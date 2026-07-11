@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - Target framework `net8.0`; `<Nullable>enable</Nullable>`; `<LangVersion>latest</LangVersion>` in every project.
-- External dependencies limited to: `War3Net.Build`, `War3Net.IO.Mpq`, `System.CommandLine` (prerelease `2.0.0-beta4.*`), `xunit` + `xunit.runner.visualstudio`. No others without updating this plan.
+- External dependencies limited to: `War3Net.Build`, `War3Net.IO.Mpq`, `System.CommandLine` (prerelease `2.0.0-beta4.*`), `xunit` + `xunit.runner.visualstudio`, and `Microsoft.NET.Test.Sdk` (required test-runner infrastructure, implied by xunit). No others without updating this plan. (Note: `coverlet.collector` from the xunit template is NOT permitted — removed in Task 1 review; add back only if code-coverage collection is actually needed.)
 - Root namespace prefix `Wc3` for all projects.
 - **Fidelity rule:** for any file not marked dirty, the bytes written back MUST equal the original *decompressed* bytes. Enforced by the round-trip test.
 - **Principle #5 (sacred):** never drop and never throw on an unknown, unnamed, or unparseable file. Unknown → preserved raw. Parse failure → keep raw bytes, record a `Diagnostic`, continue.
