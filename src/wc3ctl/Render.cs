@@ -34,4 +34,7 @@ public static class Render
 
     public static string ObjectGet(ObjectGetResult r) =>
         r.Found ? string.Join("\n", r.Fields.Select(kv => $"{kv.Key}={kv.Value}")) : $"{r.Rawcode}: not found";
+
+    public static string Extract(ExtractManifest m, string dest) =>
+        $"Extracted {m.Count} file(s) ({m.TotalBytes:N0} bytes) to {dest}";
 }

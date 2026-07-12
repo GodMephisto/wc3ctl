@@ -98,8 +98,65 @@ public static class Program
         }), mapArg, objRawcode, objField, jsonOption);
         objGet.AddCommand(objGetSub);
 
+        var internalPathArg = new Argument<string?>("internal-path", () => null, "Exact internal file path to extract.");
+        var outOption = new Option<string?>(new[] { "-o", "--out" },
+            "Output directory (or output file for a single named extraction). Default: current directory.");
+        var patternOption = new Option<string[]>("--pattern",
+            "Glob pattern(s) matched against internal names ('*' wildcard); repeatable or comma-separated.")
+        { AllowMultipleArgumentsPerToken = true };
+        var modelsOption = new Option<bool>("--models", "Extract models (*.mdx, *.mdl).");
+        var texturesOption = new Option<bool>("--textures", "Extract textures (*.blp, *.tga, *.dds).");
+        var soundsOption = new Option<bool>("--sounds", "Extract sounds (*.mp3, *.wav).");
+        var allOption = new Option<bool>("--all", "Extract every internal file (including unnamed entries).");
+        var extract = new Command("extract", "Extract internal files to disk.")
+        { mapArg, internalPathArg, outOption, patternOption, modelsOption, texturesOption, soundsOption, allOption };
+        extract.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            string? exact = p.GetValueForArgument(internalPathArg);
+            string? outPath = p.GetValueForOption(outOption);
+            bool all = p.GetValueForOption(allOption);
+            bool json = p.GetValueForOption(jsonOption);
+            var patterns = (p.GetValueForOption(patternOption) ?? Array.Empty<string>())
+                .SelectMany(v => v.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                .ToList();
+            if (p.GetValueForOption(modelsOption)) patterns.AddRange(ExtractSelector.GroupPatterns("models"));
+            if (p.GetValueForOption(texturesOption)) patterns.AddRange(ExtractSelector.GroupPatterns("textures"));
+            if (p.GetValueForOption(soundsOption)) patterns.AddRange(ExtractSelector.GroupPatterns("sounds"));
+
+            if (exact is null && patterns.Count == 0 && !all)
+                throw new ArgumentException(
+                    "nothing selected — pass an internal path, --pattern, --models/--textures/--sounds, or --all");
+            if (exact is not null && (patterns.Count > 0 || all))
+                throw new ArgumentException(
+                    "an internal path cannot be combined with --pattern/--models/--textures/--sounds/--all");
+
+            var selector = new ExtractSelector { ExactName = exact, Patterns = patterns, All = all };
+            var r = ExtractCommand.Execute(MapDocument.Load(map), selector);
+            if (exact is not null && r.Items.Count == 0)
+                throw new FileNotFoundException($"'{exact}' not found in map", exact);
+
+            ExtractManifest manifest;
+            string dest;
+            if (exact is not null && outPath is not null && !Directory.Exists(outPath))
+            {
+                // Single named extraction with -o pointing at a file path.
+                manifest = ExtractWriter.WriteSingle(r.Items[0], outPath);
+                dest = manifest.Files[0].Path;
+            }
+            else
+            {
+                var outDir = outPath ?? Directory.GetCurrentDirectory();
+                manifest = ExtractWriter.WriteAll(r, outDir);
+                dest = Path.GetFullPath(outDir);
+            }
+            Emit(json, manifest, () => Render.Extract(manifest, dest));
+        }));
+
         root.AddCommand(info); root.AddCommand(ls); root.AddCommand(rt);
         root.AddCommand(search); root.AddCommand(diff); root.AddCommand(objGet);
+        root.AddCommand(extract);
 
         int parseResult = await root.InvokeAsync(args);
         return parseResult != 0 ? parseResult : exitCode;
