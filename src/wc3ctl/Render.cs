@@ -32,8 +32,14 @@ public static class Render
     public static string Search(SearchResult r) =>
         r.Hits.Count == 0 ? "(no hits)" : string.Join("\n", r.Hits.Select(h => $"{h.FileName}  [{h.Context}]"));
 
-    public static string ObjectGet(ObjectGetResult r) =>
-        r.Found ? string.Join("\n", r.Fields.Select(kv => $"{kv.Key}={kv.Value}")) : $"{r.Rawcode}: not found";
+    public static string ObjectGet(MergedObjectResult r)
+    {
+        if (!r.Found) return $"{r.Rawcode}: not found";
+        var head = r.BaseRawcode is null ? r.Rawcode : $"{r.Rawcode} (base: {r.BaseRawcode})";
+        var lines = r.Fields.Select(f => $"{f.Name} ({f.Code}) = {f.Value}  [{f.Source}]");
+        var notes = r.Diagnostics.Select(d => $"note: {d}");
+        return string.Join("\n", new[] { head }.Concat(lines).Concat(notes));
+    }
 
     public static string Extract(ExtractManifest m, string dest) =>
         $"Extracted {m.Count} file(s) ({m.TotalBytes:N0} bytes) to {dest}";

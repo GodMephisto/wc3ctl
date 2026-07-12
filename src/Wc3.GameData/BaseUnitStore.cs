@@ -16,6 +16,9 @@ public sealed class BaseUnitStore
 
     private BaseUnitStore(UnitMetadata meta, Dictionary<string, SlkTable> slks) { _meta = meta; _slks = slks; }
 
+    /// <summary>Field-code metadata (display names) for consumers building lookups.</summary>
+    public UnitMetadata Metadata => _meta;
+
     public static BaseUnitStore Build(IGameDataSource src)
     {
         var metaBytes = src.ReadFile(Dir + "unitmetadata.slk")

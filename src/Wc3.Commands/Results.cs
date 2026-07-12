@@ -10,6 +10,9 @@ public sealed record DiffEntry(string Name, string Change);
 public sealed record DiffResult(IReadOnlyList<DiffEntry> Entries);
 public sealed record RoundtripResult(
     bool Faithful, IReadOnlyList<string> Mismatches, IReadOnlyList<string> ExcludedNotes);
-public sealed record ObjectGetResult(string Rawcode, bool Found, IReadOnlyDictionary<string, string> Fields);
+public sealed record MergedField(string Code, string Name, string Value, string Source); // Source: "base" | "map"
+public sealed record MergedObjectResult(
+    string Rawcode, bool Found, string? BaseRawcode,
+    IReadOnlyList<MergedField> Fields, IReadOnlyList<string> Diagnostics);
 public sealed record ExtractedItem(string? Name, int BlockIndex, byte[] Bytes);
 public sealed record ExtractResult(IReadOnlyList<ExtractedItem> Items);

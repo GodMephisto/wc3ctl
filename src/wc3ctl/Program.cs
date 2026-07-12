@@ -93,7 +93,8 @@ public static class Program
         var objGetSub = new Command("get", "Get an object's fields.") { mapArg, objRawcode, objField };
         objGetSub.SetHandler((string map, string rawcode, string? field, bool json) => RunSafely(() =>
         {
-            var r = ObjectGetCommand.Execute(MapDocument.Load(map), rawcode, field);
+            // --field filtering and --game-dir arrive with the merged-output rendering (Task 9).
+            var r = ObjectGetCommand.Execute(MapDocument.Load(map), rawcode, gameDirOverride: null);
             Emit(json, r, () => Render.ObjectGet(r));
         }), mapArg, objRawcode, objField, jsonOption);
         objGet.AddCommand(objGetSub);
