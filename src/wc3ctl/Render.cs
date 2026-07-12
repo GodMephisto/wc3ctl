@@ -41,6 +41,11 @@ public static class Render
         return string.Join("\n", new[] { head }.Concat(lines).Concat(notes));
     }
 
+    public static string ObjectList(ObjectListResult r) =>
+        r.Items.Count == 0 ? "(no custom objects)"
+        : string.Join("\n", r.Items.Select(i =>
+            i.BaseRawcode is null ? i.Rawcode : $"{i.Rawcode}  (base: {i.BaseRawcode})"));
+
     public static string Extract(ExtractManifest m, string dest) =>
         $"Extracted {m.Count} file(s) ({m.TotalBytes:N0} bytes) to {dest}";
 }

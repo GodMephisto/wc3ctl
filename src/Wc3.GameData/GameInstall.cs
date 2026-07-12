@@ -5,8 +5,10 @@ public static class GameInstall
 {
     public static string? Locate(string? overridePath = null)
     {
-        if (!string.IsNullOrWhiteSpace(overridePath) && Directory.Exists(overridePath))
-            return overridePath;
+        // An explicit override is authoritative: a path that doesn't exist means
+        // "not found", never a silent fallback to some other detected install.
+        if (!string.IsNullOrWhiteSpace(overridePath))
+            return Directory.Exists(overridePath) ? overridePath : null;
 
         if (OperatingSystem.IsWindows())
         {

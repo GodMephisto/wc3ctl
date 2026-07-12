@@ -14,5 +14,7 @@ public sealed record MergedField(string Code, string Name, string Value, string 
 public sealed record MergedObjectResult(
     string Rawcode, bool Found, string? BaseRawcode,
     IReadOnlyList<MergedField> Fields, IReadOnlyList<string> Diagnostics);
+public sealed record ObjectListItem(string Rawcode, string? BaseRawcode);
+public sealed record ObjectListResult(IReadOnlyList<ObjectListItem> Items);
 public sealed record ExtractedItem(string? Name, int BlockIndex, byte[] Bytes);
 public sealed record ExtractResult(IReadOnlyList<ExtractedItem> Items);

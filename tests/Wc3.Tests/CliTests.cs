@@ -55,6 +55,46 @@ public class CliTests
     }
 
     [Fact]
+    public async Task Object_get_unknown_rawcode_is_clean_exit0()
+    {
+        // Bad --game-dir must degrade to deltas-only (hermetic: never falls back
+        // to a real install), and an unknown rawcode is a clean "not found".
+        var map = SyntheticMap.Build(new Dictionary<string, byte[]> { ["war3map.j"] = new byte[] { 1 } });
+        var path = Path.Combine(Path.GetTempPath(), $"wc3ctl_og_{System.Guid.NewGuid():N}.w3x");
+        File.WriteAllBytes(path, map);
+        try
+        {
+            var sw = new StringWriter();
+            var console = System.Console.Out;
+            System.Console.SetOut(sw);
+            int code = await Wc3Ctl.Program.Main(new[] { "object", "get", path, "H999", "--game-dir", "Z:\\no_such" });
+            System.Console.SetOut(console);
+            Assert.Equal(0, code);
+            Assert.Contains("not found", sw.ToString());
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public async Task Object_list_without_w3u_is_empty_exit0()
+    {
+        var map = SyntheticMap.Build(new Dictionary<string, byte[]> { ["war3map.j"] = new byte[] { 1 } });
+        var path = Path.Combine(Path.GetTempPath(), $"wc3ctl_ol_{System.Guid.NewGuid():N}.w3x");
+        File.WriteAllBytes(path, map);
+        try
+        {
+            var sw = new StringWriter();
+            var console = System.Console.Out;
+            System.Console.SetOut(sw);
+            int code = await Wc3Ctl.Program.Main(new[] { "object", "list", path, "--json" });
+            System.Console.SetOut(console);
+            Assert.Equal(0, code);
+            Assert.Contains("\"Items\": []", sw.ToString());
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
     public async Task Missing_file_exits_nonzero_with_clean_message_no_stack_trace()
     {
         var missing = Path.Combine(Path.GetTempPath(), $"wc3ctl_missing_{System.Guid.NewGuid():N}.w3x");

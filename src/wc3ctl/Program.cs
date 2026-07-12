@@ -10,10 +10,13 @@ public static class Program
     public static async Task<int> Main(string[] args)
     {
         var jsonOption = new Option<bool>("--json", "Emit machine-readable JSON.");
+        var gameDirOption = new Option<string?>("--game-dir",
+            "Warcraft III install directory (overrides auto-detection).");
         var mapArg = new Argument<string>("map", "Path to a .w3x/.w3m map.");
 
         var root = new RootCommand("wc3ctl — Warcraft III map tool");
         root.AddGlobalOption(jsonOption);
+        root.AddGlobalOption(gameDirOption);
 
         int exitCode = 0;
 
@@ -89,15 +92,39 @@ public static class Program
 
         var objRawcode = new Argument<string>("rawcode", "Four-character object rawcode.");
         var objField = new Option<string?>("--field", "Restrict output to a single field.");
-        var objGet = new Command("object", "Object data queries.");
-        var objGetSub = new Command("get", "Get an object's fields.") { mapArg, objRawcode, objField };
-        objGetSub.SetHandler((string map, string rawcode, string? field, bool json) => RunSafely(() =>
+        var obj = new Command("object", "Object data queries.");
+        var objGet = new Command("get", "Get an object's merged fields (base game data ⊕ map deltas).")
+        { mapArg, objRawcode, objField };
+        objGet.SetHandler(ctx => RunSafely(() =>
         {
-            // --field filtering and --game-dir arrive with the merged-output rendering (Task 9).
-            var r = ObjectGetCommand.Execute(MapDocument.Load(map), rawcode, gameDirOverride: null);
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            string rawcode = p.GetValueForArgument(objRawcode);
+            string? field = p.GetValueForOption(objField);
+            bool json = p.GetValueForOption(jsonOption);
+
+            var r = ObjectGetCommand.Execute(MapDocument.Load(map), rawcode, p.GetValueForOption(gameDirOption));
+            if (field is not null)
+            {
+                var match = r.Fields
+                    .Where(f => string.Equals(f.Code, field, StringComparison.OrdinalIgnoreCase)).ToList();
+                var diags = match.Count == 0 && r.Found
+                    ? r.Diagnostics.Append($"no such field {field}").ToList()
+                    : r.Diagnostics;
+                r = r with { Fields = match, Diagnostics = diags };
+            }
             Emit(json, r, () => Render.ObjectGet(r));
-        }), mapArg, objRawcode, objField, jsonOption);
-        objGet.AddCommand(objGetSub);
+        }));
+        obj.AddCommand(objGet);
+
+        var objList = new Command("list", "List the map's custom/modified units.") { mapArg };
+        objList.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = ObjectListCommand.Execute(MapDocument.Load(p.GetValueForArgument(mapArg)));
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.ObjectList(r));
+        }));
+        obj.AddCommand(objList);
 
         var internalPathArg = new Argument<string?>("internal-path", () => null, "Exact internal file path to extract.");
         var outOption = new Option<string?>(new[] { "-o", "--out" },
@@ -156,7 +183,7 @@ public static class Program
         }));
 
         root.AddCommand(info); root.AddCommand(ls); root.AddCommand(rt);
-        root.AddCommand(search); root.AddCommand(diff); root.AddCommand(objGet);
+        root.AddCommand(search); root.AddCommand(diff); root.AddCommand(obj);
         root.AddCommand(extract);
 
         int parseResult = await root.InvokeAsync(args);
