@@ -13,4 +13,8 @@
     <PackageReference Include="War3Net.IO.Mpq" Version="6.0.3" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Wc3.Tests" />
+  </ItemGroup>
+
 </Project>

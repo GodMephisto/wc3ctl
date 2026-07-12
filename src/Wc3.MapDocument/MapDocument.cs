@@ -73,8 +73,23 @@ public sealed class MapDocument
         return doc;
     }
 
-    // Filled in Task 7.
-    private void ParseKnownFiles() { }
+    private void ParseKnownFiles()
+    {
+        foreach (var entry in _files)
+        {
+            if (entry.FileName is null || !MapFormatRegistry.TryGetParser(entry.FileName, out var parse))
+                continue;
+            try
+            {
+                entry.Model = parse(entry.RawBytes);
+            }
+            catch (Exception ex)
+            {
+                _diagnostics.Add(new Diagnostic(DiagnosticSeverity.Warning, entry.FileName,
+                    $"Parse failed, preserved as raw: {ex.Message}"));
+            }
+        }
+    }
 
     public MapFileEntry? GetFile(string fileName) =>
         _files.FirstOrDefault(f => string.Equals(f.FileName, fileName, StringComparison.OrdinalIgnoreCase));
