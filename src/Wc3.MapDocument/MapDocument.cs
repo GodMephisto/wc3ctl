@@ -13,6 +13,8 @@ public sealed class MapDocument
     public byte[] PreArchiveData { get; private set; } = Array.Empty<byte>();
     public IReadOnlyList<Diagnostic> Diagnostics => _diagnostics;
 
+    static MapDocument() => DefaultParsers.RegisterDefaults();
+
     private MapDocument(byte[] originalBytes) => _originalBytes = originalBytes;
 
     public static MapDocument Load(string path) => Load(File.ReadAllBytes(path));
@@ -77,6 +79,7 @@ public sealed class MapDocument
     {
         foreach (var entry in _files)
         {
+            if (!entry.IsKnown) continue; // unreadable/placeholder entries have empty bytes
             if (entry.FileName is null || !MapFormatRegistry.TryGetParser(entry.FileName, out var parse))
                 continue;
             try
