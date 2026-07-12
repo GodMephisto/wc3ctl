@@ -21,4 +21,30 @@ public class CliTests
         }
         finally { File.Delete(path); }
     }
+
+    [Fact]
+    public async Task Missing_file_exits_nonzero_with_clean_message_no_stack_trace()
+    {
+        var missing = Path.Combine(Path.GetTempPath(), $"wc3ctl_missing_{System.Guid.NewGuid():N}.w3x");
+        var outW = new StringWriter();
+        var errW = new StringWriter();
+        var origOut = System.Console.Out;
+        var origErr = System.Console.Error;
+        System.Console.SetOut(outW);
+        System.Console.SetError(errW);
+        try
+        {
+            int code = await Wc3Ctl.Program.Main(new[] { "info", missing });
+            Assert.Equal(1, code);
+            var err = errW.ToString();
+            Assert.Contains("error:", err);
+            Assert.DoesNotContain("Exception", err);      // no raw exception type
+            Assert.DoesNotContain("   at ", err);          // no stack-trace frames
+        }
+        finally
+        {
+            System.Console.SetOut(origOut);
+            System.Console.SetError(origErr);
+        }
+    }
 }
