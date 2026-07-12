@@ -99,6 +99,13 @@ Parsing may be eager or lazy per section; either is acceptable as long as raw by
 
 A no-edit save is therefore faithful by construction.
 
+Fidelity comparisons exclude the MPQ bookkeeping files `(listfile)`,
+`(attributes)`, and `(signature)`: the builder regenerates the first two on
+save and does **not** carry over or re-sign `(signature)` (the rebuilt map is
+unsigned). These are archive metadata — no map *content* is affected — and any
+that were present in the original but dropped/changed are surfaced as notes in
+the `roundtrip` output rather than failing the verdict.
+
 ---
 
 ## 6. Error handling (Principle #5 is non-negotiable)

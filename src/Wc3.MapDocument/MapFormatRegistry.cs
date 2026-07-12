@@ -51,6 +51,6 @@ public static class MapFormatRegistry
     {
         using var ms = new MemoryStream(raw);
         using var reader = new BinaryReader(ms);
-        return read(reader)!;
+        return read(reader) ?? throw new InvalidDataException($"Parser for {typeof(T).Name} returned null.");
     }
 }

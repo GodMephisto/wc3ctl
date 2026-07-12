@@ -8,5 +8,6 @@ public sealed record SearchHit(string FileName, string Context);
 public sealed record SearchResult(IReadOnlyList<SearchHit> Hits);
 public sealed record DiffEntry(string Name, string Change);
 public sealed record DiffResult(IReadOnlyList<DiffEntry> Entries);
-public sealed record RoundtripResult(bool Faithful, IReadOnlyList<string> Mismatches);
+public sealed record RoundtripResult(
+    bool Faithful, IReadOnlyList<string> Mismatches, IReadOnlyList<string> ExcludedNotes);
 public sealed record ObjectGetResult(string Rawcode, bool Found, IReadOnlyDictionary<string, string> Fields);

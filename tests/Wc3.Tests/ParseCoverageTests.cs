@@ -15,6 +15,9 @@ public class ParseCoverageTests
 
         var doc = MapDocument.Load(CorpusMap);
 
+        // Guard against a vacuous pass: a real map must surface known files.
+        Assert.NotEmpty(doc.Files.Where(f => f.IsKnown));
+
         foreach (var f in doc.Files.Where(f => f.IsKnown))
         {
             bool parsed = f.IsParsed;

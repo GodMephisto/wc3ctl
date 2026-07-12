@@ -17,9 +17,14 @@ public static class Render
         $"Name:    {r.Name}\nAuthor:  {r.Author}\nPlayers: {r.Players}\nSize:    {r.Width}x{r.Height}"
         + (r.Diagnostics.Count == 0 ? "" : "\n\nDiagnostics:\n" + string.Join("\n", r.Diagnostics));
 
-    public static string Roundtrip(RoundtripResult r) =>
-        r.Faithful ? "OK — round-trip is byte-faithful for all files."
-                   : "MISMATCH:\n" + string.Join("\n", r.Mismatches);
+    public static string Roundtrip(RoundtripResult r)
+    {
+        var verdict = r.Faithful ? "OK — round-trip is byte-faithful for all files."
+                                 : "MISMATCH:\n" + string.Join("\n", r.Mismatches);
+        return r.ExcludedNotes.Count == 0
+            ? verdict
+            : verdict + "\n" + string.Join("\n", r.ExcludedNotes.Select(n => $"Note: {n}."));
+    }
 
     public static string Diff(DiffResult r) =>
         r.Entries.Count == 0 ? "(identical)" : string.Join("\n", r.Entries.Select(e => $"{e.Change,-9} {e.Name}"));
