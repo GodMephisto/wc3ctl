@@ -96,4 +96,33 @@ public sealed class MapDocument
 
     public MapFileEntry? GetFile(string fileName) =>
         _files.FirstOrDefault(f => string.Equals(f.FileName, fileName, StringComparison.OrdinalIgnoreCase));
+
+    public void Save(string path) => File.WriteAllBytes(path, SaveToBytes());
+
+    public byte[] SaveToBytes()
+    {
+        using var source = new MemoryStream(_originalBytes);
+        using var archive = MpqArchive.Open(source, loadListFile: true);
+        var builder = new MpqArchiveBuilder(archive);
+
+        foreach (var entry in _files.Where(f => f.IsDirty && f.FileName is not null))
+        {
+            builder.RemoveFile(entry.FileName!);
+            builder.AddFile(MpqFile.New(new MemoryStream(SerializeEntry(entry)), entry.FileName!));
+        }
+
+        using var mpq = new MemoryStream();
+        // SaveTo disposes the target stream unless leaveOpen — we still need to read it back.
+        builder.SaveTo(mpq, leaveOpen: true);
+
+        using var outStream = new MemoryStream();
+        outStream.Write(PreArchiveData, 0, PreArchiveData.Length);
+        mpq.Position = 0;
+        mpq.CopyTo(outStream);
+        return outStream.ToArray();
+    }
+
+    // No editing this slice, so dirty files never occur; serialization is a later slice.
+    private static byte[] SerializeEntry(MapFileEntry entry) =>
+        throw new NotSupportedException("Editing/serialization arrives in a later slice.");
 }
