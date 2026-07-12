@@ -1,0 +1,63 @@
+// src/Wc3.MapDocument/MapDocument.cs
+using War3Net.IO.Mpq;
+
+namespace Wc3.MapDocument;
+
+public sealed class MapDocument
+{
+    private readonly byte[] _originalBytes;
+    private readonly List<MapFileEntry> _files = new();
+    private readonly List<Diagnostic> _diagnostics = new();
+
+    public IReadOnlyList<MapFileEntry> Files => _files;
+    public byte[] PreArchiveData { get; private set; } = Array.Empty<byte>();
+    public IReadOnlyList<Diagnostic> Diagnostics => _diagnostics;
+
+    private MapDocument(byte[] originalBytes) => _originalBytes = originalBytes;
+
+    public static MapDocument Load(string path) => Load(File.ReadAllBytes(path));
+
+    public static MapDocument Load(byte[] fileBytes)
+    {
+        var doc = new MapDocument(fileBytes);
+
+        int offset = MpqHeader.FindArchiveOffset(fileBytes);
+        if (offset < 0)
+            throw new InvalidDataException("No MPQ archive magic found in file.");
+        doc.PreArchiveData = fileBytes[..offset];
+
+        using var stream = new MemoryStream(fileBytes);
+        using var archive = MpqArchive.Open(stream, loadListFile: true);
+
+        int block = 0;
+        foreach (var entry in archive)
+        {
+            byte[] raw;
+            using (var fs = archive.OpenFile(entry))
+            {
+                using var ms = new MemoryStream();
+                fs.CopyTo(ms);
+                raw = ms.ToArray();
+            }
+
+            string? name = entry.FileName;
+            bool known = name is not null && MapFormatRegistry.IsKnown(name);
+            doc._files.Add(new MapFileEntry
+            {
+                FileName = name,
+                BlockIndex = block++,
+                RawBytes = raw,
+                IsKnown = known,
+            });
+        }
+
+        doc.ParseKnownFiles();
+        return doc;
+    }
+
+    // Filled in Task 7.
+    private void ParseKnownFiles() { }
+
+    public MapFileEntry? GetFile(string fileName) =>
+        _files.FirstOrDefault(f => string.Equals(f.FileName, fileName, StringComparison.OrdinalIgnoreCase));
+}
