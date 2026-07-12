@@ -1,5 +1,5 @@
 // src/Wc3.MapDocument/MapFormatRegistry.cs
-namespace Wc3.MapDocument;
+namespace Wc3.Model;
 
 public delegate object ParseFn(byte[] raw);
 

@@ -1,5 +1,5 @@
 // src/Wc3.MapDocument/MpqHeader.cs
-namespace Wc3.MapDocument;
+namespace Wc3.Model;
 
 public static class MpqHeader
 {

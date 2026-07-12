@@ -1,5 +1,5 @@
 // tests/Wc3.Tests/SyntheticMapTests.cs
-using Wc3.MapDocument;
+using Wc3.Model;
 namespace Wc3.Tests;
 
 public class SyntheticMapTests

@@ -1,10 +1,7 @@
 // tests/Wc3.Tests/MapDocumentLoadTests.cs
-namespace Wc3.Tests;
+using Wc3.Model;
 
-// Alias must sit INSIDE the namespace: in Wc3.* namespaces the identifier
-// "MapDocument" otherwise binds to the Wc3.MapDocument NAMESPACE (member of
-// enclosing Wc3) before file-level usings are consulted (CA1724 collision).
-using MapDocument = Wc3.MapDocument.MapDocument;
+namespace Wc3.Tests;
 
 public class MapDocumentLoadTests
 {

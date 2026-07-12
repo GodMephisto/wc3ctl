@@ -1,7 +1,7 @@
 // src/Wc3.MapDocument/MapDocument.cs
 using War3Net.IO.Mpq;
 
-namespace Wc3.MapDocument;
+namespace Wc3.Model;
 
 public sealed class MapDocument
 {
@@ -32,23 +32,41 @@ public sealed class MapDocument
         int block = 0;
         foreach (var entry in archive)
         {
-            byte[] raw;
-            using (var fs = archive.OpenFile(entry))
-            {
-                using var ms = new MemoryStream();
-                fs.CopyTo(ms);
-                raw = ms.ToArray();
-            }
-
             string? name = entry.FileName;
-            bool known = name is not null && MapFormatRegistry.IsKnown(name);
-            doc._files.Add(new MapFileEntry
+            try
             {
-                FileName = name,
-                BlockIndex = block++,
-                RawBytes = raw,
-                IsKnown = known,
-            });
+                byte[] raw;
+                using (var fs = archive.OpenFile(entry))
+                {
+                    using var ms = new MemoryStream();
+                    fs.CopyTo(ms);
+                    raw = ms.ToArray();
+                }
+
+                bool known = name is not null && MapFormatRegistry.IsKnown(name);
+                doc._files.Add(new MapFileEntry
+                {
+                    FileName = name,
+                    BlockIndex = block++,
+                    RawBytes = raw,
+                    IsKnown = known,
+                });
+            }
+            catch (Exception ex)
+            {
+                // Unreadable entry (encrypted/unnamed/corrupt): keep a placeholder
+                // instead of aborting Load. The real bytes are preserved because
+                // Save rebuilds via MpqArchiveBuilder(originalArchive).
+                doc._diagnostics.Add(new Diagnostic(DiagnosticSeverity.Warning, name ?? "(unnamed)",
+                    $"Could not read file data, preserved via archive rebuild: {ex.Message}"));
+                doc._files.Add(new MapFileEntry
+                {
+                    FileName = name,
+                    BlockIndex = block++,
+                    RawBytes = Array.Empty<byte>(),
+                    IsKnown = false,
+                });
+            }
         }
 
         doc.ParseKnownFiles();

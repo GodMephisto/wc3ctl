@@ -1,5 +1,5 @@
 // src/Wc3.MapDocument/MapFileEntry.cs
-namespace Wc3.MapDocument;
+namespace Wc3.Model;
 
 public sealed class MapFileEntry
 {
