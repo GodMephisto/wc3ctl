@@ -47,7 +47,9 @@ public static class ObjectGetCommand
             unit = w3u.NewUnits.FirstOrDefault(u => u.NewId == id)
                 ?? w3u.BaseUnits.FirstOrDefault(u => u.OldId == id);
             if (unit is not null)
-                baseRawcode = unit.NewId == 0 ? rawcode : unit.OldId.ToRawcode();
+                // Modified standard unit is its own base; a from-scratch custom
+                // unit (OldId=0) has none — never rawcode-ify the zero id.
+                baseRawcode = unit.NewId == 0 ? rawcode : (unit.OldId == 0 ? null : unit.OldId.ToRawcode());
         }
 
         var deltaFields = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -55,20 +57,28 @@ public static class ObjectGetCommand
             foreach (var mod in unit.Modifications)
                 deltaFields[mod.Id.ToRawcode()] = Convert.ToString(mod.Value, CultureInfo.InvariantCulture) ?? "";
 
-        // Not defined in the map at all? It may still be a plain standard unit.
-        var baseFields = baseLookup(baseRawcode ?? rawcode);
-        if (baseFields is not null) baseRawcode ??= rawcode;
+        // Map-defined units resolve base fields only through a real base; a rawcode
+        // absent from the map may still be a plain standard unit.
+        var baseFields = unit is not null
+            ? (baseRawcode is null ? null : baseLookup(baseRawcode))
+            : baseLookup(rawcode);
+        if (unit is null && baseFields is not null) baseRawcode = rawcode;
 
         return Merge(rawcode, baseRawcode,
+            definedInMap: unit is not null,
             baseFields ?? new Dictionary<string, string>(),
             deltaFields,
             nameLookup ?? (code => code),
             preDiagnostics);
     }
 
-    /// <summary>Pure merge: base fields overlaid by map deltas, each labeled with its source.</summary>
+    /// <summary>
+    /// Pure merge: base fields overlaid by map deltas, each labeled with its source.
+    /// A rawcode counts as Found when the map defines it (even with zero resolvable
+    /// fields) or when any field resolved.
+    /// </summary>
     public static MergedObjectResult Merge(
-        string rawcode, string? baseRawcode,
+        string rawcode, string? baseRawcode, bool definedInMap,
         IReadOnlyDictionary<string, string> baseFields,
         IReadOnlyDictionary<string, string> deltaFields,
         Func<string, string> nameLookup,
@@ -87,6 +97,6 @@ public static class ObjectGetCommand
             merged[code] = new MergedField(code, NameOf(code), value, "map");
 
         var fields = merged.Values.OrderBy(f => f.Name, StringComparer.OrdinalIgnoreCase).ToList();
-        return new MergedObjectResult(rawcode, fields.Count > 0, baseRawcode, fields, diagnostics);
+        return new MergedObjectResult(rawcode, definedInMap || fields.Count > 0, baseRawcode, fields, diagnostics);
     }
 }
