@@ -13,6 +13,16 @@
                     <TextBlock Name="RoleText" FontWeight="SemiBold"
                                VerticalAlignment="Center" Text="Map"/>
                     <Button Name="OpenMapButton" Content="Open Map…" Click="OnOpenMapClick"/>
+                    <!-- Port seam (Source only): a later wave enables this and wires
+                         it across both workspaces via MainWindow.Workspaces. The
+                         Border carries the tooltip because disabled controls don't
+                         receive the pointer events that trigger ToolTip. -->
+                    <Border Name="PortButtonHost" IsVisible="False"
+                            ToolTip.Tip="Porting arrives in a later step.">
+                        <Button Name="PortButton" Content="Port selected → Target ▶"
+                                IsEnabled="False"
+                                ToolTip.Tip="Porting arrives in a later step."/>
+                    </Border>
                 </StackPanel>
                 <TextBlock Name="StatusText" FontSize="11" TextWrapping="Wrap"
                            Text="No map open."/>

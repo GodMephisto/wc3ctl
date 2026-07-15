@@ -23,7 +23,11 @@ public partial class MapWorkspaceView : UserControl
         InitializeComponent();
     }
 
-    /// <summary>Header label, e.g. "Source" or "Target" (set from MainWindow.axaml).</summary>
+    /// <summary>
+    /// Header label, "Source" or "Target" (set from MainWindow.axaml). The role
+    /// also picks the role-specific header affordances: only the Source side
+    /// shows the (still disabled) port seam.
+    /// </summary>
     public string Role
     {
         get => _role;
@@ -31,6 +35,7 @@ public partial class MapWorkspaceView : UserControl
         {
             _role = value;
             RoleText.Text = value;
+            PortButtonHost.IsVisible = value == "Source";
         }
     }
 

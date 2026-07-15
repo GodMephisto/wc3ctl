@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
+using Wc3.Studio.Panels;
 
 namespace Wc3.Studio;
 
@@ -9,11 +10,22 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        Workspace.MapChanged += OnWorkspaceMapChanged;
+        SourceWorkspace.MapChanged += OnWorkspaceMapChanged;
+        TargetWorkspace.MapChanged += OnWorkspaceMapChanged;
     }
 
-    private async void OnOpenMapClick(object? sender, RoutedEventArgs e) =>
-        await Workspace.PickAndOpenMapAsync();
+    /// <summary>
+    /// Both panes, for the porting wave to wire across (read source selection,
+    /// write into the target session). Each workspace owns its map exclusively.
+    /// </summary>
+    public (MapWorkspaceView Source, MapWorkspaceView Target) Workspaces =>
+        (SourceWorkspace, TargetWorkspace);
+
+    private async void OnOpenSourceMapClick(object? sender, RoutedEventArgs e) =>
+        await SourceWorkspace.PickAndOpenMapAsync();
+
+    private async void OnOpenTargetMapClick(object? sender, RoutedEventArgs e) =>
+        await TargetWorkspace.PickAndOpenMapAsync();
 
     private void OnExitClick(object? sender, RoutedEventArgs e) => Close();
 
@@ -37,10 +49,12 @@ public partial class MainWindow : Window
         await dialog.ShowDialog(this);
     }
 
-    private void OnWorkspaceMapChanged(object? sender, EventArgs e)
-    {
-        StatusText.Text = Workspace.HasMap
-            ? $"Open: {Workspace.Session.MapPath}"
-            : "No map open.";
-    }
+    /// <summary>Global status: which map sits in each pane (details live per pane).</summary>
+    private void OnWorkspaceMapChanged(object? sender, EventArgs e) =>
+        StatusText.Text = $"Source: {Describe(SourceWorkspace)}   |   Target: {Describe(TargetWorkspace)}";
+
+    private static string Describe(MapWorkspaceView workspace) =>
+        workspace.HasMap
+            ? Path.GetFileName(workspace.Session.MapPath) ?? "(unnamed)"
+            : "no map";
 }
