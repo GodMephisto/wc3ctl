@@ -1,5 +1,3 @@
-using System.Globalization;
-using War3Net.Build.Object;
 using War3Net.Common.Extensions;
 using Wc3.GameData;
 using Wc3.Model;
@@ -8,49 +6,44 @@ namespace Wc3.Commands;
 
 public static class ObjectListCommand
 {
-    private static readonly int UnamId = "unam".FromRawcode();
+    /// <summary>Backward-compatible unit-only overload (CLI default, Studio).</summary>
+    public static ObjectListResult Execute(MapDocument doc, string? gameDirOverride) =>
+        Execute(doc, ObjectKind.Unit, gameDirOverride);
 
     /// <summary>
-    /// Enumerate the map's unit entries from war3map.w3u: modified standard units
-    /// (BaseUnits, identified by OldId — their own base) and custom units (NewUnits,
-    /// identified by NewId, derived from OldId; 0 = base-less). No w3u → empty list.
-    /// Names resolve from the map's unam delta, else the base game's localized unit
-    /// names (null when game data is unavailable); the game data is only opened when
-    /// the map actually has entries.
+    /// Enumerate the map's entries of one Object Editor kind from war3map.* overlaid
+    /// by the Reforged war3mapSkin.* twin: modified standard objects (Base*, identified
+    /// by OldId — their own base) and custom objects (New*, identified by NewId; OldId 0
+    /// = base-less). No file → empty list. Names resolve from the map's name-field
+    /// delta (TRIGSTR_ refs via war3map.wts), else the base game's name (null when
+    /// unavailable); the game data is only opened when the map actually has entries.
     /// </summary>
-    public static ObjectListResult Execute(MapDocument doc, string? gameDirOverride)
+    public static ObjectListResult Execute(MapDocument doc, ObjectKind kind, string? gameDirOverride)
     {
-        if (doc.GetFile("war3map.w3u")?.Model is not UnitObjectData w3u
-            || w3u.BaseUnits.Count + w3u.NewUnits.Count == 0)
-            return new ObjectListResult(Array.Empty<ObjectListItem>());
+        var entries = ObjectKinds.MergedEntries(doc, ObjectKinds.Info(kind));
+        if (entries.Count == 0) return new ObjectListResult(Array.Empty<ObjectListItem>());
 
         GameData.GameData.TryOpen(gameDirOverride, out var ctx, out _);
-        return Execute(w3u, ctx);
+        return Execute(doc, kind, entries, ctx);
     }
 
     /// <summary>Core with an optional game-data context (null = no name fallback).</summary>
-    internal static ObjectListResult Execute(UnitObjectData w3u, GameDataContext? ctx)
+    internal static ObjectListResult Execute(MapDocument doc, ObjectKind kind, GameDataContext? ctx) =>
+        Execute(doc, kind, ObjectKinds.MergedEntries(doc, ObjectKinds.Info(kind)), ctx);
+
+    private static ObjectListResult Execute(
+        MapDocument doc, ObjectKind kind, IReadOnlyList<MapObjectEntry> entries, GameDataContext? ctx)
     {
-        var items = new List<ObjectListItem>(w3u.BaseUnits.Count + w3u.NewUnits.Count);
-        foreach (var u in w3u.BaseUnits)
-            items.Add(Item(u.OldId.ToRawcode(), u, ctx));
-        foreach (var u in w3u.NewUnits)
-            items.Add(Item(u.NewId.ToRawcode(), u, ctx));
+        var info = ObjectKinds.Info(kind);
+        var strings = MapStrings.From(doc);
+        var items = new List<ObjectListItem>(entries.Count);
+        foreach (var e in entries)
+        {
+            string? baseRawcode = e.OldId == 0 ? null : e.OldId.ToRawcode();
+            string? name = ObjectKinds.DeltaName(ObjectKinds.ModsToDict(e.Mods), info, strings)
+                ?? ObjectKinds.BaseName(ctx, kind, baseRawcode);
+            items.Add(new ObjectListItem(e.Id.ToRawcode(), baseRawcode, name));
+        }
         return new ObjectListResult(items);
-    }
-
-    private static ObjectListItem Item(string rawcode, SimpleObjectModification u, GameDataContext? ctx)
-    {
-        string? baseRawcode = u.OldId == 0 ? null : u.OldId.ToRawcode();
-
-        // Map's unam delta wins; otherwise the base unit's localized name.
-        string? name = null;
-        foreach (var mod in u.Modifications)
-            if (mod.Id == UnamId) { name = Convert.ToString(mod.Value, CultureInfo.InvariantCulture); break; }
-        if (name is null && baseRawcode is not null && ctx is not null
-            && ctx.UnitNames.TryGetName(baseRawcode, out var baseName))
-            name = baseName;
-
-        return new ObjectListItem(rawcode, baseRawcode, name);
     }
 }

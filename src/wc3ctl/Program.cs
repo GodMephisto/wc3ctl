@@ -92,18 +92,27 @@ public static class Program
 
         var objRawcode = new Argument<string>("rawcode", "Four-character object rawcode.");
         var objField = new Option<string?>("--field", "Restrict output to a single field.");
+        var objGetKind = new Option<string?>("--kind",
+            "Object type: unit|item|ability|destructable|doodad|buff|upgrade. Default: auto-detect.");
+        var objListKind = new Option<string>("--kind", () => "unit",
+            "Object type: unit|item|ability|destructable|doodad|buff|upgrade.");
         var obj = new Command("object", "Object data queries.");
         var objGet = new Command("get", "Get an object's merged fields (base game data ⊕ map deltas).")
-        { mapArg, objRawcode, objField };
+        { mapArg, objRawcode, objField, objGetKind };
         objGet.SetHandler(ctx => RunSafely(() =>
         {
             var p = ctx.ParseResult;
             string map = p.GetValueForArgument(mapArg);
             string rawcode = p.GetValueForArgument(objRawcode);
             string? field = p.GetValueForOption(objField);
+            string? kindToken = p.GetValueForOption(objGetKind);
             bool json = p.GetValueForOption(jsonOption);
 
-            var r = ObjectGetCommand.Execute(MapDocument.Load(map), rawcode, p.GetValueForOption(gameDirOption));
+            // No --kind → probe every kind (map deltas first, then base stores).
+            var r = kindToken is null
+                ? ObjectGetCommand.Execute(MapDocument.Load(map), rawcode, p.GetValueForOption(gameDirOption))
+                : ObjectGetCommand.Execute(MapDocument.Load(map), ObjectKinds.Parse(kindToken), rawcode,
+                    p.GetValueForOption(gameDirOption));
             if (field is not null)
             {
                 // Leveled ability fields are keyed "code:N" — match the bare code too.
@@ -119,12 +128,15 @@ public static class Program
         }));
         obj.AddCommand(objGet);
 
-        var objList = new Command("list", "List the map's custom/modified units.") { mapArg };
+        var objList = new Command("list", "List the map's custom/modified objects of one kind.")
+        { mapArg, objListKind };
         objList.SetHandler(ctx => RunSafely(() =>
         {
             var p = ctx.ParseResult;
             var r = ObjectListCommand.Execute(
-                MapDocument.Load(p.GetValueForArgument(mapArg)), p.GetValueForOption(gameDirOption));
+                MapDocument.Load(p.GetValueForArgument(mapArg)),
+                ObjectKinds.Parse(p.GetValueForOption(objListKind)!),
+                p.GetValueForOption(gameDirOption));
             Emit(p.GetValueForOption(jsonOption), r, () => Render.ObjectList(r));
         }));
         obj.AddCommand(objList);
