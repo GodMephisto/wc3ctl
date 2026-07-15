@@ -129,20 +129,34 @@ public static class Program
         }));
         obj.AddCommand(objList);
 
-        var setFieldArg = new Argument<string>("field", "Field code or English field name.");
+        var setFieldArg = new Argument<string>("field", "Four-character field code (e.g. uhpm).");
         var setValueArg = new Argument<string>("value", "New value for the field.");
-        var objSet = new Command("set", "Set an object field (stub — write-back pending).")
-        { mapArg, objRawcode, setFieldArg, setValueArg };
+        var setOut = new Option<string?>(new[] { "-o", "--out" },
+            "Output map path. Default: '<map>.edited.<ext>' next to the input — the original is never overwritten.");
+        var objSet = new Command("set", "Set a unit object field and save the edited map.")
+        { mapArg, objRawcode, setFieldArg, setValueArg, setOut };
         objSet.SetHandler(ctx => RunSafely(() =>
         {
             var p = ctx.ParseResult;
-            var r = ObjectSetCommand.Execute(
-                MapDocument.Load(p.GetValueForArgument(mapArg)),
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = ObjectSetCommand.Execute(doc,
                 p.GetValueForArgument(objRawcode),
                 p.GetValueForArgument(setFieldArg),
                 p.GetValueForArgument(setValueArg));
-            Emit(p.GetValueForOption(jsonOption), r, () => r.Message);
-            if (!r.Ok) exitCode = 1;
+            if (!r.Ok)
+            {
+                Emit(p.GetValueForOption(jsonOption), r, () => r.Message);
+                exitCode = 1;
+                return;
+            }
+            var dest = p.GetValueForOption(setOut) ?? Path.Combine(
+                Path.GetDirectoryName(map) ?? "",
+                Path.GetFileNameWithoutExtension(map) + ".edited" + Path.GetExtension(map));
+            doc.Save(dest);
+            Emit(p.GetValueForOption(jsonOption),
+                new { r.Ok, r.Message, SavedTo = dest },
+                () => $"{r.Message}\nsaved: {dest}");
         }));
         obj.AddCommand(objSet);
 
