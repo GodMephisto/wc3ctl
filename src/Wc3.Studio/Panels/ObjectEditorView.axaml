@@ -27,21 +27,37 @@
             </StackPanel>
 
             <Grid Grid.Row="1" ColumnDefinitions="300,4,*">
-                <!-- Master: the map's objects of the selected kind (multi-select). -->
-                <Grid Grid.Column="0">
-                    <ListBox Name="ObjectList" SelectionMode="Multiple"
-                             SelectionChanged="OnObjectSelectionChanged">
-                        <ListBox.ItemTemplate>
-                            <DataTemplate>
-                                <TextBlock Text="{Binding Display}"
-                                           TextTrimming="CharacterEllipsis"
-                                           VerticalAlignment="Center"/>
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
-                    <TextBlock Name="EmptyListText" IsVisible="False"
-                               HorizontalAlignment="Center" VerticalAlignment="Center"
-                               TextWrapping="Wrap" Margin="12" Foreground="#8FA3B8"/>
+                <!-- Master: search + the map's objects of the selected kind (multi-select). -->
+                <Grid Grid.Column="0" RowDefinitions="Auto,*,Auto">
+                    <TextBox Grid.Row="0" Name="SearchBox" Margin="4,0,4,4"
+                             Watermark="Search name or rawcode…"
+                             TextChanged="OnSearchChanged"/>
+                    <Grid Grid.Row="1">
+                        <ListBox Name="ObjectList" SelectionMode="Multiple"
+                                 SelectionChanged="OnObjectSelectionChanged"
+                                 DoubleTapped="OnObjectDoubleTapped">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Display}"
+                                               TextTrimming="CharacterEllipsis"
+                                               VerticalAlignment="Center"/>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                        <TextBlock Name="EmptyListText" IsVisible="False"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   TextWrapping="Wrap" Margin="12" Foreground="#8FA3B8"/>
+                    </Grid>
+                    <!-- Model file of the double-clicked object; extract works only
+                         for map-imported models (interim until a real 3D viewer). -->
+                    <Border Grid.Row="2" Name="ModelArea" IsVisible="False"
+                            BorderBrush="#33555555" BorderThickness="0,1,0,0" Padding="4">
+                        <StackPanel Spacing="4">
+                            <TextBlock Name="ModelText" TextWrapping="Wrap" FontSize="11"/>
+                            <Button Name="ExtractModelButton" Content="Extract model…"
+                                    IsEnabled="False" Click="OnExtractModelClick"/>
+                        </StackPanel>
+                    </Border>
                 </Grid>
 
                 <GridSplitter Grid.Column="1" Background="#33555555"/>

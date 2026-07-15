@@ -1,7 +1,10 @@
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
+using Avalonia.Platform.Storage;
 using Wc3.Commands;
+using Wc3.Model;
 
 namespace Wc3.Studio.Panels;
 
@@ -28,10 +31,23 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         new(ObjectKind.Upgrade, "Upgrades"),
     };
 
+    /// <summary>Model-file field code per kind; other kinds fall back to a value scan.</summary>
+    private static readonly Dictionary<ObjectKind, string> ModelFieldCodes = new()
+    {
+        [ObjectKind.Unit] = "umdl",
+        [ObjectKind.Doodad] = "dfil",
+        [ObjectKind.Destructable] = "bfil",
+        [ObjectKind.Item] = "ifil",
+    };
+
     private MapSession? _session;
     private bool _suppress;
     /// <summary>Fields applied via ObjectSetCommand but not yet written to disk.</summary>
     private int _unsavedEdits;
+    /// <summary>The current kind's full object list; SearchBox filters this in memory.</summary>
+    private List<ObjectRow> _allRows = new();
+    /// <summary>Internal name of the double-clicked object's map-imported model, when it has one.</summary>
+    private string? _modelEntryName;
 
     public ObjectEditorView()
     {
@@ -76,13 +92,14 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         RefreshObjectList();
     }
 
-    /// <summary>Re-list the selected kind's objects; keeps the switcher usable when empty.</summary>
+    /// <summary>Re-query the selected kind's objects; keeps the switcher usable when empty.</summary>
     private void RefreshObjectList()
     {
         ClearFieldPane();
         _suppress = true;
         ObjectList.ItemsSource = null;
         _suppress = false;
+        _allRows = new List<ObjectRow>();
 
         if (_session?.Current is not { } doc)
         {
@@ -91,10 +108,9 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         }
 
         var kind = SelectedKind;
-        List<ObjectRow> rows;
         try
         {
-            rows = ObjectListCommand.Execute(doc, kind.Kind, _session.GameDir).Items
+            _allRows = ObjectListCommand.Execute(doc, kind.Kind, _session.GameDir).Items
                 .Select(i => new ObjectRow(
                     i.Rawcode, i.Name is null ? i.Rawcode : $"{i.Name} ({i.Rawcode})"))
                 .ToList();
@@ -107,18 +123,74 @@ public partial class ObjectEditorView : UserControl, IMapPanel
             return;
         }
 
-        if (rows.Count == 0)
+        ApplyObjectFilter();
+    }
+
+    private void OnSearchChanged(object? sender, TextChangedEventArgs e)
+    {
+        if (_suppress || _session?.Current is null)
+            return;
+        ApplyObjectFilter();
+    }
+
+    /// <summary>
+    /// Show the cached object list filtered by the search text — case-insensitive
+    /// substring match on rawcode and display name; empty search shows all. The
+    /// selection survives filtering while the selected objects still match, so
+    /// typing doesn't reload the field pane on every keystroke.
+    /// </summary>
+    private void ApplyObjectFilter()
+    {
+        var kind = SelectedKind;
+        if (_allRows.Count == 0)
         {
             EmptyListText.Text = $"This map has no {kind.Label} object data.";
             EmptyListText.IsVisible = true;
             ListCountText.Text = $"0 {kind.Label}";
+            _suppress = true;
+            ObjectList.ItemsSource = null;
+            _suppress = false;
+            ClearFieldPane();
+            return;
+        }
+
+        var query = SearchBox.Text?.Trim() ?? "";
+        var filtered = query.Length == 0
+            ? _allRows
+            : _allRows.Where(r =>
+                r.Rawcode.Contains(query, StringComparison.OrdinalIgnoreCase)
+                || r.Display.Contains(query, StringComparison.OrdinalIgnoreCase)).ToList();
+        ListCountText.Text = query.Length == 0
+            ? $"{_allRows.Count} {kind.Label}"
+            : $"{filtered.Count}/{_allRows.Count} {kind.Label}";
+
+        if (filtered.Count == 0)
+        {
+            EmptyListText.Text = $"No {kind.Label} match \"{query}\".";
+            EmptyListText.IsVisible = true;
+            _suppress = true;
+            ObjectList.ItemsSource = null;
+            _suppress = false;
+            ClearFieldPane();
             return;
         }
 
         EmptyListText.IsVisible = false;
-        ListCountText.Text = $"{rows.Count} {kind.Label}";
-        ObjectList.ItemsSource = rows;
-        ObjectList.SelectedIndex = 0;
+        var previous = SelectedObjects();
+        var prevFirst = previous.Count > 0 ? previous[0].Rawcode : null;
+        var keep = previous.Select(r => r.Rawcode).ToHashSet(StringComparer.Ordinal);
+
+        _suppress = true;
+        ObjectList.ItemsSource = filtered;
+        var reselect = filtered.Where(r => keep.Contains(r.Rawcode)).ToList();
+        foreach (var row in reselect)
+            ObjectList.SelectedItems?.Add(row);
+        _suppress = false;
+
+        if (reselect.Count == 0)
+            ObjectList.SelectedIndex = 0;   // fires the selection handler → field pane refresh
+        else if (reselect[0].Rawcode != prevFirst)
+            RefreshFieldPane((FieldList.SelectedItem as FieldRow)?.Code);
     }
 
     private List<ObjectRow> SelectedObjects() =>
@@ -128,6 +200,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     {
         if (_suppress)
             return;
+        HideModelArea();   // model info is per double-clicked object; drop it on reselect
         RefreshFieldPane((FieldList.SelectedItem as FieldRow)?.Code);
     }
 
@@ -189,6 +262,138 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         MultiSelectNote.IsVisible = false;
         MultiSelectNote.Text = "";
         ResetEditor();
+        HideModelArea();
+    }
+
+    // --- model file (double-click an object) ---
+
+    private void HideModelArea()
+    {
+        ModelArea.IsVisible = false;
+        ModelText.Text = "";
+        ExtractModelButton.IsEnabled = false;
+        _modelEntryName = null;
+    }
+
+    /// <summary>
+    /// Double-click: resolve the object's model file from its merged fields and
+    /// show whether it lives in the map (extractable) or in the base game.
+    /// </summary>
+    private void OnObjectDoubleTapped(object? sender, TappedEventArgs e)
+    {
+        if (_session?.Current is not { } doc)
+            return;
+        var selected = SelectedObjects();
+        if (selected.Count == 0)
+            return;
+        var rawcode = selected[0].Rawcode;
+
+        string? modelPath;
+        try
+        {
+            var fields = ObjectGetCommand.Execute(doc, SelectedKind.Kind, rawcode, _session.GameDir).Fields;
+            modelPath = FindModelPath(SelectedKind.Kind, fields);
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"Failed to resolve model for {rawcode}: {ex.Message}";
+            return;
+        }
+
+        ModelArea.IsVisible = true;
+        if (modelPath is null)
+        {
+            ModelText.Text = $"{rawcode}: no model field found.";
+            return;
+        }
+
+        var entry = FindMapEntry(doc, modelPath);
+        if (entry?.FileName is not null)
+        {
+            _modelEntryName = entry.FileName;
+            ModelText.Text = $"{rawcode} model: {entry.FileName} — in map ({entry.RawBytes.Length:N0} bytes)";
+            ExtractModelButton.IsEnabled = true;
+        }
+        else
+        {
+            ModelText.Text = $"{rawcode} — base game model: {modelPath}";
+        }
+    }
+
+    /// <summary>
+    /// The kind's dedicated model field first (umdl/dfil/bfil/ifil); otherwise the
+    /// first field whose value looks like a model path.
+    /// </summary>
+    private static string? FindModelPath(ObjectKind kind, IReadOnlyList<MergedField> fields)
+    {
+        if (ModelFieldCodes.TryGetValue(kind, out var code))
+        {
+            var hit = fields.FirstOrDefault(f => string.Equals(f.Code, code, StringComparison.OrdinalIgnoreCase));
+            if (!string.IsNullOrWhiteSpace(hit?.Value))
+                return hit.Value.Trim();
+        }
+        return fields.Select(f => f.Value.Trim()).FirstOrDefault(v =>
+            v.EndsWith(".mdl", StringComparison.OrdinalIgnoreCase)
+            || v.EndsWith(".mdx", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Looks the model path up in the map; base-data model fields often omit the
+    /// extension, so an extensionless miss retries with .mdx/.mdl appended.
+    /// </summary>
+    private static MapFileEntry? FindMapEntry(MapDocument doc, string modelPath)
+    {
+        if (doc.GetFile(modelPath) is { } entry)
+            return entry;
+        if (modelPath.EndsWith(".mdl", StringComparison.OrdinalIgnoreCase)
+            || modelPath.EndsWith(".mdx", StringComparison.OrdinalIgnoreCase))
+            return null;
+        return doc.GetFile(modelPath + ".mdx") ?? doc.GetFile(modelPath + ".mdl");
+    }
+
+    /// <summary>Write the double-clicked object's map-imported model into a picked folder.</summary>
+    private async void OnExtractModelClick(object? sender, RoutedEventArgs e)
+    {
+        if (_session?.Current is not { } doc || _modelEntryName is null)
+            return;
+        if (doc.GetFile(_modelEntryName) is not { } entry)
+        {
+            StatusText.Text = $"{_modelEntryName} is no longer in the map.";
+            return;
+        }
+
+        var storage = TopLevel.GetTopLevel(this)?.StorageProvider;
+        if (storage is null)
+            return;
+        var folders = await storage.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        {
+            Title = "Extract model to folder",
+            AllowMultiple = false,
+        });
+        if (folders.Count != 1 || folders[0].TryGetLocalPath() is not { } dir)
+            return;
+
+        // Keep the base filename; internal paths use '\' so take the last segment.
+        var baseName = SanitizeFileName(_modelEntryName.Split('\\', '/').Last());
+        if (baseName.Length == 0)
+            baseName = "model.bin";
+        var dest = Path.Combine(dir, baseName);
+        try
+        {
+            await Task.Run(() => File.WriteAllBytes(dest, entry.RawBytes));
+            StatusText.Text = $"Extracted {_modelEntryName} → {dest} ({entry.RawBytes.Length:N0} bytes)";
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"Extract failed: {ex.Message}";
+        }
+    }
+
+    private static string SanitizeFileName(string name)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        var cleaned = new string(name.Select(c => invalid.Contains(c) ? '_' : c).ToArray());
+        return cleaned.TrimEnd(' ', '.');   // Windows rejects trailing dots/spaces
     }
 
     private void OnFieldSelectionChanged(object? sender, SelectionChangedEventArgs e)
