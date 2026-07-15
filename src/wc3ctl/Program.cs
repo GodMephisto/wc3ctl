@@ -213,6 +213,21 @@ public static class Program
             Console.WriteLine($"Wrote {png.Length:N0} bytes to {dest}");
         }));
 
+        var bundle = new Command("bundle", "Dependency bundles for porting between maps.");
+        var bundleUnit = new Command("unit",
+            "Resolve everything a unit depends on: objects, asset files and trigger strings.")
+        { mapArg, objRawcode };
+        bundleUnit.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = BundleCommand.ResolveUnit(
+                MapDocument.Load(p.GetValueForArgument(mapArg)),
+                p.GetValueForArgument(objRawcode),
+                p.GetValueForOption(gameDirOption));
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.BundleUnit(r));
+        }));
+        bundle.AddCommand(bundleUnit);
+
         var script = new Command("script", "Map script queries.");
         var scriptFunctions = new Command("functions", "List functions declared in the map script.") { mapArg };
         scriptFunctions.SetHandler((string map, bool json) => RunSafely(() =>
@@ -281,7 +296,7 @@ public static class Program
         root.AddCommand(info); root.AddCommand(ls); root.AddCommand(rt);
         root.AddCommand(search); root.AddCommand(diff); root.AddCommand(obj);
         root.AddCommand(extract); root.AddCommand(render); root.AddCommand(renderModel);
-        root.AddCommand(script);
+        root.AddCommand(script); root.AddCommand(bundle);
 
         int parseResult = await root.InvokeAsync(args);
         return parseResult != 0 ? parseResult : exitCode;

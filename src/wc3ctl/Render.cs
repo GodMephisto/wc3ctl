@@ -1,12 +1,18 @@
 // src/wc3ctl/Render.cs
+using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Wc3.Commands;
 
 namespace Wc3Ctl;
 
 public static class Render
 {
-    private static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
+    private static readonly JsonSerializerOptions Json = new()
+    {
+        WriteIndented = true,
+        Converters = { new JsonStringEnumConverter() }, // ObjectKind as "Unit", not 0
+    };
     public static string AsJson(object o) => JsonSerializer.Serialize(o, Json);
 
     public static string List(FileListResult r) =>
@@ -53,6 +59,55 @@ public static class Render
             name is null ? null : $"\"{name}\"",
             baseRawcode is null ? null : $"(base: {baseRawcode})",
         }.Where(part => part is not null));
+
+    /// <summary>
+    /// Indented dependency tree (root → deps, each line "code \"name\" [custom kind]
+    /// (via field)"; repeats collapse), then the file and string lists.
+    /// </summary>
+    public static string BundleUnit(UnitBundle r)
+    {
+        var sb = new StringBuilder();
+        var byCode = r.Objects.ToDictionary(o => o.Rawcode, StringComparer.Ordinal);
+        var children = r.Edges
+            .Where(e => byCode.ContainsKey(e.To))
+            .GroupBy(e => e.From, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.Ordinal);
+
+        if (!byCode.ContainsKey(r.RootRawcode))
+        {
+            sb.AppendLine($"{r.RootRawcode}: not found");
+        }
+        else
+        {
+            var printed = new HashSet<string>(StringComparer.Ordinal);
+            void Print(string code, string? via, int depth)
+            {
+                var n = byCode[code];
+                sb.Append(new string(' ', depth * 2))
+                  .Append(n.Rawcode)
+                  .Append(n.Name is null ? "" : $"  \"{n.Name}\"")
+                  .Append($"  [{(n.CustomToMap ? "custom" : "base")} {n.Kind.ToString().ToLowerInvariant()}]")
+                  .Append(via is null ? "" : $"  (via {via})");
+                if (!printed.Add(code)) { sb.AppendLine("  (see above)"); return; }
+                sb.AppendLine();
+                if (children.TryGetValue(code, out var kids))
+                    foreach (var e in kids) Print(e.To, e.Via, depth + 1);
+            }
+            Print(r.RootRawcode, via: null, depth: 0);
+        }
+
+        sb.AppendLine().AppendLine($"Files ({r.Files.Count}):");
+        foreach (var f in r.Files)
+            sb.AppendLine($"  {(f.PresentInMap ? "[in map] " : "[missing]")} {f.Path}  ({f.Category})");
+
+        sb.AppendLine().AppendLine($"Strings ({r.Strings.Count}):");
+        foreach (var s in r.Strings)
+            sb.AppendLine($"  \"{s}\"");
+
+        foreach (var d in r.Diagnostics)
+            sb.AppendLine($"note: {d}");
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
 
     public static string ScriptFunctions(ScriptFunctionsResult r) =>
         $"{r.Functions.Count} functions in {r.ScriptFile}"

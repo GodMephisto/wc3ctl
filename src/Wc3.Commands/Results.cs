@@ -18,3 +18,9 @@ public sealed record ObjectListItem(string Rawcode, string? BaseRawcode, string?
 public sealed record ObjectListResult(IReadOnlyList<ObjectListItem> Items);
 public sealed record ExtractedItem(string? Name, int BlockIndex, byte[] Bytes);
 public sealed record ExtractResult(IReadOnlyList<ExtractedItem> Items);
+public sealed record BundleNode(string Rawcode, ObjectKind Kind, string? Name, bool CustomToMap);
+public sealed record BundleFile(string Path, string Category, bool PresentInMap); // Category: model|texture|icon|sound|other
+public sealed record BundleEdge(string From, string To, string Via); // From/To = rawcode or file path; Via = field code
+public sealed record UnitBundle(string RootRawcode, string? RootName,
+    IReadOnlyList<BundleNode> Objects, IReadOnlyList<BundleFile> Files,
+    IReadOnlyList<string> Strings, IReadOnlyList<BundleEdge> Edges, IReadOnlyList<string> Diagnostics);
