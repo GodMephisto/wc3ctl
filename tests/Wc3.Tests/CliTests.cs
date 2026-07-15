@@ -96,6 +96,60 @@ public class CliTests
     }
 
     [Fact]
+    public async Task Bundle_unit_json_emits_closure_with_string_kinds()
+    {
+        // Hermetic: bad --game-dir degrades to map-deltas-only resolution.
+        var w3u = new War3Net.Build.Object.UnitObjectData(War3Net.Build.Object.ObjectDataFormatVersion.v2);
+        var unit = new War3Net.Build.Object.SimpleObjectModification
+        {
+            OldId = War3Net.Common.Extensions.StringExtensions.FromRawcode("Hpal"),
+            NewId = War3Net.Common.Extensions.StringExtensions.FromRawcode("H000"),
+        };
+        unit.Modifications.Add(new War3Net.Build.Object.SimpleObjectDataModification
+        {
+            Id = War3Net.Common.Extensions.StringExtensions.FromRawcode("uabi"),
+            Type = War3Net.Build.Object.ObjectDataType.String,
+            Value = "A000",
+        });
+        w3u.NewUnits.Add(unit);
+        var w3a = new War3Net.Build.Object.AbilityObjectData(War3Net.Build.Object.ObjectDataFormatVersion.v2);
+        w3a.NewAbilities.Add(new War3Net.Build.Object.LevelObjectModification
+        {
+            OldId = War3Net.Common.Extensions.StringExtensions.FromRawcode("AHbz"),
+            NewId = War3Net.Common.Extensions.StringExtensions.FromRawcode("A000"),
+        });
+
+        byte[] Serialize(Action<BinaryWriter> write)
+        {
+            using var ms = new MemoryStream();
+            using (var bw = new BinaryWriter(ms, System.Text.Encoding.UTF8, leaveOpen: true)) write(bw);
+            return ms.ToArray();
+        }
+        var map = SyntheticMap.Build(new Dictionary<string, byte[]>
+        {
+            ["war3map.w3u"] = Serialize(w => War3Net.Build.Extensions.BinaryWriterExtensions.Write(w, w3u)),
+            ["war3map.w3a"] = Serialize(w => War3Net.Build.Extensions.BinaryWriterExtensions.Write(w, w3a)),
+        });
+        var path = Path.Combine(Path.GetTempPath(), $"wc3ctl_bu_{System.Guid.NewGuid():N}.w3x");
+        File.WriteAllBytes(path, map);
+        try
+        {
+            var sw = new StringWriter();
+            var console = System.Console.Out;
+            System.Console.SetOut(sw);
+            int code = await Wc3Ctl.Program.Main(
+                new[] { "bundle", "unit", path, "H000", "--json", "--game-dir", "Z:\\no_such" });
+            System.Console.SetOut(console);
+            Assert.Equal(0, code);
+            var output = sw.ToString();
+            Assert.Contains("\"RootRawcode\": \"H000\"", output);
+            Assert.Contains("\"Rawcode\": \"A000\"", output);
+            Assert.Contains("\"Kind\": \"Ability\"", output);   // enum serialized by name
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
     public async Task Missing_file_exits_nonzero_with_clean_message_no_stack_trace()
     {
         var missing = Path.Combine(Path.GetTempPath(), $"wc3ctl_missing_{System.Guid.NewGuid():N}.w3x");
