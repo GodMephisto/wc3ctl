@@ -1,9 +1,86 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="Wc3.Studio.Panels.ObjectEditorView">
-    <Grid Name="ObjectEditorRoot">
-        <TextBlock Name="ObjectEditorStubText"
+    <UserControl.Styles>
+        <Style Selector="ListBox#UnitList ListBoxItem">
+            <Setter Property="Padding" Value="6,3"/>
+            <Setter Property="MinHeight" Value="0"/>
+        </Style>
+        <Style Selector="ListBox#FieldList ListBoxItem">
+            <Setter Property="Padding" Value="4,1"/>
+            <Setter Property="MinHeight" Value="0"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Grid>
+        <TextBlock Name="PlaceholderText"
                    HorizontalAlignment="Center" VerticalAlignment="Center"
                    Text="Object editor panel — no map open"/>
+
+        <Grid Name="ContentRoot" IsVisible="False" RowDefinitions="*,Auto">
+            <Grid Grid.Row="0" ColumnDefinitions="280,4,*">
+                <!-- Master: the map's unit objects. -->
+                <DockPanel Grid.Column="0">
+                    <TextBlock DockPanel.Dock="Top" Text="Units" FontWeight="SemiBold" Margin="6,4"/>
+                    <ListBox Name="UnitList" SelectionChanged="OnUnitSelectionChanged">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBlock Text="{Binding Rawcode}"
+                                               FontFamily="Consolas,Menlo,monospace"
+                                               Foreground="#8FA3B8" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding Display}" VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+
+                <GridSplitter Grid.Column="1" Background="#33555555"/>
+
+                <!-- Detail: the selected unit's merged fields (base ⊕ map). -->
+                <DockPanel Grid.Column="2" Margin="4,0,0,0">
+                    <TextBlock Name="SelectedHeader" DockPanel.Dock="Top"
+                               FontWeight="SemiBold" Margin="6,4" Text=""/>
+                    <Grid DockPanel.Dock="Top" ColumnDefinitions="230,56,*,72" Margin="8,2">
+                        <TextBlock Grid.Column="0" Text="Field" FontWeight="SemiBold"/>
+                        <TextBlock Grid.Column="1" Text="Code" FontWeight="SemiBold"/>
+                        <TextBlock Grid.Column="2" Text="Value" FontWeight="SemiBold" Margin="4,0"/>
+                        <TextBlock Grid.Column="3" Text="Source" FontWeight="SemiBold"/>
+                    </Grid>
+                    <ListBox Name="FieldList">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Grid ColumnDefinitions="230,56,*,72">
+                                    <TextBlock Grid.Column="0" Text="{Binding Name}"
+                                               Foreground="{Binding RowBrush}"
+                                               FontWeight="{Binding RowWeight}"
+                                               TextTrimming="CharacterEllipsis"
+                                               VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding Code}"
+                                               FontFamily="Consolas,Menlo,monospace"
+                                               Foreground="{Binding RowBrush}"
+                                               VerticalAlignment="Center"/>
+                                    <TextBox Grid.Column="2" Text="{Binding Value, Mode=TwoWay}"
+                                             Margin="4,1" Padding="4,2" MinHeight="0"/>
+                                    <TextBlock Grid.Column="3" Text="{Binding SourceDisplay}"
+                                               Foreground="{Binding RowBrush}"
+                                               FontWeight="{Binding RowWeight}"
+                                               VerticalAlignment="Center"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+            </Grid>
+
+            <DockPanel Grid.Row="1" Margin="6,4">
+                <Button Name="SaveEditsButton" DockPanel.Dock="Right"
+                        Content="Save Edits" Click="OnSaveEditsClick"/>
+                <TextBlock Name="StatusText" TextWrapping="Wrap"
+                           VerticalAlignment="Center" Margin="0,0,8,0" Text=""/>
+            </DockPanel>
+        </Grid>
     </Grid>
 </UserControl>
