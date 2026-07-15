@@ -129,6 +129,43 @@ public static class Program
         }));
         obj.AddCommand(objList);
 
+        var setFieldArg = new Argument<string>("field", "Field code or English field name.");
+        var setValueArg = new Argument<string>("value", "New value for the field.");
+        var objSet = new Command("set", "Set an object field (stub — write-back pending).")
+        { mapArg, objRawcode, setFieldArg, setValueArg };
+        objSet.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = ObjectSetCommand.Execute(
+                MapDocument.Load(p.GetValueForArgument(mapArg)),
+                p.GetValueForArgument(objRawcode),
+                p.GetValueForArgument(setFieldArg),
+                p.GetValueForArgument(setValueArg));
+            Emit(p.GetValueForOption(jsonOption), r, () => r.Message);
+            if (!r.Ok) exitCode = 1;
+        }));
+        obj.AddCommand(objSet);
+
+        var renderOut = new Option<string?>(new[] { "-o", "--out" },
+            "Output PNG path. Default: <map name>.png in the current directory.");
+        var render = new Command("render", "Render a top-down terrain image to PNG.") { mapArg, renderOut };
+        render.SetHandler((string map, string? outPath) => RunSafely(() =>
+        {
+            var png = RenderCommand.Execute(MapDocument.Load(map));
+            var dest = outPath ?? Path.GetFileNameWithoutExtension(map) + ".png";
+            File.WriteAllBytes(dest, png);
+            Console.WriteLine($"Wrote {png.Length:N0} bytes to {dest}");
+        }), mapArg, renderOut);
+
+        var script = new Command("script", "Map script queries.");
+        var scriptFunctions = new Command("functions", "List functions declared in the map script.") { mapArg };
+        scriptFunctions.SetHandler((string map, bool json) => RunSafely(() =>
+        {
+            var r = ScriptCommand.Functions(MapDocument.Load(map));
+            Emit(json, r, () => Render.ScriptFunctions(r));
+        }), mapArg, jsonOption);
+        script.AddCommand(scriptFunctions);
+
         var internalPathArg = new Argument<string?>("internal-path", () => null, "Exact internal file path to extract.");
         var outOption = new Option<string?>(new[] { "-o", "--out" },
             "Output directory (or output file for a single named extraction). Default: current directory.");
@@ -187,7 +224,7 @@ public static class Program
 
         root.AddCommand(info); root.AddCommand(ls); root.AddCommand(rt);
         root.AddCommand(search); root.AddCommand(diff); root.AddCommand(obj);
-        root.AddCommand(extract);
+        root.AddCommand(extract); root.AddCommand(render); root.AddCommand(script);
 
         int parseResult = await root.InvokeAsync(args);
         return parseResult != 0 ? parseResult : exitCode;

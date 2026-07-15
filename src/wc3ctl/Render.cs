@@ -54,6 +54,10 @@ public static class Render
             baseRawcode is null ? null : $"(base: {baseRawcode})",
         }.Where(part => part is not null));
 
+    public static string ScriptFunctions(ScriptFunctionsResult r) =>
+        $"{r.Functions.Count} functions in {r.ScriptFile}"
+        + string.Concat(r.Functions.Select(f => $"\nline {f.StartLine}-{f.EndLine}  {f.Name}"));
+
     public static string Extract(ExtractManifest m, string dest) =>
         $"Extracted {m.Count} file(s) ({m.TotalBytes:N0} bytes) to {dest}";
 }
