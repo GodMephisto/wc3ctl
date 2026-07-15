@@ -1,9 +1,63 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="Wc3.Studio.Panels.FilesView">
-    <Grid Name="FilesRoot">
-        <TextBlock Name="FilesStubText"
+
+    <UserControl.Styles>
+        <!-- Compact rows so header and row columns line up. -->
+        <Style Selector="ListBox#FileList ListBoxItem">
+            <Setter Property="Padding" Value="8,3"/>
+            <Setter Property="MinHeight" Value="0"/>
+        </Style>
+        <Style Selector="Button.columnHeader">
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Padding" Value="4,4"/>
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Grid>
+        <TextBlock Name="PlaceholderText"
                    HorizontalAlignment="Center" VerticalAlignment="Center"
-                   Text="Files panel — no map open"/>
+                   Text="No map loaded"/>
+
+        <DockPanel Name="ContentRoot" IsVisible="False">
+
+            <!-- Toolbar -->
+            <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="8" Margin="8">
+                <Button Name="ExtractAllButton" Content="Extract All…" Click="OnExtractAllClick"/>
+                <Button Name="ExtractSelectedButton" Content="Extract Selected…" Click="OnExtractSelectedClick"/>
+                <TextBlock Name="SummaryText" VerticalAlignment="Center"/>
+            </StackPanel>
+
+            <!-- Status line -->
+            <Border DockPanel.Dock="Bottom" Padding="8,4">
+                <TextBlock Name="StatusText" TextWrapping="Wrap"/>
+            </Border>
+
+            <!-- File grid: sortable header row + list -->
+            <Grid RowDefinitions="Auto,*" Margin="8,0">
+                <Grid Grid.Row="0" ColumnDefinitions="*,120,80,80" Margin="8,0,8,2">
+                    <Button Grid.Column="0" Name="NameHeader" Classes="columnHeader" Content="Name" Click="OnSortByName"/>
+                    <Button Grid.Column="1" Name="SizeHeader" Classes="columnHeader" Content="Size (bytes)" Click="OnSortBySize"/>
+                    <Button Grid.Column="2" Name="KnownHeader" Classes="columnHeader" Content="Known" Click="OnSortByKnown"/>
+                    <Button Grid.Column="3" Name="ParsedHeader" Classes="columnHeader" Content="Parsed" Click="OnSortByParsed"/>
+                </Grid>
+                <ListBox Grid.Row="1" Name="FileList" SelectionMode="Multiple">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <Grid ColumnDefinitions="*,120,80,80">
+                                <TextBlock Grid.Column="0" Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Grid.Column="1" Text="{Binding SizeText}" TextAlignment="Right" Margin="0,0,24,0"/>
+                                <TextBlock Grid.Column="2" Text="{Binding KnownText}"/>
+                                <TextBlock Grid.Column="3" Text="{Binding ParsedText}"/>
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </Grid>
+
+        </DockPanel>
     </Grid>
 </UserControl>
