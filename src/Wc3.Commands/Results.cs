@@ -21,6 +21,9 @@ public sealed record ExtractResult(IReadOnlyList<ExtractedItem> Items);
 public sealed record BundleNode(string Rawcode, ObjectKind Kind, string? Name, bool CustomToMap);
 public sealed record BundleFile(string Path, string Category, bool PresentInMap); // Category: model|texture|icon|sound|other
 public sealed record BundleEdge(string From, string To, string Via); // From/To = rawcode or file path; Via = field code
+// Reason: "references '<rawcode>'[, ...]" (call-graph seed) or "called by <FunctionName>" (first discoverer).
+public sealed record BundleFunction(string Name, int StartLine, int EndLine, string Reason);
 public sealed record UnitBundle(string RootRawcode, string? RootName,
     IReadOnlyList<BundleNode> Objects, IReadOnlyList<BundleFile> Files,
-    IReadOnlyList<string> Strings, IReadOnlyList<BundleEdge> Edges, IReadOnlyList<string> Diagnostics);
+    IReadOnlyList<string> Strings, IReadOnlyList<BundleEdge> Edges, IReadOnlyList<string> Diagnostics,
+    IReadOnlyList<BundleFunction> Functions);

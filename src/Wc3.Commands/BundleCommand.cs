@@ -1,4 +1,6 @@
 // src/Wc3.Commands/BundleCommand.cs
+using System.Text;
+using System.Text.RegularExpressions;
 using War3Net.Common.Extensions;
 using Wc3.GameData;
 using Wc3.Model;
@@ -155,7 +157,7 @@ public static class BundleCommand
             diagnostics.Add($"root unit '{rootRawcode}' not found in the map"
                 + (ctx is null ? " (game data unavailable — base units unresolvable)" : " or game data"));
             return new UnitBundle(rootRawcode, null, Array.Empty<BundleNode>(), Array.Empty<BundleFile>(),
-                Array.Empty<string>(), Array.Empty<BundleEdge>(), diagnostics);
+                Array.Empty<string>(), Array.Empty<BundleEdge>(), diagnostics, Array.Empty<BundleFunction>());
         }
 
         bool rootCustom = rootRawcode.Length == 4 && IsCustom(ObjectKind.Unit, rootRawcode);
@@ -172,6 +174,16 @@ public static class BundleCommand
 
         if (capped) diagnostics.Add($"node cap ({MaxNodes}) reached — dependency closure truncated");
 
+        // Script closure: the war3map.j functions that implement the bundle's custom
+        // skills. Seeded by every rawcode being ported (root + custom objects) — those
+        // appear in JASS as 'XXXX' literals in spell-handler conditions and the like.
+        var seedRawcodes = nodes.Values.Where(n => n.CustomToMap).Select(n => n.Rawcode)
+            .Where(rc => rc != rootRawcode)
+            .OrderBy(rc => rc, StringComparer.Ordinal)
+            .Prepend(rootRawcode)
+            .ToList();
+        var functions = ResolveScriptClosure(doc, seedRawcodes, diagnostics);
+
         return new UnitBundle(
             rootRawcode,
             root.Name,
@@ -181,7 +193,130 @@ public static class BundleCommand
             edges.OrderBy(e => e.From, StringComparer.Ordinal)
                  .ThenBy(e => e.To, StringComparer.Ordinal)
                  .ThenBy(e => e.Via, StringComparer.Ordinal).ToList(),
-            diagnostics);
+            diagnostics,
+            functions);
+    }
+
+    /// <summary>Safety cap on script-closure functions (a real war3map.j tops out around
+    /// a few thousand — beyond that the seed heuristic has almost certainly run away).</summary>
+    private const int MaxFunctions = 4000;
+
+    private static readonly Regex Identifier = new(@"[A-Za-z_][A-Za-z0-9_]*", RegexOptions.Compiled);
+
+    /// <summary>
+    /// JASS call-graph closure seeded by rawcode literals: every war3map.j function whose
+    /// body mentions '&lt;seed rawcode&gt;', plus everything those functions transitively
+    /// call. Best-effort text analysis on top of <see cref="JassFunctionIndex"/> — line
+    /// comments are stripped, but /* */ block comments and string literals are not
+    /// understood, so a rawcode or function name inside either still matches
+    /// (over-inclusion, never under-inclusion). Lua maps are not analyzed.
+    /// </summary>
+    private static IReadOnlyList<BundleFunction> ResolveScriptClosure(
+        MapDocument doc, IReadOnlyList<string> seedRawcodes, List<string> diagnostics)
+    {
+        var entry = doc.GetFile("war3map.j") ?? doc.GetFile("scripts\\war3map.j");
+        if (entry is null)
+        {
+            diagnostics.Add(doc.GetFile("war3map.lua") is not null
+                ? "Lua scripts not analyzed (JASS only) — script closure skipped"
+                : "map has no war3map.j — script closure skipped");
+            return Array.Empty<BundleFunction>();
+        }
+
+        var source = Encoding.UTF8.GetString(entry.RawBytes);
+        var index = JassFunctionIndex.Parse(source);
+        if (index.Count == 0) return Array.Empty<BundleFunction>();
+
+        var lines = source.Split('\n');
+
+        // First declaration wins on duplicate names (illegal in JASS anyway).
+        var byName = new Dictionary<string, JassFunction>(StringComparer.Ordinal);
+        foreach (var f in index) byName.TryAdd(f.Name, f);
+
+        // Body text (signature line included) with // line comments stripped.
+        var bodies = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var f in byName.Values)
+        {
+            var sb = new StringBuilder();
+            for (int i = f.StartLine - 1; i < f.EndLine && i < lines.Length; i++)
+            {
+                var line = lines[i];
+                int comment = line.IndexOf("//", StringComparison.Ordinal);
+                sb.Append(comment >= 0 ? line.AsSpan(0, comment) : line).Append('\n');
+            }
+            bodies[f.Name] = sb.ToString();
+        }
+
+        // Directed call graph, callees in body order: an identifier counts as a call when
+        // it names another indexed function and is either invoked ("Foo(") or passed by
+        // reference ("function Foo" — TriggerAddAction/TimerStart/Condition and friends).
+        var callees = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        foreach (var (name, body) in bodies)
+        {
+            var list = new List<string>();
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            Match? prev = null;
+            foreach (Match m in Identifier.Matches(body))
+            {
+                if (m.Value != name && byName.ContainsKey(m.Value)
+                    && (FollowedByOpenParen(body, m) || IsFunctionReference(body, prev, m))
+                    && seen.Add(m.Value))
+                    list.Add(m.Value);
+                prev = m;
+            }
+            callees[name] = list;
+        }
+
+        // Seeds: functions whose body contains any ported rawcode as a JASS literal.
+        var literals = seedRawcodes.Where(rc => rc.Length == 4)
+            .Distinct(StringComparer.Ordinal).Select(rc => $"'{rc}'").ToList();
+        var reasons = new Dictionary<string, string>(StringComparer.Ordinal);
+        var queue = new Queue<string>();
+        bool capped = false;
+        foreach (var fn in byName.Values.OrderBy(f => f.StartLine))
+        {
+            var matched = literals.Where(l => bodies[fn.Name].Contains(l, StringComparison.Ordinal)).ToList();
+            if (matched.Count == 0) continue;
+            if (reasons.Count >= MaxFunctions) { capped = true; break; }
+            reasons[fn.Name] = "references " + string.Join(", ", matched);
+            queue.Enqueue(fn.Name);
+        }
+
+        // BFS over caller→callee; the reason records the first discoverer.
+        while (queue.Count > 0 && !capped)
+        {
+            var caller = queue.Dequeue();
+            foreach (var callee in callees[caller])
+            {
+                if (reasons.ContainsKey(callee)) continue;
+                if (reasons.Count >= MaxFunctions) { capped = true; break; }
+                reasons[callee] = $"called by {caller}";
+                queue.Enqueue(callee);
+            }
+        }
+        if (capped) diagnostics.Add($"function cap ({MaxFunctions}) reached — script closure truncated");
+
+        return reasons
+            .Select(kv => new BundleFunction(kv.Key, byName[kv.Key].StartLine, byName[kv.Key].EndLine, kv.Value))
+            .OrderBy(f => f.StartLine)
+            .ToList();
+    }
+
+    private static bool FollowedByOpenParen(string body, Match m)
+    {
+        int i = m.Index + m.Length;
+        while (i < body.Length && (body[i] == ' ' || body[i] == '\t')) i++;
+        return i < body.Length && body[i] == '(';
+    }
+
+    /// <summary>True when the matched identifier is a "function Foo" code reference —
+    /// the "function" keyword immediately precedes it with only whitespace between.</summary>
+    private static bool IsFunctionReference(string body, Match? prev, Match m)
+    {
+        if (prev is null || prev.Value != "function") return false;
+        for (int i = prev.Index + prev.Length; i < m.Index; i++)
+            if (!char.IsWhiteSpace(body[i])) return false;
+        return true;
     }
 
     /// <summary>A token references an asset iff it carries a known media extension
