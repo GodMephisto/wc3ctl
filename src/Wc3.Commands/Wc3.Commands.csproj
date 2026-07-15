@@ -11,6 +11,7 @@
     <ProjectReference Include="..\Wc3.MapDocument\Wc3.MapDocument.csproj" />
     <ProjectReference Include="..\Wc3.GameData\Wc3.GameData.csproj" />
     <ProjectReference Include="..\Wc3.Render\Wc3.Render.csproj" />
+    <ProjectReference Include="..\Wc3.Modeling\Wc3.Modeling.csproj" />
   </ItemGroup>
 
   <ItemGroup>

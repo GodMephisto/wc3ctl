@@ -183,6 +183,36 @@ public static class Program
             Console.WriteLine($"Wrote {png.Length:N0} bytes to {dest}");
         }), mapArg, renderOut);
 
+        var rmTarget = new Argument<string>("rawcode",
+            "Four-character object rawcode, or an internal model path (contains '\\', '/' or '.').");
+        var rmKind = new Option<string?>("--kind",
+            "Object type: unit|item|destructable|doodad. Default: auto-detect.");
+        var rmOut = new Option<string?>(new[] { "-o", "--out" },
+            "Output PNG path. Default: <rawcode>.png in the current directory.");
+        var renderModel = new Command("render-model",
+            "Render an object's model (map-imported .mdx/.mdl) to PNG.") { mapArg, rmTarget, rmKind, rmOut };
+        renderModel.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string target = p.GetValueForArgument(rmTarget);
+            string? kindToken = p.GetValueForOption(rmKind);
+            var doc = MapDocument.Load(p.GetValueForArgument(mapArg));
+
+            // Anything that can't be a rawcode is treated as an internal model path.
+            bool isPath = target.Length != 4 || target.IndexOfAny(new[] { '\\', '/', '.' }) >= 0;
+            var png = isPath
+                ? RenderModelCommand.Execute(doc, target)
+                : kindToken is null
+                    ? RenderModelCommand.Execute(doc, target, p.GetValueForOption(gameDirOption))
+                    : RenderModelCommand.Execute(doc, ObjectKinds.Parse(kindToken), target,
+                        p.GetValueForOption(gameDirOption));
+
+            var dest = p.GetValueForOption(rmOut)
+                ?? (isPath ? Path.GetFileNameWithoutExtension(target) : target) + ".png";
+            File.WriteAllBytes(dest, png);
+            Console.WriteLine($"Wrote {png.Length:N0} bytes to {dest}");
+        }));
+
         var script = new Command("script", "Map script queries.");
         var scriptFunctions = new Command("functions", "List functions declared in the map script.") { mapArg };
         scriptFunctions.SetHandler((string map, bool json) => RunSafely(() =>
@@ -250,7 +280,8 @@ public static class Program
 
         root.AddCommand(info); root.AddCommand(ls); root.AddCommand(rt);
         root.AddCommand(search); root.AddCommand(diff); root.AddCommand(obj);
-        root.AddCommand(extract); root.AddCommand(render); root.AddCommand(script);
+        root.AddCommand(extract); root.AddCommand(render); root.AddCommand(renderModel);
+        root.AddCommand(script);
 
         int parseResult = await root.InvokeAsync(args);
         return parseResult != 0 ? parseResult : exitCode;
