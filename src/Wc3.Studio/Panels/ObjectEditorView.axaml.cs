@@ -1,10 +1,14 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
+using Avalonia.Threading;
 using Wc3.Commands;
 using Wc3.Model;
+using Wc3.Render;
 
 namespace Wc3.Studio.Panels;
 
@@ -49,6 +53,21 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     /// <summary>Internal name of the double-clicked object's map-imported model, when it has one.</summary>
     private string? _modelEntryName;
 
+    // --- in-window model preview (all state UI-thread-only) ---
+    private const int PreviewSizePx = 256;
+    private const float DegreesPerPixel = 0.5f;
+    /// <summary>Parsed model + textures cached so drag re-renders only rasterize.</summary>
+    private RenderModelCommand.PreparedModel? _previewModel;
+    private float _previewYaw = ModelRenderer.DefaultYawDegrees;
+    private float _previewPitch = ModelRenderer.DefaultPitchDegrees;
+    /// <summary>Stamp that invalidates in-flight renders when the preview target changes.</summary>
+    private int _previewGeneration;
+    private bool _renderInFlight;
+    /// <summary>A request arrived mid-render; run one trailing render when it lands.</summary>
+    private bool _renderQueued;
+    private bool _dragging;
+    private Point _dragLast;
+
     public ObjectEditorView()
     {
         InitializeComponent();
@@ -66,6 +85,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
 
         if (session.Current is null)
         {
+            HideModelArea(); // drop any preview still rendering against the old map
             ShowPlaceholder("Object editor panel — no map open");
             return;
         }
@@ -265,7 +285,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         HideModelArea();
     }
 
-    // --- model file (double-click an object) ---
+    // --- model preview (double-click an object) ---
 
     private void HideModelArea()
     {
@@ -273,11 +293,27 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         ModelText.Text = "";
         ExtractModelButton.IsEnabled = false;
         _modelEntryName = null;
+        HidePreview();
+    }
+
+    /// <summary>Drop the rendered preview and invalidate any render still in flight.</summary>
+    private void HidePreview()
+    {
+        _previewGeneration++;
+        _previewModel = null;
+        _renderQueued = false;
+        _dragging = false;
+        PreviewBorder.IsVisible = false;
+        PreviewHint.IsVisible = false;
+        var old = PreviewImage.Source as Bitmap;
+        PreviewImage.Source = null;
+        old?.Dispose();
     }
 
     /// <summary>
-    /// Double-click: resolve the object's model file from its merged fields and
-    /// show whether it lives in the map (extractable) or in the base game.
+    /// Double-click: resolve the object's model file from its merged fields.
+    /// Map-imported models render as a rotatable preview; base-game models
+    /// (CASC, not in the map) only show their path.
     /// </summary>
     private void OnObjectDoubleTapped(object? sender, TappedEventArgs e)
     {
@@ -300,10 +336,11 @@ public partial class ObjectEditorView : UserControl, IMapPanel
             return;
         }
 
+        HideModelArea(); // reset stale extract/preview state from the last object
         ModelArea.IsVisible = true;
         if (modelPath is null)
         {
-            ModelText.Text = $"{rawcode}: no model field found.";
+            ModelText.Text = $"{rawcode}: no model field found — nothing to preview.";
             return;
         }
 
@@ -313,11 +350,141 @@ public partial class ObjectEditorView : UserControl, IMapPanel
             _modelEntryName = entry.FileName;
             ModelText.Text = $"{rawcode} model: {entry.FileName} — in map ({entry.RawBytes.Length:N0} bytes)";
             ExtractModelButton.IsEnabled = true;
+            StartPreview(doc, entry.FileName);
         }
         else
         {
-            ModelText.Text = $"{rawcode} — base game model: {modelPath}";
+            ModelText.Text = $"{rawcode} — base game model: {modelPath} — no in-map model to preview.";
         }
+    }
+
+    /// <summary>
+    /// Parse the model, resolve its textures and render the first frame, all off
+    /// the UI thread; the prepared model is cached so drag re-renders only
+    /// rasterize. The generation stamp drops results that land after the preview
+    /// target changed (another double-click, selection change, map close).
+    /// </summary>
+    private void StartPreview(MapDocument doc, string internalName)
+    {
+        _previewYaw = ModelRenderer.DefaultYawDegrees;
+        _previewPitch = ModelRenderer.DefaultPitchDegrees;
+        int gen = ++_previewGeneration;
+        float yaw = _previewYaw, pitch = _previewPitch;
+        Task.Run(() =>
+        {
+            try
+            {
+                var prepared = RenderModelCommand.Prepare(doc, internalName);
+                var png = prepared.RenderPng(PreviewSizePx, PreviewSizePx, yaw, pitch);
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (gen != _previewGeneration)
+                        return;
+                    _previewModel = prepared;
+                    PreviewBorder.IsVisible = true;
+                    PreviewHint.IsVisible = true;
+                    SetPreviewBitmap(png);
+                });
+            }
+            catch (Exception ex) // unparsable model, no geometry, …
+            {
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (gen != _previewGeneration)
+                        return;
+                    ModelText.Text += $"\nPreview unavailable: {ex.Message}";
+                });
+            }
+        });
+    }
+
+    /// <summary>
+    /// Re-render at the current angles with at most one render in flight:
+    /// requests arriving mid-render collapse into a single trailing render at
+    /// whatever the angles are by then, so releasing a drag always settles on
+    /// the final orientation without a backlog of stale frames.
+    /// </summary>
+    private void RequestPreviewRender()
+    {
+        if (_previewModel is not { } prepared)
+            return;
+        if (_renderInFlight)
+        {
+            _renderQueued = true;
+            return;
+        }
+        _renderInFlight = true;
+        int gen = _previewGeneration;
+        float yaw = _previewYaw, pitch = _previewPitch;
+        Task.Run(() =>
+        {
+            byte[]? png = null;
+            string? error = null;
+            try
+            {
+                png = prepared.RenderPng(PreviewSizePx, PreviewSizePx, yaw, pitch);
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+            }
+            Dispatcher.UIThread.Post(() =>
+            {
+                _renderInFlight = false;
+                if (gen != _previewGeneration)
+                {
+                    _renderQueued = false;
+                    return;
+                }
+                if (png is not null)
+                    SetPreviewBitmap(png);
+                else
+                    StatusText.Text = $"Preview render failed: {error}";
+                if (_renderQueued)
+                {
+                    _renderQueued = false;
+                    RequestPreviewRender();
+                }
+            });
+        });
+    }
+
+    /// <summary>Swap the preview image, disposing the bitmap it replaces.</summary>
+    private void SetPreviewBitmap(byte[] png)
+    {
+        using var ms = new MemoryStream(png);
+        var bmp = new Bitmap(ms);
+        var old = PreviewImage.Source as Bitmap;
+        PreviewImage.Source = bmp;
+        old?.Dispose();
+    }
+
+    private void OnPreviewPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (_previewModel is null)
+            return;
+        _dragging = true;
+        _dragLast = e.GetPosition(PreviewBorder);
+        e.Pointer.Capture(PreviewBorder);
+    }
+
+    /// <summary>Orbit so the model follows the drag: right spins it right, down tilts its top toward you.</summary>
+    private void OnPreviewPointerMoved(object? sender, PointerEventArgs e)
+    {
+        if (!_dragging)
+            return;
+        var pos = e.GetPosition(PreviewBorder);
+        _previewYaw = (_previewYaw - (float)(pos.X - _dragLast.X) * DegreesPerPixel) % 360f;
+        _previewPitch = Math.Clamp(
+            _previewPitch + (float)(pos.Y - _dragLast.Y) * DegreesPerPixel, -89f, 89f);
+        _dragLast = pos;
+        RequestPreviewRender();
+    }
+
+    private void OnPreviewPointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        _dragging = false;
+        e.Pointer.Capture(null);
     }
 
     /// <summary>

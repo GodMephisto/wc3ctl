@@ -48,12 +48,23 @@
                                    HorizontalAlignment="Center" VerticalAlignment="Center"
                                    TextWrapping="Wrap" Margin="12" Foreground="#8FA3B8"/>
                     </Grid>
-                    <!-- Model file of the double-clicked object; extract works only
-                         for map-imported models (interim until a real 3D viewer). -->
+                    <!-- Model preview of the double-clicked object: map-imported
+                         models render in-window (drag the image to orbit the
+                         camera); base-game models only show their path. -->
                     <Border Grid.Row="2" Name="ModelArea" IsVisible="False"
                             BorderBrush="#33555555" BorderThickness="0,1,0,0" Padding="4">
                         <StackPanel Spacing="4">
                             <TextBlock Name="ModelText" TextWrapping="Wrap" FontSize="11"/>
+                            <Border Name="PreviewBorder" IsVisible="False" Height="240"
+                                    Background="#22000000" ClipToBounds="True"
+                                    Cursor="Hand"
+                                    PointerPressed="OnPreviewPointerPressed"
+                                    PointerMoved="OnPreviewPointerMoved"
+                                    PointerReleased="OnPreviewPointerReleased">
+                                <Image Name="PreviewImage" Stretch="Uniform"/>
+                            </Border>
+                            <TextBlock Name="PreviewHint" IsVisible="False" FontSize="11"
+                                       Foreground="#8FA3B8" Text="Drag the preview to rotate"/>
                             <Button Name="ExtractModelButton" Content="Extract model…"
                                     IsEnabled="False" Click="OnExtractModelClick"/>
                         </StackPanel>
