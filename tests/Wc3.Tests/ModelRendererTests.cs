@@ -90,4 +90,29 @@ public class ModelRendererTests
         var ex = Assert.Throws<InvalidDataException>(() => ModelRenderer.RenderPng(empty, NoTextures));
         Assert.Contains("geometry", ex.Message);
     }
+
+    [Fact]
+    [Trait("Category", "Corpus")]
+    public void Renders_map_imported_model_end_to_end()
+    {
+        const string map = @"C:\Users\GodMephisto\Documents\Warcraft III\Maps\Download\Anime_WOS2_0.25c1.w3x";
+        if (!File.Exists(map)) return; // corpus-optional
+
+        // The object field says .mdl but the import is binary .mdx — exercises
+        // the extension-swap lookup along with textures and rasterization.
+        var doc = Wc3.Model.MapDocument.Load(map);
+        var png = Wc3.Commands.RenderModelCommand.Execute(doc, @"war3mapImported\wos_Bambietta.mdl");
+
+        Assert.Equal(PngSignature, png[..8]);
+        Assert.True(png.Length > 10_000, $"suspiciously small render ({png.Length} bytes)");
+
+        using var image = Image.Load<Rgba32>(png);
+        Assert.Equal(512, image.Width);
+        Assert.Equal(512, image.Height);
+        int opaque = 0;
+        for (int y = 0; y < image.Height; y++)
+            for (int x = 0; x < image.Width; x++)
+                if (image[x, y].A == 255) opaque++;
+        Assert.True(opaque > 5_000, $"expected a substantial model silhouette, got {opaque} opaque pixels");
+    }
 }
