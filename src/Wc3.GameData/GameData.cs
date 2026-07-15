@@ -16,9 +16,10 @@ public static class GameData
     // reused across object queries. Failures are never cached.
     private static readonly ConcurrentDictionary<string, GameDataContext> ContextCache = new();
 
-    /// <summary>Build all four resolvers (units, abilities, editor strings, unit names)
-    /// from a single CASC open, caching the result per install for the process lifetime.
-    /// The source is disposed before returning; the context holds only parsed data.</summary>
+    /// <summary>Build the resolvers for all seven Object Editor types plus editor strings
+    /// and unit names from a single CASC open, caching the result per install for the
+    /// process lifetime. The source is disposed before returning; the context holds only
+    /// parsed data.</summary>
     public static bool TryOpen(string? gameDirOverride, out GameDataContext? ctx, out string diagnostic)
     {
         ctx = null; diagnostic = "";
@@ -31,13 +32,28 @@ public static class GameData
         // dispose as soon as they return — success or failure.
         try
         {
+            // The five newer types degrade individually: a missing/corrupt SLK leaves
+            // that store Empty with a diagnostic rather than failing the whole open.
+            var diags = new List<string>();
+            ObjectDataStore BuildSafe(string type, Func<IGameDataSource, ObjectDataStore> build)
+            {
+                try { return build(src!); }
+                catch (Exception ex) { diags.Add($"could not read base {type} data: {ex.Message}"); return ObjectDataStore.Empty; }
+            }
+
             var wesBytes = src!.ReadFile(WorldEditStringsPath);
             ctx = new GameDataContext
             {
                 Units = BaseUnitStore.Build(src!),
                 Abilities = BaseAbilityStore.Build(src!),
+                Items = BuildSafe("item", ObjectDataStore.BuildItems),
+                Destructables = BuildSafe("destructable", ObjectDataStore.BuildDestructables),
+                Doodads = BuildSafe("doodad", ObjectDataStore.BuildDoodads),
+                Buffs = BuildSafe("buff", ObjectDataStore.BuildBuffs),
+                Upgrades = BuildSafe("upgrade", ObjectDataStore.BuildUpgrades),
                 Strings = wesBytes is null ? WorldEditStrings.Parse("") : WorldEditStrings.FromBytes(wesBytes),
                 UnitNames = UnitNameTable.FromSources(src!),
+                Diagnostics = diags,
             };
             // Concurrent builders may race; whichever lands first wins and both
             // contexts are equivalent, so GetOrAdd keeps callers consistent.
