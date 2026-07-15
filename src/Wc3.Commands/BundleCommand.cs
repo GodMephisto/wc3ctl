@@ -203,13 +203,25 @@ public static class BundleCommand
 
     private static readonly Regex Identifier = new(@"[A-Za-z_][A-Za-z0-9_]*", RegexOptions.Compiled);
 
+    /// <summary>A global declaration with an initializer: "[constant] type Name = ...".</summary>
+    private static readonly Regex GlobalInitializer =
+        new(@"^\s*(?:constant\s+)?[A-Za-z_][A-Za-z0-9_]*\s+([A-Za-z_][A-Za-z0-9_]*)\s*=", RegexOptions.Compiled);
+
+    private static string StripLineComment(string line)
+    {
+        int comment = line.IndexOf("//", StringComparison.Ordinal);
+        return comment >= 0 ? line[..comment] : line;
+    }
+
     /// <summary>
     /// JASS call-graph closure seeded by rawcode literals: every war3map.j function whose
-    /// body mentions '&lt;seed rawcode&gt;', plus everything those functions transitively
-    /// call. Best-effort text analysis on top of <see cref="JassFunctionIndex"/> — line
-    /// comments are stripped, but /* */ block comments and string literals are not
-    /// understood, so a rawcode or function name inside either still matches
-    /// (over-inclusion, never under-inclusion). Lua maps are not analyzed.
+    /// body mentions '&lt;seed rawcode&gt;' — directly, or through a global initialized
+    /// with one (integer Raiden_ID= 'H000' makes any Raiden_ID reference a hit) — plus
+    /// everything those functions transitively call. Best-effort text analysis on top of
+    /// <see cref="JassFunctionIndex"/> — line comments are stripped, but /* */ block
+    /// comments and string literals are not understood, so a rawcode or function name
+    /// inside either still matches (over-inclusion, never under-inclusion). Lua maps
+    /// are not analyzed.
     /// </summary>
     private static IReadOnlyList<BundleFunction> ResolveScriptClosure(
         MapDocument doc, IReadOnlyList<string> seedRawcodes, List<string> diagnostics)
@@ -228,10 +240,34 @@ public static class BundleCommand
         if (index.Count == 0) return Array.Empty<BundleFunction>();
 
         var lines = source.Split('\n');
+        var literals = seedRawcodes.Where(rc => rc.Length == 4)
+            .Distinct(StringComparer.Ordinal).Select(rc => $"'{rc}'").ToList();
 
         // First declaration wins on duplicate names (illegal in JASS anyway).
         var byName = new Dictionary<string, JassFunction>(StringComparer.Ordinal);
         foreach (var f in index) byName.TryAdd(f.Name, f);
+
+        // Rawcode aliases: maps commonly stash spell ids in globals and compare against
+        // those, so a global whose initializer carries a seed literal (any line outside
+        // every function body, e.g. "integer RaidenQ_ID= 'A000'") makes its name count
+        // as a reference to that rawcode wherever a function mentions it.
+        var inFunction = new bool[lines.Length];
+        foreach (var f in index)
+            for (int i = f.StartLine - 1; i < f.EndLine && i < lines.Length; i++)
+                inFunction[i] = true;
+
+        var aliases = new Dictionary<string, string>(StringComparer.Ordinal); // name → 'XXXX'
+        for (int i = 0; i < lines.Length; i++)
+        {
+            if (inFunction[i]) continue;
+            var line = StripLineComment(lines[i]);
+            foreach (var lit in literals)
+            {
+                if (!line.Contains(lit, StringComparison.Ordinal)) continue;
+                var m = GlobalInitializer.Match(line);
+                if (m.Success) aliases.TryAdd(m.Groups[1].Value, lit);
+            }
+        }
 
         // Body text (signature line included) with // line comments stripped.
         var bodies = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -239,21 +275,20 @@ public static class BundleCommand
         {
             var sb = new StringBuilder();
             for (int i = f.StartLine - 1; i < f.EndLine && i < lines.Length; i++)
-            {
-                var line = lines[i];
-                int comment = line.IndexOf("//", StringComparison.Ordinal);
-                sb.Append(comment >= 0 ? line.AsSpan(0, comment) : line).Append('\n');
-            }
+                sb.Append(StripLineComment(lines[i])).Append('\n');
             bodies[f.Name] = sb.ToString();
         }
 
-        // Directed call graph, callees in body order: an identifier counts as a call when
-        // it names another indexed function and is either invoked ("Foo(") or passed by
-        // reference ("function Foo" — TriggerAddAction/TimerStart/Condition and friends).
+        // One token pass per body fills both the call graph and the alias mentions.
+        // Callees in body order: an identifier counts as a call when it names another
+        // indexed function and is either invoked ("Foo(") or passed by reference
+        // ("function Foo" — TriggerAddAction/TimerStart/Condition and friends).
         var callees = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        var aliasHits = new Dictionary<string, List<string>>(StringComparer.Ordinal);
         foreach (var (name, body) in bodies)
         {
-            var list = new List<string>();
+            var calls = new List<string>();
+            var mentions = new List<string>();
             var seen = new HashSet<string>(StringComparer.Ordinal);
             Match? prev = null;
             foreach (Match m in Identifier.Matches(body))
@@ -261,21 +296,24 @@ public static class BundleCommand
                 if (m.Value != name && byName.ContainsKey(m.Value)
                     && (FollowedByOpenParen(body, m) || IsFunctionReference(body, prev, m))
                     && seen.Add(m.Value))
-                    list.Add(m.Value);
+                    calls.Add(m.Value);
+                else if (aliases.ContainsKey(m.Value) && seen.Add("'" + m.Value))
+                    mentions.Add(m.Value);
                 prev = m;
             }
-            callees[name] = list;
+            callees[name] = calls;
+            aliasHits[name] = mentions;
         }
 
-        // Seeds: functions whose body contains any ported rawcode as a JASS literal.
-        var literals = seedRawcodes.Where(rc => rc.Length == 4)
-            .Distinct(StringComparer.Ordinal).Select(rc => $"'{rc}'").ToList();
+        // Seeds: functions referencing any ported rawcode — as a literal or via an alias.
         var reasons = new Dictionary<string, string>(StringComparer.Ordinal);
         var queue = new Queue<string>();
         bool capped = false;
         foreach (var fn in byName.Values.OrderBy(f => f.StartLine))
         {
-            var matched = literals.Where(l => bodies[fn.Name].Contains(l, StringComparison.Ordinal)).ToList();
+            var matched = literals.Where(l => bodies[fn.Name].Contains(l, StringComparison.Ordinal))
+                .Concat(aliasHits[fn.Name].Select(a => $"{aliases[a]} via {a}"))
+                .ToList();
             if (matched.Count == 0) continue;
             if (reasons.Count >= MaxFunctions) { capped = true; break; }
             reasons[fn.Name] = "references " + string.Join(", ", matched);
