@@ -1,0 +1,53 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:panels="using:Wc3.Studio.Panels"
+             x:Class="Wc3.Studio.Panels.MapWorkspaceView">
+    <DockPanel>
+
+        <!-- Header: role label + open button, with a per-workspace status line. -->
+        <Border DockPanel.Dock="Top" BorderThickness="0,0,0,1"
+                BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
+                Padding="8,4">
+            <StackPanel Spacing="4">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBlock Name="RoleText" FontWeight="SemiBold"
+                               VerticalAlignment="Center" Text="Map"/>
+                    <Button Name="OpenMapButton" Content="Open Map…" Click="OnOpenMapClick"/>
+                    <!-- Port seam (Source only): a later wave enables this and wires
+                         it across both workspaces via MainWindow.Workspaces. The
+                         Border carries the tooltip because disabled controls don't
+                         receive the pointer events that trigger ToolTip. -->
+                    <Border Name="PortButtonHost" IsVisible="False"
+                            ToolTip.Tip="Porting arrives in a later step.">
+                        <Button Name="PortButton" Content="Port selected → Target ▶"
+                                IsEnabled="False"
+                                ToolTip.Tip="Porting arrives in a later step."/>
+                    </Border>
+                    <!-- Target only: porting into a fresh map. Creation itself is a
+                         follow-up slice (see OnNewBlankMapClick). -->
+                    <Button Name="NewBlankMapButton" Content="New Blank Map"
+                            IsVisible="False" Click="OnNewBlankMapClick"/>
+                </StackPanel>
+                <TextBlock Name="StatusText" FontSize="11" TextWrapping="Wrap"
+                           Text="No map open."/>
+            </StackPanel>
+        </Border>
+
+        <!-- This workspace's own panel instances; loaded lazily per tab. -->
+        <TabControl Name="PanelTabs" SelectionChanged="OnPanelTabsSelectionChanged">
+            <TabItem Header="Terrain">
+                <panels:TerrainView Name="TerrainPanel"/>
+            </TabItem>
+            <TabItem Header="Objects">
+                <panels:ObjectEditorView Name="ObjectsPanel"/>
+            </TabItem>
+            <TabItem Header="Files">
+                <panels:FilesView Name="FilesPanel"/>
+            </TabItem>
+            <TabItem Header="Script">
+                <panels:ScriptView Name="ScriptPanel"/>
+            </TabItem>
+        </TabControl>
+
+    </DockPanel>
+</UserControl>

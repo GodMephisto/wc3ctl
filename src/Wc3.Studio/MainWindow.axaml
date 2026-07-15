@@ -3,13 +3,14 @@
         xmlns:panels="using:Wc3.Studio.Panels"
         x:Class="Wc3.Studio.MainWindow"
         Title="wc3ctl Studio"
-        Width="1200" Height="800">
+        Width="1600" Height="900">
     <DockPanel>
 
         <!-- Top menu -->
         <Menu DockPanel.Dock="Top">
             <MenuItem Header="_File">
-                <MenuItem Header="_Open Map…" Click="OnOpenMapClick"/>
+                <MenuItem Header="Open _Source Map…" Click="OnOpenSourceMapClick"/>
+                <MenuItem Header="Open _Target Map…" Click="OnOpenTargetMapClick"/>
                 <Separator/>
                 <MenuItem Header="E_xit" Click="OnExitClick"/>
             </MenuItem>
@@ -22,24 +23,17 @@
         <Border DockPanel.Dock="Bottom" BorderThickness="0,1,0,0"
                 BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
                 Padding="8,4">
-            <TextBlock Name="StatusText" Text="No map open." TextWrapping="Wrap"/>
+            <TextBlock Name="StatusText" TextWrapping="Wrap"
+                       Text="Open a source map (port from) and a target map (port into)."/>
         </Border>
 
-        <!-- Center: panel tabs -->
-        <TabControl Name="PanelTabs" SelectionChanged="OnPanelTabsSelectionChanged">
-            <TabItem Header="Terrain">
-                <panels:TerrainView Name="TerrainPanel"/>
-            </TabItem>
-            <TabItem Header="Objects">
-                <panels:ObjectEditorView Name="ObjectsPanel"/>
-            </TabItem>
-            <TabItem Header="Files">
-                <panels:FilesView Name="FilesPanel"/>
-            </TabItem>
-            <TabItem Header="Script">
-                <panels:ScriptView Name="ScriptPanel"/>
-            </TabItem>
-        </TabControl>
+        <!-- Center: two fully independent map workspaces, source | target. -->
+        <Grid ColumnDefinitions="*,Auto,*">
+            <panels:MapWorkspaceView Grid.Column="0" Name="SourceWorkspace" Role="Source"/>
+            <GridSplitter Grid.Column="1" Width="4" ResizeDirection="Columns"
+                          Background="#33555555"/>
+            <panels:MapWorkspaceView Grid.Column="2" Name="TargetWorkspace" Role="Target"/>
+        </Grid>
 
     </DockPanel>
 </Window>
