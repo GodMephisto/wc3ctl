@@ -26,7 +26,8 @@ public partial class MapWorkspaceView : UserControl
     /// <summary>
     /// Header label, "Source" or "Target" (set from MainWindow.axaml). The role
     /// also picks the role-specific header affordances: only the Source side
-    /// shows the (still disabled) port seam.
+    /// shows the (still disabled) port seam; only the Target side offers a
+    /// blank map to port into.
     /// </summary>
     public string Role
     {
@@ -36,6 +37,7 @@ public partial class MapWorkspaceView : UserControl
             _role = value;
             RoleText.Text = value;
             PortButtonHost.IsVisible = value == "Source";
+            NewBlankMapButton.IsVisible = value == "Target";
         }
     }
 
@@ -100,6 +102,18 @@ public partial class MapWorkspaceView : UserControl
 
     private async void OnOpenMapClick(object? sender, RoutedEventArgs e) =>
         await PickAndOpenMapAsync();
+
+    /// <summary>
+    /// Blank-map creation is not implemented yet: MapDocument can only Load()
+    /// existing archive bytes, and Save() re-opens those bytes as the MPQ to
+    /// rebuild from — a blank map means synthesizing a minimal valid archive
+    /// (HM3W header + w3i/w3e/wpm/… + script) and a new MapDocument construction
+    /// path. War3Net 6.x has no blank-map factory either (Map(MapInfo?,
+    /// MapEnvironment?) wants a fully populated info + terrain grid). Follow-up
+    /// slice; the affordance stays visible so the workflow is discoverable.
+    /// </summary>
+    private void OnNewBlankMapClick(object? sender, RoutedEventArgs e) =>
+        StatusText.Text = "Blank-map creation is a follow-up — open an existing map as the target for now.";
 
     private void OnPanelTabsSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {

@@ -23,6 +23,10 @@
                                 IsEnabled="False"
                                 ToolTip.Tip="Porting arrives in a later step."/>
                     </Border>
+                    <!-- Target only: porting into a fresh map. Creation itself is a
+                         follow-up slice (see OnNewBlankMapClick). -->
+                    <Button Name="NewBlankMapButton" Content="New Blank Map"
+                            IsVisible="False" Click="OnNewBlankMapClick"/>
                 </StackPanel>
                 <TextBlock Name="StatusText" FontSize="11" TextWrapping="Wrap"
                            Text="No map open."/>
