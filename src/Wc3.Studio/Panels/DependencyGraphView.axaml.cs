@@ -20,6 +20,10 @@ public partial class DependencyGraphView : UserControl, IMapPanel
     private bool _suppress;
     /// <summary>Stamp that invalidates in-flight unit lists / resolves when the map changes.</summary>
     private int _generation;
+    /// <summary>At most one ResolveUnit runs at a time (they share the MapDocument).</summary>
+    private bool _resolveInFlight;
+    /// <summary>Selection changed mid-resolve; run one trailing resolve when it lands.</summary>
+    private bool _resolveQueued;
 
     public DependencyGraphView()
     {
@@ -114,10 +118,97 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         RequestResolve();
     }
 
-    /// <summary>Resolve the selected unit's closure. Fleshed out in the next slice.</summary>
+    /// <summary>
+    /// Resolve the selected unit's closure off the UI thread with at most one
+    /// resolve in flight: selections arriving mid-resolve collapse into a
+    /// single trailing resolve of whatever is selected by then (mirrors the
+    /// object editor's preview render pattern), so rapid switching never
+    /// cross-renders and never runs two resolves against the same document.
+    /// </summary>
     private void RequestResolve()
     {
-        SummaryText.Text = $"Selected {SelectedUnitDisplay} — closure resolution comes next.";
+        if (_session?.Current is not { } doc || SelectedUnitRawcode is not { } rawcode)
+            return;
+        if (_resolveInFlight)
+        {
+            _resolveQueued = true;
+            return;
+        }
+        _resolveInFlight = true;
+        int gen = _generation;
+        string? gameDir = _session.GameDir;
+        SummaryText.Text = $"Resolving {SelectedUnitDisplay}…";
+        GraphHint.IsVisible = true;
+        GraphHint.Text = $"Resolving {SelectedUnitDisplay}…";
+        Task.Run(() =>
+        {
+            UnitBundle? bundle = null;
+            string? error = null;
+            try
+            {
+                bundle = BundleCommand.ResolveUnit(doc, rawcode, gameDir);
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+            }
+            Dispatcher.UIThread.Post(() =>
+            {
+                _resolveInFlight = false;
+                // A newer selection supersedes this result — re-resolve, even if
+                // the map changed underneath (RequestResolve re-reads everything).
+                if (_resolveQueued)
+                {
+                    _resolveQueued = false;
+                    RequestResolve();
+                    return;
+                }
+                if (gen != _generation)
+                    return;
+                if (bundle is null)
+                {
+                    SummaryText.Text = "";
+                    GraphHint.Text = "Resolve failed — see the status line below.";
+                    StatusText.Text = $"Failed to resolve {rawcode}: {error}";
+                    return;
+                }
+                RenderBundle(bundle);
+            });
+        });
+    }
+
+    /// <summary>Render a freshly resolved closure into every view of this panel.</summary>
+    private void RenderBundle(UnitBundle bundle)
+    {
+        int custom = bundle.Objects.Count(o => o.CustomToMap);
+        SummaryText.Text =
+            $"{bundle.Objects.Count} objects ({custom} custom / {bundle.Objects.Count - custom} base)"
+            + $" · {bundle.Files.Count} files · {bundle.Strings.Count} strings";
+        StatusText.Text = bundle.Diagnostics.Count > 0 ? string.Join("; ", bundle.Diagnostics) : "";
+        BuildTree(bundle);
+        BuildFilesList(bundle);
+        BuildStringsList(bundle);
+        RenderGraph(bundle);
+    }
+
+    private void BuildTree(UnitBundle bundle)
+    {
+        DepTree.Items.Clear(); // details land in the next slice
+    }
+
+    private void BuildFilesList(UnitBundle bundle)
+    {
+        FilesList.Children.Clear();
+    }
+
+    private void BuildStringsList(UnitBundle bundle)
+    {
+        StringsList.Children.Clear();
+    }
+
+    private void RenderGraph(UnitBundle bundle)
+    {
+        GraphCanvas.Children.Clear();
     }
 
     /// <summary>Reset the picker and the exposed selection (notifying the workspace).</summary>
