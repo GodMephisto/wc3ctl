@@ -24,6 +24,7 @@
                            FontFamily="Consolas,Cascadia Mono,Menlo,monospace"
                            TextTrimming="CharacterEllipsis"/>
                 <TextBox Name="SourceBox" Grid.Row="1"
+                         Watermark="Select a function to view its source"
                          IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap"
                          FontFamily="Consolas,Cascadia Mono,Menlo,monospace"
                          ScrollViewer.VerticalScrollBarVisibility="Auto"
