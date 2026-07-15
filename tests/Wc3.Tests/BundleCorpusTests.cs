@@ -36,4 +36,23 @@ public class BundleCorpusTests
         var filePaths = bundle.Files.Select(f => f.Path).ToHashSet(StringComparer.Ordinal);
         Assert.All(bundle.Edges, e => Assert.True(known.Contains(e.To) || filePaths.Contains(e.To)));
     }
+
+    [Fact]
+    [Trait("Category", "Corpus")]
+    public void Anime_map_raiden_bundle_pulls_a_script_closure()
+    {
+        if (!File.Exists(MapPath)) return;
+        var doc = MapDocument.Load(MapPath);
+
+        // H000 "Raiden Ei" — her spell handlers live in war3map.j behind
+        // rawcode-initialized globals (integer RaidenQ_ID= 'A000' ...).
+        var bundle = BundleCommand.ResolveUnit(doc, "H000", ctx: null, preDiagnostics: Array.Empty<string>());
+
+        Assert.NotEmpty(bundle.Functions);
+        Assert.Contains(bundle.Functions, f => f.Reason.StartsWith("references ", StringComparison.Ordinal));
+        Assert.Contains(bundle.Functions, f => f.Reason.StartsWith("called by ", StringComparison.Ordinal));
+        // Deterministic: ordered by declaration position, no duplicate names.
+        Assert.Equal(bundle.Functions.OrderBy(f => f.StartLine).Select(f => f.Name), bundle.Functions.Select(f => f.Name));
+        Assert.Equal(bundle.Functions.Count, bundle.Functions.Select(f => f.Name).Distinct(StringComparer.Ordinal).Count());
+    }
 }
