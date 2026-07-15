@@ -1,0 +1,73 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Wc3.Studio.Panels.DependencyGraphView">
+    <UserControl.Styles>
+        <!-- Compact tree rows; counts here are small (dozens), no virtualization concerns. -->
+        <Style Selector="TreeView#DepTree TreeViewItem">
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="Padding" Value="2,1"/>
+        </Style>
+        <Style Selector="Expander /template/ ToggleButton">
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="Padding" Value="8,4"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Grid>
+        <TextBlock Name="PlaceholderText"
+                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                   Text="Dependency panel — no map open"/>
+
+        <Grid Name="ContentRoot" IsVisible="False" RowDefinitions="Auto,*,Auto">
+
+            <!-- Unit picker + closure summary -->
+            <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" Margin="6,4">
+                <TextBlock Text="Unit:" VerticalAlignment="Center"/>
+                <ComboBox Name="UnitCombo" MinWidth="280"
+                          SelectionChanged="OnUnitChanged"/>
+                <TextBlock Name="SummaryText" VerticalAlignment="Center"
+                           Foreground="#8FA3B8" Text=""/>
+            </StackPanel>
+
+            <Grid Grid.Row="1" ColumnDefinitions="*,4,360">
+
+                <!-- Primary: layered node-link graph (objects in depth columns,
+                     files in a bottom band), scrollable in both directions. -->
+                <Grid Grid.Column="0">
+                    <ScrollViewer Name="GraphScroll"
+                                  HorizontalScrollBarVisibility="Auto"
+                                  VerticalScrollBarVisibility="Auto"
+                                  Background="#14000000">
+                        <Canvas Name="GraphCanvas"/>
+                    </ScrollViewer>
+                    <TextBlock Name="GraphHint"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               Foreground="#8FA3B8" TextWrapping="Wrap" Margin="24"
+                               IsHitTestVisible="False"
+                               Text="Pick a unit to see its dependency graph."/>
+                </Grid>
+
+                <GridSplitter Grid.Column="1" Background="#33555555"/>
+
+                <!-- Secondary: structured details — always readable even when
+                     the canvas is busy. -->
+                <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="6,2,6,6" Spacing="6">
+                        <TreeView Name="DepTree"/>
+                        <Expander Name="FilesExpander" Header="Files (0)">
+                            <StackPanel Name="FilesList" Spacing="2" Margin="4"/>
+                        </Expander>
+                        <Expander Name="StringsExpander" Header="Strings (0)">
+                            <StackPanel Name="StringsList" Spacing="2" Margin="4"/>
+                        </Expander>
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+
+            <!-- Unobtrusive status line: resolver diagnostics / errors. -->
+            <Border Grid.Row="2" BorderBrush="#33555555" BorderThickness="0,1,0,0" Padding="6,4">
+                <TextBlock Name="StatusText" TextWrapping="Wrap" FontSize="11" Text=""/>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

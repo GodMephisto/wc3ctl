@@ -21,6 +21,7 @@ public partial class MapWorkspaceView : UserControl
     public MapWorkspaceView()
     {
         InitializeComponent();
+        DependenciesPanel.SelectionChanged += OnPortSelectionChanged;
     }
 
     /// <summary>
@@ -46,8 +47,32 @@ public partial class MapWorkspaceView : UserControl
 
     public bool HasMap => Session.Current is not null;
 
+    /// <summary>
+    /// Port seam: the unit picked in the Dependencies tab, whose closure the
+    /// port wave will copy into the Target workspace. Null until one is chosen.
+    /// </summary>
+    public string? SelectedUnitForPort => DependenciesPanel.SelectedUnitRawcode;
+
     /// <summary>Raised after a map is successfully opened into this workspace.</summary>
     public event EventHandler? MapChanged;
+
+    /// <summary>
+    /// Keep the (still disabled) port button honest about what it would port:
+    /// its text and tooltip mirror the Dependencies tab's selected unit.
+    /// Enabling the button — and porting itself — is a later wave.
+    /// </summary>
+    private void OnPortSelectionChanged(object? sender, EventArgs e)
+    {
+        var display = DependenciesPanel.SelectedUnitDisplay;
+        PortButton.Content = display is null
+            ? "Port selected → Target ▶"
+            : $"Port {display} → Target ▶";
+        var tip = display is null
+            ? "Porting arrives in a later step."
+            : $"Porting arrives in a later step. Selected: {display}.";
+        ToolTip.SetTip(PortButtonHost, tip);
+        ToolTip.SetTip(PortButton, tip);
+    }
 
     /// <summary>Shows the OS map picker, then loads the chosen map into this workspace.</summary>
     public async Task PickAndOpenMapAsync()

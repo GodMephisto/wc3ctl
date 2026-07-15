@@ -47,6 +47,9 @@
             <TabItem Header="Script">
                 <panels:ScriptView Name="ScriptPanel"/>
             </TabItem>
+            <TabItem Header="Dependencies">
+                <panels:DependencyGraphView Name="DependenciesPanel"/>
+            </TabItem>
         </TabControl>
 
     </DockPanel>
