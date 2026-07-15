@@ -86,7 +86,8 @@ public class CliTests
             var sw = new StringWriter();
             var console = System.Console.Out;
             System.Console.SetOut(sw);
-            int code = await Wc3Ctl.Program.Main(new[] { "object", "list", path, "--json" });
+            int code = await Wc3Ctl.Program.Main(
+                new[] { "object", "list", path, "--json", "--game-dir", "Z:\\no_such" });
             System.Console.SetOut(console);
             Assert.Equal(0, code);
             Assert.Contains("\"Items\": []", sw.ToString());

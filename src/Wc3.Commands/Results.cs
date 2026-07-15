@@ -12,9 +12,9 @@ public sealed record RoundtripResult(
     bool Faithful, IReadOnlyList<string> Mismatches, IReadOnlyList<string> ExcludedNotes);
 public sealed record MergedField(string Code, string Name, string Value, string Source); // Source: "base" | "map"
 public sealed record MergedObjectResult(
-    string Rawcode, bool Found, string? BaseRawcode,
+    string Rawcode, bool Found, string? BaseRawcode, string? Name,
     IReadOnlyList<MergedField> Fields, IReadOnlyList<string> Diagnostics);
-public sealed record ObjectListItem(string Rawcode, string? BaseRawcode);
+public sealed record ObjectListItem(string Rawcode, string? BaseRawcode, string? Name);
 public sealed record ObjectListResult(IReadOnlyList<ObjectListItem> Items);
 public sealed record ExtractedItem(string? Name, int BlockIndex, byte[] Bytes);
 public sealed record ExtractResult(IReadOnlyList<ExtractedItem> Items);

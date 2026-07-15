@@ -35,7 +35,7 @@ public static class Render
     public static string ObjectGet(MergedObjectResult r)
     {
         if (!r.Found) return $"{r.Rawcode}: not found";
-        var head = r.BaseRawcode is null ? r.Rawcode : $"{r.Rawcode} (base: {r.BaseRawcode})";
+        var head = Headline(r.Rawcode, r.Name, r.BaseRawcode);
         var lines = r.Fields.Select(f => $"{f.Name} ({f.Code}) = {f.Value}  [{f.Source}]");
         var notes = r.Diagnostics.Select(d => $"note: {d}");
         return string.Join("\n", new[] { head }.Concat(lines).Concat(notes));
@@ -43,8 +43,16 @@ public static class Render
 
     public static string ObjectList(ObjectListResult r) =>
         r.Items.Count == 0 ? "(no custom objects)"
-        : string.Join("\n", r.Items.Select(i =>
-            i.BaseRawcode is null ? i.Rawcode : $"{i.Rawcode}  (base: {i.BaseRawcode})"));
+        : string.Join("\n", r.Items.Select(i => Headline(i.Rawcode, i.Name, i.BaseRawcode)));
+
+    // e.g. H000  "Paladin"  (base: Hpal)
+    private static string Headline(string rawcode, string? name, string? baseRawcode) =>
+        string.Join("  ", new[]
+        {
+            rawcode,
+            name is null ? null : $"\"{name}\"",
+            baseRawcode is null ? null : $"(base: {baseRawcode})",
+        }.Where(part => part is not null));
 
     public static string Extract(ExtractManifest m, string dest) =>
         $"Extracted {m.Count} file(s) ({m.TotalBytes:N0} bytes) to {dest}";

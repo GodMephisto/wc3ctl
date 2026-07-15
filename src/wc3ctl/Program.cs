@@ -106,8 +106,10 @@ public static class Program
             var r = ObjectGetCommand.Execute(MapDocument.Load(map), rawcode, p.GetValueForOption(gameDirOption));
             if (field is not null)
             {
+                // Leveled ability fields are keyed "code:N" — match the bare code too.
                 var match = r.Fields
-                    .Where(f => string.Equals(f.Code, field, StringComparison.OrdinalIgnoreCase)).ToList();
+                    .Where(f => string.Equals(f.Code, field, StringComparison.OrdinalIgnoreCase)
+                        || f.Code.StartsWith(field + ":", StringComparison.OrdinalIgnoreCase)).ToList();
                 var diags = match.Count == 0 && r.Found
                     ? r.Diagnostics.Append($"no such field {field}").ToList()
                     : r.Diagnostics;
@@ -121,7 +123,8 @@ public static class Program
         objList.SetHandler(ctx => RunSafely(() =>
         {
             var p = ctx.ParseResult;
-            var r = ObjectListCommand.Execute(MapDocument.Load(p.GetValueForArgument(mapArg)));
+            var r = ObjectListCommand.Execute(
+                MapDocument.Load(p.GetValueForArgument(mapArg)), p.GetValueForOption(gameDirOption));
             Emit(p.GetValueForOption(jsonOption), r, () => Render.ObjectList(r));
         }));
         obj.AddCommand(objList);
