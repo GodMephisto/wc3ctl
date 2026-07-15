@@ -104,6 +104,10 @@ public static class Render
         foreach (var s in r.Strings)
             sb.AppendLine($"  \"{s}\"");
 
+        sb.AppendLine().AppendLine($"Functions ({r.Functions.Count}):");
+        foreach (var f in r.Functions)
+            sb.AppendLine($"  line {f.StartLine}-{f.EndLine}  {f.Name}  ({f.Reason})");
+
         foreach (var d in r.Diagnostics)
             sb.AppendLine($"note: {d}");
         return sb.ToString().TrimEnd('\r', '\n');

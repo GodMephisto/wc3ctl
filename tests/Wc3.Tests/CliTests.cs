@@ -145,6 +145,7 @@ public class CliTests
             Assert.Contains("\"RootRawcode\": \"H000\"", output);
             Assert.Contains("\"Rawcode\": \"A000\"", output);
             Assert.Contains("\"Kind\": \"Ability\"", output);   // enum serialized by name
+            Assert.Contains("\"Functions\": []", output);       // script-less map → empty closure
         }
         finally { File.Delete(path); }
     }
