@@ -19,7 +19,7 @@ public sealed class UnitNameTable
         foreach (var race in Races)
         {
             var bytes = src.ReadFile($@"war3.w3mod:_locales\{locale}.w3mod:units\{race}unitstrings.txt");
-            if (bytes != null) ParseInto(names, System.Text.Encoding.UTF8.GetString(bytes));
+            if (bytes != null) ParseInto(names, WorldEditStrings.DecodeUtf8(bytes));
         }
         return new UnitNameTable(names);
     }

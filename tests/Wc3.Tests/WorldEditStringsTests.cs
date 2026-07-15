@@ -58,4 +58,14 @@ public class WorldEditStringsTests
         Assert.True(wes.TryGet("WESTRING_A", out var val));
         Assert.Equal("Héro", val);
     }
+
+    [Fact]
+    public void FromBytes_skips_utf8_bom()
+    {
+        var bytes = new byte[] { 0xEF, 0xBB, 0xBF }
+            .Concat(System.Text.Encoding.UTF8.GetBytes("WESTRING_A=a\n")).ToArray();
+        var wes = WorldEditStrings.FromBytes(bytes);
+        Assert.True(wes.TryGet("WESTRING_A", out var val));
+        Assert.Equal("a", val);
+    }
 }
