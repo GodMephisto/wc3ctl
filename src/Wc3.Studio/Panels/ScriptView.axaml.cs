@@ -14,6 +14,7 @@ public partial class ScriptView : UserControl, IMapPanel
     }
 
     private List<JassFunction> _functions = new();
+    private string _source = string.Empty;            // full script; never shown whole in SourceBox
     private int[] _lineStarts = Array.Empty<int>();   // char offset of each 1-based line's start
 
     public ScriptView()
@@ -27,6 +28,7 @@ public partial class ScriptView : UserControl, IMapPanel
     {
         // Rebuild from scratch on every call.
         _functions = new List<JassFunction>();
+        _source = string.Empty;
         _lineStarts = Array.Empty<int>();
         SearchBox.Text = string.Empty;
         FunctionList.ItemsSource = null;
@@ -52,12 +54,13 @@ public partial class ScriptView : UserControl, IMapPanel
         }
 
         var raw = doc.GetFile(result.ScriptFile)?.RawBytes ?? Array.Empty<byte>();
-        var source = Encoding.UTF8.GetString(raw);
-        _lineStarts = ComputeLineStarts(source);
+        _source = Encoding.UTF8.GetString(raw);
+        _lineStarts = ComputeLineStarts(_source);
         _functions = result.Functions.OrderBy(f => f.StartLine).ToList();
 
+        // The full source stays in _source only; SourceBox gets one function at a
+        // time in OnFunctionSelected, so the TextBox never lays out megabytes.
         HeaderText.Text = $"{_functions.Count} functions in {result.ScriptFile}";
-        SourceBox.Text = source;
         ApplyFilter();
     }
 
@@ -77,21 +80,25 @@ public partial class ScriptView : UserControl, IMapPanel
 
         SignatureText.Text = item.Fn.Signature;
 
-        // Best-effort: move the caret to the function's first line and select it.
-        var line = item.Fn.StartLine;                 // 1-based (JassFunctionIndex)
-        if (line < 1 || line > _lineStarts.Length) return;
+        // Show only this function's lines so the TextBox holds a few dozen
+        // lines instead of the whole (potentially multi-MB) script.
+        var startLine = item.Fn.StartLine;            // 1-based (JassFunctionIndex)
+        if (startLine < 1 || startLine > _lineStarts.Length)
+        {
+            SourceBox.Text = string.Empty;
+            return;
+        }
 
-        var start = _lineStarts[line - 1];
-        var end = line < _lineStarts.Length
-            ? _lineStarts[line] - 1                   // up to (not including) the '\n'
-            : SourceBox.Text?.Length ?? start;
-        var text = SourceBox.Text ?? string.Empty;
-        if (end > start && end <= text.Length && end > 0 && text[end - 1] == '\r') end--;
+        var endLine = Math.Clamp(item.Fn.EndLine, startLine, _lineStarts.Length);
+        var start = _lineStarts[startLine - 1];
+        var end = endLine < _lineStarts.Length
+            ? _lineStarts[endLine] - 1                // up to (not including) the '\n'
+            : _source.Length;                         // last line runs to EOF
+        if (end > start && _source[end - 1] == '\r') end--;
         if (end < start) end = start;
 
-        SourceBox.CaretIndex = start;
-        SourceBox.SelectionStart = start;
-        SourceBox.SelectionEnd = end;
+        SourceBox.Text = _source.Substring(start, end - start);
+        SourceBox.CaretIndex = 0;
     }
 
     // Offsets follow JassFunctionIndex line numbering: lines are '\n'-separated.
