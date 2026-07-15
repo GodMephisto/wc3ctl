@@ -22,30 +22,64 @@ public static class RenderModelCommand
             [ObjectKind.Item] = "ifil",
         };
 
-    /// <summary>Renders the model at an internal map path (slash and .mdx/.mdl variants tried).</summary>
-    public static byte[] Execute(MapDocument doc, string modelInternalPath)
+    /// <summary>
+    /// A parsed model plus its map-resolved textures, ready to render repeatedly
+    /// at different camera angles (interactive rotation) without re-parsing the
+    /// model or re-decoding BLPs on every frame.
+    /// </summary>
+    public sealed record PreparedModel(Model3D Model, IReadOnlyDictionary<int, TextureImage> Textures)
+    {
+        public byte[] RenderPng(
+            int width = 512,
+            int height = 512,
+            float yawDegrees = ModelRenderer.DefaultYawDegrees,
+            float pitchDegrees = ModelRenderer.DefaultPitchDegrees)
+            => ModelRenderer.RenderPng(Model, Textures, width, height, yawDegrees, pitchDegrees);
+    }
+
+    /// <summary>Parses the model at an internal map path and resolves its textures.</summary>
+    public static PreparedModel Prepare(MapDocument doc, string modelInternalPath)
     {
         var entry = FindModelEntry(doc, modelInternalPath)
             ?? throw new InvalidDataException(
                 $"model '{modelInternalPath}' is not in the map — only map-imported models render (base-game CASC models are a follow-up)");
         var model = ModelParser.Parse(entry.RawBytes, entry.FileName!);
-        return ModelRenderer.RenderPng(model, ResolveTextures(doc, model));
+        return new PreparedModel(model, ResolveTextures(doc, model));
     }
 
+    /// <summary>Renders the model at an internal map path (slash and .mdx/.mdl variants tried).</summary>
+    public static byte[] Execute(
+        MapDocument doc,
+        string modelInternalPath,
+        float yawDegrees = ModelRenderer.DefaultYawDegrees,
+        float pitchDegrees = ModelRenderer.DefaultPitchDegrees)
+        => Prepare(doc, modelInternalPath).RenderPng(yawDegrees: yawDegrees, pitchDegrees: pitchDegrees);
+
     /// <summary>Renders one object's model, resolving the kind's model-file field.</summary>
-    public static byte[] Execute(MapDocument doc, ObjectKind kind, string rawcode, string? gameDir)
+    public static byte[] Execute(
+        MapDocument doc,
+        ObjectKind kind,
+        string rawcode,
+        string? gameDir,
+        float yawDegrees = ModelRenderer.DefaultYawDegrees,
+        float pitchDegrees = ModelRenderer.DefaultPitchDegrees)
     {
         if (!ModelFieldByKind.TryGetValue(kind, out var fieldCode))
             throw new InvalidDataException($"{kind} objects have no model-file field to render");
         var merged = ObjectGetCommand.Execute(doc, kind, rawcode, gameDir);
-        return Execute(doc, ModelPathFrom(merged, rawcode, new[] { fieldCode }));
+        return Execute(doc, ModelPathFrom(merged, rawcode, new[] { fieldCode }), yawDegrees, pitchDegrees);
     }
 
     /// <summary>Kind-agnostic: probes every kind for the rawcode, then any model-file field.</summary>
-    public static byte[] Execute(MapDocument doc, string rawcode, string? gameDir)
+    public static byte[] Execute(
+        MapDocument doc,
+        string rawcode,
+        string? gameDir,
+        float yawDegrees = ModelRenderer.DefaultYawDegrees,
+        float pitchDegrees = ModelRenderer.DefaultPitchDegrees)
     {
         var merged = ObjectGetCommand.Execute(doc, rawcode, gameDir);
-        return Execute(doc, ModelPathFrom(merged, rawcode, ModelFieldByKind.Values));
+        return Execute(doc, ModelPathFrom(merged, rawcode, ModelFieldByKind.Values), yawDegrees, pitchDegrees);
     }
 
     private static string ModelPathFrom(

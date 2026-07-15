@@ -10,13 +10,14 @@ namespace Wc3.Render;
 /// Headless CPU rasterizer for static models: z-buffered triangle fill with
 /// directional-light shading and nearest-neighbour texturing. No GPU/OpenGL —
 /// runs anywhere the CLI does. Renders the model's parsed pose (no animation)
-/// from a fixed 3/4 view with WC3's Z-up convention (models stand upright).
+/// from an orbit camera with WC3's Z-up convention (models stand upright);
+/// the default angles give the classic 3/4 view.
 /// </summary>
 public static class ModelRenderer
 {
-    // Camera orbit for the 3/4 view: yaw around the Z (up) axis, then pitch down.
-    private const float YawDegrees = 45f;
-    private const float PitchDegrees = 30f;
+    // Camera orbit for the default 3/4 view: yaw around the Z (up) axis, then pitch down.
+    public const float DefaultYawDegrees = 45f;
+    public const float DefaultPitchDegrees = 30f;
     private const float FillFraction = 0.9f;    // model's share of the frame
     private const float AmbientLight = 0.3f;    // shading floor so backfaces stay visible
     private const byte AlphaTestThreshold = 128; // cutout transparency (hair, foliage)
@@ -26,12 +27,16 @@ public static class ModelRenderer
     /// <paramref name="textures"/> maps indices of <see cref="Model3D.Textures"/> to
     /// decoded images; geosets whose texture is absent shade flat gray (covers
     /// ReplaceableId entries and textures the map does not contain).
+    /// <paramref name="yawDegrees"/>/<paramref name="pitchDegrees"/> orbit the camera
+    /// around Z-up; pitch is clamped just short of the poles to keep the basis stable.
     /// </summary>
     public static byte[] RenderPng(
         Model3D model,
         IReadOnlyDictionary<int, TextureImage> textures,
         int width = 512,
-        int height = 512)
+        int height = 512,
+        float yawDegrees = DefaultYawDegrees,
+        float pitchDegrees = DefaultPitchDegrees)
     {
         ArgumentNullException.ThrowIfNull(model);
         ArgumentNullException.ThrowIfNull(textures);
@@ -43,8 +48,10 @@ public static class ModelRenderer
             throw new InvalidDataException("model has no renderable geometry (no geosets with triangles)");
 
         // Orthographic camera basis from yaw/pitch on the unit sphere (Z-up).
-        float yaw = YawDegrees * MathF.PI / 180f;
-        float pitch = PitchDegrees * MathF.PI / 180f;
+        // A pitch at ±90° would make forward parallel to Z and the right-vector
+        // cross product degenerate (NaNs), so stop just short of the poles.
+        float yaw = yawDegrees * MathF.PI / 180f;
+        float pitch = Math.Clamp(pitchDegrees, -89.9f, 89.9f) * MathF.PI / 180f;
         var eyeDir = new Vector3(
             MathF.Cos(pitch) * MathF.Cos(yaw),
             MathF.Cos(pitch) * MathF.Sin(yaw),
