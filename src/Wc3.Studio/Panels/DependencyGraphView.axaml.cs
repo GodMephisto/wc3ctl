@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Media;
 using Avalonia.Threading;
 using Wc3.Commands;
 using Wc3.Model;
@@ -16,6 +17,14 @@ namespace Wc3.Studio.Panels;
 /// </summary>
 public partial class DependencyGraphView : UserControl, IMapPanel
 {
+    // Palette shared by the canvas and the detail lists: gold accent = custom
+    // to this map (matches the object editor's modified-field highlight),
+    // grey = base game, steel blue = file assets, red tint = not in the map.
+    private static readonly IBrush AccentText = new SolidColorBrush(Color.Parse("#E8C56A"));
+    private static readonly IBrush NormalText = new SolidColorBrush(Color.Parse("#C8CDD3"));
+    private static readonly IBrush MutedText = new SolidColorBrush(Color.Parse("#8FA3B8"));
+    private static readonly IBrush MissingText = new SolidColorBrush(Color.Parse("#D98C8C"));
+
     private MapSession? _session;
     private bool _suppress;
     /// <summary>Stamp that invalidates in-flight unit lists / resolves when the map changes.</summary>
@@ -191,20 +200,138 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         RenderGraph(bundle);
     }
 
+    /// <summary>
+    /// Structured fallback view: root unit → object deps grouped by kind, each
+    /// with a custom/base badge and the field codes ("via") that pull it in.
+    /// </summary>
     private void BuildTree(UnitBundle bundle)
     {
-        DepTree.Items.Clear(); // details land in the next slice
+        DepTree.Items.Clear();
+
+        // Field codes referencing each node, e.g. "via uhab" on an ability.
+        var viaInto = bundle.Edges
+            .GroupBy(e => e.To, StringComparer.Ordinal)
+            .ToDictionary(
+                g => g.Key,
+                g => string.Join(", ", g.Select(e => e.Via).Distinct()),
+                StringComparer.Ordinal);
+
+        var rootNode = bundle.Objects.FirstOrDefault(o => o.Rawcode == bundle.RootRawcode);
+        var rootItem = new TreeViewItem
+        {
+            Header = MakeTreeLabel(
+                $"{bundle.RootName ?? bundle.RootRawcode} ({bundle.RootRawcode}) — root unit",
+                rootNode?.CustomToMap, bold: true),
+            IsExpanded = true,
+        };
+
+        foreach (var group in bundle.Objects
+                     .Where(o => o.Rawcode != bundle.RootRawcode)
+                     .GroupBy(o => o.Kind))
+        {
+            var groupItem = new TreeViewItem
+            {
+                Header = MakeTreeLabel($"{KindLabel(group.Key)} ({group.Count()})", custom: null, bold: true),
+                IsExpanded = true,
+            };
+            foreach (var node in group)
+            {
+                var via = viaInto.TryGetValue(node.Rawcode, out var v) ? $" · via {v}" : "";
+                groupItem.Items.Add(new TreeViewItem
+                {
+                    Header = MakeTreeLabel(
+                        $"{node.Rawcode} — {node.Name ?? "(base game)"}"
+                        + $" · {(node.CustomToMap ? "custom" : "base")}{via}",
+                        node.CustomToMap, bold: false),
+                });
+            }
+            rootItem.Items.Add(groupItem);
+        }
+
+        DepTree.Items.Add(rootItem);
     }
 
     private void BuildFilesList(UnitBundle bundle)
     {
         FilesList.Children.Clear();
+        FilesExpander.Header = $"Files ({bundle.Files.Count})";
+        FilesExpander.IsExpanded = bundle.Files.Count > 0;
+        foreach (var file in bundle.Files)
+        {
+            var row = new TextBlock
+            {
+                Text = $"{CategoryPrefix(file.Category)} {file.Path}"
+                    + $" — [{(file.PresentInMap ? "in map" : "not in map")}]",
+                FontSize = 11,
+                Foreground = file.PresentInMap ? NormalText : MissingText,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+            };
+            ToolTip.SetTip(row, $"{file.Path}\n{file.Category} — "
+                + (file.PresentInMap
+                    ? "imported in this map (ports with the unit)"
+                    : "not in this map — base-game asset or a missing import"));
+            FilesList.Children.Add(row);
+        }
     }
 
     private void BuildStringsList(UnitBundle bundle)
     {
         StringsList.Children.Clear();
+        StringsExpander.Header = $"Strings ({bundle.Strings.Count})";
+        StringsExpander.IsExpanded = false; // usually the longest list; opt-in
+        foreach (var s in bundle.Strings)
+        {
+            var row = new TextBlock
+            {
+                Text = s,
+                FontSize = 11,
+                Foreground = NormalText,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+            };
+            ToolTip.SetTip(row, s);
+            StringsList.Children.Add(row);
+        }
     }
+
+    private static TextBlock MakeTreeLabel(string text, bool? custom, bool bold)
+    {
+        var label = new TextBlock
+        {
+            Text = text,
+            FontSize = 12,
+            FontWeight = bold ? FontWeight.SemiBold : FontWeight.Normal,
+            Foreground = custom switch
+            {
+                true => AccentText,
+                false => MutedText,
+                null => NormalText,
+            },
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+        ToolTip.SetTip(label, text);
+        return label;
+    }
+
+    private static string KindLabel(ObjectKind kind) => kind switch
+    {
+        ObjectKind.Unit => "Units",
+        ObjectKind.Item => "Items",
+        ObjectKind.Ability => "Abilities",
+        ObjectKind.Destructable => "Destructibles",
+        ObjectKind.Doodad => "Doodads",
+        ObjectKind.Buff => "Buffs",
+        ObjectKind.Upgrade => "Upgrades",
+        _ => kind.ToString(),
+    };
+
+    private static string CategoryPrefix(string category) => category switch
+    {
+        "model" => "[model]",
+        "texture" => "[tex]",
+        "icon" => "[icon]",
+        "sound" => "[snd]",
+        _ => "[file]",
+    };
 
     private void RenderGraph(UnitBundle bundle)
     {
