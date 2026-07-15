@@ -99,7 +99,8 @@ public static class RenderModelCommand
             $"object '{rawcode}' has no model-file field ({string.Join("/", fieldCodes)})");
     }
 
-    private static MapFileEntry? FindModelEntry(MapDocument doc, string path)
+    /// <summary>Internal so BundleCommand shares the exact model-lookup semantics.</summary>
+    internal static MapFileEntry? FindModelEntry(MapDocument doc, string path)
     {
         foreach (var candidate in PathCandidates(path))
             if (doc.GetFile(candidate) is { } entry && entry.RawBytes.Length > 0)

@@ -1,0 +1,221 @@
+// src/Wc3.Commands/BundleCommand.cs
+using War3Net.Common.Extensions;
+using Wc3.GameData;
+using Wc3.Model;
+using Wc3.Modeling;
+
+namespace Wc3.Commands;
+
+/// <summary>
+/// Computes the full dependency closure of one unit: every object it references
+/// (abilities, buffs, items, upgrades, ...), every asset file (models, textures,
+/// icons, sounds) and every trigger string, so a later wave can graph the result
+/// and port it into another map. Breadth-first reference crawl over merged
+/// object fields: 4-char tokens that resolve as objects become nodes, path-like
+/// tokens become file deps, and map-imported models contribute their textures.
+/// Only map-defined (custom) objects are recursed — base-game objects are
+/// recorded as leaf nodes since they already exist in any target map.
+/// </summary>
+public static class BundleCommand
+{
+    /// <summary>Safety cap on discovered objects (cycles are handled separately).</summary>
+    private const int MaxNodes = 5000;
+
+    private static readonly string[] AssetExtensions =
+        { ".mdx", ".mdl", ".blp", ".tga", ".dds", ".mp3", ".wav", ".flac" };
+
+    public static UnitBundle ResolveUnit(MapDocument doc, string rootRawcode, string? gameDirOverride)
+    {
+        return GameData.GameData.TryOpen(gameDirOverride, out var ctx, out var diagnostic)
+            ? ResolveUnit(doc, rootRawcode, ctx, Array.Empty<string>())
+            : ResolveUnit(doc, rootRawcode, null, new[] { diagnostic });
+    }
+
+    /// <summary>Core with an optional game-data context (null = map deltas only:
+    /// base-game references cannot resolve and are silently skipped).</summary>
+    internal static UnitBundle ResolveUnit(
+        MapDocument doc, string rootRawcode, GameDataContext? ctx, IReadOnlyList<string> preDiagnostics)
+    {
+        var diagnostics = new List<string>(preDiagnostics);
+        var strings = MapStrings.From(doc);
+
+        // Per-kind rawcode ids the map itself defines/modifies — the "custom to
+        // this map" test (custom objects need porting; base ones exist anywhere).
+        var mapIds = new Dictionary<ObjectKind, HashSet<int>>();
+        foreach (var kind in ObjectKinds.All)
+            mapIds[kind] = ObjectKinds.MergedEntries(doc, ObjectKinds.Info(kind)).Select(e => e.Id).ToHashSet();
+
+        var nodes = new Dictionary<string, BundleNode>(StringComparer.Ordinal);
+        var files = new Dictionary<string, BundleFile>(StringComparer.Ordinal); // key = normalized path
+        var stringSet = new SortedSet<string>(StringComparer.Ordinal);
+        var edges = new List<BundleEdge>();
+        var edgeSeen = new HashSet<(string, string, string)>();
+        var queue = new Queue<(string Rawcode, MergedObjectResult Merged)>();
+        bool capped = false;
+
+        bool IsCustom(ObjectKind kind, string rawcode) => mapIds[kind].Contains(rawcode.FromRawcode());
+
+        void AddEdge(string from, string to, string via)
+        {
+            if (edgeSeen.Add((from, to, via))) edges.Add(new BundleEdge(from, to, via));
+        }
+
+        // Map-defined entries of any kind win over base-game stores, mirroring
+        // ObjectGetCommand's kind-agnostic probe but keeping the matching kind.
+        (ObjectKind Kind, MergedObjectResult Merged)? Resolve(string rawcode)
+        {
+            int id = rawcode.FromRawcode();
+            foreach (var kind in ObjectKinds.All)
+                if (mapIds[kind].Contains(id))
+                    return (kind, ObjectGetCommand.Execute(doc, kind, rawcode, ctx, Array.Empty<string>()));
+            if (ctx is not null)
+                foreach (var kind in ObjectKinds.All)
+                    if (ObjectKinds.TryGetBaseFields(ctx, kind, rawcode, out _))
+                        return (kind, ObjectGetCommand.Execute(doc, kind, rawcode, ctx, Array.Empty<string>()));
+            return null;
+        }
+
+        void AddObjectRef(string from, string token, string via)
+        {
+            if (nodes.ContainsKey(token)) { AddEdge(from, token, via); return; }
+            if (nodes.Count >= MaxNodes) { capped = true; return; }
+            if (Resolve(token) is not { } hit) return; // not an object — a false-positive token
+            bool custom = IsCustom(hit.Kind, token);
+            nodes[token] = new BundleNode(token, hit.Kind, hit.Merged.Name, custom);
+            AddEdge(from, token, via);
+            // Base-game objects are leaves: whatever THEY reference is also base.
+            if (custom) queue.Enqueue((token, hit.Merged));
+        }
+
+        void AddFileRef(string from, string path, string via)
+        {
+            var key = NormalizePath(path);
+            if (!files.TryGetValue(key, out var file))
+            {
+                var category = Categorize(path);
+                bool present = category == "model"
+                    ? RenderModelCommand.FindModelEntry(doc, path) is not null
+                    : FindFileEntry(doc, path) is not null;
+                file = new BundleFile(path, category, present);
+                files[key] = file;
+                if (category == "model" && present) AddModelTextures(path);
+            }
+            AddEdge(from, file.Path, via); // first-seen spelling keeps edges consistent
+        }
+
+        void AddModelTextures(string modelPath)
+        {
+            var entry = RenderModelCommand.FindModelEntry(doc, modelPath);
+            if (entry?.FileName is null) return;
+            try
+            {
+                var model = ModelParser.Parse(entry.RawBytes, entry.FileName);
+                foreach (var texture in model.Textures)
+                {
+                    if (string.IsNullOrWhiteSpace(texture)
+                        || texture.StartsWith("ReplaceableId:", StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    AddFileRef(modelPath, texture, "texture");
+                }
+            }
+            catch (Exception ex)
+            {
+                diagnostics.Add($"could not read textures of model '{modelPath}': {ex.Message}");
+            }
+        }
+
+        void ScanField(string from, MergedField field)
+        {
+            var value = field.Value;
+            if (string.IsNullOrWhiteSpace(value)) return;
+
+            if (value.Contains("TRIGSTR_", StringComparison.Ordinal))
+            {
+                var resolved = strings.Resolve(value.Trim());
+                if (resolved.Length > 0 && !resolved.StartsWith("TRIGSTR_", StringComparison.Ordinal))
+                    stringSet.Add(resolved);
+            }
+
+            // Cross-references are 4-char rawcodes or comma-separated lists of them;
+            // asset references are file-path strings (variation fields may list several).
+            foreach (var raw in value.Split(','))
+            {
+                var token = raw.Trim();
+                if (token.Length == 0) continue;
+                if (LooksLikeAssetPath(token)) AddFileRef(from, token, field.Code);
+                else if (token.Length == 4 && token.All(c => c is >= ' ' and <= '~'))
+                    AddObjectRef(from, token, field.Code);
+            }
+        }
+
+        // Root: explicitly a unit (this command's contract).
+        var root = ObjectGetCommand.Execute(doc, ObjectKind.Unit, rootRawcode, ctx, Array.Empty<string>());
+        if (!root.Found)
+        {
+            diagnostics.Add($"root unit '{rootRawcode}' not found in the map"
+                + (ctx is null ? " (game data unavailable — base units unresolvable)" : " or game data"));
+            return new UnitBundle(rootRawcode, null, Array.Empty<BundleNode>(), Array.Empty<BundleFile>(),
+                Array.Empty<string>(), Array.Empty<BundleEdge>(), diagnostics);
+        }
+
+        bool rootCustom = rootRawcode.Length == 4 && IsCustom(ObjectKind.Unit, rootRawcode);
+        nodes[rootRawcode] = new BundleNode(rootRawcode, ObjectKind.Unit, root.Name, rootCustom);
+        if (rootCustom) queue.Enqueue((rootRawcode, root));
+        else diagnostics.Add($"root unit '{rootRawcode}' is a base-game unit — nothing custom to port");
+
+        while (queue.Count > 0)
+        {
+            var (rawcode, merged) = queue.Dequeue();
+            foreach (var field in merged.Fields)
+                ScanField(rawcode, field);
+        }
+
+        if (capped) diagnostics.Add($"node cap ({MaxNodes}) reached — dependency closure truncated");
+
+        return new UnitBundle(
+            rootRawcode,
+            root.Name,
+            nodes.Values.OrderBy(n => n.Kind).ThenBy(n => n.Rawcode, StringComparer.Ordinal).ToList(),
+            files.Values.OrderBy(f => f.Path, StringComparer.Ordinal).ToList(),
+            stringSet.ToList(),
+            edges.OrderBy(e => e.From, StringComparer.Ordinal)
+                 .ThenBy(e => e.To, StringComparer.Ordinal)
+                 .ThenBy(e => e.Via, StringComparer.Ordinal).ToList(),
+            diagnostics);
+    }
+
+    /// <summary>A token references an asset iff it carries a known media extension
+    /// anywhere (extensionless model refs get .mdx appended by the game) or a backslash.</summary>
+    private static bool LooksLikeAssetPath(string token) =>
+        token.Contains('\\')
+        || AssetExtensions.Any(ext => token.Contains(ext, StringComparison.OrdinalIgnoreCase));
+
+    private static string Categorize(string path)
+    {
+        var ext = Path.GetExtension(path).ToLowerInvariant();
+        return ext switch
+        {
+            ".mdx" or ".mdl" => "model",
+            ".blp" or ".tga" or ".dds" => IsIconPath(path) ? "icon" : "texture",
+            ".mp3" or ".wav" or ".flac" => "sound",
+            _ => "other",
+        };
+    }
+
+    /// <summary>Icons live under CommandButtons/PassiveButtons or use the BTN naming scheme.</summary>
+    private static bool IsIconPath(string path)
+    {
+        if (path.Contains("CommandButtons", StringComparison.OrdinalIgnoreCase)
+            || path.Contains("PassiveButtons", StringComparison.OrdinalIgnoreCase))
+            return true;
+        var name = Path.GetFileName(path);
+        return name.StartsWith("BTN", StringComparison.OrdinalIgnoreCase)
+            || name.StartsWith("DISBTN", StringComparison.OrdinalIgnoreCase)
+            || name.StartsWith("PASBTN", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string NormalizePath(string path) => path.Replace('/', '\\').ToLowerInvariant();
+
+    private static MapFileEntry? FindFileEntry(MapDocument doc, string path) =>
+        doc.GetFile(path) ?? doc.GetFile(path.Replace('/', '\\')) ?? doc.GetFile(path.Replace('\\', '/'));
+}
