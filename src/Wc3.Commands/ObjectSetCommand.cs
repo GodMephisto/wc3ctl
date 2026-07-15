@@ -8,7 +8,7 @@ namespace Wc3.Commands;
 
 public static class ObjectSetCommand
 {
-    public sealed record ObjectSetResult(bool Ok, string Message);
+    public sealed record ObjectSetResult(bool Ok, string Message, string? Warning = null);
 
     /// <summary>
     /// Sets a field on a unit defined in the map's war3map.w3u and marks the file
@@ -37,6 +37,7 @@ public static class ObjectSetCommand
 
         int fieldId = field.FromRawcode();
         var mod = unit.Modifications.FirstOrDefault(m => m.Id == fieldId);
+        string? warning = null;
         if (mod is not null)
         {
             if (!TryParseAs(value, mod.Type, out var typed))
@@ -47,10 +48,16 @@ public static class ObjectSetCommand
         {
             var (typed, type) = Infer(value);
             unit.Modifications.Add(new SimpleObjectDataModification { Id = fieldId, Type = type, Value = typed });
+            // New field (no prior modification): the type is guessed from the value's
+            // shape, which is not authoritative. Int vs Real are not byte-compatible, so
+            // a wrong guess stores a wrong in-game value (structure stays valid).
+            warning = $"field {field} was newly added with inferred type {type} (guessed from the value); "
+                    + "verify that matches the field's real type — an Int written where the game expects Real "
+                    + "(or vice-versa) stores a wrong value.";
         }
 
         doc.ReplaceModel(entry, w3u);
-        return new(true, $"set {field}={value} on {rawcode}");
+        return new(true, $"set {field}={value} on {rawcode}", warning);
     }
 
     private static bool TryParseAs(string value, ObjectDataType type, out object typed)

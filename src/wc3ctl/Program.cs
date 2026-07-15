@@ -155,8 +155,8 @@ public static class Program
                 Path.GetFileNameWithoutExtension(map) + ".edited" + Path.GetExtension(map));
             doc.Save(dest);
             Emit(p.GetValueForOption(jsonOption),
-                new { r.Ok, r.Message, SavedTo = dest },
-                () => $"{r.Message}\nsaved: {dest}");
+                new { r.Ok, r.Message, r.Warning, SavedTo = dest },
+                () => (r.Warning is null ? "" : $"warning: {r.Warning}\n") + $"{r.Message}\nsaved: {dest}");
         }));
         obj.AddCommand(objSet);
 
