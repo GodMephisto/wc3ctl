@@ -30,6 +30,14 @@ public static class MapFormatRegistry
         ["war3map.w3d"] = null,          // doodad object data
         ["war3map.w3h"] = null,          // buff object data
         ["war3map.w3q"] = null,          // upgrade object data
+        // Reforged skin object-data layer: same binary formats as war3map.*.
+        ["war3mapSkin.w3u"] = null,      // unit object data (skin)
+        ["war3mapSkin.w3a"] = null,      // ability object data (skin)
+        ["war3mapSkin.w3t"] = null,      // item object data (skin)
+        ["war3mapSkin.w3b"] = null,      // destructable object data (skin)
+        ["war3mapSkin.w3d"] = null,      // doodad object data (skin)
+        ["war3mapSkin.w3h"] = null,      // buff object data (skin)
+        ["war3mapSkin.w3q"] = null,      // upgrade object data (skin)
     };
 
     public static bool IsKnown(string fileName) => _parsers.ContainsKey(fileName);

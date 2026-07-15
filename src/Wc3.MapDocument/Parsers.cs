@@ -42,6 +42,15 @@ public static class DefaultParsers
         Wire("war3map.w3h", r => r.ReadBuffObjectData());
         Wire("war3map.w3q", r => r.ReadUpgradeObjectData());
 
+        // Reforged skin layer: identical binary formats under war3mapSkin.*.
+        Wire("war3mapSkin.w3u", r => r.ReadUnitObjectData());
+        Wire("war3mapSkin.w3a", r => r.ReadAbilityObjectData());
+        Wire("war3mapSkin.w3t", r => r.ReadItemObjectData());
+        Wire("war3mapSkin.w3b", r => r.ReadDestructableObjectData());
+        Wire("war3mapSkin.w3d", r => r.ReadDoodadObjectData());
+        Wire("war3mapSkin.w3h", r => r.ReadBuffObjectData());
+        Wire("war3mapSkin.w3q", r => r.ReadUpgradeObjectData());
+
         // wts is a text format; War3Net parses it via StreamReaderExtensions.
         MapFormatRegistry.Register("war3map.wts", raw =>
         {
