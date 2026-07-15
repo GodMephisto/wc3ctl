@@ -1,4 +1,6 @@
 // src/Wc3.MapDocument/MapDocument.cs
+using War3Net.Build.Extensions;
+using War3Net.Build.Object;
 using War3Net.IO.Mpq;
 
 namespace Wc3.Model;
@@ -105,11 +107,11 @@ public sealed class MapDocument
         using var archive = MpqArchive.Open(source, loadListFile: true);
         var builder = new MpqArchiveBuilder(archive);
 
+        // An added file with the same hashed name shadows the original at save;
+        // RemoveFile must NOT be called first — its removal set also filters the
+        // replacement, dropping the file from the archive entirely.
         foreach (var entry in _files.Where(f => f.IsDirty && f.FileName is not null))
-        {
-            builder.RemoveFile(entry.FileName!);
             builder.AddFile(MpqFile.New(new MemoryStream(SerializeEntry(entry)), entry.FileName!));
-        }
 
         using var mpq = new MemoryStream();
         // SaveTo disposes the target stream unless leaveOpen — we still need to read it back.
@@ -122,7 +124,33 @@ public sealed class MapDocument
         return outStream.ToArray();
     }
 
-    // No editing this slice, so dirty files never occur; serialization is a later slice.
-    private static byte[] SerializeEntry(MapFileEntry entry) =>
-        throw new NotSupportedException("Editing/serialization arrives in a later slice.");
+    /// <summary>
+    /// Installs an edited model on <paramref name="entry"/> and marks it dirty so the
+    /// next Save re-serializes it (non-dirty entries keep their original bytes).
+    /// </summary>
+    public void ReplaceModel(MapFileEntry entry, object newModel)
+    {
+        if (!_files.Contains(entry))
+            throw new ArgumentException("Entry does not belong to this document.", nameof(entry));
+        entry.Model = newModel;
+        entry.IsDirty = true;
+    }
+
+    // Only formats with a verified byte-faithful writer are serializable; everything
+    // else must stay non-dirty so Save preserves its original bytes.
+    private static byte[] SerializeEntry(MapFileEntry entry)
+    {
+        if (string.Equals(entry.FileName, "war3map.w3u", StringComparison.OrdinalIgnoreCase)
+            && entry.Model is UnitObjectData w3u)
+        {
+            // Mirror of the ReadUnitObjectData parser; round-trips real maps
+            // byte-identically (verified against the corpus).
+            using var ms = new MemoryStream();
+            using (var writer = new BinaryWriter(ms, System.Text.Encoding.UTF8, leaveOpen: true))
+                writer.Write(w3u);
+            return ms.ToArray();
+        }
+        throw new NotSupportedException(
+            $"No serializer for '{entry.FileName ?? "(unnamed)"}' yet — only war3map.w3u is editable this slice.");
+    }
 }
