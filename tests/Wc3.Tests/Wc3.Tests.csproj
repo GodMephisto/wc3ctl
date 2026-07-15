@@ -25,6 +25,7 @@
     <ProjectReference Include="..\..\src\Wc3.Commands\Wc3.Commands.csproj" />
     <ProjectReference Include="..\..\src\wc3ctl\wc3ctl.csproj" />
     <ProjectReference Include="..\..\src\Wc3.GameData\Wc3.GameData.csproj" />
+    <ProjectReference Include="..\..\src\Wc3.Modeling\Wc3.Modeling.csproj" />
   </ItemGroup>
 
 </Project>
