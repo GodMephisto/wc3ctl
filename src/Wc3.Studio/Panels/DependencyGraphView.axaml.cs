@@ -1,4 +1,6 @@
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Shapes;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Wc3.Commands;
@@ -24,6 +26,27 @@ public partial class DependencyGraphView : UserControl, IMapPanel
     private static readonly IBrush NormalText = new SolidColorBrush(Color.Parse("#C8CDD3"));
     private static readonly IBrush MutedText = new SolidColorBrush(Color.Parse("#8FA3B8"));
     private static readonly IBrush MissingText = new SolidColorBrush(Color.Parse("#D98C8C"));
+
+    // Canvas node fills/borders.
+    private static readonly IBrush CustomBorder = new SolidColorBrush(Color.Parse("#E8C56A"));
+    private static readonly IBrush CustomFill = new SolidColorBrush(Color.Parse("#26E8C56A"));
+    private static readonly IBrush BaseBorder = new SolidColorBrush(Color.Parse("#66808893"));
+    private static readonly IBrush BaseFill = new SolidColorBrush(Color.Parse("#14808893"));
+    private static readonly IBrush FileBorder = new SolidColorBrush(Color.Parse("#5F87B7"));
+    private static readonly IBrush FileFill = new SolidColorBrush(Color.Parse("#145F87B7"));
+    private static readonly IBrush MissingBorder = new SolidColorBrush(Color.Parse("#C76B6B"));
+    private static readonly IBrush MissingFill = new SolidColorBrush(Color.Parse("#14C76B6B"));
+    private static readonly IBrush EdgeStroke = new SolidColorBrush(Color.Parse("#55889CB0"));
+
+    // Layered layout constants (device-independent pixels): objects sit in
+    // columns by depth from the root, files in a wrapped band underneath.
+    private const double Pad = 24;
+    private const double ObjW = 180, ObjH = 48;
+    private const double ColGap = 130;
+    private const double RowGap = 28;
+    private const double FileW = 250, FileH = 40;
+    private const double FileGapX = 26, FileGapY = 26;
+    private const double BandGap = 100;
 
     private MapSession? _session;
     private bool _suppress;
@@ -333,9 +356,278 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         _ => "[file]",
     };
 
+    /// <summary>
+    /// Node-link graph with a simple deterministic layered layout: column 0 is
+    /// the root unit, each further column the next BFS depth of object deps;
+    /// files get their own wrapped band along the bottom. Edges are straight
+    /// lines between node anchors, labeled with their field codes (parallel
+    /// edges between the same pair coalesce into one labeled line).
+    /// </summary>
     private void RenderGraph(UnitBundle bundle)
     {
         GraphCanvas.Children.Clear();
+        if (bundle.Objects.Count == 0)
+        {
+            GraphHint.IsVisible = true;
+            GraphHint.Text = $"{bundle.RootRawcode} resolved to nothing — see the status line.";
+            return;
+        }
+        GraphHint.IsVisible = false;
+
+        // --- object depth from the root (BFS over object→object edges) ---
+        var byCode = bundle.Objects.ToDictionary(o => o.Rawcode, StringComparer.Ordinal);
+        var adjacency = bundle.Edges
+            .Where(e => byCode.ContainsKey(e.From) && byCode.ContainsKey(e.To))
+            .GroupBy(e => e.From, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.Select(e => e.To).Distinct().ToList(),
+                StringComparer.Ordinal);
+        var depth = new Dictionary<string, int>(StringComparer.Ordinal)
+        {
+            [bundle.RootRawcode] = 0,
+        };
+        var queue = new Queue<string>();
+        queue.Enqueue(bundle.RootRawcode);
+        while (queue.Count > 0)
+        {
+            var current = queue.Dequeue();
+            if (!adjacency.TryGetValue(current, out var targets))
+                continue;
+            foreach (var to in targets)
+            {
+                if (depth.TryAdd(to, depth[current] + 1))
+                    queue.Enqueue(to);
+            }
+        }
+        foreach (var node in bundle.Objects) // unreachable nodes still get drawn
+            depth.TryAdd(node.Rawcode, 1);
+
+        // --- columns: one per depth, bundle order within a column, all
+        //     vertically centered against the tallest column ---
+        var columns = bundle.Objects
+            .GroupBy(o => depth[o.Rawcode])
+            .OrderBy(g => g.Key)
+            .Select(g => g.ToList())
+            .ToList();
+        double maxColHeight = columns.Max(c => c.Count * ObjH + (c.Count - 1) * RowGap);
+        var objRects = new Dictionary<string, Rect>(StringComparer.Ordinal);
+        for (int ci = 0; ci < columns.Count; ci++)
+        {
+            double x = Pad + ci * (ObjW + ColGap);
+            double colHeight = columns[ci].Count * ObjH + (columns[ci].Count - 1) * RowGap;
+            double y = Pad + (maxColHeight - colHeight) / 2;
+            foreach (var node in columns[ci])
+            {
+                objRects[node.Rawcode] = new Rect(x, y, ObjW, ObjH);
+                y += ObjH + RowGap;
+            }
+        }
+
+        // --- files band: wrapped rows under the object area (case-insensitive
+        //     keys — WC3 paths compare case-insensitively) ---
+        var fileRects = new Dictionary<string, Rect>(StringComparer.OrdinalIgnoreCase);
+        double objAreaWidth = columns.Count * (ObjW + ColGap) - ColGap;
+        double bandTop = Pad + maxColHeight + BandGap;
+        int perRow = Math.Max(3, (int)((objAreaWidth + FileGapX) / (FileW + FileGapX)));
+        for (int i = 0; i < bundle.Files.Count; i++)
+        {
+            fileRects[bundle.Files[i].Path] = new Rect(
+                Pad + i % perRow * (FileW + FileGapX),
+                bandTop + i / perRow * (FileH + FileGapY),
+                FileW, FileH);
+        }
+        if (bundle.Files.Count > 0)
+        {
+            int usedPerRow = Math.Min(perRow, bundle.Files.Count);
+            var separator = new Border
+            {
+                Width = usedPerRow * (FileW + FileGapX) - FileGapX,
+                Height = 1,
+                Background = EdgeStroke,
+            };
+            Canvas.SetLeft(separator, Pad);
+            Canvas.SetTop(separator, bandTop - 40);
+            GraphCanvas.Children.Add(separator);
+            var bandLabel = new TextBlock
+            {
+                Text = "Files",
+                FontSize = 11,
+                FontWeight = FontWeight.SemiBold,
+                Foreground = MutedText,
+            };
+            Canvas.SetLeft(bandLabel, Pad);
+            Canvas.SetTop(bandLabel, bandTop - 34);
+            GraphCanvas.Children.Add(bandLabel);
+        }
+
+        // --- edges first (nodes draw on top), parallel edges coalesced ---
+        foreach (var group in bundle.Edges.GroupBy(e => (e.From, e.To)))
+        {
+            if (!TryGetRect(group.Key.From, objRects, fileRects, out var from, out _)
+                || !TryGetRect(group.Key.To, objRects, fileRects, out var to, out var toIsFile))
+            {
+                continue; // endpoint we didn't lay out; resolver guarantees make this rare
+            }
+
+            Point p1, p2;
+            if (toIsFile)
+            {
+                p1 = new Point(from.Center.X, from.Bottom);   // object → file: drop down
+                p2 = new Point(to.Center.X, to.Y);
+            }
+            else if (to.X > from.X)
+            {
+                p1 = new Point(from.Right, from.Center.Y);    // deeper column: left→right
+                p2 = new Point(to.X, to.Center.Y);
+            }
+            else if (to.X < from.X)
+            {
+                p1 = new Point(from.X, from.Center.Y);        // back-edge (cycle)
+                p2 = new Point(to.Right, to.Center.Y);
+            }
+            else
+            {
+                p1 = from.Center;                             // same column
+                p2 = to.Center;
+            }
+
+            GraphCanvas.Children.Add(new Line
+            {
+                StartPoint = p1,
+                EndPoint = p2,
+                Stroke = EdgeStroke,
+                StrokeThickness = 1.25,
+            });
+
+            var viaLabel = new TextBlock
+            {
+                Text = string.Join(", ", group.Select(e => e.Via).Distinct()),
+                FontSize = 9,
+                Foreground = MutedText,
+            };
+            Canvas.SetLeft(viaLabel, (p1.X + p2.X) / 2 + 3);
+            Canvas.SetTop(viaLabel, (p1.Y + p2.Y) / 2 - 13);
+            GraphCanvas.Children.Add(viaLabel);
+        }
+
+        // --- nodes on top of the wiring ---
+        foreach (var node in bundle.Objects)
+        {
+            var rect = objRects[node.Rawcode];
+            var visual = MakeObjectNode(node, node.Rawcode == bundle.RootRawcode);
+            Canvas.SetLeft(visual, rect.X);
+            Canvas.SetTop(visual, rect.Y);
+            GraphCanvas.Children.Add(visual);
+        }
+        foreach (var file in bundle.Files)
+        {
+            var rect = fileRects[file.Path];
+            var visual = MakeFileNode(file);
+            Canvas.SetLeft(visual, rect.X);
+            Canvas.SetTop(visual, rect.Y);
+            GraphCanvas.Children.Add(visual);
+        }
+
+        // Explicit size so the ScrollViewer can scroll; slack for edge labels.
+        double right = objRects.Values.Select(r => r.Right)
+            .Concat(fileRects.Values.Select(r => r.Right)).Max();
+        double bottom = objRects.Values.Select(r => r.Bottom)
+            .Concat(fileRects.Values.Select(r => r.Bottom)).Max();
+        GraphCanvas.Width = right + Pad + 40;
+        GraphCanvas.Height = bottom + Pad;
+    }
+
+    /// <summary>Edge endpoints are rawcodes (case-sensitive) or file paths (not).</summary>
+    private static bool TryGetRect(
+        string key,
+        Dictionary<string, Rect> objRects,
+        Dictionary<string, Rect> fileRects,
+        out Rect rect,
+        out bool isFile)
+    {
+        if (objRects.TryGetValue(key, out rect))
+        {
+            isFile = false;
+            return true;
+        }
+        isFile = true;
+        return fileRects.TryGetValue(key, out rect);
+    }
+
+    private static Border MakeObjectNode(BundleNode node, bool isRoot)
+    {
+        var title = new TextBlock
+        {
+            Text = $"{node.Rawcode} · {(node.CustomToMap ? "custom" : "base")}",
+            FontSize = 12,
+            FontWeight = FontWeight.SemiBold,
+            Foreground = node.CustomToMap ? AccentText : MutedText,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+        var subtitle = new TextBlock
+        {
+            Text = $"{node.Kind} — {node.Name ?? "(base game)"}",
+            FontSize = 10,
+            Foreground = node.CustomToMap ? NormalText : MutedText,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+        var visual = new Border
+        {
+            Width = ObjW,
+            Height = ObjH,
+            CornerRadius = new CornerRadius(6),
+            BorderThickness = new Thickness(isRoot ? 2 : 1),
+            BorderBrush = node.CustomToMap ? CustomBorder : BaseBorder,
+            Background = node.CustomToMap ? CustomFill : BaseFill,
+            Child = new StackPanel
+            {
+                Margin = new Thickness(8, 5, 8, 5),
+                Spacing = 1,
+                Children = { title, subtitle },
+            },
+        };
+        ToolTip.SetTip(visual, $"{node.Rawcode} — {node.Name ?? "(unnamed)"}\n{node.Kind} · "
+            + (node.CustomToMap
+                ? "custom to this map (must port)"
+                : "base game (already in any target)"));
+        return visual;
+    }
+
+    private static Border MakeFileNode(BundleFile file)
+    {
+        var name = file.Path.Split('\\', '/').Last();
+        var title = new TextBlock
+        {
+            Text = $"{CategoryPrefix(file.Category)} {name}",
+            FontSize = 11,
+            FontWeight = FontWeight.SemiBold,
+            Foreground = file.PresentInMap ? NormalText : MissingText,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+        var subtitle = new TextBlock
+        {
+            Text = file.PresentInMap ? "in map" : "not in map",
+            FontSize = 9,
+            Foreground = MutedText,
+        };
+        var visual = new Border
+        {
+            Width = FileW,
+            Height = FileH,
+            CornerRadius = new CornerRadius(4),
+            BorderThickness = new Thickness(1),
+            BorderBrush = file.PresentInMap ? FileBorder : MissingBorder,
+            Background = file.PresentInMap ? FileFill : MissingFill,
+            Child = new StackPanel
+            {
+                Margin = new Thickness(8, 4, 8, 4),
+                Children = { title, subtitle },
+            },
+        };
+        ToolTip.SetTip(visual, $"{file.Path}\n{file.Category} — "
+            + (file.PresentInMap
+                ? "imported in this map (ports with the unit)"
+                : "not in this map — base-game asset or a missing import"));
+        return visual;
     }
 
     /// <summary>Reset the picker and the exposed selection (notifying the workspace).</summary>
