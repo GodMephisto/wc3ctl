@@ -6,3 +6,4 @@ artifacts/
 [Bb]uild/
 dist/
 .superpowers/
+dist-studio/
