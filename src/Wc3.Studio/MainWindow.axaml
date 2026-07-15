@@ -26,7 +26,7 @@
         </Border>
 
         <!-- Center: panel tabs -->
-        <TabControl Name="PanelTabs">
+        <TabControl Name="PanelTabs" SelectionChanged="OnPanelTabsSelectionChanged">
             <TabItem Header="Terrain">
                 <panels:TerrainView Name="TerrainPanel"/>
             </TabItem>

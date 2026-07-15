@@ -10,13 +10,12 @@ namespace Wc3.Studio;
 public partial class MainWindow : Window
 {
     private readonly MapSession _session = new();
+    private readonly HashSet<IMapPanel> _loadedPanels = new();
 
     public MainWindow()
     {
         InitializeComponent();
     }
-
-    private IMapPanel[] Panels => new IMapPanel[] { TerrainPanel, ObjectsPanel, FilesPanel, ScriptPanel };
 
     private async void OnOpenMapClick(object? sender, RoutedEventArgs e)
     {
@@ -74,14 +73,40 @@ public partial class MainWindow : Window
                 ? $"{path} — {name} — {list.Files.Count} file(s) — {info.Diagnostics.Count} diagnostic(s): {string.Join("; ", info.Diagnostics)}"
                 : $"{path} — {name} — {list.Files.Count} file(s)";
 
-            foreach (var panel in Panels)
-            {
-                panel.ShowMap(_session);
-            }
+            // Lazy loading: only the visible tab refreshes now; the other
+            // panels load on first selection (see OnPanelTabsSelectionChanged).
+            _loadedPanels.Clear();
+            LoadSelectedPanel();
         }
         catch (Exception ex)
         {
             StatusText.Text = $"Error opening {path}: {ex.Message}";
+        }
+    }
+
+    private void OnPanelTabsSelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        // SelectionChanged bubbles up from selectors inside tab content too.
+        if (!ReferenceEquals(e.Source, PanelTabs) || _session.Current is null)
+        {
+            return;
+        }
+
+        try
+        {
+            LoadSelectedPanel();
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"Error loading panel: {ex.Message}";
+        }
+    }
+
+    private void LoadSelectedPanel()
+    {
+        if (PanelTabs.SelectedItem is TabItem { Content: IMapPanel panel } && _loadedPanels.Add(panel))
+        {
+            panel.ShowMap(_session);
         }
     }
 }
