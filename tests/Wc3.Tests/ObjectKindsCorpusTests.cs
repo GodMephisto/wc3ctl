@@ -16,6 +16,18 @@ public class ObjectKindsCorpusTests
 
     [Fact]
     [Trait("Category", "Corpus")]
+    public void Anime_map_lists_units_despite_null_wts_entries()
+    {
+        // Regression: this map's war3map.wts parses one entry (key 0) with a null
+        // value; unit unam deltas referencing it made MapStrings.Resolve throw.
+        if (!File.Exists(MapPath)) return;
+        var doc = MapDocument.Load(MapPath);
+        var units = ObjectListCommand.Execute(doc, ObjectKind.Unit, gameDirOverride: null);
+        Assert.NotEmpty(units.Items);
+    }
+
+    [Fact]
+    [Trait("Category", "Corpus")]
     public void Anime_map_lists_custom_items_and_abilities()
     {
         if (!File.Exists(MapPath)) return;

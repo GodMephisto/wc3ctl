@@ -24,7 +24,9 @@ public sealed partial class MapStrings
         var table = new Dictionary<int, string>();
         if (doc.GetFile("war3map.wts")?.Model is TriggerStrings wts)
             foreach (var s in wts.Strings)
-                table[(int)s.Key] = s.Value;
+                // Real maps carry entries with a null value (empty STRING block);
+                // store "" so Resolve never dereferences null.
+                table[(int)s.Key] = s.Value ?? "";
         return new MapStrings(table);
     }
 
