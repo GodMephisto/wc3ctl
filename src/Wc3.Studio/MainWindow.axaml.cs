@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia.Layout;
 using Avalonia.Platform.Storage;
 using Wc3.Commands;
 using Wc3.Model;
@@ -8,14 +9,16 @@ namespace Wc3.Studio;
 
 public partial class MainWindow : Window
 {
+    private readonly MapSession _session = new();
+
     public MainWindow()
     {
         InitializeComponent();
     }
 
-    private sealed record FileRow(string Name, string Size, string Known, string Parsed);
+    private IMapPanel[] Panels => new IMapPanel[] { TerrainPanel, ObjectsPanel, FilesPanel, ScriptPanel };
 
-    private async void OnBrowseClick(object? sender, RoutedEventArgs e)
+    private async void OnOpenMapClick(object? sender, RoutedEventArgs e)
     {
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
@@ -29,49 +32,56 @@ public partial class MainWindow : Window
         });
         if (files.Count == 1 && files[0].TryGetLocalPath() is { } path)
         {
-            PathBox.Text = path;
             OpenMap(path);
         }
     }
 
-    private void OnOpenClick(object? sender, RoutedEventArgs e) => OpenMap(PathBox.Text?.Trim() ?? "");
+    private void OnExitClick(object? sender, RoutedEventArgs e) => Close();
+
+    private async void OnAboutClick(object? sender, RoutedEventArgs e)
+    {
+        var dialog = new Window
+        {
+            Title = "About wc3ctl Studio",
+            Width = 380,
+            Height = 160,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Content = new TextBlock
+            {
+                Text = "wc3ctl Studio\n\nA CLI-first Warcraft III map editor.",
+                Margin = new Avalonia.Thickness(16),
+                TextWrapping = Avalonia.Media.TextWrapping.Wrap,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+            },
+        };
+        await dialog.ShowDialog(this);
+    }
 
     private void OpenMap(string path)
     {
-        if (string.IsNullOrEmpty(path))
-        {
-            StatusText.Text = "Enter a map file path first.";
-            return;
-        }
-
         try
         {
             var doc = MapDocument.Load(path);
+            _session.Current = doc;
+            _session.MapPath = path;
+            // GameDir stays null — panels auto-detect the game install.
+
             var info = InfoCommand.Execute(doc);
             var list = ListCommand.Execute(doc);
-
-            NameText.Text = info.Name;
-            AuthorText.Text = $"Author: {info.Author}";
-            PlayersText.Text = $"Players: {info.Players}";
-            SizeText.Text = info.Width is { } w && info.Height is { } h
-                ? $"Playable area: {w} x {h}"
-                : "Playable area: (unknown)";
-
-            FileList.ItemsSource = list.Files
-                .Select(f => new FileRow(
-                    f.Name ?? "(unnamed)",
-                    $"{f.SizeBytes:N0} B",
-                    f.Known ? "known" : "",
-                    f.Parsed ? "parsed" : ""))
-                .ToList();
-
+            var name = string.IsNullOrEmpty(info.Name) ? "(unnamed)" : info.Name;
             StatusText.Text = info.Diagnostics.Count > 0
-                ? $"Opened with {info.Diagnostics.Count} diagnostic(s): {string.Join("; ", info.Diagnostics)}"
-                : $"Opened {list.Files.Count} file(s).";
+                ? $"{path} — {name} — {list.Files.Count} file(s) — {info.Diagnostics.Count} diagnostic(s): {string.Join("; ", info.Diagnostics)}"
+                : $"{path} — {name} — {list.Files.Count} file(s)";
+
+            foreach (var panel in Panels)
+            {
+                panel.ShowMap(_session);
+            }
         }
         catch (Exception ex)
         {
-            StatusText.Text = $"Error: {ex.Message}";
+            StatusText.Text = $"Error opening {path}: {ex.Message}";
         }
     }
 }

@@ -1,0 +1,9 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Wc3.Studio.Panels.ScriptView">
+    <Grid Name="ScriptRoot">
+        <TextBlock Name="ScriptStubText"
+                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                   Text="Script panel — no map open"/>
+    </Grid>
+</UserControl>

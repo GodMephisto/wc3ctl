@@ -1,46 +1,45 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:panels="using:Wc3.Studio.Panels"
         x:Class="Wc3.Studio.MainWindow"
         Title="wc3ctl Studio"
-        Width="800" Height="600">
-    <DockPanel Margin="12">
+        Width="1200" Height="800">
+    <DockPanel>
 
-        <!-- Path input + Open -->
-        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,8">
-            <TextBox Grid.Column="0" Name="PathBox"
-                     Watermark="Path to a .w3x / .w3m map file"
-                     Margin="0,0,8,0"/>
-            <Button Grid.Column="1" Name="BrowseButton" Content="Browse…"
-                    Margin="0,0,8,0" Click="OnBrowseClick"/>
-            <Button Grid.Column="2" Name="OpenButton" Content="Open"
-                    Click="OnOpenClick"/>
-        </Grid>
+        <!-- Top menu -->
+        <Menu DockPanel.Dock="Top">
+            <MenuItem Header="_File">
+                <MenuItem Header="_Open Map…" Click="OnOpenMapClick"/>
+                <Separator/>
+                <MenuItem Header="E_xit" Click="OnExitClick"/>
+            </MenuItem>
+            <MenuItem Header="_Help">
+                <MenuItem Header="_About" Click="OnAboutClick"/>
+            </MenuItem>
+        </Menu>
 
-        <!-- Status -->
-        <TextBlock DockPanel.Dock="Bottom" Name="StatusText"
-                   Margin="0,8,0,0" TextWrapping="Wrap"/>
+        <!-- Bottom status bar -->
+        <Border DockPanel.Dock="Bottom" BorderThickness="0,1,0,0"
+                BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
+                Padding="8,4">
+            <TextBlock Name="StatusText" Text="No map open." TextWrapping="Wrap"/>
+        </Border>
 
-        <!-- Map info -->
-        <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8" Spacing="2">
-            <TextBlock Name="NameText" FontSize="18" FontWeight="Bold"/>
-            <TextBlock Name="AuthorText"/>
-            <TextBlock Name="PlayersText"/>
-            <TextBlock Name="SizeText"/>
-        </StackPanel>
-
-        <!-- File list -->
-        <ListBox Name="FileList">
-            <ListBox.ItemTemplate>
-                <DataTemplate>
-                    <Grid ColumnDefinitions="*,90,70,70">
-                        <TextBlock Grid.Column="0" Text="{Binding Name}"/>
-                        <TextBlock Grid.Column="1" Text="{Binding Size}" HorizontalAlignment="Right"/>
-                        <TextBlock Grid.Column="2" Text="{Binding Known}" HorizontalAlignment="Right"/>
-                        <TextBlock Grid.Column="3" Text="{Binding Parsed}" HorizontalAlignment="Right"/>
-                    </Grid>
-                </DataTemplate>
-            </ListBox.ItemTemplate>
-        </ListBox>
+        <!-- Center: panel tabs -->
+        <TabControl Name="PanelTabs">
+            <TabItem Header="Terrain">
+                <panels:TerrainView Name="TerrainPanel"/>
+            </TabItem>
+            <TabItem Header="Objects">
+                <panels:ObjectEditorView Name="ObjectsPanel"/>
+            </TabItem>
+            <TabItem Header="Files">
+                <panels:FilesView Name="FilesPanel"/>
+            </TabItem>
+            <TabItem Header="Script">
+                <panels:ScriptView Name="ScriptPanel"/>
+            </TabItem>
+        </TabControl>
 
     </DockPanel>
 </Window>

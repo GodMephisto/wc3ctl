@@ -1,0 +1,9 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Wc3.Studio.Panels.ObjectEditorView">
+    <Grid Name="ObjectEditorRoot">
+        <TextBlock Name="ObjectEditorStubText"
+                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                   Text="Object editor panel — no map open"/>
+    </Grid>
+</UserControl>
