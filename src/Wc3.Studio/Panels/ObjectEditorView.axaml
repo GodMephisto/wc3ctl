@@ -2,7 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="Wc3.Studio.Panels.ObjectEditorView">
     <UserControl.Styles>
-        <Style Selector="ListBox#UnitList ListBoxItem">
+        <Style Selector="ListBox#ObjectList ListBoxItem">
             <Setter Property="Padding" Value="6,3"/>
             <Setter Property="MinHeight" Value="0"/>
         </Style>
@@ -17,39 +17,68 @@
                    HorizontalAlignment="Center" VerticalAlignment="Center"
                    Text="Object editor panel — no map open"/>
 
-        <Grid Name="ContentRoot" IsVisible="False" RowDefinitions="*,Auto">
-            <Grid Grid.Row="0" ColumnDefinitions="280,4,*">
-                <!-- Master: the map's unit objects. -->
-                <DockPanel Grid.Column="0">
-                    <TextBlock DockPanel.Dock="Top" Text="Units" FontWeight="SemiBold" Margin="6,4"/>
-                    <ListBox Name="UnitList" SelectionChanged="OnUnitSelectionChanged">
+        <Grid Name="ContentRoot" IsVisible="False" RowDefinitions="Auto,*,Auto">
+            <!-- Type switcher: all 7 Object Editor kinds. -->
+            <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" Margin="6,4">
+                <TextBlock Text="Type:" VerticalAlignment="Center"/>
+                <ComboBox Name="KindCombo" MinWidth="150" SelectionChanged="OnKindChanged"/>
+                <TextBlock Name="ListCountText" VerticalAlignment="Center"
+                           Foreground="#8FA3B8" Text=""/>
+            </StackPanel>
+
+            <Grid Grid.Row="1" ColumnDefinitions="300,4,*">
+                <!-- Master: the map's objects of the selected kind (multi-select). -->
+                <Grid Grid.Column="0">
+                    <ListBox Name="ObjectList" SelectionMode="Multiple"
+                             SelectionChanged="OnObjectSelectionChanged">
                         <ListBox.ItemTemplate>
                             <DataTemplate>
-                                <StackPanel Orientation="Horizontal" Spacing="8">
-                                    <TextBlock Text="{Binding Rawcode}"
-                                               FontFamily="Consolas,Menlo,monospace"
-                                               Foreground="#8FA3B8" VerticalAlignment="Center"/>
-                                    <TextBlock Text="{Binding Display}" VerticalAlignment="Center"
-                                               TextTrimming="CharacterEllipsis"/>
-                                </StackPanel>
+                                <TextBlock Text="{Binding Display}"
+                                           TextTrimming="CharacterEllipsis"
+                                           VerticalAlignment="Center"/>
                             </DataTemplate>
                         </ListBox.ItemTemplate>
                     </ListBox>
-                </DockPanel>
+                    <TextBlock Name="EmptyListText" IsVisible="False"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               TextWrapping="Wrap" Margin="12" Foreground="#8FA3B8"/>
+                </Grid>
 
                 <GridSplitter Grid.Column="1" Background="#33555555"/>
 
-                <!-- Detail: the selected unit's merged fields (base ⊕ map). -->
+                <!-- Detail: merged fields (base ⊕ map) of the first selected object,
+                     read-only grid + a dedicated editor box below. -->
                 <DockPanel Grid.Column="2" Margin="4,0,0,0">
                     <TextBlock Name="SelectedHeader" DockPanel.Dock="Top"
                                FontWeight="SemiBold" Margin="6,4" Text=""/>
+                    <TextBlock Name="MultiSelectNote" DockPanel.Dock="Top" IsVisible="False"
+                               Foreground="#E8C56A" Margin="6,0,6,4" Text=""/>
                     <Grid DockPanel.Dock="Top" ColumnDefinitions="230,56,*,72" Margin="8,2">
                         <TextBlock Grid.Column="0" Text="Field" FontWeight="SemiBold"/>
                         <TextBlock Grid.Column="1" Text="Code" FontWeight="SemiBold"/>
                         <TextBlock Grid.Column="2" Text="Value" FontWeight="SemiBold" Margin="4,0"/>
                         <TextBlock Grid.Column="3" Text="Source" FontWeight="SemiBold"/>
                     </Grid>
-                    <ListBox Name="FieldList">
+
+                    <!-- Dedicated field editor: select a row above, edit here, Apply
+                         writes to every selected object (units only this slice). -->
+                    <Border DockPanel.Dock="Bottom" BorderBrush="#33555555"
+                            BorderThickness="0,1,0,0" Padding="6,4">
+                        <StackPanel Spacing="4">
+                            <TextBlock Name="FieldEditLabel" FontWeight="SemiBold"
+                                       Text="Select a field to edit"/>
+                            <DockPanel>
+                                <Button Name="ApplyButton" DockPanel.Dock="Right"
+                                        Content="Apply" Margin="6,0,0,0"
+                                        IsEnabled="False" Click="OnApplyClick"/>
+                                <TextBox Name="EditorBox" MinHeight="0" Padding="4,3"/>
+                            </DockPanel>
+                            <TextBlock Name="EditNote" Foreground="#8FA3B8" FontSize="11"
+                                       TextWrapping="Wrap" Text=""/>
+                        </StackPanel>
+                    </Border>
+
+                    <ListBox Name="FieldList" SelectionChanged="OnFieldSelectionChanged">
                         <ListBox.ItemTemplate>
                             <DataTemplate>
                                 <Grid ColumnDefinitions="230,56,*,72">
@@ -62,9 +91,12 @@
                                                FontFamily="Consolas,Menlo,monospace"
                                                Foreground="{Binding RowBrush}"
                                                VerticalAlignment="Center"/>
-                                    <TextBox Grid.Column="2" Text="{Binding Value, Mode=TwoWay}"
-                                             Margin="4,1" Padding="4,2" MinHeight="0"/>
-                                    <TextBlock Grid.Column="3" Text="{Binding SourceDisplay}"
+                                    <TextBlock Grid.Column="2" Text="{Binding Value}"
+                                               Foreground="{Binding RowBrush}"
+                                               FontWeight="{Binding RowWeight}"
+                                               TextTrimming="CharacterEllipsis"
+                                               Margin="4,0" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="3" Text="{Binding Source}"
                                                Foreground="{Binding RowBrush}"
                                                FontWeight="{Binding RowWeight}"
                                                VerticalAlignment="Center"/>
@@ -75,7 +107,7 @@
                 </DockPanel>
             </Grid>
 
-            <DockPanel Grid.Row="1" Margin="6,4">
+            <DockPanel Grid.Row="2" Margin="6,4">
                 <Button Name="SaveEditsButton" DockPanel.Dock="Right"
                         Content="Save Edits" Click="OnSaveEditsClick"/>
                 <TextBlock Name="StatusText" TextWrapping="Wrap"
