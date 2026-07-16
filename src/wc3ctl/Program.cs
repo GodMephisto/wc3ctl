@@ -264,6 +264,23 @@ public static class Program
         }));
         bundle.AddCommand(bundleUnit);
 
+        var bundleObjKind = new Option<string>("--kind", () => "unit",
+            "Root object type: unit|item|ability|destructable|doodad|buff|upgrade.");
+        var bundleObject = new Command("object",
+            "Resolve everything an object of any kind depends on ('bundle unit', generalized).")
+        { mapArg, objRawcode, bundleObjKind };
+        bundleObject.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = BundleCommand.ResolveObject(
+                MapDocument.Load(p.GetValueForArgument(mapArg)),
+                ObjectKinds.Parse(p.GetValueForOption(bundleObjKind)!),
+                p.GetValueForArgument(objRawcode),
+                p.GetValueForOption(gameDirOption));
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.BundleUnit(r));
+        }));
+        bundle.AddCommand(bundleObject);
+
         var script = new Command("script", "Map script queries.");
         var scriptFunctions = new Command("functions", "List functions declared in the map script.") { mapArg };
         scriptFunctions.SetHandler((string map, bool json) => RunSafely(() =>

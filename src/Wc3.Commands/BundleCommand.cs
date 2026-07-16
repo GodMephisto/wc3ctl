@@ -9,14 +9,15 @@ using Wc3.Modeling;
 namespace Wc3.Commands;
 
 /// <summary>
-/// Computes the full dependency closure of one unit: every object it references
-/// (abilities, buffs, items, upgrades, ...), every asset file (models, textures,
-/// icons, sounds) and every trigger string, so a later wave can graph the result
-/// and port it into another map. Breadth-first reference crawl over merged
-/// object fields: 4-char tokens that resolve as objects become nodes, path-like
-/// tokens become file deps, and map-imported models contribute their textures.
-/// Only map-defined (custom) objects are recursed — base-game objects are
-/// recorded as leaf nodes since they already exist in any target map.
+/// Computes the full dependency closure of one object (rooted at any of the seven
+/// Object Editor kinds): every object it references (abilities, buffs, items,
+/// upgrades, ...), every asset file (models, textures, icons, sounds) and every
+/// trigger string, so a later wave can graph the result and port it into another
+/// map. Breadth-first reference crawl over merged object fields: 4-char tokens
+/// that resolve as objects become nodes, path-like tokens become file deps, and
+/// map-imported models contribute their textures. Only map-defined (custom)
+/// objects are recursed — base-game objects are recorded as leaf nodes since
+/// they already exist in any target map.
 /// </summary>
 public static class BundleCommand
 {
@@ -26,17 +27,31 @@ public static class BundleCommand
     private static readonly string[] AssetExtensions =
         { ".mdx", ".mdl", ".blp", ".tga", ".dds", ".mp3", ".wav", ".flac" };
 
-    public static UnitBundle ResolveUnit(MapDocument doc, string rootRawcode, string? gameDirOverride)
+    /// <summary>Unit-rooted closure (back-compat shorthand for <see cref="ResolveObject(MapDocument, ObjectKind, string, string?)"/>).</summary>
+    public static UnitBundle ResolveUnit(MapDocument doc, string rootRawcode, string? gameDirOverride) =>
+        ResolveObject(doc, ObjectKind.Unit, rootRawcode, gameDirOverride);
+
+    /// <summary>Unit-rooted closure with an explicit game-data context (back-compat).</summary>
+    internal static UnitBundle ResolveUnit(
+        MapDocument doc, string rootRawcode, GameDataContext? ctx, IReadOnlyList<string> preDiagnostics) =>
+        ResolveObject(doc, ObjectKind.Unit, rootRawcode, ctx, preDiagnostics);
+
+    /// <summary>Closure rooted at an object of the given kind. The result is a
+    /// <see cref="UnitBundle"/> for historical reasons — it is a generic object
+    /// bundle and covers any root kind.</summary>
+    public static UnitBundle ResolveObject(
+        MapDocument doc, ObjectKind rootKind, string rootRawcode, string? gameDirOverride)
     {
         return GameData.GameData.TryOpen(gameDirOverride, out var ctx, out var diagnostic)
-            ? ResolveUnit(doc, rootRawcode, ctx, Array.Empty<string>())
-            : ResolveUnit(doc, rootRawcode, null, new[] { diagnostic });
+            ? ResolveObject(doc, rootKind, rootRawcode, ctx, Array.Empty<string>())
+            : ResolveObject(doc, rootKind, rootRawcode, null, new[] { diagnostic });
     }
 
     /// <summary>Core with an optional game-data context (null = map deltas only:
     /// base-game references cannot resolve and are silently skipped).</summary>
-    internal static UnitBundle ResolveUnit(
-        MapDocument doc, string rootRawcode, GameDataContext? ctx, IReadOnlyList<string> preDiagnostics)
+    internal static UnitBundle ResolveObject(
+        MapDocument doc, ObjectKind rootKind, string rootRawcode, GameDataContext? ctx,
+        IReadOnlyList<string> preDiagnostics)
     {
         var diagnostics = new List<string>(preDiagnostics);
         var strings = MapStrings.From(doc);
@@ -150,20 +165,21 @@ public static class BundleCommand
             }
         }
 
-        // Root: explicitly a unit (this command's contract).
-        var root = ObjectGetCommand.Execute(doc, ObjectKind.Unit, rootRawcode, ctx, Array.Empty<string>());
+        // Root: the caller-declared kind (the crawl below stays kind-agnostic).
+        var kindWord = rootKind.ToString().ToLowerInvariant();
+        var root = ObjectGetCommand.Execute(doc, rootKind, rootRawcode, ctx, Array.Empty<string>());
         if (!root.Found)
         {
-            diagnostics.Add($"root unit '{rootRawcode}' not found in the map"
-                + (ctx is null ? " (game data unavailable — base units unresolvable)" : " or game data"));
+            diagnostics.Add($"root {kindWord} '{rootRawcode}' not found in the map"
+                + (ctx is null ? " (game data unavailable — base objects unresolvable)" : " or game data"));
             return new UnitBundle(rootRawcode, null, Array.Empty<BundleNode>(), Array.Empty<BundleFile>(),
                 Array.Empty<string>(), Array.Empty<BundleEdge>(), diagnostics, Array.Empty<BundleFunction>());
         }
 
-        bool rootCustom = rootRawcode.Length == 4 && IsCustom(ObjectKind.Unit, rootRawcode);
-        nodes[rootRawcode] = new BundleNode(rootRawcode, ObjectKind.Unit, root.Name, rootCustom);
+        bool rootCustom = rootRawcode.Length == 4 && IsCustom(rootKind, rootRawcode);
+        nodes[rootRawcode] = new BundleNode(rootRawcode, rootKind, root.Name, rootCustom);
         if (rootCustom) queue.Enqueue((rootRawcode, root));
-        else diagnostics.Add($"root unit '{rootRawcode}' is a base-game unit — nothing custom to port");
+        else diagnostics.Add($"root {kindWord} '{rootRawcode}' is a base-game {kindWord} — nothing custom to port");
 
         while (queue.Count > 0)
         {
