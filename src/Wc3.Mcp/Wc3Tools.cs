@@ -1,6 +1,8 @@
 // src/Wc3.Mcp/Wc3Tools.cs
 using System.ComponentModel;
+using System.Text.Json;
 using ModelContextProtocol;
+using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using Wc3.Commands;
 using Wc3.Model;
@@ -48,6 +50,56 @@ public static class Wc3Tools
             ? ObjectGetCommand.Execute(LoadMap(map), rawcode, ResolveGameDir(game_dir))
             : ObjectGetCommand.Execute(LoadMap(map), ParseKind(kind), rawcode, ResolveGameDir(game_dir)));
 
+    [McpServerTool(Name = "bundle_unit", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Resolve everything a unit depends on - the porting preview: referenced objects (with custom-to-map flags), asset files, trigger strings, dependency edges and the JASS trigger-function closure.")]
+    public static UnitBundle BundleUnit(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Four-character unit rawcode, e.g. 'u000'.")] string rawcode,
+        [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Used to tell base-game references from custom ones.")] string? game_dir = null)
+        => Run(() => BundleCommand.ResolveUnit(LoadMap(map), rawcode, ResolveGameDir(game_dir)));
+
+    /// <summary>PNGs up to this size also return inline as MCP image content.</summary>
+    private const int InlineImageLimit = 1_000_000;
+
+    [McpServerTool(Name = "render_model", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Render an object's model (map-imported .mdx/.mdl) to a PNG written at out_path. Returns the saved path and byte size; small images also come back inline as MCP image content. The map itself is never modified.")]
+    public static CallToolResult RenderModel(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Four-character object rawcode (e.g. 'u000'), or an internal model path (contains '\\', '/' or '.').")] string rawcode,
+        [Description("Output PNG file path. Created/overwritten; parent directories are created as needed.")] string out_path,
+        [Description("Object kind: unit|item|destructable|doodad. Default: auto-detect from the rawcode.")] string? kind = null,
+        [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var).")] string? game_dir = null)
+        => Run(() =>
+        {
+            if (string.IsNullOrWhiteSpace(out_path))
+                throw new McpException("out_path is required");
+            var doc = LoadMap(map);
+
+            // Anything that can't be a rawcode is treated as an internal model path (CLI parity).
+            bool isPath = rawcode.Length != 4 || rawcode.IndexOfAny(new[] { '\\', '/', '.' }) >= 0;
+            byte[] png = isPath
+                ? RenderModelCommand.Execute(doc, rawcode)
+                : kind is null
+                    ? RenderModelCommand.Execute(doc, rawcode, ResolveGameDir(game_dir))
+                    : RenderModelCommand.Execute(doc, ParseKind(kind), rawcode, ResolveGameDir(game_dir));
+
+            string full = Path.GetFullPath(out_path);
+            if (string.Equals(full, Path.GetFullPath(map), StringComparison.OrdinalIgnoreCase))
+                throw new McpException("out_path must not be the map file itself");
+            if (Path.GetDirectoryName(full) is { Length: > 0 } dir) Directory.CreateDirectory(dir);
+            File.WriteAllBytes(full, png);
+
+            bool inline = png.Length <= InlineImageLimit;
+            var info = new RenderModelToolResult(full, png.Length, inline);
+            var content = new List<ContentBlock>
+            {
+                new TextContentBlock { Text = JsonSerializer.Serialize(info, Wc3McpServer.JsonOptions) },
+            };
+            if (inline)
+                content.Add(new ImageContentBlock { MimeType = "image/png", Data = png });
+            return new CallToolResult { Content = content };
+        });
+
     // ---- shared plumbing -------------------------------------------------
 
     /// <summary>Expected failures become clean MCP tool errors, never stack traces.</summary>
@@ -80,3 +132,6 @@ public static class Wc3Tools
         : Environment.GetEnvironmentVariable("WC3_GAME_DIR") is { Length: > 0 } env ? env
         : null;
 }
+
+/// <summary>render_model outcome: where the PNG landed and whether it was also inlined.</summary>
+public sealed record RenderModelToolResult(string SavedTo, int SizeBytes, bool ImageInline);
