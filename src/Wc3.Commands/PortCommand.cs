@@ -40,7 +40,7 @@ public static class PortCommand
         var customs = bundle.Objects.Where(o => o.CustomToMap).ToList();
 
         // 1) Rawcode remap: reassign any custom rawcode already defined in the target.
-        var used = UsedRawcodes(target);
+        var used = RawcodeAllocator.UsedRawcodes(target);
         var remap = new Dictionary<int, int>();       // source id -> target id (identity when free)
         var remapReport = new List<RawcodeRemap>();
         foreach (var o in customs)
@@ -49,7 +49,7 @@ public static class PortCommand
             if (remap.ContainsKey(id)) continue;
             if (used.Contains(id))
             {
-                int fresh = AllocateRawcode(o.Rawcode, used);
+                int fresh = RawcodeAllocator.Allocate(o.Rawcode, used);
                 remap[id] = fresh;
                 used.Add(fresh);
                 remapReport.Add(new RawcodeRemap(o.Kind, o.Rawcode, fresh.ToRawcode()));
@@ -145,42 +145,6 @@ public static class PortCommand
         return new PortResult(
             bundle.RootRawcode, rootPortedTo, bundle.RootName,
             remapReport, portedObjects, copied, skipped, inlinedStrings, warnings, diagnostics, scriptInfo);
-    }
-
-    // ---- rawcode allocation ------------------------------------------------
-
-    private static int AllocateRawcode(string original, HashSet<int> used)
-    {
-        // Preserve the leading category char (editor convention), vary the last three
-        // over [0-9A-Za-z] until a free code is found; fall back to varying all four.
-        const string alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-        char c0 = original.Length == 4 ? original[0] : 'X';
-        foreach (var a in alphabet)
-            foreach (var b in alphabet)
-                foreach (var d in alphabet)
-                {
-                    int code = new string(new[] { c0, a, b, d }).FromRawcode();
-                    if (!used.Contains(code)) return code;
-                }
-        // Exhausted (astronomically unlikely) — vary the first char too.
-        foreach (var w in alphabet)
-            foreach (var a in alphabet)
-                foreach (var b in alphabet)
-                    foreach (var d in alphabet)
-                    {
-                        int code = new string(new[] { w, a, b, d }).FromRawcode();
-                        if (!used.Contains(code)) return code;
-                    }
-        throw new InvalidOperationException("rawcode space exhausted");
-    }
-
-    private static HashSet<int> UsedRawcodes(MapDocument target)
-    {
-        var used = new HashSet<int>();
-        foreach (var kind in ObjectKinds.All)
-            foreach (var e in ObjectKinds.MergedEntries(target, ObjectKinds.Info(kind)))
-                used.Add(e.Id);
-        return used;
     }
 
     // ---- neutral group extraction / injection ------------------------------
