@@ -40,6 +40,9 @@ public partial class FilesView : UserControl, IMapPanel
         InitializeComponent();
         _audio.PlaybackStopped += (_, _) =>
             Avalonia.Threading.Dispatcher.UIThread.Post(() => SetPlayState(false));
+        // Best-effort cleanup: stop playback (releases the audio device + temp file) when
+        // this panel leaves the visual tree, e.g. on window close or tab teardown.
+        DetachedFromVisualTree += (_, _) => _audio.Stop();
     }
 
     public void ShowMap(MapSession session)
