@@ -141,18 +141,22 @@ public static class Program
         }));
         obj.AddCommand(objList);
 
-        var setFieldArg = new Argument<string>("field", "Four-character field code (e.g. uhpm).");
+        var setFieldArg = new Argument<string>("field",
+            "Four-character field code (e.g. uhpm), or code:N for an ability/upgrade level or doodad variation.");
         var setValueArg = new Argument<string>("value", "New value for the field.");
         var setOut = new Option<string?>(new[] { "-o", "--out" },
             "Output map path. Default: '<map>.edited.<ext>' next to the input - the original is never overwritten.");
-        var objSet = new Command("set", "Set a unit object field and save the edited map.")
-        { mapArg, objRawcode, setFieldArg, setValueArg, setOut };
+        var objSetKind = new Option<string>("--kind", () => "unit",
+            "Object type: unit|item|ability|destructable|doodad|buff|upgrade.");
+        var objSet = new Command("set", "Set an object field (any kind) and save the edited map.")
+        { mapArg, objRawcode, setFieldArg, setValueArg, objSetKind, setOut };
         objSet.SetHandler(ctx => RunSafely(() =>
         {
             var p = ctx.ParseResult;
             string map = p.GetValueForArgument(mapArg);
             var doc = MapDocument.Load(map);
             var r = ObjectSetCommand.Execute(doc,
+                ObjectKinds.Parse(p.GetValueForOption(objSetKind)!),
                 p.GetValueForArgument(objRawcode),
                 p.GetValueForArgument(setFieldArg),
                 p.GetValueForArgument(setValueArg));
@@ -171,6 +175,37 @@ public static class Program
                 () => (r.Warning is null ? "" : $"warning: {r.Warning}\n") + $"{r.Message}\nsaved: {dest}");
         }));
         obj.AddCommand(objSet);
+
+        var newKindArg = new Argument<string>("kind",
+            "Object type: unit|item|ability|destructable|doodad|buff|upgrade.");
+        var newBaseArg = new Argument<string>("base",
+            "Four-character rawcode of the base object the new custom object derives from.");
+        var objNew = new Command("new",
+            "Create a custom object derived from a base rawcode and save the edited map. Prints the fresh rawcode.")
+        { mapArg, newKindArg, newBaseArg, setOut };
+        objNew.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = ObjectNewCommand.Execute(doc,
+                ObjectKinds.Parse(p.GetValueForArgument(newKindArg)),
+                p.GetValueForArgument(newBaseArg));
+            if (!r.Ok)
+            {
+                Emit(p.GetValueForOption(jsonOption), r, () => r.Message);
+                exitCode = 1;
+                return;
+            }
+            var dest = p.GetValueForOption(setOut) ?? Path.Combine(
+                Path.GetDirectoryName(map) ?? "",
+                Path.GetFileNameWithoutExtension(map) + ".edited" + Path.GetExtension(map));
+            doc.Save(dest);
+            Emit(p.GetValueForOption(jsonOption),
+                new { r.Ok, r.Message, r.NewRawcode, SavedTo = dest },
+                () => $"{r.Message}\nsaved: {dest}");
+        }));
+        obj.AddCommand(objNew);
 
         var renderOut = new Option<string?>(new[] { "-o", "--out" },
             "Output PNG path. Default: <map name>.png in the current directory.");
