@@ -22,6 +22,11 @@ public static class FilePreviewCommand
     private const int MaxTextChars = 256 * 1024;   // keep the UI responsive on huge scripts
     private const int HexDumpBytes = 4 * 1024;     // first 4 KB as a hex dump
 
+    private static readonly HashSet<string> AudioExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".mp3", ".wav", ".flac", ".ogg",
+    };
+
     private static readonly HashSet<string> TextExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
         ".j", ".lua", ".txt", ".wts", ".slk", ".ini", ".fdf", ".toc", ".xml",
@@ -40,6 +45,10 @@ public static class FilePreviewCommand
     {
         string display = name ?? "(unnamed entry)";
         string ext = name is null ? "" : Path.GetExtension(name);
+
+        if (AudioExtensions.Contains(ext))
+            return new FilePreview(display, "audio",
+                $"{ext.TrimStart('.').ToUpperInvariant()} audio, {bytes.Length:N0} bytes", null, null);
 
         if (string.Equals(ext, ".blp", StringComparison.OrdinalIgnoreCase))
         {

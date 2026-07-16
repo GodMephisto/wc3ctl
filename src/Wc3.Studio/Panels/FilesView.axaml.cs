@@ -31,9 +31,15 @@ public partial class FilesView : UserControl, IMapPanel
     private SortColumn _sortColumn = SortColumn.Name;
     private bool _sortAscending = true;
 
+    private readonly AudioPlayer _audio = new();
+    private byte[]? _audioBytes;
+    private string _audioExt = "";
+
     public FilesView()
     {
         InitializeComponent();
+        _audio.PlaybackStopped += (_, _) =>
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => SetPlayState(false));
     }
 
     public void ShowMap(MapSession session)
@@ -78,23 +84,32 @@ public partial class FilesView : UserControl, IMapPanel
             return;
         try
         {
+            _audioBytes = doc.Files[row.Ordinal].RawBytes;
+            _audioExt = Path.GetExtension(row.Name ?? "");
             var preview = row.Name is not null
                 ? FilePreviewCommand.Execute(doc, row.Name)
-                : FilePreviewCommand.Of(doc.Files[row.Ordinal].RawBytes, null);
+                : FilePreviewCommand.Of(_audioBytes, null);
             ShowPreview(preview);
         }
         catch (Exception ex)
         {
             PreviewHeader.Text = $"Preview failed: {ex.Message}";
-            PreviewText.IsVisible = false;
-            PreviewImage.IsVisible = false;
+            HidePreviewBodies();
         }
     }
 
     private void ShowPreview(FilePreview preview)
     {
         PreviewHeader.Text = $"{preview.Name}  ({preview.Info})";
-        if (preview.Kind == "image" && preview.Png is { } png)
+        _audio.Stop();
+        SetPlayState(false);
+        HidePreviewBodies();
+
+        if (preview.Kind == "audio")
+        {
+            AudioControls.IsVisible = true; // bytes staged in OnFileDoubleTapped
+        }
+        else if (preview.Kind == "image" && preview.Png is { } png)
         {
             using var ms = new MemoryStream(png);
             var bmp = new Bitmap(ms);
@@ -102,25 +117,50 @@ public partial class FilesView : UserControl, IMapPanel
             PreviewImage.Source = bmp;
             old?.Dispose();
             PreviewImage.IsVisible = true;
-            PreviewText.IsVisible = false;
         }
         else
         {
             PreviewText.Text = preview.Text ?? "";
             PreviewText.IsVisible = true;
-            PreviewImage.IsVisible = false;
         }
+    }
+
+    private void HidePreviewBodies()
+    {
+        PreviewText.IsVisible = false;
+        PreviewImage.IsVisible = false;
+        AudioControls.IsVisible = false;
+    }
+
+    private void OnPlayClick(object? sender, RoutedEventArgs e)
+    {
+        if (_audioBytes is null) return;
+        try { _audio.Play(_audioBytes, _audioExt); SetPlayState(true); }
+        catch (Exception ex) { StatusText.Text = $"Cannot play {_audioExt}: {ex.Message}"; SetPlayState(false); }
+    }
+
+    private void OnStopClick(object? sender, RoutedEventArgs e)
+    {
+        _audio.Stop();
+        SetPlayState(false);
+    }
+
+    private void SetPlayState(bool playing)
+    {
+        PlayButton.IsEnabled = !playing;
+        StopButton.IsEnabled = playing;
     }
 
     private void ResetPreview()
     {
+        _audio.Stop();
+        SetPlayState(false);
         PreviewHeader.Text = "Double-click a file to preview its contents";
         PreviewText.Text = "";
-        PreviewText.IsVisible = false;
         var old = PreviewImage.Source as Bitmap;
         PreviewImage.Source = null;
         old?.Dispose();
-        PreviewImage.IsVisible = false;
+        HidePreviewBodies();
     }
 
     // --- sorting ---

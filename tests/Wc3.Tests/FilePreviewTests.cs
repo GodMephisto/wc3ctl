@@ -13,7 +13,16 @@ public class FilePreviewTests
         ["readme.txt"] = Encoding.UTF8.GetBytes("hello world"),
         ["noext"] = Encoding.UTF8.GetBytes("plain text with no extension"),
         ["blob.bin"] = new byte[] { 0, 1, 2, 3, 0, 255, 128, 7 },
+        ["war3mapImported\\sound.mp3"] = new byte[] { 0x49, 0x44, 0x33, 4, 2, 1 },
     }));
+
+    [Fact]
+    public void Audio_file_is_classified_as_audio()
+    {
+        var p = FilePreviewCommand.Execute(Map(), "war3mapImported\\sound.mp3");
+        Assert.Equal("audio", p.Kind);
+        Assert.Contains("MP3", p.Info);
+    }
 
     [Fact]
     public void Text_file_previews_as_decoded_text()

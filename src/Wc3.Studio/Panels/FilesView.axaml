@@ -70,6 +70,11 @@
                     <TextBlock Name="PreviewHeader" DockPanel.Dock="Top" FontWeight="SemiBold"
                                TextWrapping="Wrap" Margin="0,2,0,6"
                                Text="Double-click a file to preview its contents"/>
+                    <StackPanel Name="AudioControls" DockPanel.Dock="Top" IsVisible="False"
+                                Orientation="Horizontal" Spacing="8" Margin="0,0,0,6">
+                        <Button Name="PlayButton" Content="▶ Play" Click="OnPlayClick"/>
+                        <Button Name="StopButton" Content="■ Stop" Click="OnStopClick" IsEnabled="False"/>
+                    </StackPanel>
                     <Panel>
                         <TextBox Name="PreviewText" IsVisible="False" IsReadOnly="True"
                                  AcceptsReturn="True" TextWrapping="NoWrap"
