@@ -25,7 +25,7 @@ public static class InfoCommand
         var wts = doc.GetFile("war3map.wts")?.Model as TriggerStrings;
         var table = new Dictionary<int, string>();
         foreach (var s in wts?.Strings ?? Enumerable.Empty<TriggerString>())
-            table[(int)s.Key] = s.Value;
+            table[(int)s.Key] = s.Value ?? string.Empty;
         return table;
     }
 }

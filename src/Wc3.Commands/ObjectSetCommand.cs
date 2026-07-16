@@ -143,10 +143,9 @@ public static class ObjectSetCommand
             case ObjectDataType.Real or ObjectDataType.Unreal
                 when float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var f):
                 typed = f; return true;
-            case ObjectDataType.Bool when bool.TryParse(value, out var b):
-                typed = b; return true;
-            case ObjectDataType.Char when value.Length == 1:
-                typed = value[0]; return true;
+            // WC3 object data stores only int/real/unreal/string (variable types 0-3).
+            // War3Net's Bool/Char are obsolete and never emitted by the read path, so a
+            // mod's Type is always one of the above; no Bool/Char cases are reachable.
             case ObjectDataType.String:
                 typed = value; return true;
             default:
