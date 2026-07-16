@@ -18,9 +18,11 @@ public static class ModelRenderer
     // Camera orbit for the default 3/4 view: yaw around the Z (up) axis, then pitch down.
     public const float DefaultYawDegrees = 45f;
     public const float DefaultPitchDegrees = 30f;
-    private const float FillFraction = 0.9f;    // model's share of the frame
+    public const float DefaultZoom = 1f;
+    private const float FillFraction = 0.9f;    // model's share of the frame at zoom 1
     private const float AmbientLight = 0.3f;    // shading floor so backfaces stay visible
     private const byte AlphaTestThreshold = 128; // cutout transparency (hair, foliage)
+    private const float DistanceFactor = 3.5f;  // eye distance in model radii → mild perspective
 
     /// <summary>
     /// Renders <paramref name="model"/> to PNG bytes over a transparent background.
@@ -29,6 +31,9 @@ public static class ModelRenderer
     /// ReplaceableId entries and textures the map does not contain).
     /// <paramref name="yawDegrees"/>/<paramref name="pitchDegrees"/> orbit the camera
     /// around Z-up; pitch is clamped just short of the poles to keep the basis stable.
+    /// <paramref name="zoom"/> magnifies the view (1 = fit-to-frame). Framing is derived
+    /// from the model's bounding sphere so the model holds a steady size as it rotates,
+    /// and a mild perspective (with perspective-correct interpolation) gives real depth.
     /// </summary>
     public static byte[] RenderPng(
         Model3D model,
@@ -36,7 +41,8 @@ public static class ModelRenderer
         int width = 512,
         int height = 512,
         float yawDegrees = DefaultYawDegrees,
-        float pitchDegrees = DefaultPitchDegrees)
+        float pitchDegrees = DefaultPitchDegrees,
+        float zoom = DefaultZoom)
     {
         ArgumentNullException.ThrowIfNull(model);
         ArgumentNullException.ThrowIfNull(textures);
@@ -47,9 +53,9 @@ public static class ModelRenderer
         if (geosets.Count == 0)
             throw new InvalidDataException("model has no renderable geometry (no geosets with triangles)");
 
-        // Orthographic camera basis from yaw/pitch on the unit sphere (Z-up).
-        // A pitch at ±90° would make forward parallel to Z and the right-vector
-        // cross product degenerate (NaNs), so stop just short of the poles.
+        // Camera basis from yaw/pitch on the unit sphere (Z-up). A pitch at ±90° would
+        // make forward parallel to Z and the right-vector cross product degenerate, so
+        // stop just short of the poles.
         float yaw = yawDegrees * MathF.PI / 180f;
         float pitch = Math.Clamp(pitchDegrees, -89.9f, 89.9f) * MathF.PI / 180f;
         var eyeDir = new Vector3(
@@ -60,31 +66,53 @@ public static class ModelRenderer
         var right = Vector3.Normalize(Vector3.Cross(forward, Vector3.UnitZ));
         var up = Vector3.Cross(right, forward);
 
-        // Project every vertex to view space once; frame the projected bounds.
-        var viewPositions = new Vector3[geosets.Count][];
-        float minX = float.MaxValue, maxX = float.MinValue;
-        float minY = float.MaxValue, maxY = float.MinValue;
+        // Bounding sphere (view-independent) → a stable frame: the model keeps its size
+        // no matter how it is spun. Center on the box midpoint; radius covers every vertex.
+        Vector3 min = new(float.MaxValue), max = new(float.MinValue);
+        foreach (var g in geosets)
+            for (int i = 0; i + 2 < g.Vertices.Length; i += 3)
+            {
+                var p = new Vector3(g.Vertices[i], g.Vertices[i + 1], g.Vertices[i + 2]);
+                min = Vector3.Min(min, p);
+                max = Vector3.Max(max, p);
+            }
+        var center = (min + max) / 2f;
+        float radius = 1e-6f;
+        foreach (var g in geosets)
+            for (int i = 0; i + 2 < g.Vertices.Length; i += 3)
+                radius = MathF.Max(radius,
+                    (new Vector3(g.Vertices[i], g.Vertices[i + 1], g.Vertices[i + 2]) - center).Length());
+
+        // Eye pulled back along the view direction; focal chosen so the sphere fills the
+        // frame at zoom 1. Perspective divide uses the per-vertex distance along forward.
+        float dist = radius * DistanceFactor;
+        var eye = center + eyeDir * dist;
+        float focal = FillFraction * 0.5f * MathF.Min(width, height) * dist / radius * zoom;
+
+        // Project every vertex once: screen x/y (perspective) + inverse depth for
+        // perspective-correct attribute interpolation, + view depth for the z-buffer.
+        var sx = new Vector2[geosets.Count][];
+        var invW = new float[geosets.Count][];
+        var depth = new float[geosets.Count][];
         for (int gi = 0; gi < geosets.Count; gi++)
         {
             var v = geosets[gi].Vertices;
-            var view = new Vector3[v.Length / 3];
-            for (int i = 0; i < view.Length; i++)
+            int n = v.Length / 3;
+            var scr = new Vector2[n];
+            var iw = new float[n];
+            var dep = new float[n];
+            for (int i = 0; i < n; i++)
             {
-                var p = new Vector3(v[i * 3], v[i * 3 + 1], v[i * 3 + 2]);
-                var q = new Vector3(Vector3.Dot(p, right), Vector3.Dot(p, up), Vector3.Dot(p, forward));
-                view[i] = q;
-                if (q.X < minX) minX = q.X;
-                if (q.X > maxX) maxX = q.X;
-                if (q.Y < minY) minY = q.Y;
-                if (q.Y > maxY) maxY = q.Y;
+                var rel = new Vector3(v[i * 3], v[i * 3 + 1], v[i * 3 + 2]) - eye;
+                float vx = Vector3.Dot(rel, right);
+                float vy = Vector3.Dot(rel, up);
+                float vz = MathF.Max(Vector3.Dot(rel, forward), 1e-4f); // distance in front of eye
+                scr[i] = new Vector2(width / 2f + vx / vz * focal, height / 2f - vy / vz * focal);
+                iw[i] = 1f / vz;
+                dep[i] = vz;
             }
-            viewPositions[gi] = view;
+            sx[gi] = scr; invW[gi] = iw; depth[gi] = dep;
         }
-
-        float extentX = MathF.Max(maxX - minX, 1e-6f);
-        float extentY = MathF.Max(maxY - minY, 1e-6f);
-        float scale = FillFraction * MathF.Min(width / extentX, height / extentY);
-        float centerX = (minX + maxX) / 2f, centerY = (minY + maxY) / 2f;
 
         // Light biased toward the camera and above-left so the visible side reads.
         var light = Vector3.Normalize(eyeDir + 0.6f * up - 0.4f * right);
@@ -96,23 +124,21 @@ public static class ModelRenderer
         for (int gi = 0; gi < geosets.Count; gi++)
         {
             var geoset = geosets[gi];
-            var view = viewPositions[gi];
+            var scr = sx[gi];
+            var iw = invW[gi];
+            var dep = depth[gi];
             textures.TryGetValue(geoset.TextureId, out var texture);
 
             for (int t = 0; t + 2 < geoset.Indices.Length; t += 3)
             {
                 int i0 = geoset.Indices[t], i1 = geoset.Indices[t + 1], i2 = geoset.Indices[t + 2];
-                // View → screen: +X right, +Y up (flipped into image rows), Z kept for depth.
-                float ax = (view[i0].X - centerX) * scale + width / 2f;
-                float ay = height / 2f - (view[i0].Y - centerY) * scale;
-                float bx = (view[i1].X - centerX) * scale + width / 2f;
-                float by = height / 2f - (view[i1].Y - centerY) * scale;
-                float cx = (view[i2].X - centerX) * scale + width / 2f;
-                float cy = height / 2f - (view[i2].Y - centerY) * scale;
+                float ax = scr[i0].X, ay = scr[i0].Y;
+                float bx = scr[i1].X, by = scr[i1].Y;
+                float cx = scr[i2].X, cy = scr[i2].Y;
 
                 // Signed doubled area; near-zero → degenerate sliver, skip.
-                float area = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
-                if (MathF.Abs(area) < 1e-9f) continue;
+                float areaFull = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
+                if (MathF.Abs(areaFull) < 1e-9f) continue;
 
                 int pxMin = Math.Max(0, (int)MathF.Floor(MathF.Min(ax, MathF.Min(bx, cx))));
                 int pxMax = Math.Min(width - 1, (int)MathF.Ceiling(MathF.Max(ax, MathF.Max(bx, cx))));
@@ -120,29 +146,35 @@ public static class ModelRenderer
                 int pyMax = Math.Min(height - 1, (int)MathF.Ceiling(MathF.Max(ay, MathF.Max(by, cy))));
                 if (pxMin > pxMax || pyMin > pyMax) continue;
 
+                float iw0 = iw[i0], iw1 = iw[i1], iw2 = iw[i2];
                 for (int py = pyMin; py <= pyMax; py++)
                 {
-                    float sy = py + 0.5f;
+                    float py5 = py + 0.5f;
                     for (int px = pxMin; px <= pxMax; px++)
                     {
-                        float sx = px + 0.5f;
-                        // Barycentric weights; dividing by the signed area makes the
-                        // inside test winding-independent (no backface culling —
-                        // WC3 materials are frequently two-sided).
-                        float w0 = ((bx - sx) * (cy - sy) - (by - sy) * (cx - sx)) / area;
-                        float w1 = ((cx - sx) * (ay - sy) - (cy - sy) * (ax - sx)) / area;
+                        float px5 = px + 0.5f;
+                        // Screen-space barycentric weights (winding-independent inside test —
+                        // no backface culling, WC3 materials are frequently two-sided).
+                        float w0 = ((bx - px5) * (cy - py5) - (by - py5) * (cx - px5)) / areaFull;
+                        float w1 = ((cx - px5) * (ay - py5) - (cy - py5) * (ax - px5)) / areaFull;
                         float w2 = 1f - w0 - w1;
                         if (w0 < 0f || w1 < 0f || w2 < 0f) continue;
 
-                        float depth = w0 * view[i0].Z + w1 * view[i1].Z + w2 * view[i2].Z;
-                        int zi = py * width + px;
-                        if (depth >= zbuffer[zi]) continue;
+                        // Perspective-correct weights (divide by interpolated 1/z) so
+                        // textures don't warp across large near-far triangles.
+                        float denom = w0 * iw0 + w1 * iw1 + w2 * iw2;
+                        if (denom < 1e-12f) continue;
+                        float p0 = w0 * iw0 / denom, p1 = w1 * iw1 / denom, p2 = w2 * iw2 / denom;
 
-                        var rgba = SampleColor(geoset, texture, i0, i1, i2, w0, w1, w2);
+                        float d = p0 * dep[i0] + p1 * dep[i1] + p2 * dep[i2];
+                        int zi = py * width + px;
+                        if (d >= zbuffer[zi]) continue;
+
+                        var rgba = SampleColor(geoset, texture, i0, i1, i2, p0, p1, p2);
                         if (rgba.A < AlphaTestThreshold) continue; // cutout: keep depth open
 
-                        float shade = ShadeAt(geoset, i0, i1, i2, w0, w1, w2, light);
-                        zbuffer[zi] = depth;
+                        float shade = ShadeAt(geoset, i0, i1, i2, p0, p1, p2, light);
+                        zbuffer[zi] = d;
                         image[px, py] = new Rgba32(
                             (byte)(rgba.R * shade), (byte)(rgba.G * shade), (byte)(rgba.B * shade), 255);
                     }

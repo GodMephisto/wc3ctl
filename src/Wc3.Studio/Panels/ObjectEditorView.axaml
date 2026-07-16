@@ -60,11 +60,12 @@
                                     Cursor="Hand"
                                     PointerPressed="OnPreviewPointerPressed"
                                     PointerMoved="OnPreviewPointerMoved"
-                                    PointerReleased="OnPreviewPointerReleased">
+                                    PointerReleased="OnPreviewPointerReleased"
+                                    PointerWheelChanged="OnPreviewWheel">
                                 <Image Name="PreviewImage" Stretch="Uniform"/>
                             </Border>
                             <TextBlock Name="PreviewHint" IsVisible="False" FontSize="11"
-                                       Foreground="#8FA3B8" Text="Drag the preview to rotate"/>
+                                       Foreground="#8FA3B8" Text="Drag to rotate, scroll to zoom"/>
                             <Button Name="ExtractModelButton" Content="Extract model…"
                                     IsEnabled="False" Click="OnExtractModelClick"/>
                         </StackPanel>

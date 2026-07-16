@@ -33,8 +33,9 @@ public static class RenderModelCommand
             int width = 512,
             int height = 512,
             float yawDegrees = ModelRenderer.DefaultYawDegrees,
-            float pitchDegrees = ModelRenderer.DefaultPitchDegrees)
-            => ModelRenderer.RenderPng(Model, Textures, width, height, yawDegrees, pitchDegrees);
+            float pitchDegrees = ModelRenderer.DefaultPitchDegrees,
+            float zoom = ModelRenderer.DefaultZoom)
+            => ModelRenderer.RenderPng(Model, Textures, width, height, yawDegrees, pitchDegrees, zoom);
     }
 
     /// <summary>Parses the model at an internal map path and resolves its textures.</summary>

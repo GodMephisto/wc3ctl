@@ -56,10 +56,13 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     // --- in-window model preview (all state UI-thread-only) ---
     private const int PreviewSizePx = 256;
     private const float DegreesPerPixel = 0.5f;
+    private const float ZoomPerWheelNotch = 1.15f; // multiplicative zoom step
+    private const float MinZoom = 0.25f, MaxZoom = 8f;
     /// <summary>Parsed model + textures cached so drag re-renders only rasterize.</summary>
     private RenderModelCommand.PreparedModel? _previewModel;
     private float _previewYaw = ModelRenderer.DefaultYawDegrees;
     private float _previewPitch = ModelRenderer.DefaultPitchDegrees;
+    private float _previewZoom = ModelRenderer.DefaultZoom;
     /// <summary>Stamp that invalidates in-flight renders when the preview target changes.</summary>
     private int _previewGeneration;
     private bool _renderInFlight;
@@ -368,14 +371,15 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     {
         _previewYaw = ModelRenderer.DefaultYawDegrees;
         _previewPitch = ModelRenderer.DefaultPitchDegrees;
+        _previewZoom = ModelRenderer.DefaultZoom;
         int gen = ++_previewGeneration;
-        float yaw = _previewYaw, pitch = _previewPitch;
+        float yaw = _previewYaw, pitch = _previewPitch, zoom = _previewZoom;
         Task.Run(() =>
         {
             try
             {
                 var prepared = RenderModelCommand.Prepare(doc, internalName);
-                var png = prepared.RenderPng(PreviewSizePx, PreviewSizePx, yaw, pitch);
+                var png = prepared.RenderPng(PreviewSizePx, PreviewSizePx, yaw, pitch, zoom);
                 Dispatcher.UIThread.Post(() =>
                 {
                     if (gen != _previewGeneration)
@@ -415,14 +419,14 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         }
         _renderInFlight = true;
         int gen = _previewGeneration;
-        float yaw = _previewYaw, pitch = _previewPitch;
+        float yaw = _previewYaw, pitch = _previewPitch, zoom = _previewZoom;
         Task.Run(() =>
         {
             byte[]? png = null;
             string? error = null;
             try
             {
-                png = prepared.RenderPng(PreviewSizePx, PreviewSizePx, yaw, pitch);
+                png = prepared.RenderPng(PreviewSizePx, PreviewSizePx, yaw, pitch, zoom);
             }
             catch (Exception ex)
             {
@@ -485,6 +489,17 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     {
         _dragging = false;
         e.Pointer.Capture(null);
+    }
+
+    /// <summary>Scroll to zoom: wheel up magnifies, wheel down pulls back (clamped).</summary>
+    private void OnPreviewWheel(object? sender, PointerWheelEventArgs e)
+    {
+        if (_previewModel is null)
+            return;
+        float factor = MathF.Pow(ZoomPerWheelNotch, (float)e.Delta.Y);
+        _previewZoom = Math.Clamp(_previewZoom * factor, MinZoom, MaxZoom);
+        e.Handled = true; // don't let the wheel scroll the list underneath
+        RequestPreviewRender();
     }
 
     /// <summary>
