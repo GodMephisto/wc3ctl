@@ -100,6 +100,28 @@ public static class Wc3Tools
             return new CallToolResult { Content = content };
         });
 
+    [McpServerTool(Name = "port_unit", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Port a unit (its custom-object closure + imported assets + strings, and best-effort its JASS trigger closure) from a source map into a target map, auto-remapping rawcode collisions. WRITES A NEW FILE '<target>.ported.<ext>' next to the target map (overwritten if it exists from a previous run) - the source and target maps themselves are NEVER modified. Returns the full port report: remaps, ported objects, copied files, inlined strings, script info and warnings.")]
+    public static PortUnitToolResult PortUnit(
+        [Description("Map to port FROM (.w3x/.w3m). Read-only.")] string source_map,
+        [Description("Four-character rawcode of the unit to port, e.g. 'u000'.")] string rawcode,
+        [Description("Map to port INTO (.w3x/.w3m). Read-only - the result is saved as a sibling '<target>.ported.<ext>' file.")] string target_map,
+        [Description("Also carry the unit's JASS trigger-function closure into the target script (best effort). Default true.")] bool include_script = true,
+        [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var).")] string? game_dir = null)
+        => Run(() =>
+        {
+            var source = LoadMap(source_map);
+            var target = LoadMap(target_map); // fresh load - ported output never feeds back into inputs
+            var bundle = BundleCommand.ResolveUnit(source, rawcode, ResolveGameDir(game_dir));
+            var report = PortCommand.PortUnit(source, bundle, target, includeScript: include_script);
+
+            string targetFull = Path.GetFullPath(target_map);
+            string outPath = Path.Combine(Path.GetDirectoryName(targetFull) ?? ".",
+                Path.GetFileNameWithoutExtension(targetFull) + ".ported" + Path.GetExtension(targetFull));
+            target.Save(outPath);
+            return new PortUnitToolResult(outPath, report);
+        });
+
     // ---- shared plumbing -------------------------------------------------
 
     /// <summary>Expected failures become clean MCP tool errors, never stack traces.</summary>
@@ -135,3 +157,6 @@ public static class Wc3Tools
 
 /// <summary>render_model outcome: where the PNG landed and whether it was also inlined.</summary>
 public sealed record RenderModelToolResult(string SavedTo, int SizeBytes, bool ImageInline);
+
+/// <summary>port_unit outcome: where the new .ported map was written plus the full port report.</summary>
+public sealed record PortUnitToolResult(string SavedTo, PortResult Report);
