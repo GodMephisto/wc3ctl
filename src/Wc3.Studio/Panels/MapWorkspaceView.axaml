@@ -52,7 +52,7 @@
             <TabItem Header="Script">
                 <panels:ScriptView Name="ScriptPanel"/>
             </TabItem>
-            <TabItem Header="Dependencies">
+            <TabItem Header="Dependencies" Name="DependenciesTab">
                 <panels:DependencyGraphView Name="DependenciesPanel"/>
             </TabItem>
         </TabControl>
