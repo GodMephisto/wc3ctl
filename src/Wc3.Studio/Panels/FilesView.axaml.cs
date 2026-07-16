@@ -1,5 +1,7 @@
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using Wc3.Commands;
 
@@ -63,7 +65,61 @@ public partial class FilesView : UserControl, IMapPanel
         SummaryText.Text = $"{_rows.Count} file(s), {_rows.Sum(r => (long)r.SizeBytes):N0} bytes";
         PlaceholderText.IsVisible = false;
         ContentRoot.IsVisible = true;
+        ResetPreview();
         ApplySort();
+    }
+
+    // --- content preview (double-click a file) ---
+
+    private void OnFileDoubleTapped(object? sender, TappedEventArgs e)
+    {
+        if (_session?.Current is not { } doc || FileList.SelectedItem is not FileRow row)
+            return;
+        try
+        {
+            var preview = row.Name is not null
+                ? FilePreviewCommand.Execute(doc, row.Name)
+                : FilePreviewCommand.Of(doc.Files[row.Ordinal].RawBytes, null);
+            ShowPreview(preview);
+        }
+        catch (Exception ex)
+        {
+            PreviewHeader.Text = $"Preview failed: {ex.Message}";
+            PreviewText.IsVisible = false;
+            PreviewImage.IsVisible = false;
+        }
+    }
+
+    private void ShowPreview(FilePreview preview)
+    {
+        PreviewHeader.Text = $"{preview.Name}  ({preview.Info})";
+        if (preview.Kind == "image" && preview.Png is { } png)
+        {
+            using var ms = new MemoryStream(png);
+            var bmp = new Bitmap(ms);
+            var old = PreviewImage.Source as Bitmap;
+            PreviewImage.Source = bmp;
+            old?.Dispose();
+            PreviewImage.IsVisible = true;
+            PreviewText.IsVisible = false;
+        }
+        else
+        {
+            PreviewText.Text = preview.Text ?? "";
+            PreviewText.IsVisible = true;
+            PreviewImage.IsVisible = false;
+        }
+    }
+
+    private void ResetPreview()
+    {
+        PreviewHeader.Text = "Double-click a file to preview its contents";
+        PreviewText.Text = "";
+        PreviewText.IsVisible = false;
+        var old = PreviewImage.Source as Bitmap;
+        PreviewImage.Source = null;
+        old?.Dispose();
+        PreviewImage.IsVisible = false;
     }
 
     // --- sorting ---

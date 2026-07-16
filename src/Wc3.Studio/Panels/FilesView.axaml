@@ -36,26 +36,46 @@
                 <TextBlock Name="StatusText" TextWrapping="Wrap"/>
             </Border>
 
-            <!-- File grid: sortable header row + list -->
-            <Grid RowDefinitions="Auto,*" Margin="8,0">
-                <Grid Grid.Row="0" ColumnDefinitions="*,120,80,80" Margin="8,0,8,2">
-                    <Button Grid.Column="0" Name="NameHeader" Classes="columnHeader" Content="Name" Click="OnSortByName"/>
-                    <Button Grid.Column="1" Name="SizeHeader" Classes="columnHeader" Content="Size (bytes)" Click="OnSortBySize"/>
-                    <Button Grid.Column="2" Name="KnownHeader" Classes="columnHeader" Content="Known" Click="OnSortByKnown"/>
-                    <Button Grid.Column="3" Name="ParsedHeader" Classes="columnHeader" Content="Parsed" Click="OnSortByParsed"/>
+            <!-- File grid (left) + content preview (right); double-click a file to preview. -->
+            <Grid ColumnDefinitions="*,4,2.2*" Margin="8,0">
+                <Grid Grid.Column="0" RowDefinitions="Auto,*">
+                    <Grid Grid.Row="0" ColumnDefinitions="*,120,80,80" Margin="8,0,8,2">
+                        <Button Grid.Column="0" Name="NameHeader" Classes="columnHeader" Content="Name" Click="OnSortByName"/>
+                        <Button Grid.Column="1" Name="SizeHeader" Classes="columnHeader" Content="Size (bytes)" Click="OnSortBySize"/>
+                        <Button Grid.Column="2" Name="KnownHeader" Classes="columnHeader" Content="Known" Click="OnSortByKnown"/>
+                        <Button Grid.Column="3" Name="ParsedHeader" Classes="columnHeader" Content="Parsed" Click="OnSortByParsed"/>
+                    </Grid>
+                    <ListBox Grid.Row="1" Name="FileList" SelectionMode="Multiple"
+                             DoubleTapped="OnFileDoubleTapped">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Grid ColumnDefinitions="*,120,80,80">
+                                    <TextBlock Grid.Column="0" Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding SizeText}" TextAlignment="Right" Margin="0,0,24,0"/>
+                                    <TextBlock Grid.Column="2" Text="{Binding KnownText}"/>
+                                    <TextBlock Grid.Column="3" Text="{Binding ParsedText}"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
                 </Grid>
-                <ListBox Grid.Row="1" Name="FileList" SelectionMode="Multiple">
-                    <ListBox.ItemTemplate>
-                        <DataTemplate>
-                            <Grid ColumnDefinitions="*,120,80,80">
-                                <TextBlock Grid.Column="0" Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis"/>
-                                <TextBlock Grid.Column="1" Text="{Binding SizeText}" TextAlignment="Right" Margin="0,0,24,0"/>
-                                <TextBlock Grid.Column="2" Text="{Binding KnownText}"/>
-                                <TextBlock Grid.Column="3" Text="{Binding ParsedText}"/>
-                            </Grid>
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
+
+                <GridSplitter Grid.Column="1" Background="#33555555"/>
+
+                <!-- Preview pane -->
+                <DockPanel Grid.Column="2" Margin="8,0,0,0">
+                    <TextBlock Name="PreviewHeader" DockPanel.Dock="Top" FontWeight="SemiBold"
+                               TextWrapping="Wrap" Margin="0,2,0,6"
+                               Text="Double-click a file to preview its contents"/>
+                    <Panel>
+                        <TextBox Name="PreviewText" IsVisible="False" IsReadOnly="True"
+                                 AcceptsReturn="True" TextWrapping="NoWrap"
+                                 FontFamily="Consolas,Menlo,monospace" FontSize="12"
+                                 BorderThickness="0" Background="Transparent"/>
+                        <Image Name="PreviewImage" IsVisible="False" Stretch="Uniform"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Panel>
+                </DockPanel>
             </Grid>
 
         </DockPanel>
