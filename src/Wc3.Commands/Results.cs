@@ -22,6 +22,9 @@ public sealed record ExtractResult(IReadOnlyList<ExtractedItem> Items);
 // A rawcode that had to be reassigned because it collided with the target map.
 public sealed record RawcodeRemap(ObjectKind Kind, string From, string To);
 public sealed record PortedObject(ObjectKind Kind, string Rawcode, string? Name, bool ModifiesStandard);
+// Outcome of the best-effort JASS script closure append (null when no script was ported).
+public sealed record ScriptPortInfo(
+    int Functions, int Globals, int Renamed, bool InitHooked, IReadOnlyList<string> Notes);
 public sealed record PortResult(
     string RootRawcode,
     string? RootPortedTo,          // the root's rawcode in the target (== RootRawcode if no collision)
@@ -32,7 +35,8 @@ public sealed record PortResult(
     IReadOnlyList<string> SkippedFiles,
     int InlinedStrings,
     IReadOnlyList<string> Warnings,
-    IReadOnlyList<string> Diagnostics);
+    IReadOnlyList<string> Diagnostics,
+    ScriptPortInfo? Script = null);
 public sealed record BundleNode(string Rawcode, ObjectKind Kind, string? Name, bool CustomToMap);
 public sealed record BundleFile(string Path, string Category, bool PresentInMap); // Category: model|texture|icon|sound|other
 public sealed record BundleEdge(string From, string To, string Via); // From/To = rawcode or file path; Via = field code

@@ -295,10 +295,12 @@ public static class Program
 
         var portSource = new Argument<string>("source-map", "Map to port FROM.");
         var portTarget = new Argument<string>("target-map", "Map to port INTO.");
+        var noScriptOption = new Option<bool>("--no-script",
+            "Port object data + assets + strings only; skip the best-effort JASS script closure append.");
         var port = new Command("port", "Port content between maps.");
         var portUnit = new Command("unit",
-            "Port a unit (its custom objects + assets + strings) from one map into another, auto-remapping rawcode collisions.")
-        { portSource, objRawcode, portTarget, outOption };
+            "Port a unit (its custom objects + assets + strings, and best-effort its trigger script) from one map into another, auto-remapping rawcode collisions.")
+        { portSource, objRawcode, portTarget, outOption, noScriptOption };
         portUnit.SetHandler(ctx => RunSafely(() =>
         {
             var p = ctx.ParseResult;
@@ -311,7 +313,7 @@ public static class Program
             var source = MapDocument.Load(sourcePath);
             var target = MapDocument.Load(targetPath);
             var bundle = BundleCommand.ResolveUnit(source, rawcode, gameDir);
-            var result = PortCommand.PortUnit(source, bundle, target);
+            var result = PortCommand.PortUnit(source, bundle, target, includeScript: !p.GetValueForOption(noScriptOption));
 
             // Never clobber the target — write a sibling <target>.ported.<ext> by default.
             string outPath = p.GetValueForOption(outOption)

@@ -31,7 +31,8 @@ public static class PortCommand
     /// in place). The caller saves the target. Base-game deps and missing assets are skipped
     /// (they already exist in any target). Returns a full report of what was done.
     /// </summary>
-    public static PortResult PortUnit(MapDocument source, UnitBundle bundle, MapDocument target)
+    public static PortResult PortUnit(
+        MapDocument source, UnitBundle bundle, MapDocument target, bool includeScript = true)
     {
         var warnings = new List<string>();
         var diagnostics = new List<string>(bundle.Diagnostics);
@@ -122,12 +123,28 @@ public static class PortCommand
         if (importsChanged)
             target.AddOrReplaceModelFile("war3map.imp", tgtImports);
 
+        // 4) Best-effort JASS script closure append (defensive — never breaks the port).
+        ScriptPortInfo? scriptInfo = null;
+        if (includeScript)
+        {
+            try
+            {
+                var codeRemap = remap.Where(kv => kv.Key != kv.Value)
+                    .ToDictionary(kv => kv.Key.ToRawcode(), kv => kv.Value.ToRawcode(), StringComparer.Ordinal);
+                scriptInfo = ScriptPorter.PortScript(source, target, bundle, codeRemap);
+            }
+            catch (Exception ex)
+            {
+                warnings.Add($"script port skipped (object/asset port is unaffected): {ex.Message}");
+            }
+        }
+
         string rootPortedTo = remap.TryGetValue(bundle.RootRawcode.FromRawcode(), out var rid)
             ? rid.ToRawcode() : bundle.RootRawcode;
 
         return new PortResult(
             bundle.RootRawcode, rootPortedTo, bundle.RootName,
-            remapReport, portedObjects, copied, skipped, inlinedStrings, warnings, diagnostics);
+            remapReport, portedObjects, copied, skipped, inlinedStrings, warnings, diagnostics, scriptInfo);
     }
 
     // ---- rawcode allocation ------------------------------------------------
@@ -278,7 +295,7 @@ public static class PortCommand
             {
                 var mod = new SimpleObjectModification { OldId = g.OldId, NewId = g.NewId };
                 foreach (var m in g.Mods)
-                    mod.Modifications.Add(new SimpleObjectDataModification { Id = m.Id, Type = m.Type, Value = m.Value });
+                    mod.Modifications.Add(new SimpleObjectDataModification { Id = m.Id, Type = m.Type, Value = m.Value! });
                 AddSimple(target, kind, info.MapFile, version, mod, g.NewId != 0);
                 break;
             }
@@ -287,7 +304,7 @@ public static class PortCommand
             {
                 var mod = new LevelObjectModification { OldId = g.OldId, NewId = g.NewId };
                 foreach (var m in g.Mods)
-                    mod.Modifications.Add(new LevelObjectDataModification { Level = m.Level, Pointer = 0, Id = m.Id, Type = m.Type, Value = m.Value });
+                    mod.Modifications.Add(new LevelObjectDataModification { Level = m.Level, Pointer = 0, Id = m.Id, Type = m.Type, Value = m.Value! });
                 AddLevel(target, kind, info.MapFile, version, mod, g.NewId != 0);
                 break;
             }
@@ -295,7 +312,7 @@ public static class PortCommand
             {
                 var mod = new VariationObjectModification { OldId = g.OldId, NewId = g.NewId };
                 foreach (var m in g.Mods)
-                    mod.Modifications.Add(new VariationObjectDataModification { Variation = m.Level, Pointer = 0, Id = m.Id, Type = m.Type, Value = m.Value });
+                    mod.Modifications.Add(new VariationObjectDataModification { Variation = m.Level, Pointer = 0, Id = m.Id, Type = m.Type, Value = m.Value! });
                 var model = (DoodadObjectData?)target.GetFile(info.MapFile)?.Model ?? new DoodadObjectData(version);
                 (g.NewId != 0 ? model.NewDoodads : model.BaseDoodads).Add(mod);
                 target.AddOrReplaceModelFile(info.MapFile, model);

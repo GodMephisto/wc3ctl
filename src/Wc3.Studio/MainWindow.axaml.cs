@@ -117,6 +117,13 @@ public partial class MainWindow : Window
             sb.AppendLine($"  {o.Kind.ToString().ToLowerInvariant()} {o.Rawcode}"
                           + $"{(o.Name is null ? "" : $"  \"{o.Name}\"")}"
                           + $"{(o.ModifiesStandard ? "  (modifies standard object)" : "")}");
+        if (r.Script is { } s)
+        {
+            sb.AppendLine().AppendLine(
+                $"Script (best-effort): {s.Functions} function(s), {s.Globals} global(s) carried, "
+                + $"{s.Renamed} renamed, init {(s.InitHooked ? "wired" : "NOT wired")}.");
+            foreach (var n in s.Notes) sb.AppendLine($"  - {n}");
+        }
         if (r.Warnings.Count > 0)
         {
             sb.AppendLine().AppendLine("Warnings:");

@@ -140,6 +140,14 @@ public static class Render
             foreach (var f in r.CopiedFiles) sb.AppendLine($"  {f}");
         }
 
+        if (r.Script is { } s)
+        {
+            sb.AppendLine().AppendLine(
+                $"Script (best-effort): {s.Functions} function(s), {s.Globals} global(s) carried, "
+                + $"{s.Renamed} renamed, init {(s.InitHooked ? "wired" : "NOT wired")}.");
+            foreach (var n in s.Notes) sb.AppendLine($"  - {n}");
+        }
+
         if (r.Warnings.Count > 0)
         {
             sb.AppendLine().AppendLine("Warnings:");
