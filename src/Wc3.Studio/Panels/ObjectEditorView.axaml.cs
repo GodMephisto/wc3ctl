@@ -18,9 +18,10 @@ namespace Wc3.Studio.Panels;
 /// first selected object's merged fields (base game data ⊕ map deltas) on the
 /// right. The field grid is read-only; editing happens in a dedicated box below
 /// it - select a row, change the value, Apply writes it to every selected object
-/// via ObjectSetCommand (units only this slice). This select-then-edit design
-/// avoids putting TextBoxes inside the recycled ListBox rows, whose focus/recycle
-/// behavior erased in-progress edits on click.
+/// via ObjectSetCommand for the selected kind (all 7 kinds are editable), and
+/// New… derives a fresh custom object from the selected one via ObjectNewCommand.
+/// This select-then-edit design avoids putting TextBoxes inside the recycled
+/// ListBox rows, whose focus/recycle behavior erased in-progress edits on click.
 /// </summary>
 public partial class ObjectEditorView : UserControl, IMapPanel
 {
@@ -595,19 +596,16 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         UpdateApplyState();
     }
 
-    /// <summary>Write-back is units-only this slice; other kinds are view-only.</summary>
+    /// <summary>Apply is available for every kind - the command layer routes the
+    /// three modification shapes (Simple/Level/Variation) behind one call.</summary>
     private void UpdateApplyState()
     {
-        var kind = SelectedKind;
-        bool isUnit = kind.Kind == ObjectKind.Unit;
-        ApplyButton.IsEnabled = isUnit
-            && _session?.Current is not null
+        ApplyButton.IsEnabled = _session?.Current is not null
             && FieldList.SelectedItem is FieldRow
             && SelectedObjects().Count > 0;
-        EditorBox.IsReadOnly = !isUnit;
-        EditNote.Text = isUnit
-            ? "List fields (abilities, targets, flags) edit as raw comma-separated text for now."
-            : $"Editing {kind.Label} is not supported yet - view only.";
+        EditorBox.IsReadOnly = false;
+        EditNote.Text = "List fields (abilities, targets, flags) edit as raw comma-separated text; "
+            + "leveled fields (code:N) edit that level/variation only.";
     }
 
     /// <summary>Bulk edit: write the editor value to the selected field on every selected object.</summary>
@@ -638,7 +636,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         {
             try
             {
-                var result = ObjectSetCommand.Execute(doc, target.Rawcode, row.Code, value);
+                var result = ObjectSetCommand.Execute(doc, SelectedKind.Kind, target.Rawcode, row.Code, value);
                 if (result.Ok)
                 {
                     applied++;
@@ -669,6 +667,56 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         if (problems.Count > 0)
             summary += $" - {string.Join("; ", problems)}";
         StatusText.Text = summary;
+    }
+
+    /// <summary>
+    /// Create a new custom object of the current kind derived from the first
+    /// selected object (full inheritance, zero field mods), then refresh the
+    /// list and select the newcomer so editing can start immediately.
+    /// </summary>
+    private void OnNewObjectClick(object? sender, RoutedEventArgs e)
+    {
+        if (_session?.Current is not { } doc)
+        {
+            StatusText.Text = "No map open.";
+            return;
+        }
+        var selected = SelectedObjects();
+        if (selected.Count == 0)
+        {
+            StatusText.Text = "Select the object to base the new one on first.";
+            return;
+        }
+
+        ObjectNewCommand.ObjectNewResult result;
+        try
+        {
+            result = ObjectNewCommand.Execute(doc, SelectedKind.Kind, selected[0].Rawcode);
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"Create failed: {ex.Message}";
+            return;
+        }
+        if (!result.Ok || result.NewRawcode is null)
+        {
+            StatusText.Text = result.Message;
+            return;
+        }
+
+        _unsavedEdits++;
+        // Clear the search so the fresh object is visible, then hand selection to it.
+        _suppress = true;
+        SearchBox.Text = "";
+        _suppress = false;
+        RefreshObjectList();
+        if (_allRows.FirstOrDefault(r => r.Rawcode == result.NewRawcode) is { } row)
+        {
+            ObjectList.SelectedItems?.Clear();
+            ObjectList.SelectedItem = row;
+            ObjectList.ScrollIntoView(row);
+        }
+        StatusText.Text = $"{result.Message} - {_unsavedEdits} unsaved edit(s)";
     }
 
     private void OnSaveEditsClick(object? sender, RoutedEventArgs e)
