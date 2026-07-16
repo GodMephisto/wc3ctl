@@ -9,13 +9,17 @@ using Wc3.Model;
 namespace Wc3.Studio.Panels;
 
 /// <summary>
-/// Dependency graph for one unit: pick a map unit and the panel resolves its
-/// full closure (abilities, buffs, items, model, textures, icons, strings)
-/// via <see cref="BundleCommand"/>, then renders it two ways - a layered
-/// node-link graph on a canvas and a structured tree + files/strings lists
-/// beside it. Read-only this wave; the selected unit is exposed through
-/// <see cref="SelectedUnitRawcode"/>/<see cref="SelectionChanged"/> as the
-/// seam a later wave's port button hangs off.
+/// Dependency graph for one object of any Object Editor kind: the panel
+/// resolves its full closure (abilities, buffs, items, model, textures,
+/// icons, strings) via <see cref="BundleCommand.ResolveObject"/>, then
+/// renders it two ways - a layered node-link graph on a canvas and a
+/// structured tree + files/strings lists beside it. Two ways in: the
+/// workspace pushes the Objects tab's selection through
+/// <see cref="ShowObject"/> (auto-resolving immediately), or the user picks
+/// manually from the combo, which lists the current kind's map objects.
+/// The selection is exposed through <see cref="SelectedRawcode"/> (any kind)
+/// and <see cref="SelectedUnitRawcode"/> (units only - the port seam) with
+/// <see cref="SelectionChanged"/> notifications.
 /// </summary>
 public partial class DependencyGraphView : UserControl, IMapPanel
 {
@@ -50,25 +54,45 @@ public partial class DependencyGraphView : UserControl, IMapPanel
 
     private MapSession? _session;
     private bool _suppress;
-    /// <summary>Stamp that invalidates in-flight unit lists / resolves when the map changes.</summary>
+    /// <summary>Stamp that invalidates in-flight object lists / resolves when the target changes.</summary>
     private int _generation;
-    /// <summary>At most one ResolveUnit runs at a time (they share the MapDocument).</summary>
+    /// <summary>At most one ResolveObject runs at a time (they share the MapDocument).</summary>
     private bool _resolveInFlight;
     /// <summary>Selection changed mid-resolve; run one trailing resolve when it lands.</summary>
     private bool _resolveQueued;
+    /// <summary>The kind the combo's object list was (or is being) loaded for.</summary>
+    private ObjectKind _listKind = ObjectKind.Unit;
+    /// <summary>The document the combo's object list was (or is being) loaded from.</summary>
+    private MapDocument? _listDoc;
+    /// <summary>The combo's loaded options (null while a list load is in flight).</summary>
+    private List<ObjectOption>? _options;
+    /// <summary>Rawcode to select-and-resolve once the in-flight object list lands.</summary>
+    private string? _pendingSelect;
 
     public DependencyGraphView()
     {
         InitializeComponent();
     }
 
-    /// <summary>Port seam: rawcode of the unit whose closure is shown, null when none.</summary>
-    public string? SelectedUnitRawcode { get; private set; }
+    /// <summary>Kind of the object whose closure is shown (tracks the combo's list kind).</summary>
+    public ObjectKind SelectedObjectKind { get; private set; } = ObjectKind.Unit;
 
-    /// <summary>Port seam: "Name (rawcode)" of the selected unit, for button/tooltip text.</summary>
-    public string? SelectedUnitDisplay { get; private set; }
+    /// <summary>Rawcode of the object whose closure is shown, null when none.</summary>
+    public string? SelectedRawcode { get; private set; }
 
-    /// <summary>Port seam: raised whenever the selected unit changes (including cleared).</summary>
+    /// <summary>"Name (rawcode)" of the selected object, for button/tooltip text.</summary>
+    public string? SelectedDisplay { get; private set; }
+
+    /// <summary>Port seam (porting is unit-rooted): the selected rawcode when it is a
+    /// unit, null for any other kind - non-unit graphs render but cannot port.</summary>
+    public string? SelectedUnitRawcode =>
+        SelectedObjectKind == ObjectKind.Unit ? SelectedRawcode : null;
+
+    /// <summary>Port seam: display of the selected unit; null when a non-unit is shown.</summary>
+    public string? SelectedUnitDisplay =>
+        SelectedObjectKind == ObjectKind.Unit ? SelectedDisplay : null;
+
+    /// <summary>Raised whenever the selected object changes (including cleared).</summary>
     public event EventHandler? SelectionChanged;
 
     public void ShowMap(MapSession session)
@@ -79,6 +103,7 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         ClearRendered();
         StatusText.Text = "";
         SummaryText.Text = "";
+        _listDoc = null;
 
         if (session.Current is not { } doc)
         {
@@ -89,27 +114,77 @@ public partial class DependencyGraphView : UserControl, IMapPanel
 
         PlaceholderText.IsVisible = false;
         ContentRoot.IsVisible = true;
-        LoadUnitList(doc, session.GameDir, gen);
+        LoadObjectList(doc, ObjectKind.Unit, gen);
     }
 
     /// <summary>
-    /// Populate the unit picker off the UI thread - the first game-data query
-    /// per install opens CASC, which can take seconds. The generation stamp
-    /// drops results that land after another map was shown.
+    /// Smart entry point: show <paramref name="rawcode"/>'s dependency closure,
+    /// resolving immediately (off the UI thread). The workspace calls this when
+    /// the Objects tab's selection should drive this panel; re-showing the object
+    /// already displayed is a no-op, so tab switches never re-resolve. Fully
+    /// initializes the panel - it works even before any <see cref="ShowMap"/>.
     /// </summary>
-    private void LoadUnitList(MapDocument doc, string? gameDir, int gen)
+    public void ShowObject(MapSession session, ObjectKind kind, string rawcode)
     {
-        SummaryText.Text = "Loading units…";
+        _session = session;
+        if (session.Current is not { } doc)
+        {
+            PlaceholderText.IsVisible = true;
+            ContentRoot.IsVisible = false;
+            return;
+        }
+
+        // Already showing (or loading toward) exactly this object: nothing to do.
+        if (ReferenceEquals(doc, _listDoc) && kind == _listKind
+            && (rawcode == SelectedRawcode || rawcode == _pendingSelect))
+            return;
+
+        PlaceholderText.IsVisible = false;
+        ContentRoot.IsVisible = true;
+
+        if (!ReferenceEquals(doc, _listDoc) || kind != _listKind)
+        {
+            // New kind or a fresh map: reload the picker, then select + resolve.
+            _pendingSelect = rawcode;
+            LoadObjectList(doc, kind, ++_generation);
+        }
+        else if (_options is not null)
+        {
+            SelectAndResolve(rawcode);
+        }
+        else
+        {
+            _pendingSelect = rawcode; // list still loading for this kind; retarget it
+        }
+    }
+
+    /// <summary>
+    /// Populate the object picker for one kind off the UI thread - the first
+    /// game-data query per install opens CASC, which can take seconds. The
+    /// generation stamp drops results that land after the target changed.
+    /// </summary>
+    private void LoadObjectList(MapDocument doc, ObjectKind kind, int gen)
+    {
+        _listDoc = doc;
+        _listKind = kind;
+        _options = null;
+        KindLabel.Text = KindSingular(kind) + ":";
+        _suppress = true;
+        ObjectCombo.ItemsSource = null;
+        _suppress = false;
+        var kindWord = KindPlural(kind).ToLowerInvariant();
+        SummaryText.Text = $"Loading {kindWord}…";
+        string? gameDir = _session?.GameDir;
         Task.Run(() =>
         {
-            List<UnitOption>? units = null;
+            List<ObjectOption>? items = null;
             string? error = null;
             try
             {
-                units = ObjectListCommand.Execute(doc, ObjectKind.Unit, gameDir).Items
-                    .Select(i => new UnitOption(
+                items = ObjectListCommand.Execute(doc, kind, gameDir).Items
+                    .Select(i => new ObjectOption(
                         i.Rawcode, i.Name is null ? i.Rawcode : $"{i.Name} ({i.Rawcode})"))
-                    .OrderBy(u => u.Display, StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(o => o.Display, StringComparer.OrdinalIgnoreCase)
                     .ToList();
             }
             catch (Exception ex)
@@ -120,38 +195,70 @@ public partial class DependencyGraphView : UserControl, IMapPanel
             {
                 if (gen != _generation)
                     return;
-                if (units is null)
+                if (items is null)
                 {
                     SummaryText.Text = "";
-                    StatusText.Text = $"Failed to list units: {error}";
+                    StatusText.Text = $"Failed to list {kindWord}: {error}";
                     return;
                 }
+                _options = items;
                 _suppress = true;
-                UnitCombo.ItemsSource = units;
+                ObjectCombo.ItemsSource = items;
                 _suppress = false;
-                // No auto-select: resolving a closure is heavy, wait for a deliberate pick.
-                SummaryText.Text = units.Count == 0
-                    ? "This map has no custom unit data."
-                    : $"{units.Count} unit(s) - pick one to analyze.";
+                if (_pendingSelect is { } pending)
+                {
+                    // An incoming selection is waiting on this list: resolve it now.
+                    _pendingSelect = null;
+                    SelectAndResolve(pending);
+                }
+                else
+                {
+                    // No auto-select: resolving a closure is heavy, wait for a deliberate pick.
+                    SummaryText.Text = items.Count == 0
+                        ? $"This map has no custom {KindSingular(kind).ToLowerInvariant()} data."
+                        : $"{items.Count} {kindWord} - pick one to analyze.";
+                }
             });
         });
     }
 
-    private void OnUnitChanged(object? sender, SelectionChangedEventArgs e)
+    /// <summary>Reflect <paramref name="rawcode"/> in the picker, then auto-resolve it.</summary>
+    private void SelectAndResolve(string rawcode)
+    {
+        var option = _options?.FirstOrDefault(o => o.Rawcode == rawcode);
+        _suppress = true;
+        ObjectCombo.SelectedItem = option;
+        _suppress = false;
+        // Objects pushed from the editor are always in the list; if one ever is
+        // not, resolve the bare rawcode anyway - the resolver reports diagnostics.
+        UpdateSelection(rawcode, option?.Display ?? rawcode);
+        RequestResolve();
+    }
+
+    /// <summary>Update the exposed (kind, rawcode, display), notifying on change.</summary>
+    private void UpdateSelection(string? rawcode, string? display)
+    {
+        if (SelectedObjectKind == _listKind && SelectedRawcode == rawcode && SelectedDisplay == display)
+            return;
+        SelectedObjectKind = _listKind;
+        SelectedRawcode = rawcode;
+        SelectedDisplay = display;
+        SelectionChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void OnObjectChanged(object? sender, SelectionChangedEventArgs e)
     {
         if (_suppress)
             return;
-        var selected = UnitCombo.SelectedItem as UnitOption;
-        SelectedUnitRawcode = selected?.Rawcode;
-        SelectedUnitDisplay = selected?.Display;
-        SelectionChanged?.Invoke(this, EventArgs.Empty);
+        var selected = ObjectCombo.SelectedItem as ObjectOption;
+        UpdateSelection(selected?.Rawcode, selected?.Display);
         if (selected is null)
             return;
         RequestResolve();
     }
 
     /// <summary>
-    /// Resolve the selected unit's closure off the UI thread with at most one
+    /// Resolve the selected object's closure off the UI thread with at most one
     /// resolve in flight: selections arriving mid-resolve collapse into a
     /// single trailing resolve of whatever is selected by then (mirrors the
     /// object editor's preview render pattern), so rapid switching never
@@ -159,7 +266,7 @@ public partial class DependencyGraphView : UserControl, IMapPanel
     /// </summary>
     private void RequestResolve()
     {
-        if (_session?.Current is not { } doc || SelectedUnitRawcode is not { } rawcode)
+        if (_session?.Current is not { } doc || SelectedRawcode is not { } rawcode)
             return;
         if (_resolveInFlight)
         {
@@ -168,17 +275,18 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         }
         _resolveInFlight = true;
         int gen = _generation;
+        var kind = SelectedObjectKind;
         string? gameDir = _session.GameDir;
-        SummaryText.Text = $"Resolving {SelectedUnitDisplay}…";
+        SummaryText.Text = $"Resolving {SelectedDisplay}…";
         GraphHint.IsVisible = true;
-        GraphHint.Text = $"Resolving {SelectedUnitDisplay}…";
+        GraphHint.Text = $"Resolving {SelectedDisplay}…";
         Task.Run(() =>
         {
             UnitBundle? bundle = null;
             string? error = null;
             try
             {
-                bundle = BundleCommand.ResolveUnit(doc, rawcode, gameDir);
+                bundle = BundleCommand.ResolveObject(doc, kind, rawcode, gameDir);
             }
             catch (Exception ex)
             {
@@ -224,7 +332,7 @@ public partial class DependencyGraphView : UserControl, IMapPanel
     }
 
     /// <summary>
-    /// Structured fallback view: root unit → object deps grouped by kind, each
+    /// Structured fallback view: root object → object deps grouped by kind, each
     /// with a custom/base badge and the field codes ("via") that pull it in.
     /// </summary>
     private void BuildTree(UnitBundle bundle)
@@ -240,10 +348,11 @@ public partial class DependencyGraphView : UserControl, IMapPanel
                 StringComparer.Ordinal);
 
         var rootNode = bundle.Objects.FirstOrDefault(o => o.Rawcode == bundle.RootRawcode);
+        var rootKindWord = (rootNode?.Kind ?? SelectedObjectKind).ToString().ToLowerInvariant();
         var rootItem = new TreeViewItem
         {
             Header = MakeTreeLabel(
-                $"{bundle.RootName ?? bundle.RootRawcode} ({bundle.RootRawcode}) - root unit",
+                $"{bundle.RootName ?? bundle.RootRawcode} ({bundle.RootRawcode}) - root {rootKindWord}",
                 rootNode?.CustomToMap, bold: true),
             IsExpanded = true,
         };
@@ -254,7 +363,7 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         {
             var groupItem = new TreeViewItem
             {
-                Header = MakeTreeLabel($"{KindLabel(group.Key)} ({group.Count()})", custom: null, bold: true),
+                Header = MakeTreeLabel($"{KindPlural(group.Key)} ({group.Count()})", custom: null, bold: true),
                 IsExpanded = true,
             };
             foreach (var node in group)
@@ -291,7 +400,7 @@ public partial class DependencyGraphView : UserControl, IMapPanel
             };
             ToolTip.SetTip(row, $"{file.Path}\n{file.Category} - "
                 + (file.PresentInMap
-                    ? "imported in this map (ports with the unit)"
+                    ? "imported in this map (ports with the bundle)"
                     : "not in this map - base-game asset or a missing import"));
             FilesList.Children.Add(row);
         }
@@ -335,7 +444,7 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         return label;
     }
 
-    private static string KindLabel(ObjectKind kind) => kind switch
+    private static string KindPlural(ObjectKind kind) => kind switch
     {
         ObjectKind.Unit => "Units",
         ObjectKind.Item => "Items",
@@ -344,6 +453,12 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         ObjectKind.Doodad => "Doodads",
         ObjectKind.Buff => "Buffs",
         ObjectKind.Upgrade => "Upgrades",
+        _ => kind.ToString(),
+    };
+
+    private static string KindSingular(ObjectKind kind) => kind switch
+    {
+        ObjectKind.Destructable => "Destructible",
         _ => kind.ToString(),
     };
 
@@ -625,7 +740,7 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         };
         ToolTip.SetTip(visual, $"{file.Path}\n{file.Category} - "
             + (file.PresentInMap
-                ? "imported in this map (ports with the unit)"
+                ? "imported in this map (ports with the bundle)"
                 : "not in this map - base-game asset or a missing import"));
         return visual;
     }
@@ -634,24 +749,26 @@ public partial class DependencyGraphView : UserControl, IMapPanel
     private void ClearSelection()
     {
         _suppress = true;
-        UnitCombo.ItemsSource = null;
+        ObjectCombo.ItemsSource = null;
         _suppress = false;
-        if (SelectedUnitRawcode is not null || SelectedUnitDisplay is not null)
+        _options = null;
+        _pendingSelect = null;
+        if (SelectedRawcode is not null || SelectedDisplay is not null)
         {
-            SelectedUnitRawcode = null;
-            SelectedUnitDisplay = null;
+            SelectedRawcode = null;
+            SelectedDisplay = null;
             SelectionChanged?.Invoke(this, EventArgs.Empty);
         }
     }
 
-    /// <summary>Drop everything rendered for the previous unit/map.</summary>
+    /// <summary>Drop everything rendered for the previous object/map.</summary>
     private void ClearRendered()
     {
         GraphCanvas.Children.Clear();
         GraphCanvas.Width = 0;
         GraphCanvas.Height = 0;
         GraphHint.IsVisible = true;
-        GraphHint.Text = "Pick a unit to see its dependency graph.";
+        GraphHint.Text = "Pick an object to see its dependency graph.";
         DepTree.Items.Clear();
         FilesList.Children.Clear();
         StringsList.Children.Clear();
@@ -661,8 +778,8 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         StringsExpander.IsExpanded = false;
     }
 
-    /// <summary>Unit picker entry; ComboBox renders ToString.</summary>
-    private sealed record UnitOption(string Rawcode, string Display)
+    /// <summary>Object picker entry; ComboBox renders ToString.</summary>
+    private sealed record ObjectOption(string Rawcode, string Display)
     {
         public override string ToString() => Display;
     }
