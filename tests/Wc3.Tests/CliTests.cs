@@ -276,4 +276,98 @@ public class CliTests
             System.Console.SetError(origErr);
         }
     }
+
+    [Fact]
+    public async Task Convert_png_to_blp_writes_a_decodable_blp()
+    {
+        var rgba = new byte[16 * 16 * 4];
+        for (int i = 0; i < rgba.Length; i += 4) { rgba[i] = 10; rgba[i + 1] = 200; rgba[i + 2] = 30; rgba[i + 3] = 255; }
+        var png = Wc3.Render.TexturePng.Encode(new Wc3.Modeling.TextureImage(16, 16, rgba));
+        var dir = Path.Combine(Path.GetTempPath(), $"wc3ctl_conv_{System.Guid.NewGuid():N}");
+        Directory.CreateDirectory(dir);
+        var input = Path.Combine(dir, "tex.png");
+        var output = Path.Combine(dir, "tex.blp");
+        File.WriteAllBytes(input, png);
+        try
+        {
+            var sw = new StringWriter();
+            var console = System.Console.Out;
+            System.Console.SetOut(sw);
+            int code = await Wc3Ctl.Program.Main(new[] { "convert", input, output });
+            System.Console.SetOut(console);
+            Assert.Equal(0, code);
+            var tex = Wc3.Modeling.BlpDecoder.Decode(File.ReadAllBytes(output));
+            Assert.Equal(16, tex.Width);
+            Assert.Equal(16, tex.Height);
+        }
+        finally { Directory.Delete(dir, recursive: true); }
+    }
+
+    [Fact]
+    public async Task Convert_mdl_to_obj_writes_obj_and_matching_mtl()
+    {
+        const string mdl = """
+            Version { FormatVersion 800, }
+            Model "Tri" { BlendTime 150, }
+            Textures 1 { Bitmap { Image "Textures\Test.blp", }, }
+            Materials 1 { Material { Layer { FilterMode None, static TextureID 0, }, }, }
+            Geoset {
+                Vertices 3 { { 0, 0, 0 }, { 1, 0, 0 }, { 0, 1, 0 }, },
+                Normals 3 { { 0, 0, 1 }, { 0, 0, 1 }, { 0, 0, 1 }, },
+                TVertices 3 { { 0, 0 }, { 1, 0 }, { 0, 1 }, },
+                VertexGroup { 0, 0, 0, },
+                Faces 1 3 { Triangles { { 0, 1, 2 }, }, },
+                Groups 1 1 { Matrices { 0 }, },
+                MinimumExtent { -1, -1, 0 },
+                MaximumExtent { 1, 1, 0 },
+                BoundsRadius 2,
+                MaterialID 0,
+                SelectionGroup 0,
+            }
+            """;
+        var dir = Path.Combine(Path.GetTempPath(), $"wc3ctl_conv_{System.Guid.NewGuid():N}");
+        Directory.CreateDirectory(dir);
+        var input = Path.Combine(dir, "tri.mdl");
+        var output = Path.Combine(dir, "exported.obj"); // renamed on purpose
+        File.WriteAllText(input, mdl);
+        try
+        {
+            var sw = new StringWriter();
+            var console = System.Console.Out;
+            System.Console.SetOut(sw);
+            int code = await Wc3Ctl.Program.Main(new[] { "convert", input, output });
+            System.Console.SetOut(console);
+            Assert.Equal(0, code);
+
+            var obj = File.ReadAllText(output);
+            Assert.Contains("mtllib exported.mtl", obj); // mtllib follows the OUTPUT name
+            Assert.Contains("f 1/1/1 2/2/2 3/3/3", obj);
+            var mtl = File.ReadAllText(Path.Combine(dir, "exported.mtl"));
+            Assert.Contains("newmtl tex0", mtl);
+        }
+        finally { Directory.Delete(dir, recursive: true); }
+    }
+
+    [Fact]
+    public async Task Convert_model_to_non_obj_exits_nonzero_with_clean_error()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), $"wc3ctl_conv_{System.Guid.NewGuid():N}");
+        Directory.CreateDirectory(dir);
+        var input = Path.Combine(dir, "x.mdx");
+        File.WriteAllBytes(input, new byte[] { 1, 2, 3 });
+        var errW = new StringWriter();
+        var origErr = System.Console.Error;
+        System.Console.SetError(errW);
+        try
+        {
+            int code = await Wc3Ctl.Program.Main(new[] { "convert", input, Path.Combine(dir, "x.png") });
+            Assert.Equal(1, code);
+            Assert.Contains(".obj", errW.ToString());
+        }
+        finally
+        {
+            System.Console.SetError(origErr);
+            Directory.Delete(dir, recursive: true);
+        }
+    }
 }

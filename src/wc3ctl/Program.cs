@@ -329,6 +329,43 @@ public static class Program
             Emit(json, manifest, () => Render.Extract(manifest, dest));
         }));
 
+        var convertInput = new Argument<string>("input",
+            "Source file: an image (.blp/.png/.jpg/.jpeg/.bmp/.tga/.gif) or a model (.mdx/.mdl).");
+        var convertOutput = new Argument<string>("output",
+            "Destination file; its extension picks the format. Images: .png/.jpg/.jpeg/.bmp/.tga/.gif/.blp. Models: .obj (a .mtl is written beside it).");
+        var convert = new Command("convert",
+            "Convert asset files between WC3 and standard formats (disk-to-disk).")
+        { convertInput, convertOutput };
+        convert.SetHandler((string input, string output) => RunSafely(() =>
+        {
+            var fromExt = Path.GetExtension(input);
+            var toExt = Path.GetExtension(output);
+            bool modelInput = fromExt.ToLowerInvariant() is ".mdx" or ".mdl";
+            bool objOutput = string.Equals(toExt, ".obj", StringComparison.OrdinalIgnoreCase);
+            if (modelInput != objOutput)
+                throw new ArgumentException(modelInput
+                    ? "models convert to .obj only — pass an output ending in .obj"
+                    : $"only .mdx/.mdl convert to {toExt} — image sources convert to image formats");
+
+            if (modelInput)
+            {
+                // Name the parse input after the OUTPUT so the obj's mtllib line
+                // matches the .mtl actually written beside it.
+                var export = ConvertCommand.ExportModelToObj(
+                    File.ReadAllBytes(input), Path.GetFileNameWithoutExtension(output) + fromExt);
+                var mtlPath = Path.ChangeExtension(output, ".mtl");
+                File.WriteAllText(output, export.Obj);
+                File.WriteAllText(mtlPath, export.Mtl);
+                Console.WriteLine($"Wrote {output} + {mtlPath} (textures referenced by basename; convert them separately)");
+            }
+            else
+            {
+                var bytes = ConvertCommand.ConvertImage(File.ReadAllBytes(input), fromExt, toExt);
+                File.WriteAllBytes(output, bytes);
+                Console.WriteLine($"Wrote {bytes.Length:N0} bytes to {output}");
+            }
+        }), convertInput, convertOutput);
+
         var portSource = new Argument<string>("source-map", "Map to port FROM.");
         var portTarget = new Argument<string>("target-map", "Map to port INTO.");
         var portRawcodes = new Argument<string>("rawcode",
@@ -389,6 +426,7 @@ public static class Program
         root.AddCommand(search); root.AddCommand(diff); root.AddCommand(obj);
         root.AddCommand(extract); root.AddCommand(render); root.AddCommand(renderModel);
         root.AddCommand(script); root.AddCommand(bundle); root.AddCommand(port);
+        root.AddCommand(convert);
 
         int parseResult = await root.InvokeAsync(args);
         return parseResult != 0 ? parseResult : exitCode;

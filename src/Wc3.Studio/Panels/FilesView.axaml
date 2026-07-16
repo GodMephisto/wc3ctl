@@ -28,6 +28,8 @@
             <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="8" Margin="8">
                 <Button Name="ExtractAllButton" Content="Extract All…" Click="OnExtractAllClick"/>
                 <Button Name="ExtractSelectedButton" Content="Extract Selected…" Click="OnExtractSelectedClick"/>
+                <Button Name="ExportButton" Content="Export…" Click="OnExportClick" IsEnabled="False"
+                        ToolTip.Tip="Convert and save the selected file: .blp → image, .mdx/.mdl → OBJ + MTL + textures, anything else raw."/>
                 <TextBlock Name="SummaryText" VerticalAlignment="Center"/>
             </StackPanel>
 
@@ -46,6 +48,7 @@
                         <Button Grid.Column="3" Name="ParsedHeader" Classes="columnHeader" Content="Parsed" Click="OnSortByParsed"/>
                     </Grid>
                     <ListBox Grid.Row="1" Name="FileList" SelectionMode="Multiple"
+                             SelectionChanged="OnFileSelectionChanged"
                              DoubleTapped="OnFileDoubleTapped">
                         <ListBox.ItemTemplate>
                             <DataTemplate>

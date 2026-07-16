@@ -67,6 +67,7 @@ public partial class FilesView : UserControl, IMapPanel
         ContentRoot.IsVisible = true;
         ResetPreview();
         ApplySort();
+        ExportButton.IsEnabled = false; // re-sorting/reloading clears the selection
     }
 
     // --- content preview (double-click a file) ---
@@ -153,6 +154,93 @@ public partial class FilesView : UserControl, IMapPanel
         SizeHeader.Content = "Size (bytes)" + (_sortColumn == SortColumn.Size ? arrow : "");
         KnownHeader.Content = "Known" + (_sortColumn == SortColumn.Known ? arrow : "");
         ParsedHeader.Content = "Parsed" + (_sortColumn == SortColumn.Parsed ? arrow : "");
+    }
+
+    // --- export (format conversion) ---
+
+    private void OnFileSelectionChanged(object? sender, SelectionChangedEventArgs e) =>
+        ExportButton.IsEnabled = FileList.SelectedItems?.Count >= 1;
+
+    private async void OnExportClick(object? sender, RoutedEventArgs e)
+    {
+        if (_session?.Current is not { } doc) return;
+        if (FileList.SelectedItems?.OfType<FileRow>().FirstOrDefault() is not { } row)
+        {
+            StatusText.Text = "No file selected.";
+            return;
+        }
+        var storage = TopLevel.GetTopLevel(this)?.StorageProvider;
+        if (storage is null) return;
+
+        var ext = Path.GetExtension(row.Name ?? "").ToLowerInvariant();
+        try
+        {
+            if (ext == ".blp") await ExportImageAsync(storage, doc, row);
+            else if (ext is ".mdx" or ".mdl") await ExportModelAsync(storage, doc, row);
+            else await ExportRawAsync(storage, doc, row);
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"Export failed: {ex.Message}";
+        }
+    }
+
+    /// <summary>.blp → save dialog defaulting to &lt;name&gt;.png (the chosen extension picks the format).</summary>
+    private async Task ExportImageAsync(IStorageProvider storage, Wc3.Model.MapDocument doc, FileRow row)
+    {
+        var baseName = Sanitize(Path.GetFileNameWithoutExtension(row.Name!));
+        var file = await storage.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "Export image",
+            SuggestedFileName = baseName + ".png",
+            DefaultExtension = "png",
+        });
+        if (file?.TryGetLocalPath() is not { } dest) return;
+
+        var toExt = Path.GetExtension(dest);
+        if (string.IsNullOrEmpty(toExt)) { dest += ".png"; toExt = ".png"; }
+        var raw = doc.Files[row.Ordinal].RawBytes;
+        var converted = await Task.Run(() => ConvertCommand.ConvertImage(raw, ".blp", toExt));
+        await File.WriteAllBytesAsync(dest, converted);
+        StatusText.Text = $"Exported {Path.GetFileName(dest)} ({converted.Length:N0} bytes)";
+    }
+
+    /// <summary>.mdx/.mdl → folder pick, then &lt;name&gt;.obj + &lt;name&gt;.mtl + texture PNGs.</summary>
+    private async Task ExportModelAsync(IStorageProvider storage, Wc3.Model.MapDocument doc, FileRow row)
+    {
+        var folders = await storage.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        {
+            Title = "Export model (OBJ + MTL + textures) to folder",
+            AllowMultiple = false,
+        });
+        if (folders.Count != 1 || folders[0].TryGetLocalPath() is not { } dir) return;
+
+        var export = await Task.Run(() => ConvertCommand.ExportModelToObj(doc, row.Name!));
+        var baseName = Sanitize(Path.GetFileNameWithoutExtension(row.Name!));
+        await File.WriteAllTextAsync(Path.Combine(dir, baseName + ".obj"), export.Obj);
+        await File.WriteAllTextAsync(Path.Combine(dir, baseName + ".mtl"), export.Mtl);
+        foreach (var (name, bytes) in export.Textures)
+            await File.WriteAllBytesAsync(Path.Combine(dir, Sanitize(name)), bytes);
+        StatusText.Text =
+            $"Exported {baseName}.obj + {baseName}.mtl + {export.Textures.Count} texture(s) to {dir}";
+    }
+
+    /// <summary>Anything else → save dialog with the original name, raw bytes.</summary>
+    private async Task ExportRawAsync(IStorageProvider storage, Wc3.Model.MapDocument doc, FileRow row)
+    {
+        var suggested = row.Name is null
+            ? $"block_{row.Ordinal}.bin"
+            : Sanitize(Path.GetFileName(row.Name));
+        var file = await storage.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "Export file",
+            SuggestedFileName = suggested,
+        });
+        if (file?.TryGetLocalPath() is not { } dest) return;
+
+        var raw = doc.Files[row.Ordinal].RawBytes;
+        await File.WriteAllBytesAsync(dest, raw);
+        StatusText.Text = $"Exported {Path.GetFileName(dest)} ({raw.Length:N0} bytes)";
     }
 
     // --- extraction ---
