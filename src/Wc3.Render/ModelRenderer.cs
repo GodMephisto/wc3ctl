@@ -7,11 +7,12 @@ using Wc3.Modeling;
 namespace Wc3.Render;
 
 /// <summary>
-/// Headless CPU rasterizer for static models: z-buffered triangle fill with
+/// Headless CPU rasterizer for models: z-buffered triangle fill with
 /// directional-light shading and nearest-neighbour texturing. No GPU/OpenGL —
-/// runs anywhere the CLI does. Renders the model's parsed pose (no animation)
-/// from an orbit camera with WC3's Z-up convention (models stand upright);
-/// the default angles give the classic 3/4 view.
+/// runs anywhere the CLI does. Models with a parsed skeleton render posed at
+/// the first frame of their "Stand" sequence (bind pose when there is no usable
+/// skeleton), from an orbit camera with WC3's Z-up convention (models stand
+/// upright); the default angles give the classic 3/4 view.
 /// </summary>
 public static class ModelRenderer
 {
@@ -34,6 +35,9 @@ public static class ModelRenderer
     /// <paramref name="zoom"/> magnifies the view (1 = fit-to-frame). Framing is derived
     /// from the model's bounding sphere so the model holds a steady size as it rotates,
     /// and a mild perspective (with perspective-correct interpolation) gives real depth.
+    /// <paramref name="sequenceName"/> selects the animation pose ("Stand" by default;
+    /// see <see cref="Model3D.PosedAt"/> for the match rules); pass null to force the
+    /// bind pose. Models without a usable skeleton always render in bind pose.
     /// </summary>
     public static byte[] RenderPng(
         Model3D model,
@@ -42,12 +46,16 @@ public static class ModelRenderer
         int height = 512,
         float yawDegrees = DefaultYawDegrees,
         float pitchDegrees = DefaultPitchDegrees,
-        float zoom = DefaultZoom)
+        float zoom = DefaultZoom,
+        string? sequenceName = "Stand")
     {
         ArgumentNullException.ThrowIfNull(model);
         ArgumentNullException.ThrowIfNull(textures);
         if (width <= 0 || height <= 0)
             throw new ArgumentOutOfRangeException(nameof(width), "image dimensions must be positive");
+
+        if (sequenceName is not null && model.Skeleton is not null)
+            model = model.PosedAt(sequenceName); // never throws; bind pose on any failure
 
         var geosets = model.Geosets.Where(g => g.Indices.Length >= 3 && g.Vertices.Length >= 9).ToList();
         if (geosets.Count == 0)
