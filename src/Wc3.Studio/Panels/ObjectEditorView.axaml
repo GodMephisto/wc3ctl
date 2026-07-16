@@ -39,6 +39,16 @@
                         <ListBox Name="ObjectList" SelectionMode="Multiple"
                                  SelectionChanged="OnObjectSelectionChanged"
                                  DoubleTapped="OnObjectDoubleTapped">
+                            <!-- Right-click: jump to the Dependencies tab on this object.
+                                 A PointerPressed tunnel handler moves the selection to the
+                                 row under the pointer before the menu opens. -->
+                            <ListBox.ContextMenu>
+                                <ContextMenu Opening="OnObjectContextMenuOpening">
+                                    <MenuItem Name="ShowDependenciesItem"
+                                              Header="Show dependencies"
+                                              Click="OnShowDependenciesClick"/>
+                                </ContextMenu>
+                            </ListBox.ContextMenu>
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
                                     <TextBlock Text="{Binding Display}"

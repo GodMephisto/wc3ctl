@@ -17,11 +17,16 @@ public partial class MapWorkspaceView : UserControl
 {
     private readonly HashSet<IMapPanel> _loadedPanels = new();
     private string _role = "Map";
+    /// <summary>The Objects tab's primary selection - what the Dependencies tab
+    /// resolves when opened (live-pushed when that tab is already visible).</summary>
+    private (ObjectKind Kind, string Rawcode)? _currentObject;
 
     public MapWorkspaceView()
     {
         InitializeComponent();
         DependenciesPanel.SelectionChanged += OnPortSelectionChanged;
+        ObjectsPanel.ObjectSelected += OnObjectSelected;
+        ObjectsPanel.DependenciesRequested += OnDependenciesRequested;
     }
 
     /// <summary>
@@ -48,8 +53,9 @@ public partial class MapWorkspaceView : UserControl
     public bool HasMap => Session.Current is not null;
 
     /// <summary>
-    /// Port seam: the unit picked in the Dependencies tab, whose closure the
-    /// port wave will copy into the Target workspace. Null until one is chosen.
+    /// Port seam: the unit shown in the Dependencies tab, whose closure the port
+    /// copies into the Target workspace. Null until one is chosen AND null when
+    /// the tab shows a non-unit object - porting is unit-rooted.
     /// </summary>
     public string? SelectedUnitForPort => DependenciesPanel.SelectedUnitRawcode;
 
@@ -74,25 +80,51 @@ public partial class MapWorkspaceView : UserControl
     public void SetStatus(string text) => StatusText.Text = text;
 
     /// <summary>
-    /// The port button tracks the Dependencies tab's selected unit: enabled with a
-    /// live label when a unit is chosen, disabled otherwise.
+    /// The port button tracks the Dependencies tab's selection: enabled with a
+    /// live label when a UNIT is chosen. Porting is unit-rooted, so a non-unit
+    /// selection still graphs but disables the buttons with an explaining tip.
     /// </summary>
     private void OnPortSelectionChanged(object? sender, EventArgs e)
     {
-        var display = DependenciesPanel.SelectedUnitDisplay;
+        var display = DependenciesPanel.SelectedUnitDisplay; // null for non-units
+        bool nonUnit = display is null && DependenciesPanel.SelectedRawcode is not null;
         PortButton.IsEnabled = display is not null;
         PreviewPortButton.IsEnabled = display is not null;
         PortButton.Content = display is null
             ? "Port selected → Target ▶"
             : $"Port {display} → Target ▶";
-        var tip = display is null
-            ? "Pick a unit in the Dependencies tab, then port it into the Target map."
-            : $"Port {display} and everything it uses into the Target map.";
+        var kindWord = DependenciesPanel.SelectedObjectKind.ToString().ToLowerInvariant();
+        var tip = display is not null
+            ? $"Port {display} and everything it uses into the Target map."
+            : nonUnit
+                ? $"Porting is for units — {DependenciesPanel.SelectedDisplay} is a {kindWord}."
+                : "Pick a unit in the Dependencies tab, then port it into the Target map.";
         ToolTip.SetTip(PortButtonHost, tip);
         ToolTip.SetTip(PortButton, tip);
-        ToolTip.SetTip(PreviewPortButton, display is null
-            ? "Dry run: show exactly what the port would change without writing anything."
-            : $"Dry run: show exactly what porting {display} would change without writing anything.");
+        ToolTip.SetTip(PreviewPortButton, display is not null
+            ? $"Dry run: show exactly what porting {display} would change without writing anything."
+            : nonUnit
+                ? $"Porting is for units — {DependenciesPanel.SelectedDisplay} is a {kindWord}."
+                : "Dry run: show exactly what the port would change without writing anything.");
+    }
+
+    /// <summary>
+    /// Objects tab selection moved: remember it so the Dependencies tab resolves
+    /// it when opened; push it through immediately when that tab is visible.
+    /// </summary>
+    private void OnObjectSelected(object? sender, (ObjectKind Kind, string Rawcode) obj)
+    {
+        _currentObject = obj;
+        if (PanelTabs.SelectedItem is TabItem { Content: DependencyGraphView })
+            DependenciesPanel.ShowObject(Session, obj.Kind, obj.Rawcode);
+    }
+
+    /// <summary>Right-click "Show dependencies": jump to the Dependencies tab and resolve.</summary>
+    private void OnDependenciesRequested(object? sender, (ObjectKind Kind, string Rawcode) obj)
+    {
+        _currentObject = obj;
+        DependenciesTab.IsSelected = true; // tab-changed handler resolves via LoadSelectedPanel
+        LoadSelectedPanel();               // covers "already on that tab" (no selection change)
     }
 
     private void OnPortClick(object? sender, RoutedEventArgs e)
@@ -148,6 +180,7 @@ public partial class MapWorkspaceView : UserControl
             // Lazy loading: only the visible tab refreshes now; the other
             // panels load on first selection (see OnPanelTabsSelectionChanged).
             _loadedPanels.Clear();
+            _currentObject = null; // rawcodes from the previous map are stale
             LoadSelectedPanel();
 
             MapChanged?.Invoke(this, EventArgs.Empty);
@@ -193,8 +226,23 @@ public partial class MapWorkspaceView : UserControl
 
     private void LoadSelectedPanel()
     {
-        if (PanelTabs.SelectedItem is TabItem { Content: IMapPanel panel } && _loadedPanels.Add(panel))
+        if (PanelTabs.SelectedItem is not TabItem { Content: IMapPanel panel })
         {
+            return;
+        }
+
+        bool firstShow = _loadedPanels.Add(panel);
+        if (ReferenceEquals(panel, DependenciesPanel) && _currentObject is { } obj)
+        {
+            // Smart path: the Dependencies tab follows the Objects tab's selection.
+            // ShowObject fully initializes the panel (a superset of ShowMap) and
+            // no-ops when the object is already shown, so tab flips never re-resolve.
+            DependenciesPanel.ShowObject(Session, obj.Kind, obj.Rawcode);
+        }
+        else if (firstShow)
+        {
+            // No object picked yet: the Dependencies tab keeps its manual picker
+            // prompt (no forced resolve); every other panel loads as before.
             panel.ShowMap(Session);
         }
     }

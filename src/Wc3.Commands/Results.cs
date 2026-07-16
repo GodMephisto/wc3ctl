@@ -49,6 +49,8 @@ public sealed record BundleFile(string Path, string Category, bool PresentInMap)
 public sealed record BundleEdge(string From, string To, string Via); // From/To = rawcode or file path; Via = field code
 // Reason: "references '<rawcode>'[, ...]" (call-graph seed) or "called by <FunctionName>" (first discoverer).
 public sealed record BundleFunction(string Name, int StartLine, int EndLine, string Reason);
+// Despite the name, this is a generic object bundle: the root may be ANY ObjectKind
+// (BundleCommand.ResolveObject). "Unit" is kept for API/JSON compatibility this pass.
 public sealed record UnitBundle(string RootRawcode, string? RootName,
     IReadOnlyList<BundleNode> Objects, IReadOnlyList<BundleFile> Files,
     IReadOnlyList<string> Strings, IReadOnlyList<BundleEdge> Edges, IReadOnlyList<string> Diagnostics,

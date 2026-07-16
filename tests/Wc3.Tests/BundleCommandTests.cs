@@ -85,6 +85,69 @@ public class BundleCommandTests
     }
 
     [Fact]
+    public void Ability_root_closure_captures_buff_model_and_texture()
+    {
+        // ResolveObject seeded at an ABILITY: A000 --abuf:1--> B000 (buff), plus an
+        // aeat effect-art model import whose MDX names one texture. Same crawl as
+        // the unit path, just rooted at a different kind.
+        var w3a = new AbilityObjectData(ObjectDataFormatVersion.v2);
+        var ability = new LevelObjectModification { OldId = "AHbz".FromRawcode(), NewId = "A000".FromRawcode() };
+        ability.Modifications.Add(new LevelObjectDataModification
+        { Id = "anam".FromRawcode(), Type = ObjectDataType.String, Value = "Dark Strike", Level = 0, Pointer = 0 });
+        ability.Modifications.Add(new LevelObjectDataModification
+        { Id = "abuf".FromRawcode(), Type = ObjectDataType.String, Value = "B000", Level = 1, Pointer = 0 });
+        ability.Modifications.Add(new LevelObjectDataModification
+        { Id = "aeat".FromRawcode(), Type = ObjectDataType.String, Value = @"war3mapImported\spell.mdx", Level = 0, Pointer = 0 });
+        w3a.NewAbilities.Add(ability);
+
+        var w3h = new BuffObjectData(ObjectDataFormatVersion.v2);
+        var buff = new SimpleObjectModification { OldId = "BSTN".FromRawcode(), NewId = "B000".FromRawcode() };
+        buff.Modifications.Add(new SimpleObjectDataModification
+        { Id = "fnam".FromRawcode(), Type = ObjectDataType.String, Value = "Dark Buff" });
+        w3h.NewBuffs.Add(buff);
+
+        var doc = MapDocument.Load(SyntheticMap.Build(new Dictionary<string, byte[]>
+        {
+            ["war3map.w3a"] = Serialize(w => w.Write(w3a)),
+            ["war3map.w3h"] = Serialize(w => w.Write(w3h)),
+            [@"war3mapImported\spell.mdx"] = TexsOnlyMdx(@"Textures\Spell.blp"),
+        }));
+
+        var bundle = BundleCommand.ResolveObject(
+            doc, ObjectKind.Ability, "A000", ctx: null, preDiagnostics: Array.Empty<string>());
+
+        Assert.Equal("A000", bundle.RootRawcode);
+        Assert.Equal("Dark Strike", bundle.RootName);
+        Assert.Equal(new[]
+        {
+            new BundleNode("A000", ObjectKind.Ability, "Dark Strike", CustomToMap: true),
+            new BundleNode("B000", ObjectKind.Buff, "Dark Buff", CustomToMap: true),
+        }, bundle.Objects);
+        Assert.Equal(new[]
+        {
+            new BundleFile(@"Textures\Spell.blp", "texture", PresentInMap: false),
+            new BundleFile(@"war3mapImported\spell.mdx", "model", PresentInMap: true),
+        }, bundle.Files);
+        Assert.Contains(new BundleEdge("A000", "B000", "abuf:1"), bundle.Edges);
+        Assert.Contains(new BundleEdge("A000", @"war3mapImported\spell.mdx", "aeat"), bundle.Edges);
+        Assert.Contains(new BundleEdge(@"war3mapImported\spell.mdx", @"Textures\Spell.blp", "texture"), bundle.Edges);
+    }
+
+    [Fact]
+    public void Missing_root_of_non_unit_kind_names_the_kind()
+    {
+        var doc = MapDocument.Load(SyntheticMap.Build(new Dictionary<string, byte[]>
+        { ["war3map.j"] = new byte[] { 1 } }));
+
+        var bundle = BundleCommand.ResolveObject(
+            doc, ObjectKind.Ability, "A999", ctx: null, preDiagnostics: Array.Empty<string>());
+
+        Assert.Empty(bundle.Objects);
+        Assert.Contains(bundle.Diagnostics,
+            d => d.Contains("root ability") && d.Contains("A999") && d.Contains("not found"));
+    }
+
+    [Fact]
     public void Cyclic_references_terminate_with_each_node_once()
     {
         var w3u = new UnitObjectData(ObjectDataFormatVersion.v2);

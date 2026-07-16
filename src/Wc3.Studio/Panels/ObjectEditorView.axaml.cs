@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -6,6 +7,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Wc3.Commands;
 using Wc3.Model;
 using Wc3.Render;
@@ -72,12 +74,29 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     private bool _dragging;
     private Point _dragLast;
 
+    /// <summary>The last (kind, rawcode) surfaced through <see cref="ObjectSelected"/>.</summary>
+    private (ObjectKind Kind, string Rawcode)? _lastNotified;
+
     public ObjectEditorView()
     {
         InitializeComponent();
         KindCombo.ItemsSource = Kinds;
         KindCombo.SelectedIndex = 0;
+        // Tunnel so right-click retargets the selection BEFORE the context menu opens.
+        ObjectList.AddHandler(PointerPressedEvent, OnObjectListPointerPressed,
+            RoutingStrategies.Tunnel);
     }
+
+    /// <summary>
+    /// Raised when the primary selected object (the first of the selection)
+    /// changes - including the automatic first-row selection after a list/kind
+    /// refresh. The workspace feeds this to the Dependencies tab.
+    /// </summary>
+    public event EventHandler<(ObjectKind Kind, string Rawcode)>? ObjectSelected;
+
+    /// <summary>Raised by the object list's right-click "Show dependencies": an
+    /// explicit ask to open the Dependencies tab on this object.</summary>
+    public event EventHandler<(ObjectKind Kind, string Rawcode)>? DependenciesRequested;
 
     private KindOption SelectedKind => KindCombo.SelectedItem as KindOption ?? Kinds[0];
 
@@ -242,6 +261,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         }
 
         var first = selected[0];
+        NotifyObjectSelected(SelectedKind.Kind, first.Rawcode);
         MultiSelectNote.IsVisible = selected.Count > 1;
         MultiSelectNote.Text = selected.Count > 1
             ? $"{selected.Count} objects selected - edits apply to all (fields shown are {first.Rawcode}'s)"
@@ -279,6 +299,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
 
     private void ClearFieldPane()
     {
+        _lastNotified = null; // reselecting the same object later re-notifies
         _suppress = true;
         FieldList.ItemsSource = null;
         _suppress = false;
@@ -287,6 +308,51 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         MultiSelectNote.Text = "";
         ResetEditor();
         HideModelArea();
+    }
+
+    /// <summary>Surface the primary selection once per (kind, rawcode) change - the
+    /// field pane refreshes more often than the selection actually moves.</summary>
+    private void NotifyObjectSelected(ObjectKind kind, string rawcode)
+    {
+        if (_lastNotified == (kind, rawcode))
+            return;
+        _lastNotified = (kind, rawcode);
+        ObjectSelected?.Invoke(this, (kind, rawcode));
+    }
+
+    // --- right-click → "Show dependencies" ---
+
+    /// <summary>
+    /// Right-click targets the row under the pointer (like Explorer): when it is
+    /// outside the current selection, the selection moves to it, so the context
+    /// menu always acts on the row the user clicked. Clicks inside the current
+    /// selection keep it - "Show dependencies" then uses the primary object.
+    /// </summary>
+    private void OnObjectListPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (!e.GetCurrentPoint(ObjectList).Properties.IsRightButtonPressed)
+            return;
+        var row = (e.Source as Control)?.FindAncestorOfType<ListBoxItem>(includeSelf: true)
+            ?.DataContext as ObjectRow;
+        if (row is null || SelectedObjects().Contains(row))
+            return;
+        ObjectList.SelectedItems?.Clear();
+        ObjectList.SelectedItem = row;
+    }
+
+    private void OnObjectContextMenuOpening(object? sender, CancelEventArgs e)
+    {
+        var target = SelectedObjects().FirstOrDefault();
+        ShowDependenciesItem.IsEnabled = target is not null;
+        ShowDependenciesItem.Header = target is null
+            ? "Show dependencies"
+            : $"Show dependencies of {target.Rawcode}";
+    }
+
+    private void OnShowDependenciesClick(object? sender, RoutedEventArgs e)
+    {
+        if (SelectedObjects().FirstOrDefault() is { } target)
+            DependenciesRequested?.Invoke(this, (SelectedKind.Kind, target.Rawcode));
     }
 
     // --- model preview (double-click an object) ---
