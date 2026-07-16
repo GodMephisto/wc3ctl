@@ -293,10 +293,39 @@ public static class Program
             Emit(json, manifest, () => Render.Extract(manifest, dest));
         }));
 
+        var portSource = new Argument<string>("source-map", "Map to port FROM.");
+        var portTarget = new Argument<string>("target-map", "Map to port INTO.");
+        var port = new Command("port", "Port content between maps.");
+        var portUnit = new Command("unit",
+            "Port a unit (its custom objects + assets + strings) from one map into another, auto-remapping rawcode collisions.")
+        { portSource, objRawcode, portTarget, outOption };
+        portUnit.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string sourcePath = p.GetValueForArgument(portSource);
+            string targetPath = p.GetValueForArgument(portTarget);
+            string rawcode = p.GetValueForArgument(objRawcode);
+            bool json = p.GetValueForOption(jsonOption);
+            string? gameDir = p.GetValueForOption(gameDirOption);
+
+            var source = MapDocument.Load(sourcePath);
+            var target = MapDocument.Load(targetPath);
+            var bundle = BundleCommand.ResolveUnit(source, rawcode, gameDir);
+            var result = PortCommand.PortUnit(source, bundle, target);
+
+            // Never clobber the target — write a sibling <target>.ported.<ext> by default.
+            string outPath = p.GetValueForOption(outOption)
+                ?? Path.Combine(Path.GetDirectoryName(Path.GetFullPath(targetPath)) ?? ".",
+                    Path.GetFileNameWithoutExtension(targetPath) + ".ported" + Path.GetExtension(targetPath));
+            target.Save(outPath);
+            Emit(json, result, () => Render.Port(result, outPath));
+        }));
+        port.AddCommand(portUnit);
+
         root.AddCommand(info); root.AddCommand(ls); root.AddCommand(rt);
         root.AddCommand(search); root.AddCommand(diff); root.AddCommand(obj);
         root.AddCommand(extract); root.AddCommand(render); root.AddCommand(renderModel);
-        root.AddCommand(script); root.AddCommand(bundle);
+        root.AddCommand(script); root.AddCommand(bundle); root.AddCommand(port);
 
         int parseResult = await root.InvokeAsync(args);
         return parseResult != 0 ? parseResult : exitCode;

@@ -113,6 +113,44 @@ public static class Render
         return sb.ToString().TrimEnd('\r', '\n');
     }
 
+    public static string Port(PortResult r, string outPath)
+    {
+        var sb = new StringBuilder();
+        string root = r.RootPortedTo == r.RootRawcode ? r.RootRawcode : $"{r.RootRawcode} → {r.RootPortedTo}";
+        sb.AppendLine($"Ported {root}{(r.RootName is null ? "" : $"  \"{r.RootName}\"")}");
+        sb.AppendLine($"  {r.Objects.Count} object(s), {r.CopiedFiles.Count} file(s) copied, "
+                      + $"{r.InlinedStrings} string(s) inlined, {r.Remaps.Count} rawcode(s) remapped.");
+
+        if (r.Remaps.Count > 0)
+        {
+            sb.AppendLine().AppendLine("Rawcode remaps (collisions with the target):");
+            foreach (var m in r.Remaps)
+                sb.AppendLine($"  {m.Kind.ToString().ToLowerInvariant()} {m.From} → {m.To}");
+        }
+
+        sb.AppendLine().AppendLine($"Objects ({r.Objects.Count}):");
+        foreach (var o in r.Objects)
+            sb.AppendLine($"  {o.Kind.ToString().ToLowerInvariant()} {o.Rawcode}"
+                          + $"{(o.Name is null ? "" : $"  \"{o.Name}\"")}"
+                          + $"{(o.ModifiesStandard ? "  (modifies standard object)" : "")}");
+
+        if (r.CopiedFiles.Count > 0)
+        {
+            sb.AppendLine().AppendLine($"Copied files ({r.CopiedFiles.Count}):");
+            foreach (var f in r.CopiedFiles) sb.AppendLine($"  {f}");
+        }
+
+        if (r.Warnings.Count > 0)
+        {
+            sb.AppendLine().AppendLine("Warnings:");
+            foreach (var w in r.Warnings) sb.AppendLine($"  ! {w}");
+        }
+
+        foreach (var d in r.Diagnostics) sb.AppendLine($"note: {d}");
+        sb.AppendLine().AppendLine($"Saved: {outPath}");
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
     public static string ScriptFunctions(ScriptFunctionsResult r) =>
         $"{r.Functions.Count} functions in {r.ScriptFile}"
         + string.Concat(r.Functions.Select(f => $"\nline {f.StartLine}-{f.EndLine}  {f.Name}"));

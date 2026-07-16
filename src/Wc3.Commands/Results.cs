@@ -18,6 +18,21 @@ public sealed record ObjectListItem(string Rawcode, string? BaseRawcode, string?
 public sealed record ObjectListResult(IReadOnlyList<ObjectListItem> Items);
 public sealed record ExtractedItem(string? Name, int BlockIndex, byte[] Bytes);
 public sealed record ExtractResult(IReadOnlyList<ExtractedItem> Items);
+
+// A rawcode that had to be reassigned because it collided with the target map.
+public sealed record RawcodeRemap(ObjectKind Kind, string From, string To);
+public sealed record PortedObject(ObjectKind Kind, string Rawcode, string? Name, bool ModifiesStandard);
+public sealed record PortResult(
+    string RootRawcode,
+    string? RootPortedTo,          // the root's rawcode in the target (== RootRawcode if no collision)
+    string? RootName,
+    IReadOnlyList<RawcodeRemap> Remaps,
+    IReadOnlyList<PortedObject> Objects,
+    IReadOnlyList<string> CopiedFiles,
+    IReadOnlyList<string> SkippedFiles,
+    int InlinedStrings,
+    IReadOnlyList<string> Warnings,
+    IReadOnlyList<string> Diagnostics);
 public sealed record BundleNode(string Rawcode, ObjectKind Kind, string? Name, bool CustomToMap);
 public sealed record BundleFile(string Path, string Category, bool PresentInMap); // Category: model|texture|icon|sound|other
 public sealed record BundleEdge(string From, string To, string Via); // From/To = rawcode or file path; Via = field code
