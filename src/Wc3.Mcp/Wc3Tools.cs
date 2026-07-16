@@ -29,6 +29,25 @@ public static class Wc3Tools
         [Description("Path to a .w3x/.w3m map file.")] string map)
         => Run(() => ListCommand.Execute(LoadMap(map)));
 
+    [McpServerTool(Name = "object_list", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("List the map's custom/modified objects of one Object Editor kind: rawcode, base rawcode (null = created from scratch) and resolved name.")]
+    public static ObjectListResult ObjectList(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Object kind: " + KindValues + ".")] string kind = "unit",
+        [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Used to resolve base-game names.")] string? game_dir = null)
+        => Run(() => ObjectListCommand.Execute(LoadMap(map), ParseKind(kind), ResolveGameDir(game_dir)));
+
+    [McpServerTool(Name = "object_get", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Get an object's merged fields (base game data overlaid by the map's deltas), each labeled 'base' or 'map', with field names resolved. Omit kind to auto-detect it from the rawcode.")]
+    public static MergedObjectResult ObjectGet(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Four-character object rawcode, e.g. 'hfoo' or 'u000'.")] string rawcode,
+        [Description("Object kind: " + KindValues + ". Default: probe every kind (map deltas first, then base game data).")] string? kind = null,
+        [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Without it only the map's own deltas resolve.")] string? game_dir = null)
+        => Run(() => kind is null
+            ? ObjectGetCommand.Execute(LoadMap(map), rawcode, ResolveGameDir(game_dir))
+            : ObjectGetCommand.Execute(LoadMap(map), ParseKind(kind), rawcode, ResolveGameDir(game_dir)));
+
     // ---- shared plumbing -------------------------------------------------
 
     /// <summary>Expected failures become clean MCP tool errors, never stack traces.</summary>
