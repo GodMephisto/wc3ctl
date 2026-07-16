@@ -11,7 +11,7 @@ Wc3.Render       terrain heightmap → PNG (model→PNG renderer coming)
 Wc3.Commands     handlers → plain result POCOs   (DEPENDS ON Model/GameData/etc. ONLY)
 wc3ctl           CLI (System.CommandLine, --json)  ─┐ thin front-ends over Wc3.Commands
 Wc3.Studio       Avalonia GUI                       ─┤ (never parse/re-implement here)
-Wc3.Mcp          seam stub                          ─┘
+Wc3.Mcp          MCP server over stdio (official C# SDK) ─┘
 ```
 **`Wc3.Commands` must not reference CLI/GUI/MCP types.** Front-ends only render.
 
@@ -31,7 +31,7 @@ dotnet test --filter "Category!=Corpus&Category!=GameData"   # hermetic (CI-safe
 dotnet test --filter "Category=GameData"                     # needs WC3 install at D:\Warcraft III
 dotnet test --filter "Category=Corpus"                       # needs a real .w3x on disk
 ```
-Publish: `wc3ctl` → `dist/` (+ `CascLib.dll` beside it); `Wc3.Studio` → `dist-studio/` (close the running app first — the DLL locks).
+Publish: `wc3ctl` → `dist/` (+ `CascLib.dll` beside it); `Wc3.Studio` → `dist-studio/` (close the running app first — the DLL locks); `Wc3.Mcp` → `dist-mcp/` (MCP registration snippet in `src/Wc3.Mcp/README.md`).
 
 ## History / decisions
 `docs/superpowers/specs/`, `docs/superpowers/plans/`, and `.superpowers/sdd/*progress.md` (git-ignored ledgers).
