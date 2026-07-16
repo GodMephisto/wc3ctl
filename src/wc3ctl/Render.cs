@@ -113,9 +113,52 @@ public static class Render
         return sb.ToString().TrimEnd('\r', '\n');
     }
 
-    public static string Port(PortResult r, string outPath)
+    /// <summary>One port report; a null <paramref name="outPath"/> marks a dry run.</summary>
+    public static string Port(PortResult r, string? outPath)
     {
         var sb = new StringBuilder();
+        AppendPortBody(sb, r);
+        AppendPortFooter(sb, outPath);
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
+    /// <summary>Combined batch report; a null <paramref name="outPath"/> marks a dry run.</summary>
+    public static string PortBatch(BatchPortResult r, string? outPath)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"Ported {r.Units.Count} unit(s) into one target: "
+            + string.Join(", ", r.Units.Select(u =>
+                u.RootPortedTo == u.RootRawcode ? u.RootRawcode : $"{u.RootRawcode} → {u.RootPortedTo}")));
+
+        foreach (var u in r.Units)
+        {
+            sb.AppendLine().AppendLine("----------------------------------------");
+            AppendPortBody(sb, u);
+        }
+
+        if (r.Script is { } s)
+        {
+            sb.AppendLine().AppendLine(
+                $"Script (best-effort, merged across all units): {s.Functions} function(s), "
+                + $"{s.Globals} global(s) carried, {s.Renamed} renamed, init {(s.InitHooked ? "wired" : "NOT wired")}.");
+            foreach (var n in s.Notes) sb.AppendLine($"  - {n}");
+        }
+
+        if (r.Warnings.Count > 0)
+        {
+            sb.AppendLine().AppendLine("Warnings:");
+            foreach (var w in r.Warnings) sb.AppendLine($"  ! {w}");
+        }
+
+        AppendPortFooter(sb, outPath);
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
+    private static void AppendPortFooter(StringBuilder sb, string? outPath) =>
+        sb.AppendLine().AppendLine(outPath is null ? "DRY RUN - nothing written" : $"Saved: {outPath}");
+
+    private static void AppendPortBody(StringBuilder sb, PortResult r)
+    {
         string root = r.RootPortedTo == r.RootRawcode ? r.RootRawcode : $"{r.RootRawcode} → {r.RootPortedTo}";
         sb.AppendLine($"Ported {root}{(r.RootName is null ? "" : $"  \"{r.RootName}\"")}");
         sb.AppendLine($"  {r.Objects.Count} object(s), {r.CopiedFiles.Count} file(s) copied, "
@@ -155,8 +198,6 @@ public static class Render
         }
 
         foreach (var d in r.Diagnostics) sb.AppendLine($"note: {d}");
-        sb.AppendLine().AppendLine($"Saved: {outPath}");
-        return sb.ToString().TrimEnd('\r', '\n');
     }
 
     public static string ScriptFunctions(ScriptFunctionsResult r) =>

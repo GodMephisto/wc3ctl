@@ -54,6 +54,7 @@ public static class GameData
                 Strings = wesBytes is null ? WorldEditStrings.Parse("") : WorldEditStrings.FromBytes(wesBytes),
                 UnitNames = UnitNameTable.FromSources(src!),
                 Diagnostics = diags,
+                InstallDir = dir, // lets TryReadFile lazily re-open CASC for raw assets
             };
             // Concurrent builders may race; whichever lands first wins and both
             // contexts are equivalent, so GetOrAdd keeps callers consistent.

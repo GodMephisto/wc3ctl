@@ -19,9 +19,14 @@
                          receive the pointer events that trigger ToolTip. -->
                     <Border Name="PortButtonHost" IsVisible="False"
                             ToolTip.Tip="Pick a unit in the Dependencies tab, then port it into the Target map.">
-                        <Button Name="PortButton" Content="Port selected → Target ▶"
-                                IsEnabled="False" Click="OnPortClick"
-                                ToolTip.Tip="Pick a unit in the Dependencies tab, then port it into the Target map."/>
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <Button Name="PreviewPortButton" Content="Preview…"
+                                    IsEnabled="False" Click="OnPreviewPortClick"
+                                    ToolTip.Tip="Dry run: show exactly what the port would change without writing anything."/>
+                            <Button Name="PortButton" Content="Port selected → Target ▶"
+                                    IsEnabled="False" Click="OnPortClick"
+                                    ToolTip.Tip="Pick a unit in the Dependencies tab, then port it into the Target map."/>
+                        </StackPanel>
                     </Border>
                     <!-- Target only: porting into a fresh map. Creation itself is a
                          follow-up slice (see OnNewBlankMapClick). -->

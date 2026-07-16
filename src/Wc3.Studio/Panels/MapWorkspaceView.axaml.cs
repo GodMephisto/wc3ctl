@@ -63,6 +63,13 @@ public partial class MapWorkspaceView : UserControl
     /// </summary>
     public event EventHandler<string>? PortRequested;
 
+    /// <summary>
+    /// Raised (Source only) when the user asks for a dry-run preview of the port: the
+    /// same report the real port would produce, with nothing written. Argument and
+    /// handling mirror <see cref="PortRequested"/>.
+    /// </summary>
+    public event EventHandler<string>? PortPreviewRequested;
+
     /// <summary>Sets this workspace's status line (used to report port progress/results).</summary>
     public void SetStatus(string text) => StatusText.Text = text;
 
@@ -74,6 +81,7 @@ public partial class MapWorkspaceView : UserControl
     {
         var display = DependenciesPanel.SelectedUnitDisplay;
         PortButton.IsEnabled = display is not null;
+        PreviewPortButton.IsEnabled = display is not null;
         PortButton.Content = display is null
             ? "Port selected → Target ▶"
             : $"Port {display} → Target ▶";
@@ -82,12 +90,21 @@ public partial class MapWorkspaceView : UserControl
             : $"Port {display} and everything it uses into the Target map.";
         ToolTip.SetTip(PortButtonHost, tip);
         ToolTip.SetTip(PortButton, tip);
+        ToolTip.SetTip(PreviewPortButton, display is null
+            ? "Dry run: show exactly what the port would change without writing anything."
+            : $"Dry run: show exactly what porting {display} would change without writing anything.");
     }
 
     private void OnPortClick(object? sender, RoutedEventArgs e)
     {
         if (SelectedUnitForPort is { } rawcode)
             PortRequested?.Invoke(this, rawcode);
+    }
+
+    private void OnPreviewPortClick(object? sender, RoutedEventArgs e)
+    {
+        if (SelectedUnitForPort is { } rawcode)
+            PortPreviewRequested?.Invoke(this, rawcode);
     }
 
     /// <summary>Shows the OS map picker, then loads the chosen map into this workspace.</summary>

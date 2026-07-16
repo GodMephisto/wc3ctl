@@ -37,6 +37,13 @@ public sealed record PortResult(
     IReadOnlyList<string> Warnings,
     IReadOnlyList<string> Diagnostics,
     ScriptPortInfo? Script = null);
+// Combined outcome of porting several units into one target: per-unit results in input
+// order (their Script is always null — the batch splices the merged closure once), the
+// single merged script summary, and batch-level warnings.
+public sealed record BatchPortResult(
+    IReadOnlyList<PortResult> Units,
+    ScriptPortInfo? Script,
+    IReadOnlyList<string> Warnings);
 public sealed record BundleNode(string Rawcode, ObjectKind Kind, string? Name, bool CustomToMap);
 public sealed record BundleFile(string Path, string Category, bool PresentInMap); // Category: model|texture|icon|sound|other
 public sealed record BundleEdge(string From, string To, string Via); // From/To = rawcode or file path; Via = field code
