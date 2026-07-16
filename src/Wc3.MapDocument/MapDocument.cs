@@ -217,9 +217,10 @@ public sealed class MapDocument
             case ImportedFiles m: return WriteBinary(w => w.Write(m));
         }
 
-        // Dirty but no serializable model and no override: keep the original bytes.
-        if (entry.RawBytes.Length > 0) return entry.RawBytes;
-
+        // A dirty entry with no override and no supported model would silently lose
+        // the caller's intent if we passed the original bytes through — fail loudly.
+        // Formats without a byte-faithful model writer (e.g. war3map.wts) must be
+        // written via AddOrReplaceRawFile instead.
         throw new NotSupportedException(
             $"No byte-faithful serializer for '{entry.FileName ?? "(unnamed)"}' " +
             $"(model: {entry.Model?.GetType().Name ?? "none"}). Use AddOrReplaceRawFile for raw payloads.");
