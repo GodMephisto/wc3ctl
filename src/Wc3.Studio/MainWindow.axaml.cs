@@ -17,6 +17,7 @@ public partial class MainWindow : Window
         SourceWorkspace.MapChanged += OnWorkspaceMapChanged;
         TargetWorkspace.MapChanged += OnWorkspaceMapChanged;
         SourceWorkspace.PortRequested += OnPortRequested;
+        SourceWorkspace.PortPreviewRequested += OnPortPreviewRequested;
     }
 
     /// <summary>
@@ -61,7 +62,17 @@ public partial class MainWindow : Window
     /// works on a fresh reload of each map on disk, so the open sessions stay untouched
     /// and the result is written to a sibling &lt;target&gt;.ported.&lt;ext&gt; (never clobbers).
     /// </summary>
-    private async void OnPortRequested(object? sender, string rawcode)
+    private async void OnPortRequested(object? sender, string rawcode) =>
+        await RunPort(rawcode, dryRun: false);
+
+    /// <summary>
+    /// Dry-run preview: computes the identical report through PortCommand.PreviewPort
+    /// (same code path as the real port) and shows it — nothing is written anywhere.
+    /// </summary>
+    private async void OnPortPreviewRequested(object? sender, string rawcode) =>
+        await RunPort(rawcode, dryRun: true);
+
+    private async Task RunPort(string rawcode, bool dryRun)
     {
         if (!SourceWorkspace.HasMap || SourceWorkspace.Session.MapPath is not { } sourcePath)
         { SourceWorkspace.SetStatus("Open a Source map first."); return; }
@@ -69,7 +80,9 @@ public partial class MainWindow : Window
         { SourceWorkspace.SetStatus("Open a Target map first (right pane)."); return; }
 
         var gameDir = SourceWorkspace.Session.GameDir;
-        SourceWorkspace.SetStatus($"Porting {rawcode} → {Path.GetFileName(targetPath)}…");
+        SourceWorkspace.SetStatus(dryRun
+            ? $"Previewing port of {rawcode} → {Path.GetFileName(targetPath)}…"
+            : $"Porting {rawcode} → {Path.GetFileName(targetPath)}…");
 
         try
         {
@@ -78,26 +91,31 @@ public partial class MainWindow : Window
                 var source = MapDocument.Load(sourcePath);
                 var target = MapDocument.Load(targetPath);
                 var bundle = BundleCommand.ResolveUnit(source, rawcode, gameDir);
+                if (dryRun)
+                    return (PortCommand.PreviewPort(source, bundle, target), (string?)null);
                 var r = PortCommand.PortUnit(source, bundle, target);
                 string outp = Path.Combine(
                     Path.GetDirectoryName(Path.GetFullPath(targetPath)) ?? ".",
                     Path.GetFileNameWithoutExtension(targetPath) + ".ported" + Path.GetExtension(targetPath));
                 target.Save(outp);
-                return (r, outp);
+                return (r, (string?)outp);
             });
 
-            SourceWorkspace.SetStatus(
-                $"Ported {result.RootRawcode} → {result.RootPortedTo} into {Path.GetFileName(outPath)} "
-                + $"({result.Objects.Count} objects, {result.CopiedFiles.Count} files, {result.Remaps.Count} remaps).");
+            SourceWorkspace.SetStatus(outPath is null
+                ? $"Preview: {result.RootRawcode} → {result.RootPortedTo} ({result.Objects.Count} objects, "
+                  + $"{result.CopiedFiles.Count} files, {result.Remaps.Count} remaps) - nothing written."
+                : $"Ported {result.RootRawcode} → {result.RootPortedTo} into {Path.GetFileName(outPath)} "
+                  + $"({result.Objects.Count} objects, {result.CopiedFiles.Count} files, {result.Remaps.Count} remaps).");
             await ShowPortReport(result, outPath);
         }
         catch (Exception ex)
         {
-            SourceWorkspace.SetStatus($"Port failed: {ex.Message}");
+            SourceWorkspace.SetStatus($"{(dryRun ? "Preview" : "Port")} failed: {ex.Message}");
         }
     }
 
-    private async Task ShowPortReport(PortResult r, string outPath)
+    /// <summary>Port (or dry-run, when <paramref name="outPath"/> is null) report dialog.</summary>
+    private async Task ShowPortReport(PortResult r, string? outPath)
     {
         var sb = new StringBuilder();
         string root = r.RootPortedTo == r.RootRawcode ? r.RootRawcode : $"{r.RootRawcode} → {r.RootPortedTo}";
@@ -130,11 +148,11 @@ public partial class MainWindow : Window
             foreach (var w in r.Warnings) sb.AppendLine($"  ! {w}");
         }
         foreach (var d in r.Diagnostics) sb.AppendLine($"note: {d}");
-        sb.AppendLine().AppendLine($"Saved: {outPath}");
+        sb.AppendLine().AppendLine(outPath is null ? "DRY RUN - nothing written" : $"Saved: {outPath}");
 
         var dialog = new Window
         {
-            Title = "Port complete",
+            Title = outPath is null ? "Port preview (dry run)" : "Port complete",
             Width = 620,
             Height = 520,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,

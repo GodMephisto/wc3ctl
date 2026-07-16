@@ -23,17 +23,22 @@ internal static class ScriptPorter
     private static readonly Regex Rawcode = new(@"'(\\?.|[^'\\]{1,4})'", RegexOptions.Compiled);
 
     /// <summary>
-    /// Splices the bundle's function closure into <paramref name="target"/> (mutated via
-    /// AddOrReplaceRawFile). <paramref name="codeRemap"/> maps source rawcode → target
-    /// rawcode (as 4-char strings) for the objects that were remapped on collision.
-    /// Returns null when there is nothing to port (no functions, or no target script).
+    /// Splices the function closure into <paramref name="target"/> (mutated via
+    /// AddOrReplaceRawFile) — or, with <paramref name="apply"/> false, computes the exact
+    /// same <see cref="ScriptPortInfo"/> without touching the target (dry-run preview;
+    /// one code path so preview and port cannot drift). <paramref name="codeRemap"/> maps
+    /// source rawcode → target rawcode (as 4-char strings) for the objects that were
+    /// remapped on collision; <paramref name="markerLabel"/> names the port in the spliced
+    /// block's BEGIN/END comments (e.g. "Raiden Ei (H000)"). Returns null when there is
+    /// nothing to port (no functions, or no target script).
     /// </summary>
     public static ScriptPortInfo? PortScript(
-        MapDocument source, MapDocument target, UnitBundle bundle,
-        IReadOnlyDictionary<string, string> codeRemap)
+        MapDocument source, MapDocument target,
+        IReadOnlyList<BundleFunction> functions, string markerLabel,
+        IReadOnlyDictionary<string, string> codeRemap, bool apply = true)
     {
         var notes = new List<string>();
-        if (bundle.Functions.Count == 0) return null;
+        if (functions.Count == 0) return null;
 
         var srcEntry = ScriptEntry(source);
         var tgtEntry = ScriptEntry(target);
@@ -45,7 +50,7 @@ internal static class ScriptPorter
         var srcLines = srcJ.Replace("\r\n", "\n").Split('\n');
 
         // Closure function bodies, in source order.
-        var closureNames = bundle.Functions.Select(f => f.Name).ToHashSet(StringComparer.Ordinal);
+        var closureNames = functions.Select(f => f.Name).ToHashSet(StringComparer.Ordinal);
         var srcFns = JassFunctionIndex.Parse(srcJ)
             .Where(f => closureNames.Contains(f.Name))
             .OrderBy(f => f.StartLine).ToList();
@@ -93,7 +98,7 @@ internal static class ScriptPorter
             portedFns.Append(Rewrite(BodyText(srcLines, f))).Append('\n');
 
         // Splice into the target: globals into its globals block, functions after endglobals.
-        string marker = $"wc3ctl ported: {bundle.RootName ?? bundle.RootRawcode} ({bundle.RootRawcode})";
+        string marker = $"wc3ctl ported: {markerLabel}";
         string merged = Splice(tgtJ, portedGlobals.ToString(), portedFns.ToString(), marker, notes);
 
         // Best-effort init hook: call carried InitTrig_* functions from InitCustomTriggers.
@@ -115,7 +120,8 @@ internal static class ScriptPorter
                       "init path, verify it runs in the target.");
         }
 
-        target.AddOrReplaceRawFile(tgtEntry.FileName!, Encoding.UTF8.GetBytes(merged));
+        if (apply)
+            target.AddOrReplaceRawFile(tgtEntry.FileName!, Encoding.UTF8.GetBytes(merged));
         return new ScriptPortInfo(srcFns.Count, carriedGlobals.Count, rename.Count, hooked, notes);
     }
 

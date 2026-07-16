@@ -330,32 +330,57 @@ public static class Program
 
         var portSource = new Argument<string>("source-map", "Map to port FROM.");
         var portTarget = new Argument<string>("target-map", "Map to port INTO.");
+        var portRawcodes = new Argument<string>("rawcode",
+            "Four-character unit rawcode, or a comma-separated list (H000,H001,…) to port several units into the same target in one operation.");
         var noScriptOption = new Option<bool>("--no-script",
             "Port object data + assets + strings only; skip the best-effort JASS script closure append.");
+        var dryRunOption = new Option<bool>("--dry-run",
+            "Preview the port: print the full report (remaps, objects, files, strings, script) without writing anything.");
         var port = new Command("port", "Port content between maps.");
         var portUnit = new Command("unit",
             "Port a unit (its custom objects + assets + strings, and best-effort its trigger script) from one map into another, auto-remapping rawcode collisions.")
-        { portSource, objRawcode, portTarget, outOption, noScriptOption };
+        { portSource, portRawcodes, portTarget, outOption, noScriptOption, dryRunOption };
         portUnit.SetHandler(ctx => RunSafely(() =>
         {
             var p = ctx.ParseResult;
             string sourcePath = p.GetValueForArgument(portSource);
             string targetPath = p.GetValueForArgument(portTarget);
-            string rawcode = p.GetValueForArgument(objRawcode);
+            var rawcodes = p.GetValueForArgument(portRawcodes)
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (rawcodes.Length == 0)
+                throw new ArgumentException("no rawcode given");
             bool json = p.GetValueForOption(jsonOption);
+            bool dryRun = p.GetValueForOption(dryRunOption);
+            bool includeScript = !p.GetValueForOption(noScriptOption);
             string? gameDir = p.GetValueForOption(gameDirOption);
 
             var source = MapDocument.Load(sourcePath);
             var target = MapDocument.Load(targetPath);
-            var bundle = BundleCommand.ResolveUnit(source, rawcode, gameDir);
-            var result = PortCommand.PortUnit(source, bundle, target, includeScript: !p.GetValueForOption(noScriptOption));
 
             // Never clobber the target - write a sibling <target>.ported.<ext> by default.
-            string outPath = p.GetValueForOption(outOption)
+            // A dry run writes nothing at all.
+            string? outPath = dryRun ? null : p.GetValueForOption(outOption)
                 ?? Path.Combine(Path.GetDirectoryName(Path.GetFullPath(targetPath)) ?? ".",
                     Path.GetFileNameWithoutExtension(targetPath) + ".ported" + Path.GetExtension(targetPath));
-            target.Save(outPath);
-            Emit(json, result, () => Render.Port(result, outPath));
+
+            if (rawcodes.Length == 1)
+            {
+                var bundle = BundleCommand.ResolveUnit(source, rawcodes[0], gameDir);
+                var result = dryRun
+                    ? PortCommand.PreviewPort(source, bundle, target, includeScript)
+                    : PortCommand.PortUnit(source, bundle, target, includeScript);
+                if (outPath is not null) target.Save(outPath);
+                Emit(json, result, () => Render.Port(result, outPath));
+            }
+            else
+            {
+                var bundles = rawcodes.Select(rc => BundleCommand.ResolveUnit(source, rc, gameDir)).ToList();
+                var result = dryRun
+                    ? PortCommand.PreviewPorts(source, bundles, target, includeScript)
+                    : PortCommand.PortUnits(source, bundles, target, includeScript);
+                if (outPath is not null) target.Save(outPath);
+                Emit(json, result, () => Render.PortBatch(result, outPath));
+            }
         }));
         port.AddCommand(portUnit);
 

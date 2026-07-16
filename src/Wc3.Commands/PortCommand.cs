@@ -33,6 +33,96 @@ public static class PortCommand
     /// </summary>
     public static PortResult PortUnit(
         MapDocument source, UnitBundle bundle, MapDocument target, bool includeScript = true)
+        => PortCore(source, bundle, target, RawcodeAllocator.UsedRawcodes(target),
+            alreadyPorted: null, pendingCopies: null, includeScript, apply: true);
+
+    /// <summary>
+    /// Computes exactly the report <see cref="PortUnit"/> would produce — the rawcode
+    /// remap plan, the objects, which asset files would copy vs skip, the string-inline
+    /// count and the script closure summary — WITHOUT mutating <paramref name="target"/>
+    /// or writing anything. Same code path as the real port behind a single apply switch,
+    /// so preview and port cannot drift.
+    /// </summary>
+    public static PortResult PreviewPort(
+        MapDocument source, UnitBundle bundle, MapDocument target, bool includeScript = true)
+        => PortCore(source, bundle, target, RawcodeAllocator.UsedRawcodes(target),
+            alreadyPorted: null,
+            pendingCopies: new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase),
+            includeScript, apply: false);
+
+    /// <summary>
+    /// Ports several units into the SAME target in one operation. The used-rawcode set
+    /// grows across bundles so later units can never collide with earlier ports, objects
+    /// shared between bundles (a common custom ability) are ported once and reused, and
+    /// the script closures are merged and spliced once (a shared spell dispatcher is
+    /// carried a single time, with every unit's rawcode remap applied). The caller saves
+    /// the target once at the end.
+    /// </summary>
+    public static BatchPortResult PortUnits(
+        MapDocument source, IReadOnlyList<UnitBundle> bundles, MapDocument target, bool includeScript = true)
+        => BatchCore(source, bundles, target, includeScript, apply: true);
+
+    /// <summary>The combined report <see cref="PortUnits"/> would produce, writing nothing.</summary>
+    public static BatchPortResult PreviewPorts(
+        MapDocument source, IReadOnlyList<UnitBundle> bundles, MapDocument target, bool includeScript = true)
+        => BatchCore(source, bundles, target, includeScript, apply: false);
+
+    private static BatchPortResult BatchCore(
+        MapDocument source, IReadOnlyList<UnitBundle> bundles, MapDocument target,
+        bool includeScript, bool apply)
+    {
+        var used = RawcodeAllocator.UsedRawcodes(target);
+        var alreadyPorted = new Dictionary<int, int>();
+        // In preview mode the target never mutates, so files "copied" by earlier bundles
+        // are simulated here to keep later bundles' copy-vs-skip decisions identical.
+        var pendingCopies = apply ? null : new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
+        var results = new List<PortResult>();
+        foreach (var bundle in bundles)
+            results.Add(PortCore(source, bundle, target, used, alreadyPorted, pendingCopies,
+                includeScript: false, apply));
+
+        // One combined script port: the union of the closures (shared dispatcher functions
+        // carried once) with the union of every unit's rawcode remap.
+        ScriptPortInfo? script = null;
+        var warnings = new List<string>();
+        if (includeScript)
+        {
+            try
+            {
+                var functions = bundles.SelectMany(b => b.Functions)
+                    .GroupBy(f => f.Name, StringComparer.Ordinal)
+                    .Select(g => g.First())
+                    .OrderBy(f => f.StartLine)
+                    .ToList();
+                var codeRemap = new Dictionary<string, string>(StringComparer.Ordinal);
+                foreach (var r in results)
+                    foreach (var m in r.Remaps)
+                        codeRemap.TryAdd(m.From, m.To);
+                var label = string.Join(" + ", results.Select(r => $"{r.RootName ?? r.RootRawcode} ({r.RootRawcode})"));
+                script = ScriptPorter.PortScript(source, target, functions, label, codeRemap, apply);
+            }
+            catch (Exception ex)
+            {
+                warnings.Add($"script port skipped (object/asset port is unaffected): {ex.Message}");
+            }
+        }
+
+        return new BatchPortResult(results, script, warnings);
+    }
+
+    /// <summary>
+    /// The single shared port pipeline. <paramref name="apply"/> true mutates the target;
+    /// false computes the identical report without touching it. <paramref name="used"/>
+    /// accumulates allocated rawcodes across a batch; <paramref name="alreadyPorted"/>
+    /// (batch only) maps source ids already ported by an earlier bundle to their target
+    /// ids so shared dependencies are reused, not duplicated; <paramref name="pendingCopies"/>
+    /// (preview only) simulates the asset copies a real port would have made.
+    /// </summary>
+    private static PortResult PortCore(
+        MapDocument source, UnitBundle bundle, MapDocument target,
+        HashSet<int> used, Dictionary<int, int>? alreadyPorted,
+        Dictionary<string, byte[]>? pendingCopies,
+        bool includeScript, bool apply)
     {
         var warnings = new List<string>();
         var diagnostics = new List<string>(bundle.Diagnostics);
@@ -40,13 +130,23 @@ public static class PortCommand
         var customs = bundle.Objects.Where(o => o.CustomToMap).ToList();
 
         // 1) Rawcode remap: reassign any custom rawcode already defined in the target.
-        var used = RawcodeAllocator.UsedRawcodes(target);
+        //    Objects an earlier bundle in this batch already ported are reused as-is.
         var remap = new Dictionary<int, int>();       // source id -> target id (identity when free)
         var remapReport = new List<RawcodeRemap>();
+        var sharedIds = new HashSet<int>();           // ported by an earlier bundle — don't re-inject
         foreach (var o in customs)
         {
             int id = o.Rawcode.FromRawcode();
             if (remap.ContainsKey(id)) continue;
+            if (alreadyPorted is not null && alreadyPorted.TryGetValue(id, out var prior))
+            {
+                remap[id] = prior;
+                sharedIds.Add(id);
+                if (prior != id)
+                    remapReport.Add(new RawcodeRemap(o.Kind, o.Rawcode, prior.ToRawcode()));
+                diagnostics.Add($"{o.Kind} {o.Rawcode} already ported by an earlier unit in this batch — reusing {prior.ToRawcode()}.");
+                continue;
+            }
             if (used.Contains(id))
             {
                 int fresh = RawcodeAllocator.Allocate(o.Rawcode, used);
@@ -79,8 +179,11 @@ public static class PortCommand
 
             foreach (var g in groups.Values)
             {
+                if (sharedIds.Contains(g.NewId != 0 ? g.NewId : g.OldId))
+                    continue; // an earlier bundle in this batch already injected it
                 var remapped = RemapGroup(g, remap, srcStrings, ref inlinedStrings);
-                InjectGroup(target, kind, remapped);
+                if (apply)
+                    InjectGroup(target, kind, remapped);
                 var node = byKind.First(o => o.Rawcode.FromRawcode() == (g.NewId != 0 ? g.NewId : g.OldId));
                 string ownId = (remapped.NewId != 0 ? remapped.NewId : remapped.OldId).ToRawcode();
                 portedObjects.Add(new PortedObject(kind, ownId, node.Name, remapped.NewId == 0));
@@ -103,24 +206,37 @@ public static class PortCommand
             var srcEntry = FindFile(source, f.Path);
             if (srcEntry is null || srcEntry.RawBytes.Length == 0) { skipped.Add($"{f.Path} (unreadable in source)"); continue; }
 
-            var tgtEntry = FindFile(target, f.Path);
-            if (tgtEntry is not null && tgtEntry.RawBytes.SequenceEqual(srcEntry.RawBytes))
+            // What the target holds at that path — including files "copied" by an earlier
+            // bundle of a preview batch (pendingCopies simulates the real port's mutation).
+            var tgtBytes = FindFile(target, f.Path)?.RawBytes;
+            if (tgtBytes is null && pendingCopies is not null
+                && pendingCopies.TryGetValue(NormalizePath(f.Path), out var pending))
+                tgtBytes = pending;
+
+            if (tgtBytes is not null && tgtBytes.SequenceEqual(srcEntry.RawBytes))
             { skipped.Add($"{f.Path} (already in target)"); continue; }
-            if (tgtEntry is not null)
+            if (tgtBytes is not null)
                 warnings.Add($"{f.Path} already exists in target with different bytes — overwritten.");
 
-            target.AddOrReplaceRawFile(srcEntry.FileName!, srcEntry.RawBytes);
-            copied.Add(srcEntry.FileName!);
-
-            if (!tgtImports.Files.Any(i => PathEq(i.FullPath, srcEntry.FileName!)))
+            if (apply)
             {
-                var flags = srcImports?.Files.FirstOrDefault(i => PathEq(i.FullPath, srcEntry.FileName!))?.Flags
-                            ?? (ImportedFileFlags)10; // standard custom-path import
-                tgtImports.Files.Add(new ImportedFile { Flags = flags, FullPath = srcEntry.FileName! });
-                importsChanged = true;
+                target.AddOrReplaceRawFile(srcEntry.FileName!, srcEntry.RawBytes);
+
+                if (!tgtImports.Files.Any(i => PathEq(i.FullPath, srcEntry.FileName!)))
+                {
+                    var flags = srcImports?.Files.FirstOrDefault(i => PathEq(i.FullPath, srcEntry.FileName!))?.Flags
+                                ?? (ImportedFileFlags)10; // standard custom-path import
+                    tgtImports.Files.Add(new ImportedFile { Flags = flags, FullPath = srcEntry.FileName! });
+                    importsChanged = true;
+                }
             }
+            else
+            {
+                pendingCopies![NormalizePath(srcEntry.FileName!)] = srcEntry.RawBytes;
+            }
+            copied.Add(srcEntry.FileName!);
         }
-        if (importsChanged)
+        if (apply && importsChanged)
             target.AddOrReplaceModelFile("war3map.imp", tgtImports);
 
         // 4) Best-effort JASS script closure append (defensive — never breaks the port).
@@ -131,13 +247,20 @@ public static class PortCommand
             {
                 var codeRemap = remap.Where(kv => kv.Key != kv.Value)
                     .ToDictionary(kv => kv.Key.ToRawcode(), kv => kv.Value.ToRawcode(), StringComparer.Ordinal);
-                scriptInfo = ScriptPorter.PortScript(source, target, bundle, codeRemap);
+                scriptInfo = ScriptPorter.PortScript(source, target, bundle.Functions,
+                    $"{bundle.RootName ?? bundle.RootRawcode} ({bundle.RootRawcode})", codeRemap, apply);
             }
             catch (Exception ex)
             {
                 warnings.Add($"script port skipped (object/asset port is unaffected): {ex.Message}");
             }
         }
+
+        // Batch bookkeeping: later bundles reuse everything this one ported (identity
+        // mappings included — a later bundle must not treat them as fresh collisions).
+        if (alreadyPorted is not null)
+            foreach (var kv in remap)
+                alreadyPorted[kv.Key] = kv.Value;
 
         string rootPortedTo = remap.TryGetValue(bundle.RootRawcode.FromRawcode(), out var rid)
             ? rid.ToRawcode() : bundle.RootRawcode;
@@ -351,4 +474,8 @@ public static class PortCommand
 
     private static bool PathEq(string a, string b) =>
         string.Equals(a.Replace('/', '\\'), b.Replace('/', '\\'), StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Key form for the preview batch's simulated-copy lookup (slash-normalized;
+    /// the dictionary itself compares case-insensitively).</summary>
+    private static string NormalizePath(string path) => path.Replace('/', '\\');
 }
