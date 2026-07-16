@@ -56,7 +56,7 @@ public partial class MainWindow : Window
 
     /// <summary>
     /// The one-button port: resolve the selected unit's closure in the Source map and
-    /// inject it into the Target map, auto-remapping rawcode collisions — no config. Runs
+    /// inject it into the Target map, auto-remapping rawcode collisions - no config. Runs
     /// off the UI thread (a real map is large); reports the outcome in a dialog. The port
     /// works on a fresh reload of each map on disk, so the open sessions stay untouched
     /// and the result is written to a sibling &lt;target&gt;.ported.&lt;ext&gt; (never clobbers).
@@ -102,8 +102,8 @@ public partial class MainWindow : Window
         var sb = new StringBuilder();
         string root = r.RootPortedTo == r.RootRawcode ? r.RootRawcode : $"{r.RootRawcode} → {r.RootPortedTo}";
         sb.AppendLine($"Ported {root}{(r.RootName is null ? "" : $"  \"{r.RootName}\"")}");
-        sb.AppendLine($"{r.Objects.Count} object(s) · {r.CopiedFiles.Count} file(s) copied · "
-                      + $"{r.InlinedStrings} string(s) inlined · {r.Remaps.Count} rawcode(s) remapped");
+        sb.AppendLine($"{r.Objects.Count} object(s), {r.CopiedFiles.Count} file(s) copied, "
+                      + $"{r.InlinedStrings} string(s) inlined, {r.Remaps.Count} rawcode(s) remapped");
         sb.AppendLine();
         if (r.Remaps.Count > 0)
         {

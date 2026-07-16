@@ -11,7 +11,7 @@ namespace Wc3.Studio.Panels;
 /// <summary>
 /// Dependency graph for one unit: pick a map unit and the panel resolves its
 /// full closure (abilities, buffs, items, model, textures, icons, strings)
-/// via <see cref="BundleCommand"/>, then renders it two ways — a layered
+/// via <see cref="BundleCommand"/>, then renders it two ways - a layered
 /// node-link graph on a canvas and a structured tree + files/strings lists
 /// beside it. Read-only this wave; the selected unit is exposed through
 /// <see cref="SelectedUnitRawcode"/>/<see cref="SelectionChanged"/> as the
@@ -93,7 +93,7 @@ public partial class DependencyGraphView : UserControl, IMapPanel
     }
 
     /// <summary>
-    /// Populate the unit picker off the UI thread — the first game-data query
+    /// Populate the unit picker off the UI thread - the first game-data query
     /// per install opens CASC, which can take seconds. The generation stamp
     /// drops results that land after another map was shown.
     /// </summary>
@@ -132,7 +132,7 @@ public partial class DependencyGraphView : UserControl, IMapPanel
                 // No auto-select: resolving a closure is heavy, wait for a deliberate pick.
                 SummaryText.Text = units.Count == 0
                     ? "This map has no custom unit data."
-                    : $"{units.Count} unit(s) — pick one to analyze.";
+                    : $"{units.Count} unit(s) - pick one to analyze.";
             });
         });
     }
@@ -187,7 +187,7 @@ public partial class DependencyGraphView : UserControl, IMapPanel
             Dispatcher.UIThread.Post(() =>
             {
                 _resolveInFlight = false;
-                // A newer selection supersedes this result — re-resolve, even if
+                // A newer selection supersedes this result - re-resolve, even if
                 // the map changed underneath (RequestResolve re-reads everything).
                 if (_resolveQueued)
                 {
@@ -200,7 +200,7 @@ public partial class DependencyGraphView : UserControl, IMapPanel
                 if (bundle is null)
                 {
                     SummaryText.Text = "";
-                    GraphHint.Text = "Resolve failed — see the status line below.";
+                    GraphHint.Text = "Resolve failed - see the status line below.";
                     StatusText.Text = $"Failed to resolve {rawcode}: {error}";
                     return;
                 }
@@ -215,7 +215,7 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         int custom = bundle.Objects.Count(o => o.CustomToMap);
         SummaryText.Text =
             $"{bundle.Objects.Count} objects ({custom} custom / {bundle.Objects.Count - custom} base)"
-            + $" · {bundle.Files.Count} files · {bundle.Strings.Count} strings";
+            + $", {bundle.Files.Count} files, {bundle.Strings.Count} strings";
         StatusText.Text = bundle.Diagnostics.Count > 0 ? string.Join("; ", bundle.Diagnostics) : "";
         BuildTree(bundle);
         BuildFilesList(bundle);
@@ -243,7 +243,7 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         var rootItem = new TreeViewItem
         {
             Header = MakeTreeLabel(
-                $"{bundle.RootName ?? bundle.RootRawcode} ({bundle.RootRawcode}) — root unit",
+                $"{bundle.RootName ?? bundle.RootRawcode} ({bundle.RootRawcode}) - root unit",
                 rootNode?.CustomToMap, bold: true),
             IsExpanded = true,
         };
@@ -259,12 +259,12 @@ public partial class DependencyGraphView : UserControl, IMapPanel
             };
             foreach (var node in group)
             {
-                var via = viaInto.TryGetValue(node.Rawcode, out var v) ? $" · via {v}" : "";
+                var via = viaInto.TryGetValue(node.Rawcode, out var v) ? $", via {v}" : "";
                 groupItem.Items.Add(new TreeViewItem
                 {
                     Header = MakeTreeLabel(
-                        $"{node.Rawcode} — {node.Name ?? "(base game)"}"
-                        + $" · {(node.CustomToMap ? "custom" : "base")}{via}",
+                        $"{node.Rawcode} - {node.Name ?? "(base game)"}"
+                        + $", {(node.CustomToMap ? "custom" : "base")}{via}",
                         node.CustomToMap, bold: false),
                 });
             }
@@ -284,15 +284,15 @@ public partial class DependencyGraphView : UserControl, IMapPanel
             var row = new TextBlock
             {
                 Text = $"{CategoryPrefix(file.Category)} {file.Path}"
-                    + $" — [{(file.PresentInMap ? "in map" : "not in map")}]",
+                    + $" - [{(file.PresentInMap ? "in map" : "not in map")}]",
                 FontSize = 11,
                 Foreground = file.PresentInMap ? NormalText : MissingText,
                 TextTrimming = TextTrimming.CharacterEllipsis,
             };
-            ToolTip.SetTip(row, $"{file.Path}\n{file.Category} — "
+            ToolTip.SetTip(row, $"{file.Path}\n{file.Category} - "
                 + (file.PresentInMap
                     ? "imported in this map (ports with the unit)"
-                    : "not in this map — base-game asset or a missing import"));
+                    : "not in this map - base-game asset or a missing import"));
             FilesList.Children.Add(row);
         }
     }
@@ -369,7 +369,7 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         if (bundle.Objects.Count == 0)
         {
             GraphHint.IsVisible = true;
-            GraphHint.Text = $"{bundle.RootRawcode} resolved to nothing — see the status line.";
+            GraphHint.Text = $"{bundle.RootRawcode} resolved to nothing - see the status line.";
             return;
         }
         GraphHint.IsVisible = false;
@@ -423,7 +423,7 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         }
 
         // --- files band: wrapped rows under the object area (case-insensitive
-        //     keys — WC3 paths compare case-insensitively) ---
+        //     keys - WC3 paths compare case-insensitively) ---
         var fileRects = new Dictionary<string, Rect>(StringComparer.OrdinalIgnoreCase);
         double objAreaWidth = columns.Count * (ObjW + ColGap) - ColGap;
         double bandTop = Pad + maxColHeight + BandGap;
@@ -557,7 +557,7 @@ public partial class DependencyGraphView : UserControl, IMapPanel
     {
         var title = new TextBlock
         {
-            Text = $"{node.Rawcode} · {(node.CustomToMap ? "custom" : "base")}",
+            Text = $"{node.Rawcode}, {(node.CustomToMap ? "custom" : "base")}",
             FontSize = 12,
             FontWeight = FontWeight.SemiBold,
             Foreground = node.CustomToMap ? AccentText : MutedText,
@@ -565,7 +565,7 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         };
         var subtitle = new TextBlock
         {
-            Text = $"{node.Kind} — {node.Name ?? "(base game)"}",
+            Text = $"{node.Kind} - {node.Name ?? "(base game)"}",
             FontSize = 10,
             Foreground = node.CustomToMap ? NormalText : MutedText,
             TextTrimming = TextTrimming.CharacterEllipsis,
@@ -585,7 +585,7 @@ public partial class DependencyGraphView : UserControl, IMapPanel
                 Children = { title, subtitle },
             },
         };
-        ToolTip.SetTip(visual, $"{node.Rawcode} — {node.Name ?? "(unnamed)"}\n{node.Kind} · "
+        ToolTip.SetTip(visual, $"{node.Rawcode} - {node.Name ?? "(unnamed)"}\n{node.Kind}, "
             + (node.CustomToMap
                 ? "custom to this map (must port)"
                 : "base game (already in any target)"));
@@ -623,10 +623,10 @@ public partial class DependencyGraphView : UserControl, IMapPanel
                 Children = { title, subtitle },
             },
         };
-        ToolTip.SetTip(visual, $"{file.Path}\n{file.Category} — "
+        ToolTip.SetTip(visual, $"{file.Path}\n{file.Category} - "
             + (file.PresentInMap
                 ? "imported in this map (ports with the unit)"
-                : "not in this map — base-game asset or a missing import"));
+                : "not in this map - base-game asset or a missing import"));
         return visual;
     }
 

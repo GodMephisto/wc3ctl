@@ -99,8 +99,14 @@ public static class RenderModelCommand
             $"object '{rawcode}' has no model-file field ({string.Join("/", fieldCodes)})");
     }
 
-    /// <summary>Internal so BundleCommand shares the exact model-lookup semantics.</summary>
-    internal static MapFileEntry? FindModelEntry(MapDocument doc, string path)
+    /// <summary>
+    /// Resolves a model reference to the map entry that holds it, trying both slash
+    /// conventions and the .mdx/.mdl extension swap (maps routinely reference a model as
+    /// ".mdl" while storing the binary under ".mdx", and vice versa). Returns null when
+    /// no in-map file backs the path (e.g. a base-game/CASC model). Public so every
+    /// front-end resolves models identically — do not reimplement this lookup.
+    /// </summary>
+    public static MapFileEntry? FindModelEntry(MapDocument doc, string path)
     {
         foreach (var candidate in PathCandidates(path))
             if (doc.GetFile(candidate) is { } entry && entry.RawBytes.Length > 0)

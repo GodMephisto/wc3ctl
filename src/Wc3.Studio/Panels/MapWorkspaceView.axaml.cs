@@ -42,7 +42,7 @@ public partial class MapWorkspaceView : UserControl
         }
     }
 
-    /// <summary>This workspace's map state, passed to its panels — never shared.</summary>
+    /// <summary>This workspace's map state, passed to its panels - never shared.</summary>
     public MapSession Session { get; } = new();
 
     public bool HasMap => Session.Current is not null;
@@ -98,7 +98,7 @@ public partial class MapWorkspaceView : UserControl
             return;
         var files = await storage.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = $"Open Warcraft III map — {_role}",
+            Title = $"Open Warcraft III map - {_role}",
             AllowMultiple = false,
             FileTypeFilter = new[]
             {
@@ -119,14 +119,14 @@ public partial class MapWorkspaceView : UserControl
             var doc = MapDocument.Load(path);
             Session.Current = doc;
             Session.MapPath = path;
-            // GameDir stays null — panels auto-detect the game install.
+            // GameDir stays null - panels auto-detect the game install.
 
             var info = InfoCommand.Execute(doc);
             var list = ListCommand.Execute(doc);
             var name = string.IsNullOrEmpty(info.Name) ? "(unnamed)" : info.Name;
             StatusText.Text = info.Diagnostics.Count > 0
-                ? $"{path} — {name} — {list.Files.Count} file(s) — {info.Diagnostics.Count} diagnostic(s): {string.Join("; ", info.Diagnostics)}"
-                : $"{path} — {name} — {list.Files.Count} file(s)";
+                ? $"{path} - {name} - {list.Files.Count} file(s) - {info.Diagnostics.Count} diagnostic(s): {string.Join("; ", info.Diagnostics)}"
+                : $"{path} - {name} - {list.Files.Count} file(s)";
 
             // Lazy loading: only the visible tab refreshes now; the other
             // panels load on first selection (see OnPanelTabsSelectionChanged).
@@ -147,14 +147,14 @@ public partial class MapWorkspaceView : UserControl
     /// <summary>
     /// Blank-map creation is not implemented yet: MapDocument can only Load()
     /// existing archive bytes, and Save() re-opens those bytes as the MPQ to
-    /// rebuild from — a blank map means synthesizing a minimal valid archive
+    /// rebuild from - a blank map means synthesizing a minimal valid archive
     /// (HM3W header + w3i/w3e/wpm/… + script) and a new MapDocument construction
     /// path. War3Net 6.x has no blank-map factory either (Map(MapInfo?,
     /// MapEnvironment?) wants a fully populated info + terrain grid). Follow-up
     /// slice; the affordance stays visible so the workflow is discoverable.
     /// </summary>
     private void OnNewBlankMapClick(object? sender, RoutedEventArgs e) =>
-        StatusText.Text = "Blank-map creation is a follow-up — open an existing map as the target for now.";
+        StatusText.Text = "Blank-map creation is a follow-up - open an existing map as the target for now.";
 
     private void OnPanelTabsSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {

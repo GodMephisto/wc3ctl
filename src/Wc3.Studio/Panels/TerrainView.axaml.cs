@@ -77,7 +77,7 @@ public partial class TerrainView : UserControl, IMapPanel
             return;
         TerrainImage.Width = _bitmap.PixelSize.Width * _zoom;
         TerrainImage.Height = _bitmap.PixelSize.Height * _zoom;
-        CaptionText.Text = $"{_bitmap.PixelSize.Width}×{_bitmap.PixelSize.Height} px — {_zoom:P0}";
+        CaptionText.Text = $"{_bitmap.PixelSize.Width}×{_bitmap.PixelSize.Height} px - {_zoom:P0}";
     }
 
     private void OnPointerWheel(object? sender, PointerWheelEventArgs e)

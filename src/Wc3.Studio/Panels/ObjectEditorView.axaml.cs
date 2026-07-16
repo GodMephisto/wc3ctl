@@ -17,7 +17,7 @@ namespace Wc3.Studio.Panels;
 /// kinds, the map's objects of that kind on the left (multi-select), and the
 /// first selected object's merged fields (base game data ⊕ map deltas) on the
 /// right. The field grid is read-only; editing happens in a dedicated box below
-/// it — select a row, change the value, Apply writes it to every selected object
+/// it - select a row, change the value, Apply writes it to every selected object
 /// via ObjectSetCommand (units only this slice). This select-then-edit design
 /// avoids putting TextBoxes inside the recycled ListBox rows, whose focus/recycle
 /// behavior erased in-progress edits on click.
@@ -86,7 +86,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         if (session.Current is null)
         {
             HideModelArea(); // drop any preview still rendering against the old map
-            ShowPlaceholder("Object editor panel — no map open");
+            ShowPlaceholder("Object editor panel - no map open");
             return;
         }
 
@@ -123,7 +123,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
 
         if (_session?.Current is not { } doc)
         {
-            ShowPlaceholder("Object editor panel — no map open");
+            ShowPlaceholder("Object editor panel - no map open");
             return;
         }
 
@@ -154,7 +154,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     }
 
     /// <summary>
-    /// Show the cached object list filtered by the search text — case-insensitive
+    /// Show the cached object list filtered by the search text - case-insensitive
     /// substring match on rawcode and display name; empty search shows all. The
     /// selection survives filtering while the selected objects still match, so
     /// typing doesn't reload the field pane on every keystroke.
@@ -240,7 +240,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         var first = selected[0];
         MultiSelectNote.IsVisible = selected.Count > 1;
         MultiSelectNote.Text = selected.Count > 1
-            ? $"{selected.Count} objects selected — edits apply to all (fields shown are {first.Rawcode}'s)"
+            ? $"{selected.Count} objects selected - edits apply to all (fields shown are {first.Rawcode}'s)"
             : "";
 
         try
@@ -248,7 +248,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
             var result = ObjectGetCommand.Execute(doc, SelectedKind.Kind, first.Rawcode, _session.GameDir);
             var baseInfo = result.BaseRawcode is null ? "no base" : $"base {result.BaseRawcode}";
             SelectedHeader.Text =
-                $"{result.Name ?? first.Rawcode} ({first.Rawcode}) — {baseInfo} — {result.Fields.Count} field(s)";
+                $"{result.Name ?? first.Rawcode} ({first.Rawcode}) - {baseInfo} - {result.Fields.Count} field(s)";
 
             var rows = result.Fields.Select(f => new FieldRow(f)).ToList();
             _suppress = true;
@@ -340,7 +340,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         ModelArea.IsVisible = true;
         if (modelPath is null)
         {
-            ModelText.Text = $"{rawcode}: no model field found — nothing to preview.";
+            ModelText.Text = $"{rawcode}: no model field found - nothing to preview.";
             return;
         }
 
@@ -348,13 +348,13 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         if (entry?.FileName is not null)
         {
             _modelEntryName = entry.FileName;
-            ModelText.Text = $"{rawcode} model: {entry.FileName} — in map ({entry.RawBytes.Length:N0} bytes)";
+            ModelText.Text = $"{rawcode} model: {entry.FileName} - in map ({entry.RawBytes.Length:N0} bytes)";
             ExtractModelButton.IsEnabled = true;
             StartPreview(doc, entry.FileName);
         }
         else
         {
-            ModelText.Text = $"{rawcode} — base game model: {modelPath} — no in-map model to preview.";
+            ModelText.Text = $"{rawcode} - base game model: {modelPath} - no in-map model to preview.";
         }
     }
 
@@ -505,18 +505,12 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     }
 
     /// <summary>
-    /// Looks the model path up in the map; base-data model fields often omit the
-    /// extension, so an extensionless miss retries with .mdx/.mdl appended.
+    /// Resolves the model path against the map, reusing the shared command-layer
+    /// resolver so the preview finds exactly what the renderer does - including the
+    /// .mdx/.mdl swap (maps reference a model as ".mdl" but store the binary as ".mdx").
     /// </summary>
-    private static MapFileEntry? FindMapEntry(MapDocument doc, string modelPath)
-    {
-        if (doc.GetFile(modelPath) is { } entry)
-            return entry;
-        if (modelPath.EndsWith(".mdl", StringComparison.OrdinalIgnoreCase)
-            || modelPath.EndsWith(".mdx", StringComparison.OrdinalIgnoreCase))
-            return null;
-        return doc.GetFile(modelPath + ".mdx") ?? doc.GetFile(modelPath + ".mdl");
-    }
+    private static MapFileEntry? FindMapEntry(MapDocument doc, string modelPath) =>
+        RenderModelCommand.FindModelEntry(doc, modelPath);
 
     /// <summary>Write the double-clicked object's map-imported model into a picked folder.</summary>
     private async void OnExtractModelClick(object? sender, RoutedEventArgs e)
@@ -598,7 +592,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         EditorBox.IsReadOnly = !isUnit;
         EditNote.Text = isUnit
             ? "List fields (abilities, targets, flags) edit as raw comma-separated text for now."
-            : $"Editing {kind.Label} is not supported yet — view only.";
+            : $"Editing {kind.Label} is not supported yet - view only.";
     }
 
     /// <summary>Bulk edit: write the editor value to the selected field on every selected object.</summary>
@@ -654,11 +648,11 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         RefreshFieldPane(row.Code);
 
         var summary = $"Applied {row.Code}={value} to {applied}/{targets.Count} object(s)"
-            + (applied > 0 ? $" — {_unsavedEdits} unsaved edit(s)" : "");
+            + (applied > 0 ? $" - {_unsavedEdits} unsaved edit(s)" : "");
         if (warnings.Count > 0)
-            summary += $" — {string.Join("; ", warnings)}";
+            summary += $" - {string.Join("; ", warnings)}";
         if (problems.Count > 0)
-            summary += $" — {string.Join("; ", problems)}";
+            summary += $" - {string.Join("; ", problems)}";
         StatusText.Text = summary;
     }
 
@@ -676,7 +670,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         }
         if (_unsavedEdits == 0)
         {
-            StatusText.Text = "No edits applied — nothing to save.";
+            StatusText.Text = "No edits applied - nothing to save.";
             return;
         }
 
@@ -692,7 +686,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
             return;
         }
 
-        StatusText.Text = $"Saved {editedPath} — {_unsavedEdits} edit(s) written.";
+        StatusText.Text = $"Saved {editedPath} - {_unsavedEdits} edit(s) written.";
         _unsavedEdits = 0;
     }
 

@@ -25,7 +25,7 @@ public static class Render
 
     public static string Roundtrip(RoundtripResult r)
     {
-        var verdict = r.Faithful ? "OK — round-trip is byte-faithful for all files."
+        var verdict = r.Faithful ? "OK - round-trip is byte-faithful for all files."
                                  : "MISMATCH:\n" + string.Join("\n", r.Mismatches);
         return r.ExcludedNotes.Count == 0
             ? verdict

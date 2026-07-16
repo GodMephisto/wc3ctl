@@ -14,7 +14,7 @@ public static class Program
             "Warcraft III install directory (overrides auto-detection).");
         var mapArg = new Argument<string>("map", "Path to a .w3x/.w3m map.");
 
-        var root = new RootCommand("wc3ctl — Warcraft III map tool");
+        var root = new RootCommand("wc3ctl - Warcraft III map tool");
         root.AddGlobalOption(jsonOption);
         root.AddGlobalOption(gameDirOption);
 
@@ -43,7 +43,7 @@ public static class Program
             }
             catch (InvalidDataException ex)
             {
-                Console.Error.WriteLine($"error: not a valid MPQ/.w3x map — {ex.Message}");
+                Console.Error.WriteLine($"error: not a valid MPQ/.w3x map - {ex.Message}");
                 exitCode = 1;
             }
             catch (Exception ex)
@@ -115,7 +115,7 @@ public static class Program
                     p.GetValueForOption(gameDirOption));
             if (field is not null)
             {
-                // Leveled ability fields are keyed "code:N" — match the bare code too.
+                // Leveled ability fields are keyed "code:N" - match the bare code too.
                 var match = r.Fields
                     .Where(f => string.Equals(f.Code, field, StringComparison.OrdinalIgnoreCase)
                         || f.Code.StartsWith(field + ":", StringComparison.OrdinalIgnoreCase)).ToList();
@@ -144,7 +144,7 @@ public static class Program
         var setFieldArg = new Argument<string>("field", "Four-character field code (e.g. uhpm).");
         var setValueArg = new Argument<string>("value", "New value for the field.");
         var setOut = new Option<string?>(new[] { "-o", "--out" },
-            "Output map path. Default: '<map>.edited.<ext>' next to the input — the original is never overwritten.");
+            "Output map path. Default: '<map>.edited.<ext>' next to the input - the original is never overwritten.");
         var objSet = new Command("set", "Set a unit object field and save the edited map.")
         { mapArg, objRawcode, setFieldArg, setValueArg, setOut };
         objSet.SetHandler(ctx => RunSafely(() =>
@@ -266,7 +266,7 @@ public static class Program
 
             if (exact is null && patterns.Count == 0 && !all)
                 throw new ArgumentException(
-                    "nothing selected — pass an internal path, --pattern, --models/--textures/--sounds, or --all");
+                    "nothing selected - pass an internal path, --pattern, --models/--textures/--sounds, or --all");
             if (exact is not null && (patterns.Count > 0 || all))
                 throw new ArgumentException(
                     "an internal path cannot be combined with --pattern/--models/--textures/--sounds/--all");
@@ -315,7 +315,7 @@ public static class Program
             var bundle = BundleCommand.ResolveUnit(source, rawcode, gameDir);
             var result = PortCommand.PortUnit(source, bundle, target, includeScript: !p.GetValueForOption(noScriptOption));
 
-            // Never clobber the target — write a sibling <target>.ported.<ext> by default.
+            // Never clobber the target - write a sibling <target>.ported.<ext> by default.
             string outPath = p.GetValueForOption(outOption)
                 ?? Path.Combine(Path.GetDirectoryName(Path.GetFullPath(targetPath)) ?? ".",
                     Path.GetFileNameWithoutExtension(targetPath) + ".ported" + Path.GetExtension(targetPath));

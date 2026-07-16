@@ -15,7 +15,7 @@
     <Grid>
         <TextBlock Name="PlaceholderText"
                    HorizontalAlignment="Center" VerticalAlignment="Center"
-                   Text="Object editor panel — no map open"/>
+                   Text="Object editor panel - no map open"/>
 
         <Grid Name="ContentRoot" IsVisible="False" RowDefinitions="Auto,*,Auto">
             <!-- Type switcher: all 7 Object Editor kinds. -->

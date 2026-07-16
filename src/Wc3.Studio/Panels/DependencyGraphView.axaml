@@ -16,7 +16,7 @@
     <Grid>
         <TextBlock Name="PlaceholderText"
                    HorizontalAlignment="Center" VerticalAlignment="Center"
-                   Text="Dependency panel — no map open"/>
+                   Text="Dependency panel - no map open"/>
 
         <Grid Name="ContentRoot" IsVisible="False" RowDefinitions="Auto,*,Auto">
 
@@ -49,7 +49,7 @@
 
                 <GridSplitter Grid.Column="1" Background="#33555555"/>
 
-                <!-- Secondary: structured details — always readable even when
+                <!-- Secondary: structured details - always readable even when
                      the canvas is busy. -->
                 <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="6,2,6,6" Spacing="6">
