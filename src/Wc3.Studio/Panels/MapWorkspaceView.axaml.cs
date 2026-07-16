@@ -57,21 +57,37 @@ public partial class MapWorkspaceView : UserControl
     public event EventHandler? MapChanged;
 
     /// <summary>
-    /// Keep the (still disabled) port button honest about what it would port:
-    /// its text and tooltip mirror the Dependencies tab's selected unit.
-    /// Enabling the button — and porting itself — is a later wave.
+    /// Raised (Source only) when the user clicks "Port → Target"; the argument is the
+    /// selected unit's rawcode. MainWindow handles it because only it holds both the
+    /// Source and Target sessions.
+    /// </summary>
+    public event EventHandler<string>? PortRequested;
+
+    /// <summary>Sets this workspace's status line (used to report port progress/results).</summary>
+    public void SetStatus(string text) => StatusText.Text = text;
+
+    /// <summary>
+    /// The port button tracks the Dependencies tab's selected unit: enabled with a
+    /// live label when a unit is chosen, disabled otherwise.
     /// </summary>
     private void OnPortSelectionChanged(object? sender, EventArgs e)
     {
         var display = DependenciesPanel.SelectedUnitDisplay;
+        PortButton.IsEnabled = display is not null;
         PortButton.Content = display is null
             ? "Port selected → Target ▶"
             : $"Port {display} → Target ▶";
         var tip = display is null
-            ? "Porting arrives in a later step."
-            : $"Porting arrives in a later step. Selected: {display}.";
+            ? "Pick a unit in the Dependencies tab, then port it into the Target map."
+            : $"Port {display} and everything it uses into the Target map.";
         ToolTip.SetTip(PortButtonHost, tip);
         ToolTip.SetTip(PortButton, tip);
+    }
+
+    private void OnPortClick(object? sender, RoutedEventArgs e)
+    {
+        if (SelectedUnitForPort is { } rawcode)
+            PortRequested?.Invoke(this, rawcode);
     }
 
     /// <summary>Shows the OS map picker, then loads the chosen map into this workspace.</summary>
