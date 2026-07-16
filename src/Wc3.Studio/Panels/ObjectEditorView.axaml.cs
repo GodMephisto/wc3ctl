@@ -317,7 +317,8 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     /// <summary>
     /// Double-click: resolve the object's model file from its merged fields.
     /// Map-imported models render as a rotatable preview; base-game models
-    /// (CASC, not in the map) only show their path.
+    /// (not in the map) render from CASC when a WC3 install is available,
+    /// otherwise only their path shows.
     /// </summary>
     private void OnObjectDoubleTapped(object? sender, TappedEventArgs e)
     {
@@ -332,7 +333,10 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         try
         {
             var fields = ObjectGetCommand.Execute(doc, SelectedKind.Kind, rawcode, _session.GameDir).Fields;
-            modelPath = FindModelPath(SelectedKind.Kind, fields);
+            // Merged fields first (a map delta always wins); untouched base objects keep
+            // their art in Reforged skin profiles, resolved through the command layer.
+            modelPath = FindModelPath(SelectedKind.Kind, fields)
+                ?? RenderModelCommand.BaseModelPath(SelectedKind.Kind, rawcode, _session.GameDir);
         }
         catch (Exception ex)
         {
@@ -358,15 +362,21 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         }
         else
         {
-            ModelText.Text = $"{rawcode} - base game model: {modelPath} - no in-map model to preview.";
+            // Not imported - try the base game (CASC). Preparation failures append a
+            // "Preview unavailable" note, leaving the path message as the fallback.
+            ModelText.Text = $"{rawcode} - base game model: {modelPath}";
+            StartPreview(doc, modelPath);
         }
     }
 
     /// <summary>
     /// Parse the model, resolve its textures and render the first frame, all off
     /// the UI thread; the prepared model is cached so drag re-renders only
-    /// rasterize. The generation stamp drops results that land after the preview
-    /// target changed (another double-click, selection change, map close).
+    /// rasterize. Resolution goes through the command layer's map-then-CASC
+    /// fallback, so base-game models render when an install is available (the
+    /// first CASC open can take seconds - also off the UI thread). The generation
+    /// stamp drops results that land after the preview target changed (another
+    /// double-click, selection change, map close).
     /// </summary>
     private void StartPreview(MapDocument doc, string internalName)
     {
@@ -375,11 +385,12 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         _previewZoom = ModelRenderer.DefaultZoom;
         int gen = ++_previewGeneration;
         float yaw = _previewYaw, pitch = _previewPitch, zoom = _previewZoom;
+        string? gameDir = _session?.GameDir;
         Task.Run(() =>
         {
             try
             {
-                var prepared = RenderModelCommand.Prepare(doc, internalName);
+                var prepared = RenderModelCommand.PrepareWithFallback(doc, internalName, gameDir);
                 var png = prepared.RenderPng(PreviewSizePx, PreviewSizePx, yaw, pitch, zoom);
                 Dispatcher.UIThread.Post(() =>
                 {

@@ -172,8 +172,8 @@ endfunction
         var j = Encoding.UTF8.GetString(reloaded.GetFile("war3map.j")!.RawBytes);
 
         // Carried exactly once — no renamed _p1 duplicate from a second splice.
-        Assert.Equal(1, Regex.Matches(j, @"function Trig_Dispatch_Actions takes").Count);
-        Assert.Equal(1, Regex.Matches(j, @"call InitTrig_Dispatch\(\)").Count);
+        Assert.Single(Regex.Matches(j, @"function Trig_Dispatch_Actions takes"));
+        Assert.Single(Regex.Matches(j, @"call InitTrig_Dispatch\(\)"));
 
         // Every ported unit's rawcode literal follows its remap; no original survives.
         string h0To = r.Units[0].Remaps.Single(m => m.From == "H000").To;

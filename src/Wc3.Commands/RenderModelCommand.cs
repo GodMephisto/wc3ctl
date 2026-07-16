@@ -1,4 +1,6 @@
 // src/Wc3.Commands/RenderModelCommand.cs
+using System.Text;
+using Wc3.GameData;
 using Wc3.Model;
 using Wc3.Modeling;
 using Wc3.Render;
@@ -6,9 +8,10 @@ using Wc3.Render;
 namespace Wc3.Commands;
 
 /// <summary>
-/// Renders a map-imported model to PNG bytes: model file from the map archive,
-/// textures resolved from the map's imports (missing/ReplaceableId textures fall
-/// back to flat shading). Base-game models (CASC) are not resolved yet.
+/// Renders an object's model to PNG bytes. Map-imported models resolve first (model
+/// file from the map archive, textures from the map's imports); models that live in
+/// the base game fall back to CASC when a WC3 install is available, textures included.
+/// Missing/ReplaceableId (team-colour) textures always fall back to flat shading.
 /// </summary>
 public static class RenderModelCommand
 {
@@ -38,17 +41,67 @@ public static class RenderModelCommand
             => ModelRenderer.RenderPng(Model, Textures, width, height, yawDegrees, pitchDegrees, zoom);
     }
 
-    /// <summary>Parses the model at an internal map path and resolves its textures.</summary>
+    /// <summary>Parses the model at an internal map path and resolves its textures
+    /// (map-imported only — no base-game fallback without a game-data context).</summary>
     public static PreparedModel Prepare(MapDocument doc, string modelInternalPath)
+        => Prepare(doc, modelInternalPath, ctx: null);
+
+    /// <summary>
+    /// Parses the model and resolves its textures: the map's own files first, then —
+    /// when <paramref name="ctx"/> is available — the base game via CASC, so units whose
+    /// model was never imported (a plain Footman) render too. Both lookups try the usual
+    /// slash and .mdx/.mdl variants; texture paths missing on both sides shade flat.
+    /// </summary>
+    public static PreparedModel Prepare(MapDocument doc, string modelInternalPath, GameDataContext? ctx)
     {
-        var entry = FindModelEntry(doc, modelInternalPath)
-            ?? throw new InvalidDataException(
-                $"model '{modelInternalPath}' is not in the map — only map-imported models render (base-game CASC models are a follow-up)");
-        var model = ModelParser.Parse(entry.RawBytes, entry.FileName!);
-        return new PreparedModel(model, ResolveTextures(doc, model));
+        if (FindModelEntry(doc, modelInternalPath) is { } entry)
+        {
+            var model = ModelParser.Parse(entry.RawBytes, entry.FileName!);
+            return new PreparedModel(model, ResolveTextures(doc, model, ctx));
+        }
+
+        if (ctx is not null && TryReadCascModel(ctx, modelInternalPath, out var bytes, out var name))
+        {
+            var model = ModelParser.Parse(bytes, name);
+            return new PreparedModel(model, ResolveTextures(doc, model, ctx));
+        }
+
+        throw new InvalidDataException(
+            $"model '{modelInternalPath}' is not in the map"
+            + (ctx is null
+                ? " and no game install is available for a base-game (CASC) lookup"
+                : " or the base game data"));
     }
 
-    /// <summary>Renders the model at an internal map path (slash and .mdx/.mdl variants tried).</summary>
+    /// <summary>Convenience for front-ends: <see cref="Prepare(MapDocument, string, GameDataContext?)"/>
+    /// with the game-data context opened from <paramref name="gameDir"/> (null = auto-detect;
+    /// unavailable install degrades to map-only resolution).</summary>
+    public static PreparedModel PrepareWithFallback(MapDocument doc, string modelInternalPath, string? gameDir)
+        => Prepare(doc, modelInternalPath, OpenContext(gameDir));
+
+    /// <summary>The base-game model bytes for a game path, trying the same slash/.mdx/.mdl
+    /// candidates as the in-map resolver.</summary>
+    private static bool TryReadCascModel(
+        GameDataContext ctx, string path, out byte[] bytes, out string resolvedName)
+    {
+        foreach (var candidate in PathCandidates(path))
+        {
+            if (ctx.TryReadFile(candidate, out bytes))
+            {
+                resolvedName = candidate;
+                return true;
+            }
+        }
+        bytes = Array.Empty<byte>();
+        resolvedName = path;
+        return false;
+    }
+
+    private static GameDataContext? OpenContext(string? gameDir) =>
+        GameData.GameData.TryOpen(gameDir, out var ctx, out _) ? ctx : null;
+
+    /// <summary>Renders the model at an internal map path (slash and .mdx/.mdl variants
+    /// tried; map-imported only).</summary>
     public static byte[] Execute(
         MapDocument doc,
         string modelInternalPath,
@@ -56,7 +109,19 @@ public static class RenderModelCommand
         float pitchDegrees = ModelRenderer.DefaultPitchDegrees)
         => Prepare(doc, modelInternalPath).RenderPng(yawDegrees: yawDegrees, pitchDegrees: pitchDegrees);
 
-    /// <summary>Renders one object's model, resolving the kind's model-file field.</summary>
+    /// <summary>Renders the model at an internal or base-game path, falling back to CASC
+    /// (via <paramref name="gameDir"/>) when the map doesn't contain it.</summary>
+    public static byte[] ExecutePath(
+        MapDocument doc,
+        string modelPath,
+        string? gameDir,
+        float yawDegrees = ModelRenderer.DefaultYawDegrees,
+        float pitchDegrees = ModelRenderer.DefaultPitchDegrees)
+        => PrepareWithFallback(doc, modelPath, gameDir)
+            .RenderPng(yawDegrees: yawDegrees, pitchDegrees: pitchDegrees);
+
+    /// <summary>Renders one object's model, resolving the kind's model-file field.
+    /// Base-game models fall back to CASC when the install is available.</summary>
     public static byte[] Execute(
         MapDocument doc,
         ObjectKind kind,
@@ -67,11 +132,14 @@ public static class RenderModelCommand
     {
         if (!ModelFieldByKind.TryGetValue(kind, out var fieldCode))
             throw new InvalidDataException($"{kind} objects have no model-file field to render");
-        var merged = ObjectGetCommand.Execute(doc, kind, rawcode, gameDir);
-        return Execute(doc, ModelPathFrom(merged, rawcode, new[] { fieldCode }), yawDegrees, pitchDegrees);
+        var ctx = OpenContext(gameDir);
+        var merged = ObjectGetCommand.Execute(doc, kind, rawcode, ctx, Array.Empty<string>());
+        return Prepare(doc, ResolveModelPath(merged, rawcode, new[] { fieldCode }, kind, ctx), ctx)
+            .RenderPng(yawDegrees: yawDegrees, pitchDegrees: pitchDegrees);
     }
 
-    /// <summary>Kind-agnostic: probes every kind for the rawcode, then any model-file field.</summary>
+    /// <summary>Kind-agnostic: probes every kind for the rawcode, then any model-file field.
+    /// Base-game models fall back to CASC when the install is available.</summary>
     public static byte[] Execute(
         MapDocument doc,
         string rawcode,
@@ -79,12 +147,21 @@ public static class RenderModelCommand
         float yawDegrees = ModelRenderer.DefaultYawDegrees,
         float pitchDegrees = ModelRenderer.DefaultPitchDegrees)
     {
-        var merged = ObjectGetCommand.Execute(doc, rawcode, gameDir);
-        return Execute(doc, ModelPathFrom(merged, rawcode, ModelFieldByKind.Values), yawDegrees, pitchDegrees);
+        var ctx = OpenContext(gameDir);
+        var merged = ObjectGetCommand.Execute(doc, rawcode, ctx, Array.Empty<string>());
+        return Prepare(doc, ResolveModelPath(merged, rawcode, ModelFieldByKind.Values, kind: null, ctx), ctx)
+            .RenderPng(yawDegrees: yawDegrees, pitchDegrees: pitchDegrees);
     }
 
-    private static string ModelPathFrom(
-        MergedObjectResult merged, string rawcode, IEnumerable<string> fieldCodes)
+    /// <summary>
+    /// The object's model path: its merged model-file field first (a map delta always
+    /// wins), then — for untouched base objects, whose art fields Reforged moved out of
+    /// the SLKs into skin-profile TXTs the stores don't resolve — the "file" key of the
+    /// kind's skin profile via CASC.
+    /// </summary>
+    private static string ResolveModelPath(
+        MergedObjectResult merged, string rawcode, IEnumerable<string> fieldCodes,
+        ObjectKind? kind, GameDataContext? ctx)
     {
         if (!merged.Found)
             throw new InvalidDataException($"object '{rawcode}' not found in the map or game data");
@@ -96,8 +173,69 @@ public static class RenderModelCommand
             if (!string.IsNullOrWhiteSpace(field?.Value))
                 return field.Value.Split(',')[0].Trim();
         }
+        if (ctx is not null && BaseSkinModelPath(ctx, kind, rawcode) is { } skinPath)
+            return skinPath;
         throw new InvalidDataException(
             $"object '{rawcode}' has no model-file field ({string.Join("/", fieldCodes)})");
+    }
+
+    /// <summary>
+    /// Front-end hook: the base game's model path for an object that has no model-file
+    /// field in its merged fields (Reforged skin profiles), or null when the install/CASC
+    /// or the entry is unavailable. Kind-aware; never throws.
+    /// </summary>
+    public static string? BaseModelPath(ObjectKind kind, string rawcode, string? gameDir)
+    {
+        var ctx = OpenContext(gameDir);
+        return ctx is null ? null : BaseSkinModelPath(ctx, kind, rawcode);
+    }
+
+    /// <summary>Skin-profile TXT per kind (Reforged's home for base art fields).</summary>
+    private static readonly IReadOnlyDictionary<ObjectKind, string> SkinProfileByKind =
+        new Dictionary<ObjectKind, string>
+        {
+            [ObjectKind.Unit] = @"units\unitskin.txt",
+            [ObjectKind.Item] = @"units\itemskin.txt",
+            [ObjectKind.Destructable] = @"units\destructableskin.txt",
+            [ObjectKind.Doodad] = @"doodads\doodadskins.txt",
+        };
+
+    /// <summary>The "file" value of the object's skin-profile section ([hfoo] →
+    /// file=units\human\Footman\Footman); null kind probes every profile.</summary>
+    private static string? BaseSkinModelPath(GameDataContext ctx, ObjectKind? kind, string rawcode)
+    {
+        var profiles = kind is { } k
+            ? SkinProfileByKind.TryGetValue(k, out var one) ? new[] { one } : Array.Empty<string>()
+            : SkinProfileByKind.Values.ToArray();
+        foreach (var profile in profiles)
+        {
+            if (!ctx.TryReadFile(profile, out var bytes)) continue;
+            var value = IniValue(Encoding.UTF8.GetString(bytes), rawcode, "file");
+            if (!string.IsNullOrWhiteSpace(value))
+                return value.Split(',')[0].Trim().Trim('"');
+        }
+        return null;
+    }
+
+    /// <summary>Minimal INI lookup: the first "key=value" under "[section]".</summary>
+    private static string? IniValue(string text, string section, string key)
+    {
+        bool inSection = false;
+        foreach (var raw in text.Split('\n'))
+        {
+            var line = raw.Trim();
+            if (line.StartsWith('['))
+            {
+                inSection = line.Equals($"[{section}]", StringComparison.OrdinalIgnoreCase);
+                continue;
+            }
+            if (!inSection || line.Length == 0 || line.StartsWith("//", StringComparison.Ordinal))
+                continue;
+            int eq = line.IndexOf('=');
+            if (eq > 0 && line[..eq].Trim().Equals(key, StringComparison.OrdinalIgnoreCase))
+                return line[(eq + 1)..].Trim();
+        }
+        return null;
     }
 
     /// <summary>
@@ -135,11 +273,14 @@ public static class RenderModelCommand
     }
 
     /// <summary>
-    /// Decodes every model texture the map actually contains, keyed by texture index.
-    /// ReplaceableId entries (team colour etc.), base-game paths and undecodable
-    /// formats are simply absent — the renderer shades those geosets flat.
+    /// Decodes every resolvable model texture, keyed by texture index: the map's own
+    /// files win (imports can override base textures), then the base game via CASC when
+    /// a context is available. ReplaceableId entries (team colour etc.), unresolvable
+    /// paths and undecodable formats are simply absent — the renderer shades those
+    /// geosets flat.
     /// </summary>
-    private static IReadOnlyDictionary<int, TextureImage> ResolveTextures(MapDocument doc, Model3D model)
+    private static IReadOnlyDictionary<int, TextureImage> ResolveTextures(
+        MapDocument doc, Model3D model, GameDataContext? ctx = null)
     {
         var textures = new Dictionary<int, TextureImage>();
         for (int i = 0; i < model.Textures.Count; i++)
@@ -151,16 +292,39 @@ public static class RenderModelCommand
             var entry = doc.GetFile(path)
                 ?? doc.GetFile(path.Replace('/', '\\'))
                 ?? doc.GetFile(path.Replace('\\', '/'));
-            if (entry is null || entry.RawBytes.Length == 0) continue;
-            try
-            {
-                textures[i] = BlpDecoder.Decode(entry.RawBytes);
-            }
-            catch
-            {
-                // Not a decodable BLP (tga/dds import or corrupt) — flat fallback.
-            }
+            byte[]? bytes = entry is { RawBytes.Length: > 0 } ? entry.RawBytes : null;
+            if (bytes is null && ctx is not null)
+                foreach (var candidate in CascTextureCandidates(path))
+                    if (ctx.TryReadFile(candidate, out var cascBytes)) { bytes = cascBytes; break; }
+            if (bytes is null) continue;
+            if (TryDecodeTexture(bytes) is { } decoded)
+                textures[i] = decoded;
         }
         return textures;
+    }
+
+    /// <summary>Model texture references keep classic .blp/.tga names, but Reforged's
+    /// CASC stores those files repacked as .dds at the same path — try both.</summary>
+    private static IEnumerable<string> CascTextureCandidates(string path)
+    {
+        yield return path;
+        var ext = Path.GetExtension(path);
+        if (ext.Equals(".blp", StringComparison.OrdinalIgnoreCase)
+            || ext.Equals(".tga", StringComparison.OrdinalIgnoreCase))
+            yield return Path.ChangeExtension(path, ".dds");
+    }
+
+    /// <summary>Sniffs the container (DDS magic, else BLP); undecodable bytes are null —
+    /// the caller shades those geosets flat.</summary>
+    private static TextureImage? TryDecodeTexture(byte[] bytes)
+    {
+        try
+        {
+            return DdsDecoder.LooksLikeDds(bytes) ? DdsDecoder.Decode(bytes) : BlpDecoder.Decode(bytes);
+        }
+        catch
+        {
+            return null;
+        }
     }
 }

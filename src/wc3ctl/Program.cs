@@ -225,7 +225,8 @@ public static class Program
         var rmOut = new Option<string?>(new[] { "-o", "--out" },
             "Output PNG path. Default: <rawcode>.png in the current directory.");
         var renderModel = new Command("render-model",
-            "Render an object's model (map-imported .mdx/.mdl) to PNG.") { mapArg, rmTarget, rmKind, rmOut };
+            "Render an object's model (.mdx/.mdl) to PNG - map-imported models first, base-game (CASC) models when a WC3 install is available.")
+        { mapArg, rmTarget, rmKind, rmOut };
         renderModel.SetHandler(ctx => RunSafely(() =>
         {
             var p = ctx.ParseResult;
@@ -236,7 +237,7 @@ public static class Program
             // Anything that can't be a rawcode is treated as an internal model path.
             bool isPath = target.Length != 4 || target.IndexOfAny(new[] { '\\', '/', '.' }) >= 0;
             var png = isPath
-                ? RenderModelCommand.Execute(doc, target)
+                ? RenderModelCommand.ExecutePath(doc, target, p.GetValueForOption(gameDirOption))
                 : kindToken is null
                     ? RenderModelCommand.Execute(doc, target, p.GetValueForOption(gameDirOption))
                     : RenderModelCommand.Execute(doc, ObjectKinds.Parse(kindToken), target,
