@@ -1,0 +1,50 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Wc3.Studio.Controls.SearchableComboBox">
+    <UserControl.Styles>
+        <Style Selector="ListBox#ItemList ListBoxItem">
+            <Setter Property="Padding" Value="6,3"/>
+            <Setter Property="MinHeight" Value="0"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Grid>
+        <!-- Closed face: the current selection's "Name (id)" + a chevron. -->
+        <ToggleButton Name="Toggle" HorizontalAlignment="Stretch"
+                      HorizontalContentAlignment="Stretch">
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Right" Text="▾" Margin="8,0,0,0"
+                           Foreground="#8FA3B8" VerticalAlignment="Center"/>
+                <TextBlock Name="SelectionText" TextTrimming="CharacterEllipsis"
+                           VerticalAlignment="Center" Text=""/>
+            </DockPanel>
+        </ToggleButton>
+
+        <!-- Dropdown: ONE search box above a display-only list. Never put an
+             editable TextBox inside the virtualized rows - recycling/focus wipes
+             in-progress edits (see src/Wc3.Studio/CLAUDE.md). -->
+        <Popup Name="DropDown" Placement="BottomEdgeAlignedLeft"
+               IsLightDismissEnabled="True">
+            <Border Background="#FF23272B" BorderBrush="#33555555"
+                    BorderThickness="1" Padding="4" MinWidth="240">
+                <DockPanel>
+                    <TextBox Name="SearchBox" DockPanel.Dock="Top" Margin="0,0,0,4"
+                             Watermark="Search name or id…"
+                             TextChanged="OnSearchChanged" KeyDown="OnSearchKeyDown"/>
+                    <TextBlock Name="NoMatchText" DockPanel.Dock="Top" IsVisible="False"
+                               Foreground="#8FA3B8" Margin="4,2" Text="No matches"/>
+                    <ListBox Name="ItemList" MaxHeight="320" SelectionMode="Single"
+                             Tapped="OnItemTapped" KeyDown="OnListKeyDown">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Display}"
+                                           TextTrimming="CharacterEllipsis"
+                                           VerticalAlignment="Center"/>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+            </Border>
+        </Popup>
+    </Grid>
+</UserControl>

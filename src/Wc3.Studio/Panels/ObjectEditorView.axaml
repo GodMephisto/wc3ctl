@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="using:Wc3.Studio.Controls"
              x:Class="Wc3.Studio.Panels.ObjectEditorView">
     <UserControl.Styles>
         <Style Selector="ListBox#ObjectList ListBoxItem">
@@ -22,7 +23,9 @@
                  custom object of the current kind from the selected object. -->
             <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" Margin="6,4">
                 <TextBlock Text="Type:" VerticalAlignment="Center"/>
-                <ComboBox Name="KindCombo" MinWidth="150" SelectionChanged="OnKindChanged"/>
+                <!-- Searchable type switcher; SelectionChanged is wired in code
+                     (CLR event with a SearchableComboBoxItem payload). -->
+                <controls:SearchableComboBox Name="KindCombo" MinWidth="150"/>
                 <Button Name="NewObjectButton" Content="New…" Click="OnNewObjectClick"
                         ToolTip.Tip="Create a new custom object of this kind based on the selected one"/>
                 <TextBlock Name="ListCountText" VerticalAlignment="Center"

@@ -11,6 +11,7 @@ using Avalonia.VisualTree;
 using Wc3.Commands;
 using Wc3.Model;
 using Wc3.Render;
+using Wc3.Studio.Controls;
 
 namespace Wc3.Studio.Panels;
 
@@ -80,8 +81,11 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     public ObjectEditorView()
     {
         InitializeComponent();
-        KindCombo.ItemsSource = Kinds;
-        KindCombo.SelectedIndex = 0;
+        KindCombo.SetItems(
+            Kinds.Select(k => new SearchableComboBoxItem(k.Label, KindId(k.Kind), k)).ToList(),
+            selectId: KindId(Kinds[0].Kind));
+        KindCombo.Watermark = "Search kind name or id…";
+        KindCombo.SelectionChanged += OnKindChanged;
         // Tunnel so right-click retargets the selection BEFORE the context menu opens.
         ObjectList.AddHandler(PointerPressedEvent, OnObjectListPointerPressed,
             RoutingStrategies.Tunnel);
@@ -98,7 +102,10 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     /// explicit ask to open the Dependencies tab on this object.</summary>
     public event EventHandler<(ObjectKind Kind, string Rawcode)>? DependenciesRequested;
 
-    private KindOption SelectedKind => KindCombo.SelectedItem as KindOption ?? Kinds[0];
+    private KindOption SelectedKind => KindCombo.SelectedItem?.Payload as KindOption ?? Kinds[0];
+
+    /// <summary>Canonical dropdown id for a kind - the enum name the CLI parses (case-insensitive).</summary>
+    private static string KindId(ObjectKind kind) => kind.ToString().ToLowerInvariant();
 
     public void ShowMap(MapSession session)
     {
@@ -115,9 +122,9 @@ public partial class ObjectEditorView : UserControl, IMapPanel
 
         PlaceholderText.IsVisible = false;
         ContentRoot.IsVisible = true;
-        _suppress = true;
-        KindCombo.SelectedIndex = 0; // a freshly shown map starts on Units
-        _suppress = false;
+        // A freshly shown map starts on Units; Select never raises SelectionChanged,
+        // so the single RefreshObjectList below is the only requery.
+        KindCombo.Select(KindId(Kinds[0].Kind));
         RefreshObjectList();
     }
 
@@ -128,7 +135,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         ContentRoot.IsVisible = false;
     }
 
-    private void OnKindChanged(object? sender, SelectionChangedEventArgs e)
+    private void OnKindChanged(object? sender, SearchableComboBoxItem item)
     {
         if (_suppress)
             return;
@@ -177,10 +184,11 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     }
 
     /// <summary>
-    /// Show the cached object list filtered by the search text - case-insensitive
-    /// substring match on rawcode and display name; empty search shows all. The
-    /// selection survives filtering while the selected objects still match, so
-    /// typing doesn't reload the field pane on every keystroke.
+    /// Show the cached object list filtered by the search text - DropdownFilter
+    /// matching (case-insensitive substring on display name OR rawcode) with the
+    /// best hits ranked first; empty search shows all in file order. The selection
+    /// survives filtering while the selected objects still match, so typing
+    /// doesn't reload the field pane on every keystroke.
     /// </summary>
     private void ApplyObjectFilter()
     {
@@ -200,9 +208,10 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         var query = SearchBox.Text?.Trim() ?? "";
         var filtered = query.Length == 0
             ? _allRows
-            : _allRows.Where(r =>
-                r.Rawcode.Contains(query, StringComparison.OrdinalIgnoreCase)
-                || r.Display.Contains(query, StringComparison.OrdinalIgnoreCase)).ToList();
+            : _allRows
+                .Where(r => DropdownFilter.Matches(query, r.Display, r.Rawcode))
+                .OrderBy(r => DropdownFilter.Rank(query, r.Display, r.Rawcode)) // best hits first; stable
+                .ToList();
         ListCountText.Text = query.Length == 0
             ? $"{_allRows.Count} {kind.Label}"
             : $"{filtered.Count}/{_allRows.Count} {kind.Label}";
