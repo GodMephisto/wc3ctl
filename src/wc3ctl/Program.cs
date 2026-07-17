@@ -439,11 +439,21 @@ public static class Program
         }));
         port.AddCommand(portUnit);
 
+        var validate = new Command("validate",
+            "Check a map for problems (missing/empty files, loader errors). Exits 2 if invalid.")
+            { mapArg };
+        validate.SetHandler((string map, bool json) => RunSafely(() =>
+        {
+            var r = ValidateCommand.Execute(MapDocument.Load(map));
+            Emit(json, r, () => Render.Validate(r));
+            if (!r.Valid) exitCode = 2;
+        }), mapArg, jsonOption);
+
         root.AddCommand(info); root.AddCommand(ls); root.AddCommand(rt);
         root.AddCommand(search); root.AddCommand(diff); root.AddCommand(obj);
         root.AddCommand(extract); root.AddCommand(render); root.AddCommand(renderModel);
         root.AddCommand(script); root.AddCommand(bundle); root.AddCommand(port);
-        root.AddCommand(convert);
+        root.AddCommand(convert); root.AddCommand(validate);
 
         int parseResult = await root.InvokeAsync(args);
         return parseResult != 0 ? parseResult : exitCode;

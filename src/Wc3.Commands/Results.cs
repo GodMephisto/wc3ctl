@@ -1,3 +1,5 @@
+using Wc3.Model;
+
 namespace Wc3.Commands;
 
 public sealed record FileEntryInfo(string? Name, int SizeBytes, bool Known, bool Parsed);
@@ -55,3 +57,10 @@ public sealed record UnitBundle(string RootRawcode, string? RootName,
     IReadOnlyList<BundleNode> Objects, IReadOnlyList<BundleFile> Files,
     IReadOnlyList<string> Strings, IReadOnlyList<BundleEdge> Edges, IReadOnlyList<string> Diagnostics,
     IReadOnlyList<BundleFunction> Functions);
+
+// Output of the `validate` command. Severity reuses the loader's DiagnosticSeverity
+// so JSON renders "Error"/"Warning"/"Info". Category is a short machine tag
+// (loader | missing-file | empty-file | map-info). Valid == no Error-severity issues.
+public sealed record ValidationIssue(DiagnosticSeverity Severity, string Category, string FileName, string Message);
+public sealed record ValidateResult(
+    bool Valid, int Errors, int Warnings, IReadOnlyList<ValidationIssue> Issues);

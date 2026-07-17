@@ -15,6 +15,18 @@ public static class Render
     };
     public static string AsJson(object o) => JsonSerializer.Serialize(o, Json);
 
+    public static string Validate(ValidateResult r)
+    {
+        var sb = new StringBuilder();
+        foreach (var i in r.Issues)
+            sb.AppendLine($"{i.Severity}: [{i.Category}] {i.FileName} — {i.Message}");
+        if (r.Issues.Count > 0) sb.AppendLine();
+        sb.Append(r.Valid
+            ? $"OK — valid ({r.Errors} error(s), {r.Warnings} warning(s))"
+            : $"INVALID — {r.Errors} error(s), {r.Warnings} warning(s)");
+        return sb.ToString();
+    }
+
     public static string List(FileListResult r) =>
         string.Join("\n", r.Files.Select(f =>
             $"{f.Name ?? "(unnamed)",-28} {f.SizeBytes,10}  {(f.Known ? "known" : "unknown")}{(f.Parsed ? "/parsed" : "")}"));
