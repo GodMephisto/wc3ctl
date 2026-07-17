@@ -43,6 +43,9 @@
             <TabItem Header="Terrain">
                 <panels:TerrainView Name="TerrainPanel"/>
             </TabItem>
+            <TabItem Header="Map Info">
+                <panels:MapInfoView Name="MapInfoPanel"/>
+            </TabItem>
             <TabItem Header="Objects">
                 <panels:ObjectEditorView Name="ObjectsPanel"/>
             </TabItem>
@@ -51,6 +54,9 @@
             </TabItem>
             <TabItem Header="Script">
                 <panels:ScriptView Name="ScriptPanel"/>
+            </TabItem>
+            <TabItem Header="Strings">
+                <panels:StringImportView Name="StringsPanel"/>
             </TabItem>
             <TabItem Header="Dependencies" Name="DependenciesTab">
                 <panels:DependencyGraphView Name="DependenciesPanel"/>

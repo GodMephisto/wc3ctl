@@ -8,3 +8,5 @@ dist/
 .superpowers/
 dist-studio/
 dist-mcp/
+.claude/settings.local.json
+.claude/worktrees/
