@@ -1,0 +1,24 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Wc3.Studio.Panels.MapInfoView">
+    <Grid RowDefinitions="Auto,*,Auto,Auto" Margin="8">
+
+        <TextBlock Name="HeaderText" Grid.Row="0" Margin="0,0,0,6"
+                   FontWeight="SemiBold" Text="No map open"/>
+
+        <!-- Read-only field rows; editing happens ONLY in the dedicated editor
+             below (convention: no editable TextBox inside a ListBox). -->
+        <ListBox Name="FieldList" Grid.Row="1"/>
+
+        <!-- Dedicated editor: select a row above, edit here, Apply writes it
+             back into the in-memory document. -->
+        <DockPanel Grid.Row="2" Margin="0,6,0,0">
+            <Button Name="ApplyButton" DockPanel.Dock="Right" Content="Apply"
+                    Margin="6,0,0,0" IsEnabled="False"/>
+            <TextBox Name="EditorBox" Watermark="Select an editable field…"/>
+        </DockPanel>
+
+        <TextBlock Name="StatusText" Grid.Row="3" Margin="0,4,0,0"
+                   Foreground="Gray" TextWrapping="Wrap"/>
+    </Grid>
+</UserControl>
