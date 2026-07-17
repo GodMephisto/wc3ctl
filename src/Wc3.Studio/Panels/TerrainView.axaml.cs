@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -87,8 +88,16 @@ public partial class TerrainView : UserControl, IMapPanel
         var factor = e.Delta.Y > 0 ? 1.1 : e.Delta.Y < 0 ? 0.9 : 1.0;
         if (factor == 1.0)
             return;
-        _zoom = Math.Clamp(_zoom * factor, MinZoom, MaxZoom);
+        var cursor = e.GetPosition(ScrollHost);
+        var (offsetX, offsetY, zoom) = Wc3.Commands.ZoomMath.ZoomAtPoint(
+            ScrollHost.Offset.X, ScrollHost.Offset.Y, _zoom,
+            cursor.X, cursor.Y, factor, MinZoom, MaxZoom);
+        _zoom = zoom;
         ApplyZoom();
+        // The Image was just resized; run layout so the ScrollViewer's extent grows
+        // before the new offset is coerced against it.
+        ScrollHost.UpdateLayout();
+        ScrollHost.Offset = new Vector(offsetX, offsetY);
         e.Handled = true;
     }
 
