@@ -40,11 +40,31 @@ public sealed class AudioPlayer : IDisposable
             _tempFile = Path.Combine(Path.GetTempPath(), "wc3ctl_audio_" + Guid.NewGuid().ToString("N") + suffix);
             File.WriteAllBytes(_tempFile, bytes);
 
-            _reader = new MediaFoundationReader(_tempFile);
-            _output = new WaveOutEvent();
-            _output.PlaybackStopped += OnStopped;
-            _output.Init(_reader);
-            _output.Play();
+            try
+            {
+                _reader = new MediaFoundationReader(_tempFile);
+                // WAVE_MAPPER (-1): route to the current default output device. The NAudio
+                // default, DeviceNumber = 0, opens the *first* enumerated device, which
+                // throws "BadDeviceId calling waveOutOpen" whenever device 0 isn't the
+                // usable default (disabled/absent) — the common cause of that error.
+                _output = new WaveOutEvent { DeviceNumber = -1 };
+                _output.PlaybackStopped += OnStopped;
+                _output.Init(_reader);
+                _output.Play();
+            }
+            catch (NAudio.MmException mm) when (mm.Result == NAudio.MmResult.BadDeviceId)
+            {
+                // WAVE_MAPPER still failed → the box genuinely has no usable playback
+                // endpoint (headless/remote session, or audio disabled). Surface that
+                // plainly instead of winmm's raw "BadDeviceId calling waveOutOpen".
+                Teardown();
+                throw new InvalidOperationException("no audio output device is available", mm);
+            }
+            catch
+            {
+                Teardown();   // a failed Play must leave no open device, reader, or temp file
+                throw;
+            }
         }
     }
 
