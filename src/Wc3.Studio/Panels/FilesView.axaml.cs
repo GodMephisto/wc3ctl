@@ -35,6 +35,13 @@ public partial class FilesView : UserControl, IMapPanel
     private byte[]? _audioBytes;
     private string _audioExt = "";
 
+    // Current preview state (wave 2: hex toggle, model preview, text edit).
+    private FileRow? _previewRow;
+    private byte[]? _previewBytes;      // override-aware bytes of the previewed file
+    private FilePreview? _preview;      // the auto preview (null for model files)
+    private bool _hexMode;
+    private bool _editing;
+
     public FilesView()
     {
         InitializeComponent();
@@ -65,12 +72,7 @@ public partial class FilesView : UserControl, IMapPanel
         }
 
         // Ordinal == position in doc.Files order, shared by ListCommand and ExtractCommand(All).
-        _rows = ListCommand.Execute(doc).Files
-            .Select((f, i) => new FileRow
-            {
-                Ordinal = i, Name = f.Name, SizeBytes = f.SizeBytes, Known = f.Known, Parsed = f.Parsed,
-            })
-            .ToList();
+        _rows = BuildRows(doc);
         SummaryText.Text = $"{_rows.Count} file(s), {_rows.Sum(r => (long)r.SizeBytes):N0} bytes";
         PlaceholderText.IsVisible = false;
         ContentRoot.IsVisible = true;
@@ -87,12 +89,34 @@ public partial class FilesView : UserControl, IMapPanel
             return;
         try
         {
-            _audioBytes = doc.Files[row.Ordinal].RawBytes;
+            var entry = doc.Files[row.Ordinal];
+            _previewRow = row;
+            _previewBytes = entry.OverrideBytes ?? entry.RawBytes;   // reflect in-session edits
+            _audioBytes = _previewBytes;
             _audioExt = Path.GetExtension(row.Name ?? "");
-            var preview = row.Name is not null
-                ? FilePreviewCommand.Execute(doc, row.Name)
-                : FilePreviewCommand.Of(_audioBytes, null);
-            ShowPreview(preview);
+            _hexMode = false;
+            _editing = false;
+            HexButton.Content = "Hex";
+            EditButton.Content = "Edit";
+            SaveTextButton.IsEnabled = false;
+
+            var ext = _audioExt.ToLowerInvariant();
+            if (ext is ".mdx" or ".mdl")
+            {
+                _preview = null;
+                ShowModelPreview(row, _previewBytes);
+                EditButton.IsEnabled = false;
+            }
+            else
+            {
+                _preview = row.Name is not null
+                    ? FilePreviewCommand.Execute(doc, row.Name)
+                    : FilePreviewCommand.Of(_previewBytes, null);
+                ShowPreview(_preview);
+                bool isText = _preview.Kind is not "image" and not "audio";
+                EditButton.IsEnabled = row.Name is not null && isText;
+            }
+            PreviewActions.IsVisible = true;
         }
         catch (Exception ex)
         {
@@ -135,6 +159,185 @@ public partial class FilesView : UserControl, IMapPanel
         AudioControls.IsVisible = false;
     }
 
+    // --- wave 2: model preview, hex view, text edit, import/replace ---
+
+    /// <summary>Render an .mdx/.mdl model as a lightweight orthographic wireframe PNG.</summary>
+    private void ShowModelPreview(FileRow row, byte[] bytes)
+    {
+        _audio.Stop();
+        SetPlayState(false);
+        HidePreviewBodies();
+        PreviewHeader.Text = $"{row.DisplayName}  (model preview - wireframe)";
+        try
+        {
+            var png = ModelPreviewCommand.RenderPreview(bytes);
+            using var ms = new MemoryStream(png);
+            var bmp = new Bitmap(ms);
+            var old = PreviewImage.Source as Bitmap;
+            PreviewImage.Source = bmp;
+            old?.Dispose();
+            PreviewImage.IsVisible = true;
+        }
+        catch (Exception ex)
+        {
+            PreviewHeader.Text = $"Model preview failed: {ex.Message}";
+        }
+    }
+
+    private void OnHexToggleClick(object? sender, RoutedEventArgs e)
+    {
+        if (_previewBytes is null) return;
+        _hexMode = !_hexMode;
+        HexButton.Content = _hexMode ? "Auto" : "Hex";
+        if (_hexMode) ShowHex();
+        else RestoreAutoPreview();
+    }
+
+    private void ShowHex()
+    {
+        _audio.Stop();
+        SetPlayState(false);
+        HidePreviewBodies();
+        const int cap = 256 * 1024; // the preview TextBox is not virtualized - cap the dump
+        var bytes = _previewBytes!;
+        int len = Math.Min(bytes.Length, cap);
+        var text = string.Join("\n", HexDumpCommand.Format(bytes, 0, len));
+        if (len < bytes.Length)
+            text += $"\n... ({bytes.Length - len:N0} more bytes not shown)";
+        PreviewText.Text = text;
+        PreviewText.IsReadOnly = true;
+        PreviewText.IsVisible = true;
+    }
+
+    private void RestoreAutoPreview()
+    {
+        if (_previewRow is not { } row) return;
+        var ext = Path.GetExtension(row.Name ?? "").ToLowerInvariant();
+        if (ext is ".mdx" or ".mdl") ShowModelPreview(row, _previewBytes!);
+        else if (_preview is not null) ShowPreview(_preview);
+        // Leaving hex returns to the read-only auto view; editing must be re-enabled.
+        PreviewText.IsReadOnly = true;
+        _editing = false;
+        EditButton.Content = "Edit";
+        SaveTextButton.IsEnabled = false;
+    }
+
+    private void OnEditToggleClick(object? sender, RoutedEventArgs e)
+    {
+        if (_hexMode || _preview is null) return;
+        _editing = !_editing;
+        PreviewText.IsReadOnly = !_editing;
+        EditButton.Content = _editing ? "Editing..." : "Edit";
+        SaveTextButton.IsEnabled = _editing;
+        if (_editing) PreviewText.Focus();
+    }
+
+    private void OnSaveTextClick(object? sender, RoutedEventArgs e)
+    {
+        if (_session?.Current is not { } doc || _previewRow?.Name is not { } name) return;
+        try
+        {
+            FileEditCommand.WriteText(doc, name, PreviewText.Text ?? "");
+            RefreshList();
+            StatusText.Text = $"Saved edits to {name} in the map. Use Save Map As... to write to disk.";
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"Save to map failed: {ex.Message}";
+        }
+    }
+
+    private async void OnImportReplaceClick(object? sender, RoutedEventArgs e)
+    {
+        if (_session?.Current is not { } doc) return;
+        var storage = TopLevel.GetTopLevel(this)?.StorageProvider;
+        if (storage is null) return;
+        var files = await storage.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Import or replace a file in the map",
+            AllowMultiple = false,
+        });
+        if (files.Count != 1 || files[0].TryGetLocalPath() is not { } path) return;
+
+        // Replace the selected file if one is highlighted; otherwise add under the disk name.
+        var selectedName = FileList.SelectedItems?.OfType<FileRow>().FirstOrDefault()?.Name;
+        var targetName = selectedName ?? Path.GetFileName(path);
+        try
+        {
+            var bytes = await File.ReadAllBytesAsync(path);
+            var result = FileEditCommand.AddOrReplace(doc, targetName, bytes);
+            RefreshList();
+            StatusText.Text =
+                $"{(result.Replaced ? "Replaced" : "Added")} {targetName} ({bytes.Length:N0} bytes). Save Map As... to persist.";
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"Import failed: {ex.Message}";
+        }
+    }
+
+    private async void OnSaveMapClick(object? sender, RoutedEventArgs e)
+    {
+        if (_session?.Current is not { } doc) return;
+        var storage = TopLevel.GetTopLevel(this)?.StorageProvider;
+        if (storage is null) return;
+
+        var mapPath = _session.MapPath;
+        var ext = mapPath is not null ? Path.GetExtension(mapPath) : ".w3x";
+        var suggested = mapPath is not null
+            ? Path.GetFileNameWithoutExtension(mapPath) + ".edited" + ext
+            : "map.edited.w3x";
+        var file = await storage.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "Save map with edits",
+            SuggestedFileName = suggested,
+            DefaultExtension = ext.TrimStart('.'),
+        });
+        if (file?.TryGetLocalPath() is not { } dest) return;
+        try
+        {
+            await Task.Run(() => doc.Save(dest));
+            StatusText.Text = $"Saved map to {Path.GetFileName(dest)}";
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"Save map failed: {ex.Message}";
+        }
+    }
+
+    private void OnFilterChanged(object? sender, TextChangedEventArgs e) => ApplySort();
+
+    /// <summary>Rebuild the row list from the current doc (override-aware sizes), preserving the preview.</summary>
+    private void RefreshList()
+    {
+        if (_session?.Current is not { } doc) return;
+        _rows = BuildRows(doc);
+        SummaryText.Text = $"{_rows.Count} file(s), {_rows.Sum(r => (long)r.SizeBytes):N0} bytes";
+        ApplySort();
+    }
+
+    /// <summary>Rows from ListCommand, with byte sizes taken override-aware from doc.Files.</summary>
+    private static List<FileRow> BuildRows(Wc3.Model.MapDocument doc)
+    {
+        var files = ListCommand.Execute(doc).Files;
+        var rows = new List<FileRow>(files.Count);
+        for (int i = 0; i < files.Count; i++)
+        {
+            var f = files[i];
+            int size = f.SizeBytes;
+            if (i < doc.Files.Count)
+            {
+                var entry = doc.Files[i];
+                size = (entry.OverrideBytes ?? entry.RawBytes)?.Length ?? f.SizeBytes;
+            }
+            rows.Add(new FileRow
+            {
+                Ordinal = i, Name = f.Name, SizeBytes = size, Known = f.Known, Parsed = f.Parsed,
+            });
+        }
+        return rows;
+    }
+
     private void OnPlayClick(object? sender, RoutedEventArgs e)
     {
         if (_audioBytes is null) return;
@@ -160,10 +363,21 @@ public partial class FilesView : UserControl, IMapPanel
         SetPlayState(false);
         PreviewHeader.Text = "Double-click a file to preview its contents";
         PreviewText.Text = "";
+        PreviewText.IsReadOnly = true;
         var old = PreviewImage.Source as Bitmap;
         PreviewImage.Source = null;
         old?.Dispose();
         HidePreviewBodies();
+        PreviewActions.IsVisible = false;
+        _previewRow = null;
+        _previewBytes = null;
+        _preview = null;
+        _hexMode = false;
+        _editing = false;
+        HexButton.Content = "Hex";
+        EditButton.Content = "Edit";
+        EditButton.IsEnabled = false;
+        SaveTextButton.IsEnabled = false;
     }
 
     // --- sorting ---
@@ -182,12 +396,17 @@ public partial class FilesView : UserControl, IMapPanel
 
     private void ApplySort()
     {
+        IEnumerable<FileRow> src = _rows;
+        var query = FilterBox?.Text;
+        if (!string.IsNullOrWhiteSpace(query))
+            src = src.Where(r => DropdownFilter.Matches(query!, r.DisplayName, r.Name ?? ""));
+
         IEnumerable<FileRow> sorted = _sortColumn switch
         {
-            SortColumn.Size => _rows.OrderBy(r => r.SizeBytes),
-            SortColumn.Known => _rows.OrderBy(r => r.Known),
-            SortColumn.Parsed => _rows.OrderBy(r => r.Parsed),
-            _ => _rows.OrderBy(r => r.DisplayName, StringComparer.OrdinalIgnoreCase),
+            SortColumn.Size => src.OrderBy(r => r.SizeBytes),
+            SortColumn.Known => src.OrderBy(r => r.Known),
+            SortColumn.Parsed => src.OrderBy(r => r.Parsed),
+            _ => src.OrderBy(r => r.DisplayName, StringComparer.OrdinalIgnoreCase),
         };
         if (!_sortAscending) sorted = sorted.Reverse();
         FileList.ItemsSource = sorted.ToList();

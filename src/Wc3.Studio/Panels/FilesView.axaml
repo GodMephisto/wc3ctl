@@ -30,6 +30,10 @@
                 <Button Name="ExtractSelectedButton" Content="Extract Selected…" Click="OnExtractSelectedClick"/>
                 <Button Name="ExportButton" Content="Export…" Click="OnExportClick" IsEnabled="False"
                         ToolTip.Tip="Convert and save the selected file: .blp → image, .mdx/.mdl → OBJ + MTL + textures, anything else raw."/>
+                <Button Name="ImportButton" Content="Import / Replace…" Click="OnImportReplaceClick"
+                        ToolTip.Tip="Add a file from disk, or (if a file is selected) replace its bytes. Edits stay in memory until Save Map As…"/>
+                <Button Name="SaveMapButton" Content="Save Map As…" Click="OnSaveMapClick"
+                        ToolTip.Tip="Write the map with your in-session edits to a new file (never overwrites the original)."/>
                 <TextBlock Name="SummaryText" VerticalAlignment="Center"/>
             </StackPanel>
 
@@ -40,14 +44,16 @@
 
             <!-- File grid (left) + content preview (right); double-click a file to preview. -->
             <Grid ColumnDefinitions="*,4,2.2*" Margin="8,0">
-                <Grid Grid.Column="0" RowDefinitions="Auto,*">
-                    <Grid Grid.Row="0" ColumnDefinitions="*,120,80,80" Margin="8,0,8,2">
+                <Grid Grid.Column="0" RowDefinitions="Auto,Auto,*">
+                    <TextBox Grid.Row="0" Name="FilterBox" Watermark="Filter files by name…"
+                             Margin="8,0,8,4" TextChanged="OnFilterChanged"/>
+                    <Grid Grid.Row="1" ColumnDefinitions="*,120,80,80" Margin="8,0,8,2">
                         <Button Grid.Column="0" Name="NameHeader" Classes="columnHeader" Content="Name" Click="OnSortByName"/>
                         <Button Grid.Column="1" Name="SizeHeader" Classes="columnHeader" Content="Size (bytes)" Click="OnSortBySize"/>
                         <Button Grid.Column="2" Name="KnownHeader" Classes="columnHeader" Content="Known" Click="OnSortByKnown"/>
                         <Button Grid.Column="3" Name="ParsedHeader" Classes="columnHeader" Content="Parsed" Click="OnSortByParsed"/>
                     </Grid>
-                    <ListBox Grid.Row="1" Name="FileList" SelectionMode="Multiple"
+                    <ListBox Grid.Row="2" Name="FileList" SelectionMode="Multiple"
                              SelectionChanged="OnFileSelectionChanged"
                              DoubleTapped="OnFileDoubleTapped">
                         <ListBox.ItemTemplate>
@@ -70,6 +76,15 @@
                     <TextBlock Name="PreviewHeader" DockPanel.Dock="Top" FontWeight="SemiBold"
                                TextWrapping="Wrap" Margin="0,2,0,6"
                                Text="Double-click a file to preview its contents"/>
+                    <StackPanel Name="PreviewActions" DockPanel.Dock="Top" IsVisible="False"
+                                Orientation="Horizontal" Spacing="8" Margin="0,0,0,6">
+                        <Button Name="HexButton" Content="Hex" Click="OnHexToggleClick"
+                                ToolTip.Tip="Toggle a hex dump of the raw bytes."/>
+                        <Button Name="EditButton" Content="Edit" Click="OnEditToggleClick" IsEnabled="False"
+                                ToolTip.Tip="Edit this text file, then Save to map."/>
+                        <Button Name="SaveTextButton" Content="Save to map" Click="OnSaveTextClick" IsEnabled="False"
+                                ToolTip.Tip="Write your text edits back into the in-memory map (then Save Map As… to persist)."/>
+                    </StackPanel>
                     <StackPanel Name="AudioControls" DockPanel.Dock="Top" IsVisible="False"
                                 Orientation="Horizontal" Spacing="8" Margin="0,0,0,6">
                         <Button Name="PlayButton" Content="▶ Play" Click="OnPlayClick"/>
