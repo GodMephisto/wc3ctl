@@ -1,0 +1,68 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Wc3.Studio.Panels.StringImportView">
+
+    <UserControl.Styles>
+        <!-- Compact read-only rows (edits go through the dedicated editor, never the list). -->
+        <Style Selector="ListBox ListBoxItem">
+            <Setter Property="Padding" Value="8,3"/>
+            <Setter Property="MinHeight" Value="0"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Grid>
+        <TextBlock Name="PlaceholderText"
+                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                   Text="No map loaded"/>
+
+        <DockPanel Name="ContentRoot" IsVisible="False">
+
+            <!-- Status line -->
+            <Border DockPanel.Dock="Bottom" Padding="8,4">
+                <TextBlock Name="StatusText" TextWrapping="Wrap"/>
+            </Border>
+
+            <Grid ColumnDefinitions="1.2*,4,1.4*,4,*" Margin="8">
+
+                <!-- Left: searchable strings list -->
+                <Grid Grid.Column="0" RowDefinitions="Auto,Auto,*">
+                    <TextBlock Name="HeaderText" Grid.Row="0" FontWeight="SemiBold"
+                               Margin="0,0,0,4" Text="Strings"/>
+                    <TextBox Name="SearchBox" Grid.Row="1" Margin="0,0,0,6"
+                             Watermark="Filter by id or text…"/>
+                    <ListBox Name="StringList" Grid.Row="2"
+                             FontFamily="Consolas,Cascadia Mono,Menlo,monospace" FontSize="12"/>
+                </Grid>
+
+                <GridSplitter Grid.Column="1" ResizeDirection="Columns" Background="#33555555"/>
+
+                <!-- Middle: dedicated editor for the selected string -->
+                <Grid Grid.Column="2" RowDefinitions="Auto,*,Auto" Margin="8,0">
+                    <TextBlock Name="EditorHeader" Grid.Row="0" FontWeight="SemiBold"
+                               Margin="0,0,0,6" Text="Select a string to edit"/>
+                    <TextBox Name="EditorBox" Grid.Row="1" IsEnabled="False"
+                             AcceptsReturn="True" TextWrapping="Wrap"
+                             FontFamily="Consolas,Cascadia Mono,Menlo,monospace" FontSize="12"
+                             ScrollViewer.VerticalScrollBarVisibility="Auto"/>
+                    <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8" Margin="0,6,0,0">
+                        <Button Name="ApplyButton" Content="Apply" Click="OnApplyClick" IsEnabled="False"
+                                ToolTip.Tip="Rewrites only this entry's text in the in-memory war3map.wts; every other byte of the file is preserved."/>
+                        <Button Name="SaveButton" Content="Save Map…" Click="OnSaveClick" IsEnabled="False"
+                                ToolTip.Tip="Writes &lt;map&gt;.edited&lt;ext&gt; next to the original (the original is never overwritten)."/>
+                    </StackPanel>
+                </Grid>
+
+                <GridSplitter Grid.Column="3" ResizeDirection="Columns" Background="#33555555"/>
+
+                <!-- Right: read-only imports listing -->
+                <Grid Grid.Column="4" RowDefinitions="Auto,*" Margin="8,0,0,0">
+                    <TextBlock Name="ImportsHeader" Grid.Row="0" FontWeight="SemiBold"
+                               Margin="0,0,0,6" Text="Imports"/>
+                    <ListBox Name="ImportsList" Grid.Row="1"
+                             FontFamily="Consolas,Cascadia Mono,Menlo,monospace" FontSize="12"/>
+                </Grid>
+
+            </Grid>
+        </DockPanel>
+    </Grid>
+</UserControl>
