@@ -247,6 +247,66 @@ public class BundleCommandTests
         Assert.Contains(bundle.Objects, o => o is { Rawcode: "A000", Kind: ObjectKind.Ability, CustomToMap: true });
     }
 
+    [Fact]
+    public void Extensionless_model_ref_captures_the_model_file_and_its_textures()
+    {
+        // Real-map convention (e.g. Nanaya Shiki H05Y): the unit's model field stores an
+        // EXTENSIONLESS path — the game appends .mdx/.mdl at load — while the import is
+        // keyed WITH the extension. The resolver must still treat it as a model so the
+        // model file AND its textures are captured, not dropped as an unknown "other" file.
+        var w3u = new UnitObjectData(ObjectDataFormatVersion.v2);
+        var unit = new SimpleObjectModification { OldId = "Hpal".FromRawcode(), NewId = "H000".FromRawcode() };
+        unit.Modifications.Add(new SimpleObjectDataModification
+        { Id = "unam".FromRawcode(), Type = ObjectDataType.String, Value = "TRIGSTR_1" });
+        unit.Modifications.Add(new SimpleObjectDataModification
+        { Id = "umdl".FromRawcode(), Type = ObjectDataType.String, Value = @"war3mapImported\Tohno" });
+        w3u.NewUnits.Add(unit);
+
+        var doc = MapDocument.Load(SyntheticMap.Build(new Dictionary<string, byte[]>
+        {
+            ["war3map.w3u"] = Serialize(w => w.Write(w3u)),
+            ["war3map.wts"] = Wts((1u, "Tohno")),
+            [@"war3mapImported\Tohno.mdx"] = TexsOnlyMdx(@"war3mapImported\Tohno.blp"),
+        }));
+
+        var bundle = BundleCommand.ResolveUnit(doc, "H000", ctx: null, preDiagnostics: Array.Empty<string>());
+
+        // The model file is present in the map (resolved by appending .mdx to the ref)...
+        Assert.Contains(bundle.Files, f => f is { Category: "model", PresentInMap: true }
+            && f.Path == @"war3mapImported\Tohno");
+        // ...and its texture was followed (dropped entirely if the ref stayed category "other").
+        Assert.Contains(bundle.Files, f => f.Path == @"war3mapImported\Tohno.blp");
+        Assert.Contains(bundle.Edges, e => e is { From: "H000", Via: "umdl" });
+        Assert.Contains(bundle.Edges, e => e.Via == "texture" && e.To == @"war3mapImported\Tohno.blp");
+    }
+
+    [Fact]
+    public void Mdl_reference_to_an_mdx_import_captures_the_textures()
+    {
+        // Regression guard: the field references ".mdl" but the binary is stored as ".mdx"
+        // (a routine cross-extension mismatch). FindModelEntry swaps the extension, so
+        // presence AND texture-following must keep working through the full AddFileRef path.
+        var w3u = new UnitObjectData(ObjectDataFormatVersion.v2);
+        var unit = new SimpleObjectModification { OldId = "Hpal".FromRawcode(), NewId = "H000".FromRawcode() };
+        unit.Modifications.Add(new SimpleObjectDataModification
+        { Id = "unam".FromRawcode(), Type = ObjectDataType.String, Value = "TRIGSTR_1" });
+        unit.Modifications.Add(new SimpleObjectDataModification
+        { Id = "umdl".FromRawcode(), Type = ObjectDataType.String, Value = @"war3mapImported\Tohno.mdl" });
+        w3u.NewUnits.Add(unit);
+
+        var doc = MapDocument.Load(SyntheticMap.Build(new Dictionary<string, byte[]>
+        {
+            ["war3map.w3u"] = Serialize(w => w.Write(w3u)),
+            ["war3map.wts"] = Wts((1u, "Tohno")),
+            [@"war3mapImported\Tohno.mdx"] = TexsOnlyMdx(@"war3mapImported\Tohno.blp"),
+        }));
+
+        var bundle = BundleCommand.ResolveUnit(doc, "H000", ctx: null, preDiagnostics: Array.Empty<string>());
+
+        Assert.Contains(bundle.Files, f => f is { Category: "model", PresentInMap: true });
+        Assert.Contains(bundle.Files, f => f.Path == @"war3mapImported\Tohno.blp");
+    }
+
     private static byte[] Serialize(Action<BinaryWriter> write)
     {
         using var ms = new MemoryStream();

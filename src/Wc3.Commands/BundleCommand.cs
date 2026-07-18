@@ -110,8 +110,16 @@ public static class BundleCommand
             if (!files.TryGetValue(key, out var file))
             {
                 var category = Categorize(path);
+                // Extensionless refs (the game appends .mdx/.mdl at load) categorize as
+                // "other". If a stored model file actually backs the ref, treat it as a
+                // model so the file itself AND its textures are captured, not dropped.
+                var modelEntry = category is "model" or "other"
+                    ? RenderModelCommand.FindModelEntry(doc, path)
+                    : null;
+                if (category == "other" && modelEntry is not null)
+                    category = "model";
                 bool present = category == "model"
-                    ? RenderModelCommand.FindModelEntry(doc, path) is not null
+                    ? modelEntry is not null
                     : FindFileEntry(doc, path) is not null;
                 file = new BundleFile(path, category, present);
                 files[key] = file;
