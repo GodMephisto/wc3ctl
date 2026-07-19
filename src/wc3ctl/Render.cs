@@ -63,6 +63,16 @@ public static class Render
         r.Items.Count == 0 ? "(no custom objects)"
         : string.Join("\n", r.Items.Select(i => Headline(i.Rawcode, i.Name, i.BaseRawcode)));
 
+    public static string DoodadPalette(DoodadPaletteResult r)
+    {
+        // A base doodad the map edits in place carries BaseRawcode == its own code; suppress
+        // the "(base: self)" noise there — the [source] tag already says "map-modified".
+        var lines = r.Entries.Select(e =>
+            Headline(e.Rawcode, e.Name, e.BaseRawcode == e.Rawcode ? null : e.BaseRawcode) + $"  [{e.Source}]");
+        var notes = r.Diagnostics.Select(d => $"note: {d}");
+        return string.Join("\n", new[] { r.Message }.Concat(lines).Concat(notes));
+    }
+
     // e.g. H000  "Paladin"  (base: Hpal)
     private static string Headline(string rawcode, string? name, string? baseRawcode) =>
         string.Join("  ", new[]

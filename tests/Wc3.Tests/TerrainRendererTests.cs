@@ -1,4 +1,7 @@
 // tests/Wc3.Tests/TerrainRendererTests.cs
+using System.Collections.Generic;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.PixelFormats;
 using Wc3.Model;
 using Wc3.Render;
 
@@ -37,5 +40,26 @@ public class TerrainRendererTests
         Assert.True(width > 0 && height > 0, $"IHDR dims {width}x{height} should be positive");
         // ggg is a square 257x257-tilepoint map, so the render must be square too.
         Assert.Equal(width, height);
+
+        // Not grayscale: decode the render and require chromatic variety.
+        // A grayscale image has R==G==B for every pixel; a colored terrain
+        // render (grass/water/dirt/cliffs) must have many pixels whose channels
+        // differ, plus several distinct colors covering the ground types.
+        using var img = Image.Load<Rgba32>(png);
+        long chromatic = 0;
+        var distinct = new HashSet<int>();
+        for (int y = 0; y < img.Height; y++)
+            for (int x = 0; x < img.Width; x++)
+            {
+                Rgba32 p = img[x, y];
+                if (p.R != p.G || p.G != p.B) chromatic++;
+                distinct.Add((p.R << 16) | (p.G << 8) | p.B);
+            }
+
+        long total = (long)img.Width * img.Height;
+        Assert.True(chromatic > total / 20,
+            $"expected a colored render, but only {chromatic} of {total} pixels were chromatic (grayscale regression?)");
+        Assert.True(distinct.Count >= 8,
+            $"expected varied terrain colors, but got only {distinct.Count} distinct colors");
     }
 }
