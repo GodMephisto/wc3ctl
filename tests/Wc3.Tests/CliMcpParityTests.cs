@@ -29,6 +29,7 @@ public class CliMcpParityTests
         ["place_doodad"] = "place doodad",
         ["place_region"] = "place region",
         ["place_unit"] = "place unit",
+        ["place_start_location"] = "place start-location",
         ["terrain_stats"] = "terrain stats",
         ["terrain_deform"] = "terrain deform",
         ["terrain_cliff"] = "terrain cliff",
@@ -36,6 +37,10 @@ public class CliMcpParityTests
         ["terrain_paint"] = "terrain paint",
         ["terrain_water"] = "terrain water",
         ["terrain_blight"] = "terrain blight",
+        ["sound_list"] = "sound list",
+        ["sound_add"] = "sound add",
+        ["sound_set"] = "sound set",
+        ["sound_remove"] = "sound remove",
     };
 
     // CLI commands that intentionally have no MCP tool (local dev / query utilities).

@@ -96,6 +96,36 @@ public class MapWriteTests
             "war3map.w3e writer is NOT byte-faithful (round-trip differs)");
     }
 
+    /// <summary>
+    /// The sound catalog (war3map.w3s) writer must be byte-faithful: re-serializing the
+    /// real map's own sounds model (unchanged) must reproduce the original bytes exactly.
+    /// This pins the War3Net MapSounds writer that SoundCommand relies on; a non-faithful
+    /// writer would gratuitously rewrite the untouched sound catalog on every edit.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "Corpus")]
+    public void Sounds_writer_is_byte_faithful_on_real_map()
+    {
+        if (!File.Exists(CorpusPath)) return;
+
+        var original = MapDocument.Load(CorpusPath);
+        var doc = MapDocument.Load(CorpusPath);
+
+        var entry = doc.GetFile("war3map.w3s");
+        Assert.NotNull(entry);          // the corpus map must contain a sound catalog
+        Assert.NotNull(entry!.Model);   // and the reader must have parsed it into a model
+
+        // Same model, re-serialized: a pure round-trip through the new w3s writer path.
+        doc.AddOrReplaceModelFile("war3map.w3s", entry.Model!);
+
+        var rebuilt = MapDocument.Load(doc.SaveToBytes());
+        var before = ContentFilesByName(original)["war3map.w3s"];
+        var after = ContentFilesByName(rebuilt)["war3map.w3s"];
+
+        Assert.True(after.SequenceEqual(before),
+            "war3map.w3s writer is NOT byte-faithful (round-trip differs)");
+    }
+
     [Fact]
     [Trait("Category", "Corpus")]
     public void Adding_a_raw_import_persists_and_leaves_others_untouched()

@@ -9,6 +9,22 @@ public static class Program
 {
     public static async Task<int> Main(string[] args)
     {
+        var root = BuildRoot(out var exitCode);
+        int parseResult = await root.InvokeAsync(args);
+        return parseResult != 0 ? parseResult : exitCode[0];
+    }
+
+    /// <summary>Builds the full wc3ctl command tree. Exposed (parameterless) so
+    /// CLI&lt;-&gt;MCP parity tests can introspect the real CLI surface without
+    /// spawning a process.</summary>
+    public static RootCommand BuildRoot() => BuildRoot(out _);
+
+    private static RootCommand BuildRoot(out int[] exitCodeOut)
+    {
+        // 1-element box so command handlers (closures) and Main share the exit code.
+        var exitCode = new int[1];
+        exitCodeOut = exitCode;
+
         var jsonOption = new Option<bool>("--json", "Emit machine-readable JSON.");
         var gameDirOption = new Option<string?>("--game-dir",
             "Warcraft III install directory (overrides auto-detection).");
@@ -17,8 +33,6 @@ public static class Program
         var root = new RootCommand("wc3ctl - Warcraft III map tool");
         root.AddGlobalOption(jsonOption);
         root.AddGlobalOption(gameDirOption);
-
-        int exitCode = 0;
 
         void Emit(bool json, object result, Func<string> human) =>
             Console.WriteLine(json ? Render.AsJson(result) : human());
@@ -34,22 +48,22 @@ public static class Program
             catch (FileNotFoundException ex)
             {
                 Console.Error.WriteLine($"error: file not found: {ex.FileName ?? "(unknown)"}");
-                exitCode = 1;
+                exitCode[0] = 1;
             }
             catch (DirectoryNotFoundException ex)
             {
                 Console.Error.WriteLine($"error: {ex.Message}");
-                exitCode = 1;
+                exitCode[0] = 1;
             }
             catch (InvalidDataException ex)
             {
                 Console.Error.WriteLine($"error: not a valid MPQ/.w3x map - {ex.Message}");
-                exitCode = 1;
+                exitCode[0] = 1;
             }
             catch (Exception ex)
             {
                 Console.Error.WriteLine($"error: {ex.Message}");
-                exitCode = 1;
+                exitCode[0] = 1;
             }
         }
 
@@ -163,7 +177,7 @@ public static class Program
             if (!r.Ok)
             {
                 Emit(p.GetValueForOption(jsonOption), r, () => r.Message);
-                exitCode = 1;
+                exitCode[0] = 1;
                 return;
             }
             var dest = p.GetValueForOption(setOut) ?? Path.Combine(
@@ -194,7 +208,7 @@ public static class Program
             if (!r.Ok)
             {
                 Emit(p.GetValueForOption(jsonOption), r, () => r.Message);
-                exitCode = 1;
+                exitCode[0] = 1;
                 return;
             }
             var dest = p.GetValueForOption(setOut) ?? Path.Combine(
@@ -236,7 +250,7 @@ public static class Program
             if (!r.Ok)
             {
                 Emit(p.GetValueForOption(jsonOption), r, () => r.Message);
-                exitCode = 1;
+                exitCode[0] = 1;
                 return;
             }
             var dest = p.GetValueForOption(setOut) ?? Path.Combine(
@@ -271,7 +285,7 @@ public static class Program
             if (!r.Ok)
             {
                 Emit(p.GetValueForOption(jsonOption), r, () => r.Message);
-                exitCode = 1;
+                exitCode[0] = 1;
                 return;
             }
             var dest = p.GetValueForOption(setOut) ?? Path.Combine(
@@ -283,6 +297,70 @@ public static class Program
                 () => $"{r.Message}\nsaved: {dest}");
         }));
         place.AddCommand(placeRegion);
+
+        var placeUnitRawcode = new Argument<string>("rawcode", "Four-character unit type rawcode.");
+        var placeOwnerArg = new Argument<int>("owner", "Owning player id (0-based; 0 = red).");
+        var placeUnit = new Command("unit",
+            "Place a unit at (x, y) and save the edited map. Writes war3mapUnits.doo.")
+        { mapArg, placeUnitRawcode, placeOwnerArg, placeXArg, placeYArg, placeZOpt, placeRotOpt, placeScaleOpt, setOut };
+        placeUnit.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = PlacementCommand.PlaceUnit(doc,
+                p.GetValueForArgument(placeUnitRawcode),
+                p.GetValueForArgument(placeOwnerArg),
+                p.GetValueForArgument(placeXArg),
+                p.GetValueForArgument(placeYArg),
+                p.GetValueForOption(placeZOpt),
+                p.GetValueForOption(placeRotOpt),
+                p.GetValueForOption(placeScaleOpt));
+            if (!r.Ok)
+            {
+                Emit(p.GetValueForOption(jsonOption), r, () => r.Message);
+                exitCode[0] = 1;
+                return;
+            }
+            var dest = p.GetValueForOption(setOut) ?? Path.Combine(
+                Path.GetDirectoryName(map) ?? "",
+                Path.GetFileNameWithoutExtension(map) + ".edited" + Path.GetExtension(map));
+            doc.Save(dest);
+            Emit(p.GetValueForOption(jsonOption),
+                new { r.Ok, r.Message, r.CreationNumber, SavedTo = dest },
+                () => $"{r.Message}\nsaved: {dest}");
+        }));
+        place.AddCommand(placeUnit);
+
+        var placePlayerArg = new Argument<int>("player", "Player whose start location this is (0-based; 0 = red).");
+        var placeStartLoc = new Command("start-location",
+            "Place or move a player's start location at (x, y) and save the edited map. "
+            + "One per player — an existing one for this player is moved. Writes war3mapUnits.doo.")
+        { mapArg, placePlayerArg, placeXArg, placeYArg, setOut };
+        placeStartLoc.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = PlacementCommand.PlaceStartLocation(doc,
+                p.GetValueForArgument(placePlayerArg),
+                p.GetValueForArgument(placeXArg),
+                p.GetValueForArgument(placeYArg));
+            if (!r.Ok)
+            {
+                Emit(p.GetValueForOption(jsonOption), r, () => r.Message);
+                exitCode[0] = 1;
+                return;
+            }
+            var dest = p.GetValueForOption(setOut) ?? Path.Combine(
+                Path.GetDirectoryName(map) ?? "",
+                Path.GetFileNameWithoutExtension(map) + ".edited" + Path.GetExtension(map));
+            doc.Save(dest);
+            Emit(p.GetValueForOption(jsonOption),
+                new { r.Ok, r.Message, r.CreationNumber, SavedTo = dest },
+                () => $"{r.Message}\nsaved: {dest}");
+        }));
+        place.AddCommand(placeStartLoc);
 
         // ---- palette: the doodad types placeable on a map (base catalog ⊕ map object-data) ----
         var palette = new Command("palette",
@@ -536,17 +614,235 @@ public static class Program
         {
             var r = ValidateCommand.Execute(MapDocument.Load(map));
             Emit(json, r, () => Render.Validate(r));
-            if (!r.Valid) exitCode = 2;
+            if (!r.Valid) exitCode[0] = 2;
         }), mapArg, jsonOption);
+
+        // ---- terrain editing ----
+        void FinishTerrain(bool json, string? outOpt, string map, MapDocument doc,
+            bool ok, string message, int tiles)
+        {
+            if (!ok)
+            {
+                Emit(json, new { Ok = false, Message = message }, () => message);
+                exitCode[0] = 1;
+                return;
+            }
+            var dest = outOpt ?? Path.Combine(
+                Path.GetDirectoryName(map) ?? "",
+                Path.GetFileNameWithoutExtension(map) + ".edited" + Path.GetExtension(map));
+            doc.Save(dest);
+            Emit(json, new { Ok = true, Message = message, TilesChanged = tiles, SavedTo = dest },
+                () => $"{message}\nsaved: {dest}");
+        }
+
+        void FinishSound(bool json, string? outOpt, string map, MapDocument doc, SoundOpResult r)
+        {
+            if (!r.Ok)
+            {
+                Emit(json, new { r.Ok, r.Message }, () => r.Message);
+                exitCode[0] = 1;
+                return;
+            }
+            var dest = outOpt ?? Path.Combine(
+                Path.GetDirectoryName(map) ?? "",
+                Path.GetFileNameWithoutExtension(map) + ".edited" + Path.GetExtension(map));
+            doc.Save(dest);
+            Emit(json, new { r.Ok, r.Message, SavedTo = dest },
+                () => $"{r.Message}\nsaved: {dest}");
+        }
+
+        var tCX = new Argument<int>("cx", "Brush centre tile X (column).");
+        var tCY = new Argument<int>("cy", "Brush centre tile Y (row).");
+        var tRadius = new Argument<int>("radius", "Brush radius in tiles.");
+        var tShapeOpt = new Option<TerrainCommand.BrushShape>(
+            "--shape", () => TerrainCommand.BrushShape.Circle, "Brush footprint: Circle or Square.");
+
+        var terrainStats = new Command("stats",
+            "Summarize terrain: tile count, height range and cliff range.") { mapArg };
+        terrainStats.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = TerrainCommand.Stats(MapDocument.Load(p.GetValueForArgument(mapArg)));
+            Emit(p.GetValueForOption(jsonOption), r,
+                () => r.Ok
+                    ? $"tiles={r.TileCount}  height=[{r.MinHeight}..{r.MaxHeight}] mean={r.MeanHeight}  cliff=[{r.MinCliff}..{r.MaxCliff}]"
+                    : r.Message);
+        }));
+
+        var tOpDeform = new Argument<TerrainCommand.HeightOp>("op", "raise|lower|set|flatten|smooth");
+        var tAmountOpt = new Option<float>("--amount", () => 1f,
+            "Step for raise/lower; target for set. Default: 1.");
+        var terrainDeform = new Command("deform",
+            "Raise/lower/set/flatten/smooth ground height over a brush.")
+        { mapArg, tCX, tCY, tRadius, tOpDeform, tAmountOpt, tShapeOpt, setOut };
+        terrainDeform.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = TerrainCommand.Deform(doc,
+                p.GetValueForArgument(tCX), p.GetValueForArgument(tCY), p.GetValueForArgument(tRadius),
+                p.GetValueForArgument(tOpDeform), p.GetValueForOption(tAmountOpt), p.GetValueForOption(tShapeOpt));
+            FinishTerrain(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message, r.TilesChanged);
+        }));
+
+        var tOpCliff = new Argument<TerrainCommand.CliffOp>("op", "raise|lower|set");
+        var tLevelOpt = new Option<int>("--level", () => 1,
+            "Step count for raise/lower; absolute level for set. Default: 1.");
+        var terrainCliff = new Command("cliff",
+            "Raise/lower/set the cliff (stepped-terrain) level over a brush.")
+        { mapArg, tCX, tCY, tRadius, tOpCliff, tLevelOpt, tShapeOpt, setOut };
+        terrainCliff.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = TerrainCommand.Cliff(doc,
+                p.GetValueForArgument(tCX), p.GetValueForArgument(tCY), p.GetValueForArgument(tRadius),
+                p.GetValueForArgument(tOpCliff), p.GetValueForOption(tLevelOpt), p.GetValueForOption(tShapeOpt));
+            FinishTerrain(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message, r.TilesChanged);
+        }));
+
+        var tRampOff = new Option<bool>("--off", () => false, "Clear the ramp flag instead of setting it.");
+        var terrainRamp = new Command("ramp",
+            "Toggle the ramp (sloped cliff transition) flag over a brush.")
+        { mapArg, tCX, tCY, tRadius, tRampOff, tShapeOpt, setOut };
+        terrainRamp.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = TerrainCommand.Ramp(doc,
+                p.GetValueForArgument(tCX), p.GetValueForArgument(tCY), p.GetValueForArgument(tRadius),
+                !p.GetValueForOption(tRampOff), p.GetValueForOption(tShapeOpt));
+            FinishTerrain(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message, r.TilesChanged);
+        }));
+
+        var tTexArg = new Argument<int>("texture", "Ground texture slot index in the map's tileset table.");
+        var tVarOpt = new Option<int?>("--variation", () => null, "Tile variation; omit for default.");
+        var terrainPaint = new Command("paint", "Paint a ground texture over a brush.")
+        { mapArg, tCX, tCY, tRadius, tTexArg, tVarOpt, tShapeOpt, setOut };
+        terrainPaint.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = TerrainCommand.Paint(doc,
+                p.GetValueForArgument(tCX), p.GetValueForArgument(tCY), p.GetValueForArgument(tRadius),
+                p.GetValueForArgument(tTexArg), p.GetValueForOption(tVarOpt), p.GetValueForOption(tShapeOpt));
+            FinishTerrain(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message, r.TilesChanged);
+        }));
+
+        var tOpWater = new Argument<TerrainCommand.WaterOp>("op", "set|raise|lower|remove");
+        var tWaterAmount = new Option<float>("--amount", () => 0f,
+            "Absolute height for set; delta for raise/lower. Default: 0.");
+        var terrainWater = new Command("water", "Set/raise/lower/remove water over a brush.")
+        { mapArg, tCX, tCY, tRadius, tOpWater, tWaterAmount, tShapeOpt, setOut };
+        terrainWater.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = TerrainCommand.Water(doc,
+                p.GetValueForArgument(tCX), p.GetValueForArgument(tCY), p.GetValueForArgument(tRadius),
+                p.GetValueForArgument(tOpWater), p.GetValueForOption(tWaterAmount), p.GetValueForOption(tShapeOpt));
+            FinishTerrain(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message, r.TilesChanged);
+        }));
+
+        var tBlightClear = new Option<bool>("--clear", () => false, "Clear blight instead of setting it.");
+        var terrainBlight = new Command("blight",
+            "Set or clear the blight (corrupted ground) flag over a brush.")
+        { mapArg, tCX, tCY, tRadius, tBlightClear, tShapeOpt, setOut };
+        terrainBlight.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = TerrainCommand.Blight(doc,
+                p.GetValueForArgument(tCX), p.GetValueForArgument(tCY), p.GetValueForArgument(tRadius),
+                !p.GetValueForOption(tBlightClear), p.GetValueForOption(tShapeOpt));
+            FinishTerrain(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message, r.TilesChanged);
+        }));
+
+        var terrain = new Command("terrain",
+            "Terrain editing: height, cliffs, ramps, textures, water, blight.");
+        terrain.AddCommand(terrainStats);
+        terrain.AddCommand(terrainDeform);
+        terrain.AddCommand(terrainCliff);
+        terrain.AddCommand(terrainRamp);
+        terrain.AddCommand(terrainPaint);
+        terrain.AddCommand(terrainWater);
+        terrain.AddCommand(terrainBlight);
+
+        // ---- sound: edit the map's sound catalog (war3map.w3s) ----
+        var soundList = new Command("list", "List the map's sound definitions.") { mapArg };
+        soundList.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var sounds = SoundCommand.List(MapDocument.Load(p.GetValueForArgument(mapArg)));
+            Emit(p.GetValueForOption(jsonOption), sounds,
+                () => sounds.Count == 0
+                    ? "(no sounds)"
+                    : string.Join("\n", sounds.Select(s =>
+                        $"{s.Name}  file={s.FilePath}  ch={s.Channel}  vol={s.Volume}  flags={s.Flags}")));
+        }));
+
+        var soundNameArg = new Argument<string>("name", "Sound label (the key triggers/UI reference).");
+        var soundFileOpt = new Option<string?>("--file",
+            "Audio file path inside the map (e.g. war3mapImported\\snd.wav).");
+        var soundAdd = new Command("add", "Add a new sound definition and save the edited map.")
+        { mapArg, soundNameArg, soundFileOpt, setOut };
+        soundAdd.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = SoundCommand.Add(doc, p.GetValueForArgument(soundNameArg),
+                p.GetValueForOption(soundFileOpt));
+            FinishSound(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r);
+        }));
+
+        var soundFieldArg = new Argument<string>("field",
+            "Field: " + string.Join("|", SoundCommand.EditableFields) + ".");
+        var soundValueArg = new Argument<string>("value", "New value for the field.");
+        var soundSet = new Command("set", "Set a field on a sound and save the edited map.")
+        { mapArg, soundNameArg, soundFieldArg, soundValueArg, setOut };
+        soundSet.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = SoundCommand.Set(doc, p.GetValueForArgument(soundNameArg),
+                p.GetValueForArgument(soundFieldArg), p.GetValueForArgument(soundValueArg));
+            FinishSound(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r);
+        }));
+
+        var soundRemove = new Command("remove", "Remove a sound definition and save the edited map.")
+        { mapArg, soundNameArg, setOut };
+        soundRemove.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = SoundCommand.Remove(doc, p.GetValueForArgument(soundNameArg));
+            FinishSound(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r);
+        }));
+
+        var sound = new Command("sound",
+            "Sound catalog editing (war3map.w3s): list, add, set, remove.");
+        sound.AddCommand(soundList);
+        sound.AddCommand(soundAdd);
+        sound.AddCommand(soundSet);
+        sound.AddCommand(soundRemove);
 
         root.AddCommand(info); root.AddCommand(ls); root.AddCommand(rt);
         root.AddCommand(search); root.AddCommand(diff); root.AddCommand(obj);
         root.AddCommand(extract); root.AddCommand(render); root.AddCommand(renderModel);
         root.AddCommand(script); root.AddCommand(bundle); root.AddCommand(port);
         root.AddCommand(convert); root.AddCommand(validate);
-        root.AddCommand(place); root.AddCommand(palette);
+        root.AddCommand(place); root.AddCommand(palette); root.AddCommand(terrain);
+        root.AddCommand(sound);
 
-        int parseResult = await root.InvokeAsync(args);
-        return parseResult != 0 ? parseResult : exitCode;
+        return root;
     }
 }

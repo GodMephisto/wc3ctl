@@ -50,6 +50,44 @@ public static class Wc3Tools
             ? ObjectGetCommand.Execute(LoadMap(map), rawcode, ResolveGameDir(game_dir))
             : ObjectGetCommand.Execute(LoadMap(map), ParseKind(kind), rawcode, ResolveGameDir(game_dir)));
 
+    [McpServerTool(Name = "object_set", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Set a field on an object of one Object Editor kind and save the edited map to out_path (only that kind's war3map.* file is re-serialized). The input map is NEVER modified in place. Field syntax: a bare 4-char field code, or 'code:N' to select level N (ability/upgrade) or variation N (doodad).")]
+    public static ObjectSetToolResult ObjectSet(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Four-character object rawcode, e.g. 'hfoo' or 'u000'.")] string rawcode,
+        [Description("Field to set: a 4-char field code, optionally ':N' for level/variation.")] string field,
+        [Description("New value (parsed to the field's type: int/real/bool/string).")] string value,
+        [Description("Object kind (selects which war3map.* file is edited): " + KindValues + ".")] string kind = "unit")
+        => Run(() =>
+        {
+            string full = ResolveOutPath(map, out_path);
+            var doc = LoadMap(map);
+            var r = ObjectSetCommand.Execute(doc, ParseKind(kind), rawcode, field, value);
+            if (!r.Ok) throw new McpException(r.Message);
+            if (Path.GetDirectoryName(full) is { Length: > 0 } dir) Directory.CreateDirectory(dir);
+            doc.Save(full);
+            return new ObjectSetToolResult(full, r.Message, r.Warning);
+        });
+
+    [McpServerTool(Name = "object_new", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Create a new custom object derived from a base rawcode (a fresh unused rawcode is allocated) and save the edited map to out_path. The input map is NEVER modified in place. Returns the new rawcode.")]
+    public static ObjectNewToolResult ObjectNew(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Four-character base object rawcode to derive from, e.g. 'hfoo'.")] string base_rawcode,
+        [Description("Object kind: " + KindValues + ".")] string kind = "unit")
+        => Run(() =>
+        {
+            string full = ResolveOutPath(map, out_path);
+            var doc = LoadMap(map);
+            var r = ObjectNewCommand.Execute(doc, ParseKind(kind), base_rawcode);
+            if (!r.Ok) throw new McpException(r.Message);
+            if (Path.GetDirectoryName(full) is { Length: > 0 } dir) Directory.CreateDirectory(dir);
+            doc.Save(full);
+            return new ObjectNewToolResult(full, r.Message, r.NewRawcode);
+        });
+
     [McpServerTool(Name = "bundle_unit", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Resolve everything a unit depends on - the porting preview: referenced objects (with custom-to-map flags), asset files, trigger strings, dependency edges and the JASS trigger-function closure.")]
     public static UnitBundle BundleUnit(
@@ -163,6 +201,195 @@ public static class Wc3Tools
             return (r.Ok, r.Message, r.CreationNumber);
         }));
 
+    [McpServerTool(Name = "place_unit", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Place a unit of the given type, owned by a player, at world (x, y) and save the edited map to out_path. The input map is NEVER modified in place. Returns the assigned creation number (the id triggers use to reference the unit).")]
+    public static PlacementToolResult PlaceUnit(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map). Created/overwritten; parent directories are created as needed.")] string out_path,
+        [Description("Four-character unit type rawcode, e.g. 'hfoo' or 'u000'.")] string type_rawcode,
+        [Description("Owning player id (0-based; 0 = red). Neutral players use the high ids (e.g. 24 = neutral hostile).")] int owner_id,
+        [Description("World X coordinate.")] float x,
+        [Description("World Y coordinate.")] float y,
+        [Description("Height above ground in world units. Default 0.")] float z = 0f,
+        [Description("Facing angle in radians. Default 0.")] float rotation = 0f,
+        [Description("Uniform scale. Default 1.")] float scale = 1f)
+        => Run(() => SavePlacement(map, out_path, doc =>
+        {
+            var r = PlacementCommand.PlaceUnit(doc, type_rawcode, owner_id, x, y, z, rotation, scale);
+            return (r.Ok, r.Message, r.CreationNumber);
+        }));
+
+    [McpServerTool(Name = "place_start_location", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Place or move a player's start location at world (x, y) and save the edited map to out_path. The input map is NEVER modified in place. A start location is stored as a preplaced 'sloc' unit owned by the player; the World Editor permits exactly one per player, so if this player already has one it is moved (its creation number preserved) rather than duplicated. Returns the start location's creation number.")]
+    public static PlacementToolResult PlaceStartLocation(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map). Created/overwritten; parent directories are created as needed.")] string out_path,
+        [Description("Player whose start location this is (0-based; 0 = red).")] int player,
+        [Description("World X coordinate.")] float x,
+        [Description("World Y coordinate.")] float y)
+        => Run(() => SavePlacement(map, out_path, doc =>
+        {
+            var r = PlacementCommand.PlaceStartLocation(doc, player, x, y);
+            return (r.Ok, r.Message, r.CreationNumber);
+        }));
+
+    // ---- terrain editing -------------------------------------------------
+
+    private const string ShapeValues = "circle|square";
+
+    // Compile-time mirror of SoundCommand.EditableFields (attribute args must be const).
+    private const string SoundFieldValues =
+        "Name|File|Eax|Volume|Pitch|PitchVariance|FadeIn|FadeOut|Priority|Channel|Flags|" +
+        "MinDistance|MaxDistance|DistanceCutoff|ConeInside|ConeOutside|ConeOutsideVolume";
+
+    [McpServerTool(Name = "terrain_stats", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Summarize a map's terrain (war3map.w3e): tile count, min/mean/max ground height and min/max cliff level. Read-only.")]
+    public static TerrainCommand.StatsResult TerrainStats(
+        [Description("Path to a .w3x/.w3m map file.")] string map)
+        => Run(() => TerrainCommand.Stats(LoadMap(map)));
+
+    [McpServerTool(Name = "terrain_deform", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Raise/lower/set/flatten/smooth ground height over a circular or square brush, saving the edited map to out_path. The input map is NEVER modified in place.")]
+    public static TerrainToolResult TerrainDeform(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map). Created/overwritten; parent directories are created as needed.")] string out_path,
+        [Description("Brush centre tile X (0-based column into war3map.w3e).")] int center_x,
+        [Description("Brush centre tile Y (0-based row into war3map.w3e).")] int center_y,
+        [Description("Brush radius in tiles (>= 0).")] int radius,
+        [Description("Height operation: raise|lower|set|flatten|smooth.")] string op = "raise",
+        [Description("Step for raise/lower; target for set; ignored by flatten/smooth. WC3 world units.")] float amount = 1f,
+        [Description("Brush footprint: " + ShapeValues + ".")] string shape = "circle")
+        => Run(() => SaveTerrain(map, out_path, doc =>
+        {
+            var r = TerrainCommand.Deform(doc, center_x, center_y, radius,
+                ParseEnum<TerrainCommand.HeightOp>(op, "op"), amount,
+                ParseEnum<TerrainCommand.BrushShape>(shape, "shape"));
+            return (r.Ok, r.Message, r.TilesChanged);
+        }));
+
+    [McpServerTool(Name = "terrain_cliff", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Raise/lower/set the cliff (stepped-terrain) level over a brush, saving the edited map to out_path. The input map is NEVER modified in place.")]
+    public static TerrainToolResult TerrainCliff(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Brush centre tile X.")] int center_x,
+        [Description("Brush centre tile Y.")] int center_y,
+        [Description("Brush radius in tiles (>= 0).")] int radius,
+        [Description("Cliff operation: raise|lower|set.")] string op = "raise",
+        [Description("Step count for raise/lower; the absolute cliff level for set.")] int level = 1,
+        [Description("Brush footprint: " + ShapeValues + ".")] string shape = "circle")
+        => Run(() => SaveTerrain(map, out_path, doc =>
+        {
+            var r = TerrainCommand.Cliff(doc, center_x, center_y, radius,
+                ParseEnum<TerrainCommand.CliffOp>(op, "op"), level,
+                ParseEnum<TerrainCommand.BrushShape>(shape, "shape"));
+            return (r.Ok, r.Message, r.TilesChanged);
+        }));
+
+    [McpServerTool(Name = "terrain_ramp", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Toggle the ramp (sloped cliff transition) flag over a brush, saving the edited map to out_path. The input map is NEVER modified in place.")]
+    public static TerrainToolResult TerrainRamp(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Brush centre tile X.")] int center_x,
+        [Description("Brush centre tile Y.")] int center_y,
+        [Description("Brush radius in tiles (>= 0).")] int radius,
+        [Description("true = set the ramp flag; false = clear it.")] bool on = true,
+        [Description("Brush footprint: " + ShapeValues + ".")] string shape = "circle")
+        => Run(() => SaveTerrain(map, out_path, doc =>
+        {
+            var r = TerrainCommand.Ramp(doc, center_x, center_y, radius, on,
+                ParseEnum<TerrainCommand.BrushShape>(shape, "shape"));
+            return (r.Ok, r.Message, r.TilesChanged);
+        }));
+
+    [McpServerTool(Name = "terrain_paint", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Paint a ground texture over a brush, saving the edited map to out_path. texture_index selects a slot in the map's tileset table. The input map is NEVER modified in place.")]
+    public static TerrainToolResult TerrainPaint(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Brush centre tile X.")] int center_x,
+        [Description("Brush centre tile Y.")] int center_y,
+        [Description("Brush radius in tiles (>= 0).")] int radius,
+        [Description("Ground texture slot index in the map's tileset table.")] int texture_index,
+        [Description("Optional tile variation; omit to choose the default.")] int? variation = null,
+        [Description("Brush footprint: " + ShapeValues + ".")] string shape = "circle")
+        => Run(() => SaveTerrain(map, out_path, doc =>
+        {
+            var r = TerrainCommand.Paint(doc, center_x, center_y, radius, texture_index, variation,
+                ParseEnum<TerrainCommand.BrushShape>(shape, "shape"));
+            return (r.Ok, r.Message, r.TilesChanged);
+        }));
+
+    [McpServerTool(Name = "terrain_water", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Set/raise/lower/remove water over a brush, saving the edited map to out_path. The input map is NEVER modified in place.")]
+    public static TerrainToolResult TerrainWater(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Brush centre tile X.")] int center_x,
+        [Description("Brush centre tile Y.")] int center_y,
+        [Description("Brush radius in tiles (>= 0).")] int radius,
+        [Description("Water operation: set|raise|lower|remove. set/raise/lower flag the tile as water; remove clears the flag.")] string op = "set",
+        [Description("Absolute water height for set; delta for raise/lower; ignored by remove. WC3 world units.")] float amount = 0f,
+        [Description("Brush footprint: " + ShapeValues + ".")] string shape = "circle")
+        => Run(() => SaveTerrain(map, out_path, doc =>
+        {
+            var r = TerrainCommand.Water(doc, center_x, center_y, radius,
+                ParseEnum<TerrainCommand.WaterOp>(op, "op"), amount,
+                ParseEnum<TerrainCommand.BrushShape>(shape, "shape"));
+            return (r.Ok, r.Message, r.TilesChanged);
+        }));
+
+    [McpServerTool(Name = "terrain_blight", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Set or clear the blight (corrupted ground) flag over a brush, saving the edited map to out_path. The input map is NEVER modified in place.")]
+    public static TerrainToolResult TerrainBlight(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Brush centre tile X.")] int center_x,
+        [Description("Brush centre tile Y.")] int center_y,
+        [Description("Brush radius in tiles (>= 0).")] int radius,
+        [Description("true = blight the tiles; false = clear blight.")] bool on = true,
+        [Description("Brush footprint: " + ShapeValues + ".")] string shape = "circle")
+        => Run(() => SaveTerrain(map, out_path, doc =>
+        {
+            var r = TerrainCommand.Blight(doc, center_x, center_y, radius, on,
+                ParseEnum<TerrainCommand.BrushShape>(shape, "shape"));
+            return (r.Ok, r.Message, r.TilesChanged);
+        }));
+
+    [McpServerTool(Name = "sound_list", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("List the map's sound catalog (war3map.w3s): each definition's name, file path, channel, flags, volume, pitch, priority and min/max distance.")]
+    public static IReadOnlyList<SoundFields> SoundList(
+        [Description("Path to a .w3x/.w3m map file.")] string map)
+        => Run(() => SoundCommand.List(LoadMap(map)));
+
+    [McpServerTool(Name = "sound_add", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Add a new sound definition (keyed by name) to the map's sound catalog and save the edited map to out_path. The input map is NEVER modified in place.")]
+    public static SoundToolResult SoundAdd(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Sound definition name (the label triggers/UI reference). Must be unique.")] string name,
+        [Description("Sound file path, e.g. 'Sound\\Ambient\\...'. Optional.")] string? file = null)
+        => Run(() => SaveSound(map, out_path, doc => SoundCommand.Add(doc, name, file)));
+
+    [McpServerTool(Name = "sound_set", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Set a field on a sound definition and save the edited map to out_path. The input map is NEVER modified in place. Editable fields: " + SoundFieldValues + ".")]
+    public static SoundToolResult SoundSet(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Sound definition name to edit.")] string name,
+        [Description("Field to set: " + SoundFieldValues + ".")] string field,
+        [Description("New value (parsed to the field's type: int/real/bool/string).")] string value)
+        => Run(() => SaveSound(map, out_path, doc => SoundCommand.Set(doc, name, field, value)));
+
+    [McpServerTool(Name = "sound_remove", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = false)]
+    [Description("Remove a sound definition from the map's sound catalog and save the edited map to out_path. The input map is NEVER modified in place.")]
+    public static SoundToolResult SoundRemove(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Sound definition name to remove.")] string name)
+        => Run(() => SaveSound(map, out_path, doc => SoundCommand.Remove(doc, name)));
+
     // ---- shared plumbing -------------------------------------------------
 
     /// <summary>Expected failures become clean MCP tool errors, never stack traces.</summary>
@@ -204,6 +431,65 @@ public static class Wc3Tools
         return new PlacementToolResult(full, message, creationNumber);
     }
 
+    /// <summary>Load the map, apply a terrain edit, and save the edited copy to out_path.</summary>
+    private static TerrainToolResult SaveTerrain(
+        string map, string outPath, Func<MapDocument, (bool Ok, string Message, int TilesChanged)> edit)
+    {
+        if (string.IsNullOrWhiteSpace(outPath))
+            throw new McpException("out_path is required");
+        string full = Path.GetFullPath(outPath);
+        if (string.Equals(full, Path.GetFullPath(map), StringComparison.OrdinalIgnoreCase))
+            throw new McpException("out_path must not be the input map file itself");
+
+        var doc = LoadMap(map);
+        var (ok, message, tilesChanged) = edit(doc);
+        if (!ok) throw new McpException(message);
+
+        if (Path.GetDirectoryName(full) is { Length: > 0 } dir) Directory.CreateDirectory(dir);
+        doc.Save(full);
+        return new TerrainToolResult(full, message, tilesChanged);
+    }
+
+    /// <summary>Load the map, apply a sound-catalog mutation, and save the edited copy to out_path.</summary>
+    private static SoundToolResult SaveSound(
+        string map, string outPath, Func<MapDocument, SoundOpResult> edit)
+    {
+        if (string.IsNullOrWhiteSpace(outPath))
+            throw new McpException("out_path is required");
+        string full = Path.GetFullPath(outPath);
+        if (string.Equals(full, Path.GetFullPath(map), StringComparison.OrdinalIgnoreCase))
+            throw new McpException("out_path must not be the input map file itself");
+
+        var doc = LoadMap(map);
+        var r = edit(doc);
+        if (!r.Ok) throw new McpException(r.Message);
+
+        if (Path.GetDirectoryName(full) is { Length: > 0 } dir) Directory.CreateDirectory(dir);
+        doc.Save(full);
+        return new SoundToolResult(full, r.Message);
+    }
+
+    /// <summary>Parse a string into an enum (case-insensitive); clean MCP error on failure.</summary>
+    private static TEnum ParseEnum<TEnum>(string value, string paramName) where TEnum : struct, Enum
+    {
+        if (Enum.TryParse<TEnum>(value, ignoreCase: true, out var parsed) && Enum.IsDefined(parsed))
+            return parsed;
+        throw new McpException(
+            $"invalid {paramName} '{value}'; expected one of: " +
+            string.Join(", ", Enum.GetNames<TEnum>()).ToLowerInvariant());
+    }
+
+    /// <summary>Validate an out_path (required, must differ from the input) and return its full path.</summary>
+    private static string ResolveOutPath(string map, string outPath)
+    {
+        if (string.IsNullOrWhiteSpace(outPath))
+            throw new McpException("out_path is required");
+        string full = Path.GetFullPath(outPath);
+        if (string.Equals(full, Path.GetFullPath(map), StringComparison.OrdinalIgnoreCase))
+            throw new McpException("out_path must not be the input map file itself");
+        return full;
+    }
+
     private static ObjectKind ParseKind(string kind)
     {
         try { return ObjectKinds.Parse(kind); }
@@ -226,3 +512,15 @@ public sealed record PortUnitToolResult(string SavedTo, PortResult Report);
 /// <summary>place_doodad / place_region outcome: where the edited map was written, a
 /// human-readable message, and the creation number assigned to the new instance.</summary>
 public sealed record PlacementToolResult(string SavedTo, string Message, int CreationNumber);
+
+/// <summary>terrain_* edit outcome: where the edited map was written, a message, and tiles changed.</summary>
+public sealed record TerrainToolResult(string SavedTo, string Message, int TilesChanged);
+
+/// <summary>object_set outcome: where the edited map was written, a message, and any non-fatal warning.</summary>
+public sealed record ObjectSetToolResult(string SavedTo, string Message, string? Warning);
+
+/// <summary>object_new outcome: where the edited map was written, a message, and the newly allocated rawcode.</summary>
+public sealed record ObjectNewToolResult(string SavedTo, string Message, string? NewRawcode);
+
+/// <summary>sound_* write outcome: where the edited map was written plus a human-readable message.</summary>
+public sealed record SoundToolResult(string SavedTo, string Message);

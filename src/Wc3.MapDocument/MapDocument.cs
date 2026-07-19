@@ -1,4 +1,5 @@
 // src/Wc3.MapDocument/MapDocument.cs
+using War3Net.Build.Audio;
 using War3Net.Build.Environment;
 using War3Net.Build.Extensions;
 using War3Net.Build.Import;
@@ -233,6 +234,11 @@ public sealed class MapDocument
             // byte-faithfulness of the War3Net writer is pinned by
             // MapWriteTests.Environment_writer_is_byte_faithful_on_real_map.
             case MapEnvironment m: return WriteBinary(w => w.Write(m));
+            // Sound definitions (war3map.w3s). Read via ReadMapSounds (Parsers.cs); the
+            // byte-faithful writer BinaryWriterExtensions.Write(BinaryWriter, MapSounds)
+            // was confirmed by MapSoundsProbe (reflection dump) and is pinned by
+            // MapWriteTests.Sounds_writer_is_byte_faithful_on_real_map.
+            case MapSounds m: return WriteBinary(w => w.Write(m));
         }
 
         // A dirty entry with no override and no supported model would silently lose

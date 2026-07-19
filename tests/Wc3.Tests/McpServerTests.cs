@@ -12,10 +12,17 @@ namespace Wc3.Tests;
 
 public class McpServerTests
 {
+    // Ordinal-sorted: the test compares against tools.OrderBy(..., StringComparer.Ordinal).
+    // Underscore (0x5F) sorts before lowercase letters, so families group naturally.
     private static readonly string[] ExpectedTools =
     {
-        "bundle_unit", "list_files", "map_info", "object_get", "object_list",
-        "palette_doodad", "place_doodad", "place_region", "port_unit", "render_model",
+        "bundle_unit", "list_files", "map_info",
+        "object_get", "object_list", "object_new", "object_set",
+        "palette_doodad", "place_doodad", "place_region", "place_start_location", "place_unit",
+        "port_unit", "render_model",
+        "sound_add", "sound_list", "sound_remove", "sound_set",
+        "terrain_blight", "terrain_cliff", "terrain_deform", "terrain_paint",
+        "terrain_ramp", "terrain_stats", "terrain_water",
     };
 
     /// <summary>Runs the body against a live in-memory client/server session.</summary>
