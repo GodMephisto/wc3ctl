@@ -18,7 +18,7 @@ namespace Wc3.Commands;
 /// the live range before brushing). Built primarily so automated tests can raise a known
 /// region and assert the load/edit/save round-trip, but it is a general API.
 /// </summary>
-public static class TerrainCommand
+public static partial class TerrainCommand
 {
     public const string TerrainFile = "war3map.w3e";
 
