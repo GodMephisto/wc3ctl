@@ -35,21 +35,23 @@ placement* (units, doodads, regions, cameras). Reads/writes `war3map.w3e`
 | Blank terrain synthesis (new map) | ✅ Have | `BlankMap` — synthesizes valid `w3e`+`w3i` MPQ (task #1) |
 | Tile/texture painting (per-tile ground + cliff textures) | 🟡 Partial | Model is read/writable; **no brush/paint operation API** |
 | Cliffs raise/lower/ramp; add cliff types | 🟡 Partial | Data editable; no geometry-op helpers. Reforged 2.0.4 added *extra cliff types* |
-| Height/deformation brushes | ❌ Missing | No brush primitives (raise/lower/plateau/noise/smooth) |
+| Height/deformation brushes | ✅ Have | `TerrainCommand` — HiveWE-style raise/lower/plateau/smooth/flatten, circle/square brush + radius, on `war3map.w3e`; reports height stats; tested |
 | Water height editing | 🟡 Partial | Field-level only; no area brush |
 | Blight painting | 🟡 Partial | Bitfield present; no paint op |
-| Pathing / blocker map (`war3map.wpm`) | 🟡 Partial | Parsed; **no pathing-paint brush** (HiveWE's headline feature — see survey) |
+| Pathing / blocker map (`war3map.wpm`) | ✅ Have | `PathingCommand` — HiveWE-style paint/set/clear/toggle brush over walk/fly/build pathing bits, circle/square + radius, on `war3map.wpm`; tested |
 | Fog / weather / sky / environment settings | 🟡 Partial | Stored in `w3i`/`w3e`; exposed via MapInfo, not all edited |
 | Camera bounds | ✅ Have | In `w3i` (MapInfo read/write) |
-| **Unit / item placement** (`war3mapUnits.doo`) | ❌ Missing | **Task #2** — no placement API yet |
-| **Doodad placement** (`war3map.doo`) | ❌ Missing | No parse/place API confirmed |
-| **Region placement** (`war3map.w3r`) | ❌ Missing | No region API |
+| **Unit / item placement** (`war3mapUnits.doo`) | ✅ Have | `PlacementCommand` place unit — owner/position/rotation/scale/variation/skin, auto creation numbers; tested |
+| **Doodad placement** (`war3map.doo`) | ✅ Have | `PlacementCommand` place doodad — same shape as units, on `war3map.doo`; tested |
+| **Region placement** (`war3map.w3r`) | ✅ Have | `PlacementCommand` place region — rect + name/weather/ambient, on `war3map.w3r`; tested |
 | **Camera objects** (`war3map.w3c`) | 🟡 Partial | Bounds yes; named camera objects no |
 | Start locations | 🟡 Partial | Count in `w3i`; no placement helper |
 | Tile variations / tileset swap (up to 64 tiles) | 🟡 Partial | Data model supports; no convenience op |
 
-**Biggest terrain gaps:** placement APIs (units/doodads/regions/cameras) and brush
-primitives (height, texture, pathing). Task #2 covers unit placement first.
+**Biggest terrain gaps (remaining):** placement APIs (units/doodads/regions) and the
+height + pathing brushes now ship (`PlacementCommand`, `TerrainCommand`, `PathingCommand`,
+all tested). What's left: **texture/tile-paint brush**, **cliff/ramp geometry ops**, and
+**named camera-object placement** (`war3map.w3c`).
 
 ---
 
@@ -145,9 +147,10 @@ Both are **low priority** for a programmatic map tool.
 
 ## 9. Regions / Cameras / Pathing (placement editors)
 
-Covered inline under Terrain Editor above. Summary: **all three placement editors
-(regions `w3r`, cameras `w3c`, pathing brush `wpm`) are Missing/Partial** and are
-prime automation targets.
+Covered inline under Terrain Editor above. Summary: **region placement (`w3r`) and the
+pathing brush (`wpm`) now ship and are tested** (`PlacementCommand`, `PathingCommand`).
+Remaining gap: **named camera-object placement (`w3c`)** — camera *bounds* are already
+handled via `MapInfo`, but discrete camera objects are not yet placeable.
 
 ---
 
@@ -168,16 +171,18 @@ prime automation targets.
 
 Ranked by value for an automatable map tool:
 
-1. **Unit/item placement** (`war3mapUnits.doo`) — **Task #2, in progress.** Unlocks
-   automated test-map generation.
-2. **Doodad placement** (`war3map.doo`) — same shape as units; natural follow-on.
-3. **Region + camera-object placement** (`war3map.w3r` / `.w3c`) — completes
+1. ✅ **Unit/item placement** (`war3mapUnits.doo`) — **shipped** (`PlacementCommand`, tested).
+   Unlocks automated test-map generation.
+2. ✅ **Doodad placement** (`war3map.doo`) — **shipped** (`PlacementCommand`, tested).
+3. ✅ **Region placement** (`war3map.w3r`) — **shipped** (`PlacementCommand`, tested).
+   Camera-object placement (`.w3c`) still open.
+4. ✅ **Pathing-map brush ops** (`war3map.wpm`) — **shipped** (`PathingCommand`, tested) —
+   HiveWE's signature capability.
+5. 🟡 **Terrain brush primitives** — height/deform brush **shipped** (`TerrainCommand`, tested);
+   **texture/tile-paint and cliff/ramp geometry ops still open** — enables generative terrain.
+6. **Camera-object placement** (`war3map.w3c`) — discrete named cameras; small, completes
    in-map placement automation.
-4. **Pathing-map brush ops** (`war3map.wpm`) — HiveWE's signature capability
-   (see survey); high value, medium effort.
-5. **Terrain brush primitives** (height/texture/cliff paint) — enables generative
-   terrain; larger effort.
-6. **GUI trigger (`.wtg`) parse/edit** — largest missing module; big effort, defer
+7. **GUI trigger (`.wtg`) parse/edit** — largest missing module; big effort, defer
    unless demand.
 7. **Sound editor (`.w3s`)** — low effort, low demand.
 8. AI/Campaign — lowest priority.
