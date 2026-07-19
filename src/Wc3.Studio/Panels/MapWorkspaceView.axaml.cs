@@ -1,7 +1,9 @@
+using System.Diagnostics;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Wc3.Commands;
+using Wc3.GameData;
 using Wc3.Model;
 
 namespace Wc3.Studio.Panels;
@@ -169,6 +171,8 @@ public partial class MapWorkspaceView : UserControl
             Session.Current = doc;
             Session.MapPath = path;
             // GameDir stays null - panels auto-detect the game install.
+            SaveButton.IsEnabled = true;
+            TestButton.IsEnabled = true;
 
             var info = InfoCommand.Execute(doc);
             var list = ListCommand.Execute(doc);
@@ -193,6 +197,67 @@ public partial class MapWorkspaceView : UserControl
 
     private async void OnOpenMapClick(object? sender, RoutedEventArgs e) =>
         await PickAndOpenMapAsync();
+
+    /// <summary>
+    /// Writes the in-memory map (with any edits made this session) back to the .w3x
+    /// file it was opened from. MapDocument.Save re-serializes through the byte-faithful
+    /// writer, so an untouched map round-trips unchanged.
+    /// </summary>
+    private void OnSaveClick(object? sender, RoutedEventArgs e)
+    {
+        if (Session.Current is not { } doc || Session.MapPath is not { } path)
+        {
+            StatusText.Text = "No map open to save.";
+            return;
+        }
+        try
+        {
+            doc.Save(path);
+            StatusText.Text = $"Saved {path}.";
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"Save failed: {ex.Message}";
+        }
+    }
+
+    /// <summary>
+    /// Saves the map, then launches Warcraft III on it via -loadfile. The executable
+    /// is found under the located install (Reforged layout first, then classic
+    /// war3.exe); launching is best-effort and its outcome is reported on the status
+    /// line - a missing install or a failed launch never throws.
+    /// </summary>
+    private void OnTestClick(object? sender, RoutedEventArgs e)
+    {
+        if (Session.Current is not { } doc || Session.MapPath is not { } path)
+        {
+            StatusText.Text = "No map open to test.";
+            return;
+        }
+        try
+        {
+            doc.Save(path);
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"Test aborted - save failed: {ex.Message}";
+            return;
+        }
+        if (GameInstall.LocateExecutable(Session.GameDir) is not { } exe)
+        {
+            StatusText.Text = "Saved, but couldn't find the Warcraft III executable to launch - open the map from the game manually.";
+            return;
+        }
+        try
+        {
+            Process.Start(new ProcessStartInfo(exe, $"-loadfile \"{path}\"") { UseShellExecute = true });
+            StatusText.Text = $"Saved and launched Warcraft III on {System.IO.Path.GetFileName(path)}.";
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"Saved, but launch failed: {ex.Message}";
+        }
+    }
 
     /// <summary>
     /// Blank-map creation is not implemented yet: MapDocument can only Load()

@@ -13,6 +13,10 @@
                     <TextBlock Name="RoleText" FontWeight="SemiBold"
                                VerticalAlignment="Center" Text="Map"/>
                     <Button Name="OpenMapButton" Content="Open Map…" Click="OnOpenMapClick"/>
+                    <Button Name="SaveButton" Content="Save" IsEnabled="False" Click="OnSaveClick"
+                            ToolTip.Tip="Write the map (with any edits) back to its .w3x file on disk."/>
+                    <Button Name="TestButton" Content="Test in WC3" IsEnabled="False" Click="OnTestClick"
+                            ToolTip.Tip="Save, then launch Warcraft III on this map."/>
                     <!-- Port seam (Source only): a later wave enables this and wires
                          it across both workspaces via MainWindow.Workspaces. The
                          Border carries the tooltip because disabled controls don't
@@ -42,6 +46,9 @@
         <TabControl Name="PanelTabs" SelectionChanged="OnPanelTabsSelectionChanged">
             <TabItem Header="Terrain">
                 <panels:TerrainView Name="TerrainPanel"/>
+            </TabItem>
+            <TabItem Header="Palette">
+                <panels:PaletteView Name="PalettePanel"/>
             </TabItem>
             <TabItem Header="Map Info">
                 <panels:MapInfoView Name="MapInfoPanel"/>

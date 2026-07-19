@@ -5,6 +5,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using Wc3.Commands;
 using Wc3.Model;
+using Wc3.Studio.Controls;
 
 namespace Wc3.Studio.Panels;
 
@@ -53,7 +54,6 @@ public partial class DependencyGraphView : UserControl, IMapPanel
     private const double BandGap = 100;
 
     private MapSession? _session;
-    private bool _suppress;
     /// <summary>Stamp that invalidates in-flight object lists / resolves when the target changes.</summary>
     private int _generation;
     /// <summary>At most one ResolveObject runs at a time (they share the MapDocument).</summary>
@@ -65,13 +65,15 @@ public partial class DependencyGraphView : UserControl, IMapPanel
     /// <summary>The document the combo's object list was (or is being) loaded from.</summary>
     private MapDocument? _listDoc;
     /// <summary>The combo's loaded options (null while a list load is in flight).</summary>
-    private List<ObjectOption>? _options;
+    private List<SearchableComboBoxItem>? _options;
     /// <summary>Rawcode to select-and-resolve once the in-flight object list lands.</summary>
     private string? _pendingSelect;
 
     public DependencyGraphView()
     {
         InitializeComponent();
+        ObjectCombo.Watermark = "Search name or rawcode…";
+        ObjectCombo.SelectionChanged += OnObjectPicked;
     }
 
     /// <summary>Kind of the object whose closure is shown (tracks the combo's list kind).</summary>
@@ -169,21 +171,18 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         _listKind = kind;
         _options = null;
         KindLabel.Text = KindSingular(kind) + ":";
-        _suppress = true;
-        ObjectCombo.ItemsSource = null;
-        _suppress = false;
+        ObjectCombo.SetItems(Array.Empty<SearchableComboBoxItem>());
         var kindWord = KindPlural(kind).ToLowerInvariant();
         SummaryText.Text = $"Loading {kindWord}…";
         string? gameDir = _session?.GameDir;
         Task.Run(() =>
         {
-            List<ObjectOption>? items = null;
+            List<SearchableComboBoxItem>? items = null;
             string? error = null;
             try
             {
                 items = ObjectListCommand.Execute(doc, kind, gameDir).Items
-                    .Select(i => new ObjectOption(
-                        i.Rawcode, i.Name is null ? i.Rawcode : $"{i.Name} ({i.Rawcode})"))
+                    .Select(i => new SearchableComboBoxItem(i.Name ?? "", i.Rawcode))
                     .OrderBy(o => o.Display, StringComparer.OrdinalIgnoreCase)
                     .ToList();
             }
@@ -202,9 +201,7 @@ public partial class DependencyGraphView : UserControl, IMapPanel
                     return;
                 }
                 _options = items;
-                _suppress = true;
-                ObjectCombo.ItemsSource = items;
-                _suppress = false;
+                ObjectCombo.SetItems(items, selectFirstWhenNoMatch: false);
                 if (_pendingSelect is { } pending)
                 {
                     // An incoming selection is waiting on this list: resolve it now.
@@ -225,10 +222,8 @@ public partial class DependencyGraphView : UserControl, IMapPanel
     /// <summary>Reflect <paramref name="rawcode"/> in the picker, then auto-resolve it.</summary>
     private void SelectAndResolve(string rawcode)
     {
-        var option = _options?.FirstOrDefault(o => o.Rawcode == rawcode);
-        _suppress = true;
-        ObjectCombo.SelectedItem = option;
-        _suppress = false;
+        var option = _options?.FirstOrDefault(o => o.Id == rawcode);
+        ObjectCombo.Select(rawcode, raiseEvent: false);
         // Objects pushed from the editor are always in the list; if one ever is
         // not, resolve the bare rawcode anyway - the resolver reports diagnostics.
         UpdateSelection(rawcode, option?.Display ?? rawcode);
@@ -246,14 +241,9 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         SelectionChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    private void OnObjectChanged(object? sender, SelectionChangedEventArgs e)
+    private void OnObjectPicked(object? sender, SearchableComboBoxItem item)
     {
-        if (_suppress)
-            return;
-        var selected = ObjectCombo.SelectedItem as ObjectOption;
-        UpdateSelection(selected?.Rawcode, selected?.Display);
-        if (selected is null)
-            return;
+        UpdateSelection(item.Id, item.Display);
         RequestResolve();
     }
 
@@ -748,9 +738,7 @@ public partial class DependencyGraphView : UserControl, IMapPanel
     /// <summary>Reset the picker and the exposed selection (notifying the workspace).</summary>
     private void ClearSelection()
     {
-        _suppress = true;
-        ObjectCombo.ItemsSource = null;
-        _suppress = false;
+        ObjectCombo.SetItems(Array.Empty<SearchableComboBoxItem>());
         _options = null;
         _pendingSelect = null;
         if (SelectedRawcode is not null || SelectedDisplay is not null)
@@ -778,9 +766,4 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         StringsExpander.IsExpanded = false;
     }
 
-    /// <summary>Object picker entry; ComboBox renders ToString.</summary>
-    private sealed record ObjectOption(string Rawcode, string Display)
-    {
-        public override string ToString() => Display;
-    }
 }

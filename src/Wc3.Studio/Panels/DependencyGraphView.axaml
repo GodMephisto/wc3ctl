@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="using:Wc3.Studio.Controls"
              x:Class="Wc3.Studio.Panels.DependencyGraphView">
     <UserControl.Styles>
         <!-- Compact tree rows; counts here are small (dozens), no virtualization concerns. -->
@@ -23,8 +24,7 @@
             <!-- Object picker (follows the Objects tab's kind) + closure summary -->
             <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" Margin="6,4">
                 <TextBlock Name="KindLabel" Text="Unit:" VerticalAlignment="Center"/>
-                <ComboBox Name="ObjectCombo" MinWidth="280"
-                          SelectionChanged="OnObjectChanged"/>
+                <controls:SearchableComboBox Name="ObjectCombo" MinWidth="280"/>
                 <TextBlock Name="SummaryText" VerticalAlignment="Center"
                            Foreground="#8FA3B8" Text=""/>
             </StackPanel>

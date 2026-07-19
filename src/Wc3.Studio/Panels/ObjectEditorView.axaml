@@ -113,9 +113,19 @@
                                        Text="Select a field to edit"/>
                             <DockPanel>
                                 <Button Name="ApplyButton" DockPanel.Dock="Right"
-                                        Content="Apply" Margin="6,0,0,0"
+                                        Content="Apply" Margin="6,0,0,0" VerticalAlignment="Top"
                                         IsEnabled="False" Click="OnApplyClick"/>
-                                <TextBox Name="EditorBox" MinHeight="0" Padding="4,3"/>
+                                <!-- Exactly one editor is visible at a time; the field's
+                                     metadata type picks it (see ConfigureEditor). The text
+                                     box is the always-available fallback. -->
+                                <Panel>
+                                    <TextBox Name="EditorBox" MinHeight="0" Padding="4,3"/>
+                                    <controls:SearchableComboBox Name="EditorCombo" IsVisible="False"/>
+                                    <Border Name="EditorMultiHost" IsVisible="False"
+                                            BorderBrush="#33555555" BorderThickness="1" MaxHeight="180">
+                                        <ListBox Name="EditorMulti" SelectionMode="Multiple,Toggle"/>
+                                    </Border>
+                                </Panel>
                             </DockPanel>
                             <TextBlock Name="EditNote" Foreground="#8FA3B8" FontSize="11"
                                        TextWrapping="Wrap" Text=""/>

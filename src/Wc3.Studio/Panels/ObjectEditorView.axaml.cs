@@ -78,6 +78,15 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     /// <summary>The last (kind, rawcode) surfaced through <see cref="ObjectSelected"/>.</summary>
     private (ObjectKind Kind, string Rawcode)? _lastNotified;
 
+    // --- typed field editor: one control shown per field, chosen from its metadata ---
+    private enum EditorMode { Text, Combo, Multi }
+    private EditorMode _editorMode = EditorMode.Text;
+    /// <summary>Multiselect tokens in display order, so Apply joins deterministically.</summary>
+    private IReadOnlyList<string> _editorMultiTokens = Array.Empty<string>();
+    /// <summary>Above this many derivable options a field is treated as free text (paths,
+    /// ids, and other high-cardinality fields aren't real enumerations).</summary>
+    private const int MaxEditorOptions = 200;
+
     public ObjectEditorView()
     {
         InitializeComponent();
@@ -666,7 +675,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         if (FieldList.SelectedItem is FieldRow row)
         {
             FieldEditLabel.Text = $"{row.Name} ({row.Code})";
-            EditorBox.Text = row.Value;
+            ConfigureEditor(row);
             UpdateApplyState();
         }
         else
@@ -675,10 +684,120 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         }
     }
 
+    /// <summary>Pick the editor control from the field's metadata: enumerated fields get a
+    /// searchable dropdown (single value) or a checklist (list types); everything else -
+    /// ints, reals, strings, paths, or fields with no derivable option set - stays free
+    /// text. The current value is always kept selectable so out-of-range data is never
+    /// silently lost.</summary>
+    private void ConfigureEditor(FieldRow row)
+    {
+        ObjectFieldOptionsResult opt;
+        try
+        {
+            opt = ObjectFieldOptionsCommand.Execute(SelectedKind.Kind, row.Code, _session?.GameDir);
+        }
+        catch
+        {
+            opt = new ObjectFieldOptionsResult("", false, Array.Empty<string>());
+        }
+
+        bool freeText = opt.Options.Count == 0
+            || opt.Options.Count > MaxEditorOptions
+            || IsFreeTextType(opt.Type);
+        if (!freeText && opt.IsList)
+            ShowMultiEditor(row, opt.Options);
+        else if (!freeText)
+            ShowComboEditor(row, opt.Options);
+        else
+            ShowTextEditor(row);
+
+        UpdateEditNote(opt);
+    }
+
+    /// <summary>Metadata types edited as free text; anything else with a small option set
+    /// is treated as an enumeration.</summary>
+    private static bool IsFreeTextType(string type) => type.ToLowerInvariant() switch
+    {
+        "int" or "real" or "unreal" or "string" => true,
+        _ => false,
+    };
+
+    private void ShowTextEditor(FieldRow row)
+    {
+        _editorMode = EditorMode.Text;
+        EditorBox.Text = row.Value;
+        EditorBox.IsVisible = true;
+        EditorCombo.IsVisible = false;
+        EditorMultiHost.IsVisible = false;
+    }
+
+    private void ShowComboEditor(FieldRow row, IReadOnlyList<string> options)
+    {
+        _editorMode = EditorMode.Combo;
+        var tokens = options.ToList();
+        var current = (row.Value ?? "").Trim();
+        if (current.Length > 0 && !tokens.Contains(current, StringComparer.OrdinalIgnoreCase))
+            tokens.Insert(0, current);
+        EditorCombo.SetItems(
+            tokens.Select(t => new SearchableComboBoxItem(t, t)).ToList(),
+            selectId: current.Length > 0 ? current : null);
+        EditorBox.IsVisible = false;
+        EditorCombo.IsVisible = true;
+        EditorMultiHost.IsVisible = false;
+    }
+
+    private void ShowMultiEditor(FieldRow row, IReadOnlyList<string> options)
+    {
+        _editorMode = EditorMode.Multi;
+        var selected = new HashSet<string>(
+            (row.Value ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+            StringComparer.OrdinalIgnoreCase);
+        // Options ∪ any current tokens outside the option set, so nothing is dropped.
+        var tokens = options.ToList();
+        foreach (var s in selected)
+            if (!tokens.Contains(s, StringComparer.OrdinalIgnoreCase))
+                tokens.Add(s);
+        _editorMultiTokens = tokens;
+        EditorMulti.ItemsSource = tokens;
+        EditorMulti.SelectedItems?.Clear();
+        foreach (var t in tokens)
+            if (selected.Contains(t))
+                EditorMulti.SelectedItems?.Add(t);
+        EditorBox.IsVisible = false;
+        EditorCombo.IsVisible = false;
+        EditorMultiHost.IsVisible = true;
+    }
+
+    /// <summary>The value to write, read from whichever editor is currently shown.</summary>
+    private string CurrentEditorValue() => _editorMode switch
+    {
+        EditorMode.Combo => EditorCombo.SelectedId ?? "",
+        EditorMode.Multi => string.Join(",",
+            _editorMultiTokens.Where(t => EditorMulti.SelectedItems?.Contains(t) == true)),
+        _ => EditorBox.Text ?? "",
+    };
+
+    private void UpdateEditNote(ObjectFieldOptionsResult opt)
+    {
+        EditNote.Text = _editorMode switch
+        {
+            EditorMode.Combo => $"Enumerated field (type '{opt.Type}') — pick a value the base game already uses.",
+            EditorMode.Multi => $"List field (type '{opt.Type}') — check tokens to include; saved comma-separated.",
+            _ when opt.Diagnostic is { } d => $"Free-text field. ({d})",
+            _ => "Free-text field; leveled fields (code:N) edit that level/variation only.",
+        };
+    }
+
     private void ResetEditor()
     {
         FieldEditLabel.Text = "Select a field to edit";
+        _editorMode = EditorMode.Text;
+        _editorMultiTokens = Array.Empty<string>();
         EditorBox.Text = "";
+        EditorBox.IsVisible = true;
+        EditorCombo.IsVisible = false;
+        EditorMultiHost.IsVisible = false;
+        EditNote.Text = "";
         UpdateApplyState();
     }
 
@@ -689,9 +808,6 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         ApplyButton.IsEnabled = _session?.Current is not null
             && FieldList.SelectedItem is FieldRow
             && SelectedObjects().Count > 0;
-        EditorBox.IsReadOnly = false;
-        EditNote.Text = "List fields (abilities, targets, flags) edit as raw comma-separated text; "
-            + "leveled fields (code:N) edit that level/variation only.";
     }
 
     /// <summary>Bulk edit: write the editor value to the selected field on every selected object.</summary>
@@ -714,7 +830,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
             return;
         }
 
-        var value = EditorBox.Text ?? "";
+        var value = CurrentEditorValue();
         int applied = 0;
         var warnings = new List<string>();
         var problems = new List<string>();
@@ -847,11 +963,8 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         return Path.Combine(dir, $"{stem}.edited{ext}");
     }
 
-    /// <summary>Type-switcher entry; ComboBox renders ToString.</summary>
-    private sealed record KindOption(ObjectKind Kind, string Label)
-    {
-        public override string ToString() => Label;
-    }
+    /// <summary>Type-switcher entry; carried as the combo item's payload.</summary>
+    private sealed record KindOption(ObjectKind Kind, string Label);
 
     /// <summary>Object list row: "Name (rawcode)", or the bare rawcode when nameless.</summary>
     public sealed record ObjectRow(string Rawcode, string Display);

@@ -58,14 +58,20 @@ public partial class SearchableComboBox : UserControl
     }
 
     /// <summary>
-    /// Replace the choices. <paramref name="selectId"/> picks the initial selection
-    /// (falls back to the first item; empty list clears the selection). Never raises
-    /// <see cref="SelectionChanged"/> - the initial selection is the caller's own doing.
+    /// Replace the choices. <paramref name="selectId"/> picks the initial selection;
+    /// when it matches nothing, <paramref name="selectFirstWhenNoMatch"/> decides whether
+    /// to fall back to the first item (a kind switcher wants that; a picker that waits for
+    /// a deliberate choice passes false to stay empty). An empty list always clears. Never
+    /// raises <see cref="SelectionChanged"/> - the initial selection is the caller's own doing.
     /// </summary>
-    public void SetItems(IReadOnlyList<SearchableComboBoxItem> items, string? selectId = null)
+    public void SetItems(IReadOnlyList<SearchableComboBoxItem> items, string? selectId = null,
+                         bool selectFirstWhenNoMatch = true)
     {
         _items = items ?? throw new ArgumentNullException(nameof(items));
-        SetSelected(FindById(selectId) ?? (_items.Count > 0 ? _items[0] : null));
+        var initial = FindById(selectId);
+        if (initial is null && selectFirstWhenNoMatch)
+            initial = _items.Count > 0 ? _items[0] : null;
+        SetSelected(initial);
         if (DropDown.IsOpen)
             RefreshList();
     }

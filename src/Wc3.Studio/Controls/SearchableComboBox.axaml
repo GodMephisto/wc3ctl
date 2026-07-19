@@ -26,7 +26,7 @@
         <Popup Name="DropDown" Placement="BottomEdgeAlignedLeft"
                IsLightDismissEnabled="True">
             <Border Background="#FF23272B" BorderBrush="#33555555"
-                    BorderThickness="1" Padding="4" MinWidth="240">
+                    BorderThickness="1" Padding="4" MinWidth="240" MaxWidth="520">
                 <DockPanel>
                     <TextBox Name="SearchBox" DockPanel.Dock="Top" Margin="0,0,0,4"
                              Watermark="Search name or id…"
@@ -34,6 +34,7 @@
                     <TextBlock Name="NoMatchText" DockPanel.Dock="Top" IsVisible="False"
                                Foreground="#8FA3B8" Margin="4,2" Text="No matches"/>
                     <ListBox Name="ItemList" MaxHeight="320" SelectionMode="Single"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                              Tapped="OnItemTapped" KeyDown="OnListKeyDown">
                         <ListBox.ItemTemplate>
                             <DataTemplate>
