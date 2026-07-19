@@ -66,6 +66,36 @@ public class MapWriteTests
         Assert.Equal(original.PreArchiveData, rebuilt.PreArchiveData);
     }
 
+    /// <summary>
+    /// The terrain environment (war3map.w3e) writer must be byte-faithful: re-serializing
+    /// the real map's own environment model (unchanged) must reproduce the original bytes
+    /// exactly. This pins the War3Net MapEnvironment writer that TerrainCommand relies on;
+    /// a non-faithful writer would gratuitously rewrite untouched terrain on every edit.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "Corpus")]
+    public void Environment_writer_is_byte_faithful_on_real_map()
+    {
+        if (!File.Exists(CorpusPath)) return;
+
+        var original = MapDocument.Load(CorpusPath);
+        var doc = MapDocument.Load(CorpusPath);
+
+        var entry = doc.GetFile("war3map.w3e");
+        Assert.NotNull(entry);          // the corpus map must contain terrain
+        Assert.NotNull(entry!.Model);   // and the reader must have parsed it into a model
+
+        // Same model, re-serialized: a pure round-trip through the new w3e writer path.
+        doc.AddOrReplaceModelFile("war3map.w3e", entry.Model!);
+
+        var rebuilt = MapDocument.Load(doc.SaveToBytes());
+        var before = ContentFilesByName(original)["war3map.w3e"];
+        var after = ContentFilesByName(rebuilt)["war3map.w3e"];
+
+        Assert.True(after.SequenceEqual(before),
+            "war3map.w3e writer is NOT byte-faithful (round-trip differs)");
+    }
+
     [Fact]
     [Trait("Category", "Corpus")]
     public void Adding_a_raw_import_persists_and_leaves_others_untouched()

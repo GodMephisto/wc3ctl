@@ -229,6 +229,10 @@ public sealed class MapDocument
             // Regions (war3map.w3r). Read via ReadMapRegions (Parsers.cs); write
             // confirmed via reflection: BinaryWriterExtensions.Write(BinaryWriter, MapRegions).
             case MapRegions m: return WriteBinary(w => w.Write(m));
+            // Terrain environment (war3map.w3e). Read via ReadMapEnvironment (Parsers.cs);
+            // byte-faithfulness of the War3Net writer is pinned by
+            // MapWriteTests.Environment_writer_is_byte_faithful_on_real_map.
+            case MapEnvironment m: return WriteBinary(w => w.Write(m));
         }
 
         // A dirty entry with no override and no supported model would silently lose
