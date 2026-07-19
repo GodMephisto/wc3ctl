@@ -74,6 +74,73 @@ public class PlacementCommandTests
         Assert.Null(doc.GetFile(PlacementCommand.UnitsFile)); // nothing written on rejection
     }
 
+    // ---- Start locations (sloc units in war3mapUnits.doo) -----------------
+
+    [Fact]
+    public void PlaceStartLocation_CreatesSlocUnitOwnedByPlayer_AndSurvivesRoundTrip()
+    {
+        var doc = BlankMap.Create();
+        int slocType = PlacementCommand.StartLocationRawcode.FromRawcode();
+
+        var result = PlacementCommand.PlaceStartLocation(doc, player: 3, x: 512f, y: -768f);
+        Assert.True(result.Ok, result.Message);
+        Assert.Equal(0, result.CreationNumber);
+
+        byte[] saved = doc.SaveToBytes();
+        var units = MapDocument.Load(saved).GetFile(PlacementCommand.UnitsFile)?.Model as MapUnits;
+        Assert.NotNull(units);
+        var sloc = Assert.Single(units!.Units);
+        Assert.Equal(slocType, sloc.TypeId);
+        Assert.Equal(3, sloc.OwnerId);
+        Assert.Equal(512f, sloc.Position.X);
+        Assert.Equal(-768f, sloc.Position.Y);
+    }
+
+    [Fact]
+    public void PlaceStartLocation_MovesExistingRatherThanDuplicating()
+    {
+        var doc = BlankMap.Create();
+
+        var first = PlacementCommand.PlaceStartLocation(doc, player: 0, x: 0f, y: 0f);
+        var second = PlacementCommand.PlaceStartLocation(doc, player: 0, x: 256f, y: 128f);
+        Assert.True(second.Ok, second.Message);
+
+        // Same player -> moved in place: one unit total, its creation number preserved.
+        Assert.Equal(first.CreationNumber, second.CreationNumber);
+
+        var units = doc.GetFile(PlacementCommand.UnitsFile)?.Model as MapUnits;
+        Assert.NotNull(units);
+        var sloc = Assert.Single(units!.Units);
+        Assert.Equal(256f, sloc.Position.X);
+        Assert.Equal(128f, sloc.Position.Y);
+    }
+
+    [Fact]
+    public void PlaceStartLocation_DifferentPlayersGetSeparateLocations()
+    {
+        var doc = BlankMap.Create();
+        int slocType = PlacementCommand.StartLocationRawcode.FromRawcode();
+
+        PlacementCommand.PlaceStartLocation(doc, player: 0, x: 0f, y: 0f);
+        PlacementCommand.PlaceStartLocation(doc, player: 1, x: 1024f, y: 1024f);
+
+        var units = doc.GetFile(PlacementCommand.UnitsFile)?.Model as MapUnits;
+        Assert.NotNull(units);
+        Assert.Equal(2, units!.Units.Count(u => u.TypeId == slocType));
+        Assert.Equal(
+            new[] { 0, 1 },
+            units.Units.Where(u => u.TypeId == slocType).Select(u => u.OwnerId).OrderBy(n => n));
+    }
+
+    [Fact]
+    public void PlaceStartLocation_RejectsNegativePlayer()
+    {
+        var doc = BlankMap.Create();
+        var result = PlacementCommand.PlaceStartLocation(doc, player: -1, x: 0f, y: 0f);
+        Assert.False(result.Ok);
+        Assert.Null(doc.GetFile(PlacementCommand.UnitsFile)); // nothing written on rejection
+    }
+
     // ---- Doodads (war3map.doo) --------------------------------------------
 
     [Fact]

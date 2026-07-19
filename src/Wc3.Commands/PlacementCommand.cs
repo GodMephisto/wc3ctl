@@ -88,6 +88,48 @@ public static class PlacementCommand
         return new(true, $"placed {typeRawcode} (owner {ownerId}) at ({x}, {y}) as unit #{creationNumber}", creationNumber);
     }
 
+    /// <summary>The 4-character type id the World Editor uses for a start location inside
+    /// war3mapUnits.doo. A start location is stored as a preplaced "unit" of this type owned
+    /// by the player it belongs to; the unit's (x, y) is that player's spawn point.</summary>
+    public const string StartLocationRawcode = "sloc";
+
+    /// <summary>
+    /// Places (or moves) player <paramref name="player"/>'s start location at map coordinates
+    /// (<paramref name="x"/>, <paramref name="y"/>). The World Editor permits exactly one start
+    /// location per player, so if this player already has one it is moved rather than duplicated
+    /// (preserving its CreationNumber). Otherwise a fresh <c>sloc</c> unit is added. Returns the
+    /// start location's CreationNumber.
+    /// </summary>
+    public static PlaceUnitResult PlaceStartLocation(MapDocument doc, int player, float x, float y)
+    {
+        if (player < 0)
+            return new(false, $"invalid player {player} — must be >= 0");
+
+        var units = GetOrCreateUnits(doc);
+        int slocType = StartLocationRawcode.FromRawcode();
+
+        // One start location per player: move the existing one in place if present so its
+        // CreationNumber (and any trigger references keyed off it) survive the edit.
+        var existing = units.Units.FirstOrDefault(u => u.TypeId == slocType && u.OwnerId == player);
+        if (existing is not null)
+        {
+            existing.Position = new Vector3(x, y, existing.Position.Z);
+            doc.AddOrReplaceModelFile(UnitsFile, units);
+            return new(true,
+                $"moved player {player} start location to ({x}, {y}) (unit #{existing.CreationNumber})",
+                existing.CreationNumber);
+        }
+
+        // None yet: delegate to PlaceUnit so the UnitData defaults (skin, hero fields, inventory
+        // lists) live in exactly one place.
+        var result = PlaceUnit(doc, StartLocationRawcode, player, x, y);
+        return result.Ok
+            ? new(true,
+                $"placed player {player} start location at ({x}, {y}) (unit #{result.CreationNumber})",
+                result.CreationNumber)
+            : result;
+    }
+
     /// <summary>Returns the map's parsed MapUnits, creating an empty modern one if absent.</summary>
     private static MapUnits GetOrCreateUnits(MapDocument doc)
     {
