@@ -1,7 +1,9 @@
 // src/Wc3.MapDocument/MapDocument.cs
+using War3Net.Build.Environment;
 using War3Net.Build.Extensions;
 using War3Net.Build.Import;
 using War3Net.Build.Object;
+using War3Net.Build.Widget;
 using War3Net.IO.Mpq;
 
 namespace Wc3.Model;
@@ -215,6 +217,18 @@ public sealed class MapDocument
             case BuffObjectData m: return WriteBinary(w => w.Write(m));
             case UpgradeObjectData m: return WriteBinary(w => w.Write(m));
             case ImportedFiles m: return WriteBinary(w => w.Write(m));
+            // Widget placement files (war3mapUnits.doo / war3map.doo). The read path
+            // (Parsers.cs) parses these into MapUnits/MapDoodads, so the write path must
+            // match or a dirtied placement edit would hit the throw below. Confirmed via
+            // reflection: BinaryWriterExtensions.Write(BinaryWriter, MapUnits/MapDoodads).
+            case MapUnits m: return WriteBinary(w => w.Write(m));
+            case MapDoodads m: return WriteBinary(w => w.Write(m));
+            // Pathing map (war3map.wpm). Read via ReadMapPathingMap (Parsers.cs); write
+            // confirmed via reflection: BinaryWriterExtensions.Write(BinaryWriter, MapPathingMap).
+            case MapPathingMap m: return WriteBinary(w => w.Write(m));
+            // Regions (war3map.w3r). Read via ReadMapRegions (Parsers.cs); write
+            // confirmed via reflection: BinaryWriterExtensions.Write(BinaryWriter, MapRegions).
+            case MapRegions m: return WriteBinary(w => w.Write(m));
         }
 
         // A dirty entry with no override and no supported model would silently lose

@@ -207,6 +207,96 @@ public static class Program
         }));
         obj.AddCommand(objNew);
 
+        // ---- placement: add doodads/regions to a map and save the edited copy ----
+        var placeXArg = new Argument<float>("x", "World X coordinate.");
+        var placeYArg = new Argument<float>("y", "World Y coordinate.");
+        var placeZOpt = new Option<float>("--z", () => 0f, "World Z (height offset). Default: 0.");
+        var placeRotOpt = new Option<float>("--rotation", () => 0f, "Facing angle in radians. Default: 0.");
+        var placeScaleOpt = new Option<float>("--scale", () => 1f, "Uniform scale. Default: 1.");
+        var placeVarOpt = new Option<int>("--variation", () => 0, "Doodad variation index. Default: 0.");
+        var place = new Command("place", "Place objects on a map and save the edited copy.");
+
+        var placeDooRawcode = new Argument<string>("rawcode", "Four-character doodad type rawcode.");
+        var placeDoodad = new Command("doodad",
+            "Place a doodad at (x, y) and save the edited map. Writes war3map.doo.")
+        { mapArg, placeDooRawcode, placeXArg, placeYArg, placeZOpt, placeRotOpt, placeScaleOpt, placeVarOpt, setOut };
+        placeDoodad.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = PlacementCommand.PlaceDoodad(doc,
+                p.GetValueForArgument(placeDooRawcode),
+                p.GetValueForArgument(placeXArg),
+                p.GetValueForArgument(placeYArg),
+                p.GetValueForOption(placeZOpt),
+                p.GetValueForOption(placeRotOpt),
+                p.GetValueForOption(placeScaleOpt),
+                p.GetValueForOption(placeVarOpt));
+            if (!r.Ok)
+            {
+                Emit(p.GetValueForOption(jsonOption), r, () => r.Message);
+                exitCode = 1;
+                return;
+            }
+            var dest = p.GetValueForOption(setOut) ?? Path.Combine(
+                Path.GetDirectoryName(map) ?? "",
+                Path.GetFileNameWithoutExtension(map) + ".edited" + Path.GetExtension(map));
+            doc.Save(dest);
+            Emit(p.GetValueForOption(jsonOption),
+                new { r.Ok, r.Message, r.CreationNumber, SavedTo = dest },
+                () => $"{r.Message}\nsaved: {dest}");
+        }));
+        place.AddCommand(placeDoodad);
+
+        var placeRegName = new Argument<string>("name", "Region name.");
+        var placeRegLeft = new Argument<float>("left", "West edge (min X).");
+        var placeRegBottom = new Argument<float>("bottom", "South edge (min Y).");
+        var placeRegRight = new Argument<float>("right", "East edge (max X).");
+        var placeRegTop = new Argument<float>("top", "North edge (max Y).");
+        var placeRegion = new Command("region",
+            "Add a rectangular region and save the edited map. Writes war3map.w3r.")
+        { mapArg, placeRegName, placeRegLeft, placeRegBottom, placeRegRight, placeRegTop, setOut };
+        placeRegion.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = PlacementCommand.PlaceRegion(doc,
+                p.GetValueForArgument(placeRegName),
+                p.GetValueForArgument(placeRegLeft),
+                p.GetValueForArgument(placeRegBottom),
+                p.GetValueForArgument(placeRegRight),
+                p.GetValueForArgument(placeRegTop));
+            if (!r.Ok)
+            {
+                Emit(p.GetValueForOption(jsonOption), r, () => r.Message);
+                exitCode = 1;
+                return;
+            }
+            var dest = p.GetValueForOption(setOut) ?? Path.Combine(
+                Path.GetDirectoryName(map) ?? "",
+                Path.GetFileNameWithoutExtension(map) + ".edited" + Path.GetExtension(map));
+            doc.Save(dest);
+            Emit(p.GetValueForOption(jsonOption),
+                new { r.Ok, r.Message, r.CreationNumber, SavedTo = dest },
+                () => $"{r.Message}\nsaved: {dest}");
+        }));
+        place.AddCommand(placeRegion);
+
+        // ---- palette: the doodad types placeable on a map (base catalog ⊕ map object-data) ----
+        var palette = new Command("palette",
+            "List the doodad types placeable on a map (base-game catalog + the map's own object-data).")
+        { mapArg };
+        palette.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = PaletteCommand.DoodadPalette(
+                MapDocument.Load(p.GetValueForArgument(mapArg)),
+                p.GetValueForOption(gameDirOption));
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.DoodadPalette(r));
+        }));
+
         var renderOut = new Option<string?>(new[] { "-o", "--out" },
             "Output PNG path. Default: <map name>.png in the current directory.");
         var render = new Command("render", "Render a top-down terrain image to PNG.") { mapArg, renderOut };
@@ -454,6 +544,7 @@ public static class Program
         root.AddCommand(extract); root.AddCommand(render); root.AddCommand(renderModel);
         root.AddCommand(script); root.AddCommand(bundle); root.AddCommand(port);
         root.AddCommand(convert); root.AddCommand(validate);
+        root.AddCommand(place); root.AddCommand(palette);
 
         int parseResult = await root.InvokeAsync(args);
         return parseResult != 0 ? parseResult : exitCode;

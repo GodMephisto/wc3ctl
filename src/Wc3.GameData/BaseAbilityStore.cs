@@ -31,4 +31,13 @@ public sealed class BaseAbilityStore
     /// <summary>Field-code -> base value for the given ability; false if no field resolves.</summary>
     public bool TryGetAbility(string rawcode, out IReadOnlyDictionary<string, string> fieldsByCode)
         => _store.TryGet(rawcode, out fieldsByCode);
+
+    /// <summary>Field metadata including the SLK `type` token (for typed editors).</summary>
+    public ObjectMetadata FieldMetadata => _store.Metadata;
+
+    /// <summary>Every ability rawcode in the base data (the ability catalog).</summary>
+    public IEnumerable<string> Rawcodes => _store.Rawcodes;
+
+    /// <summary>Distinct base values a field takes across all abilities (enum option set).</summary>
+    public IEnumerable<string> DistinctValues(string fieldCode) => _store.DistinctValues(fieldCode);
 }

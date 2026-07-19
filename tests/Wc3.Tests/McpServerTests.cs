@@ -14,7 +14,8 @@ public class McpServerTests
 {
     private static readonly string[] ExpectedTools =
     {
-        "bundle_unit", "list_files", "map_info", "object_get", "object_list", "port_unit", "render_model",
+        "bundle_unit", "list_files", "map_info", "object_get", "object_list",
+        "palette_doodad", "place_doodad", "place_region", "port_unit", "render_model",
     };
 
     /// <summary>Runs the body against a live in-memory client/server session.</summary>

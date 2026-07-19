@@ -122,6 +122,47 @@ public static class Wc3Tools
             return new PortUnitToolResult(outPath, report);
         });
 
+    [McpServerTool(Name = "palette_doodad", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("List the doodad types placeable on a map - the palette to consult before place_doodad. Unions the base-game doodad catalog (installed GameData) with the map's own object-data: custom New* doodads and modified Base* doodads. Each entry carries its four-char rawcode, a resolved display name (null when unresolvable), its source (base|map-custom|map-modified) and the base it derives from. Without a WC3 install the palette is map-only. The map is never modified.")]
+    public static DoodadPaletteResult PaletteDoodad(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var).")] string? game_dir = null)
+        => Run(() => PaletteCommand.DoodadPalette(LoadMap(map), ResolveGameDir(game_dir)));
+
+    [McpServerTool(Name = "place_doodad", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Place a doodad instance at (x, y) on the map's doodad layer (war3map.doo) and save the edited map to out_path. The input map is NEVER modified in place - out_path must differ from it. Returns the assigned creation number.")]
+    public static PlacementToolResult PlaceDoodad(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map). Created/overwritten; parent directories are created as needed.")] string out_path,
+        [Description("Four-character doodad type rawcode from palette_doodad, e.g. 'ATtr'.")] string type_rawcode,
+        [Description("World X coordinate.")] float x,
+        [Description("World Y coordinate.")] float y,
+        [Description("World Z height offset. Default 0.")] float z = 0f,
+        [Description("Facing angle in radians. Default 0.")] float rotation = 0f,
+        [Description("Uniform scale. Default 1.")] float scale = 1f,
+        [Description("Doodad variation index. Default 0.")] int variation = 0)
+        => Run(() => SavePlacement(map, out_path, doc =>
+        {
+            var r = PlacementCommand.PlaceDoodad(doc, type_rawcode, x, y, z, rotation, scale, variation);
+            return (r.Ok, r.Message, r.CreationNumber);
+        }));
+
+    [McpServerTool(Name = "place_region", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Define a rectangular region on the map's region layer (war3map.w3r) and save the edited map to out_path. The input map is NEVER modified in place - out_path must differ from it. Bounds need right>left and top>bottom. Returns the assigned creation number.")]
+    public static PlacementToolResult PlaceRegion(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map). Created/overwritten; parent directories are created as needed.")] string out_path,
+        [Description("Region name (non-empty).")] string name,
+        [Description("West edge, min X (world coordinate).")] float left,
+        [Description("South edge, min Y (world coordinate).")] float bottom,
+        [Description("East edge, max X (world coordinate).")] float right,
+        [Description("North edge, max Y (world coordinate).")] float top)
+        => Run(() => SavePlacement(map, out_path, doc =>
+        {
+            var r = PlacementCommand.PlaceRegion(doc, name, left, bottom, right, top);
+            return (r.Ok, r.Message, r.CreationNumber);
+        }));
+
     // ---- shared plumbing -------------------------------------------------
 
     /// <summary>Expected failures become clean MCP tool errors, never stack traces.</summary>
@@ -142,6 +183,27 @@ public static class Wc3Tools
         catch (Exception ex) { throw new McpException($"could not load '{map}': {ex.Message}"); }
     }
 
+    /// <summary>Load the map, apply a placement mutation, and save the edited copy to out_path.
+    /// The input map is never modified in place (out_path must differ) - mirroring the no-clobber
+    /// stance of render_model and port_unit. A rejected placement surfaces as a clean MCP error.</summary>
+    private static PlacementToolResult SavePlacement(
+        string map, string outPath, Func<MapDocument, (bool Ok, string Message, int CreationNumber)> place)
+    {
+        if (string.IsNullOrWhiteSpace(outPath))
+            throw new McpException("out_path is required");
+        string full = Path.GetFullPath(outPath);
+        if (string.Equals(full, Path.GetFullPath(map), StringComparison.OrdinalIgnoreCase))
+            throw new McpException("out_path must not be the input map file itself");
+
+        var doc = LoadMap(map);
+        var (ok, message, creationNumber) = place(doc);
+        if (!ok) throw new McpException(message);
+
+        if (Path.GetDirectoryName(full) is { Length: > 0 } dir) Directory.CreateDirectory(dir);
+        doc.Save(full);
+        return new PlacementToolResult(full, message, creationNumber);
+    }
+
     private static ObjectKind ParseKind(string kind)
     {
         try { return ObjectKinds.Parse(kind); }
@@ -160,3 +222,7 @@ public sealed record RenderModelToolResult(string SavedTo, int SizeBytes, bool I
 
 /// <summary>port_unit outcome: where the new .ported map was written plus the full port report.</summary>
 public sealed record PortUnitToolResult(string SavedTo, PortResult Report);
+
+/// <summary>place_doodad / place_region outcome: where the edited map was written, a
+/// human-readable message, and the creation number assigned to the new instance.</summary>
+public sealed record PlacementToolResult(string SavedTo, string Message, int CreationNumber);

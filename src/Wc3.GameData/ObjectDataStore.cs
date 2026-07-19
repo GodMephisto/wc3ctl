@@ -73,6 +73,25 @@ public sealed class ObjectDataStore
         return result.Count > 0;
     }
 
+    /// <summary>Every rawcode present in any loaded data SLK (the object catalog for this
+    /// kind). Union across tables, case-insensitively de-duplicated.</summary>
+    public IEnumerable<string> Rawcodes =>
+        _slks.Values.SelectMany(t => t.RowKeys).Distinct(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Distinct non-empty base values a single field takes across every object of
+    /// this kind — the correct-by-construction option set for an enumerated field (its
+    /// tokens are exactly the ones the game already uses, so write-back can't corrupt).</summary>
+    public IEnumerable<string> DistinctValues(string fieldCode)
+    {
+        if (!_meta.TryGet(fieldCode, out var fm)) yield break;
+        if (!_slks.TryGetValue(fm.SlkName, out var table)) yield break;
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var key in table.RowKeys)
+            if (table.TryGetRow(key, out var row) && row.TryGetValue(fm.Column, out var v)
+                && v.Length > 0 && seen.Add(v))
+                yield return v;
+    }
+
     /// <summary>Default table-name -> CASC path convention: lowercased + ".slk" under units\.</summary>
     public static string UnitsDirSlk(string name) => UnitsDir + name.ToLowerInvariant() + ".slk";
 

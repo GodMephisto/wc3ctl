@@ -30,4 +30,28 @@ public static class GameInstall
             if (Directory.Exists(p)) return p;
         return null;
     }
+
+    /// <summary>
+    /// Finds the Warcraft III executable under an install root (located via
+    /// <see cref="Locate"/>). Probes the Reforged layout (Warcraft III.exe under
+    /// _retail_/x86_64 or x86_64) first, then the classic war3.exe in the root.
+    /// Returns null when the install or a known executable can't be found.
+    /// </summary>
+    public static string? LocateExecutable(string? overridePath = null)
+    {
+        if (Locate(overridePath) is not { } root)
+            return null;
+        foreach (var rel in new[]
+        {
+            Path.Combine("_retail_", "x86_64", "Warcraft III.exe"),
+            Path.Combine("x86_64", "Warcraft III.exe"),
+            "Warcraft III.exe",
+            "war3.exe",
+        })
+        {
+            var full = Path.Combine(root, rel);
+            if (File.Exists(full)) return full;
+        }
+        return null;
+    }
 }

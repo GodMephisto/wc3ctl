@@ -182,6 +182,50 @@ public static class ObjectKinds
     };
 
     /// <summary>
+    /// A field's editor type token (from the kind's metadata SLK) plus the enumerated
+    /// option set, generalized over every kind. Options are the distinct base-data values
+    /// the field takes across all objects of the kind — correct-by-construction, so a
+    /// dropdown/multiselect can only ever write a token the game already uses. For list
+    /// types ("*List") the options are the individual comma-separated tokens; otherwise
+    /// the whole values. Empty options ⇒ caller should fall back to free text. Leveled
+    /// keys ("code:N") resolve by the bare code.
+    /// </summary>
+    internal static bool TryGetFieldOptions(
+        GameDataContext? ctx, ObjectKind kind, string fieldCode,
+        out string type, out bool isList, out IReadOnlyList<string> options)
+    {
+        type = "";
+        isList = false;
+        options = Array.Empty<string>();
+        if (ctx is null) return false;
+
+        int colon = fieldCode.IndexOf(':');
+        var code = colon < 0 ? fieldCode : fieldCode[..colon];
+
+        ObjectMetadata meta;
+        Func<string, IEnumerable<string>> distinct;
+        switch (kind)
+        {
+            case ObjectKind.Unit: meta = ctx.Units.FieldMetadata; distinct = ctx.Units.DistinctValues; break;
+            case ObjectKind.Ability: meta = ctx.Abilities.FieldMetadata; distinct = ctx.Abilities.DistinctValues; break;
+            default: var s = SimpleStore(ctx, kind); meta = s.Metadata; distinct = s.DistinctValues; break;
+        }
+
+        if (meta.TryGet(code, out var fm)) type = fm.Type;
+        isList = type.EndsWith("List", StringComparison.OrdinalIgnoreCase);
+
+        var values = distinct(code);
+        var tokens = isList
+            ? values.SelectMany(v => v.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            : values;
+        options = tokens
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(v => v, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        return true;
+    }
+
+    /// <summary>
     /// The base game's name for a standard object, when resolvable: units via the
     /// localized name table; other kinds via the store's name field, whose SLK-backed
     /// values are WESTRING refs (an unresolvable ref is not a name → null). Kinds whose

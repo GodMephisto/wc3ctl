@@ -18,6 +18,17 @@ public sealed record MergedObjectResult(
     IReadOnlyList<MergedField> Fields, IReadOnlyList<string> Diagnostics);
 public sealed record ObjectListItem(string Rawcode, string? BaseRawcode, string? Name);
 public sealed record ObjectListResult(IReadOnlyList<ObjectListItem> Items);
+// Doodad "palette": the placeable doodad catalog = base-game set (GameData) unioned with
+// the map's own object-data (war3map.w3d ⊕ war3mapSkin.w3d). Source: "base" (stock, from
+// the install), "map-custom" (a New* doodad defined by the map), or "map-modified" (a
+// base doodad the map edits in place). BaseRawcode = the base a map entry derives from
+// (null for pure base-catalog rows). Name is null when unresolvable (no install / WESTRING).
+public sealed record PaletteEntry(string Rawcode, string? Name, string Source, string? BaseRawcode);
+public sealed record DoodadPaletteResult(
+    bool Ok, string Message, IReadOnlyList<PaletteEntry> Entries, IReadOnlyList<string> Diagnostics);
+// Same shape as DoodadPaletteResult, over the unit catalog (ObjectKind.Unit) instead.
+public sealed record UnitPaletteResult(
+    bool Ok, string Message, IReadOnlyList<PaletteEntry> Entries, IReadOnlyList<string> Diagnostics);
 public sealed record ExtractedItem(string? Name, int BlockIndex, byte[] Bytes);
 public sealed record ExtractResult(IReadOnlyList<ExtractedItem> Items);
 

@@ -1,6 +1,6 @@
 namespace Wc3.GameData;
 
-public sealed record ObjectFieldMeta(string Code, string SlkName, string Column, string DisplayName);
+public sealed record ObjectFieldMeta(string Code, string SlkName, string Column, string DisplayName, string Type);
 
 /// <summary>
 /// Type-agnostic view of the metadata SLK shape shared by every Object Editor type
@@ -27,8 +27,9 @@ public sealed class ObjectMetadata
             string slk = row.TryGetValue("slk", out var s) ? s : "";
             string col = row.TryGetValue("field", out var f) ? f : "";
             string disp = row.TryGetValue("displayname", out var d) ? d : code;
+            string type = row.TryGetValue("type", out var t) ? t : "";
             if (col.Length > 0)
-                m._byCode[code] = new ObjectFieldMeta(code, slk, col, disp);
+                m._byCode[code] = new ObjectFieldMeta(code, slk, col, disp, type);
         }
         return m;
     }
