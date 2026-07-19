@@ -33,11 +33,11 @@ placement* (units, doodads, regions, cameras). Reads/writes `war3map.w3e`
 |---|---|---|
 | Read/write `war3map.w3e` (tiles, heights, cliffs, variations, water, blight) | ✅ Have | `MapEnvironment` parse/write; round-trips clean |
 | Blank terrain synthesis (new map) | ✅ Have | `BlankMap` — synthesizes valid `w3e`+`w3i` MPQ (task #1) |
-| Tile/texture painting (per-tile ground + cliff textures) | 🟡 Partial | Model is read/writable; **no brush/paint operation API** |
-| Cliffs raise/lower/ramp; add cliff types | 🟡 Partial | Data editable; no geometry-op helpers. Reforged 2.0.4 added *extra cliff types* |
+| Tile/texture painting (per-tile ground + cliff textures) | ✅ Have | `TerrainCommand` paint — validated tile-type brush over `war3map.w3e`, circle/square + radius; tested |
+| Cliffs raise/lower/ramp; add cliff types | ✅ Have | `TerrainCommand` cliff + ramp — cliff-level set/raise/lower and ramp-toggle brushes on `war3map.w3e`; tested |
 | Height/deformation brushes | ✅ Have | `TerrainCommand` — HiveWE-style raise/lower/plateau/smooth/flatten, circle/square brush + radius, on `war3map.w3e`; reports height stats; tested |
-| Water height editing | 🟡 Partial | Field-level only; no area brush |
-| Blight painting | 🟡 Partial | Bitfield present; no paint op |
+| Water height editing | ✅ Have | `TerrainCommand` water — area brush sets/clears water flag + absolute height over `war3map.w3e`, circle/square + radius; tested |
+| Blight painting | ✅ Have | `TerrainCommand` blight — set/clear blight-flag brush over `war3map.w3e`, circle/square + radius; tested |
 | Pathing / blocker map (`war3map.wpm`) | ✅ Have | `PathingCommand` — HiveWE-style paint/set/clear/toggle brush over walk/fly/build pathing bits, circle/square + radius, on `war3map.wpm`; tested |
 | Fog / weather / sky / environment settings | 🟡 Partial | Stored in `w3i`/`w3e`; exposed via MapInfo, not all edited |
 | Camera bounds | ✅ Have | In `w3i` (MapInfo read/write) |
@@ -48,10 +48,12 @@ placement* (units, doodads, regions, cameras). Reads/writes `war3map.w3e`
 | Start locations | 🟡 Partial | Count in `w3i`; no placement helper |
 | Tile variations / tileset swap (up to 64 tiles) | 🟡 Partial | Data model supports; no convenience op |
 
-**Biggest terrain gaps (remaining):** placement APIs (units/doodads/regions) and the
-height + pathing brushes now ship (`PlacementCommand`, `TerrainCommand`, `PathingCommand`,
-all tested). What's left: **texture/tile-paint brush**, **cliff/ramp geometry ops**, and
-**named camera-object placement** (`war3map.w3c`).
+**Biggest terrain gaps (remaining):** the terrain-brush family now ships end to end —
+placement (`PlacementCommand`), height/deform, texture-paint, cliff/ramp, water, and
+blight (`TerrainCommand`), plus pathing (`PathingCommand`), all tested and reachable from
+both the CLI and MCP surfaces (guarded by `CliMcpParityTests`). What's left: **named
+camera-object placement** (`war3map.w3c`), **tileset-swap / tile-variation convenience
+ops**, and full **fog / weather / sky** editing beyond `w3i` field access.
 
 ---
 
@@ -178,8 +180,9 @@ Ranked by value for an automatable map tool:
    Camera-object placement (`.w3c`) still open.
 4. ✅ **Pathing-map brush ops** (`war3map.wpm`) — **shipped** (`PathingCommand`, tested) —
    HiveWE's signature capability.
-5. 🟡 **Terrain brush primitives** — height/deform brush **shipped** (`TerrainCommand`, tested);
-   **texture/tile-paint and cliff/ramp geometry ops still open** — enables generative terrain.
+5. ✅ **Terrain brush primitives** — height/deform, texture-paint, cliff/ramp, water, and
+   blight brushes all **shipped** (`TerrainCommand`, tested, CLI+MCP) — HiveWE-style
+   generative terrain is done; only tileset-swap/tile-variation convenience ops remain.
 6. **Camera-object placement** (`war3map.w3c`) — discrete named cameras; small, completes
    in-map placement automation.
 7. **GUI trigger (`.wtg`) parse/edit** — largest missing module; big effort, defer
