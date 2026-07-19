@@ -296,6 +296,124 @@ public static class TerrainRenderer
     }
 
     /// <summary>
+    /// Inverts the <see cref="RenderPerspectivePng"/> camera: given a pixel in the
+    /// rendered 3D image, casts a ray from the eye through that pixel and marches it
+    /// against the terrain heightmap, returning the world (x,y) it strikes. Kept in
+    /// lockstep with the render loop's camera math so picks match what is drawn.
+    /// <paramref name="width"/>/<paramref name="height"/> and the yaw/pitch/zoom must
+    /// be the same values passed to the render that produced the image.
+    /// </summary>
+    public static (bool ok, float wx, float wy) PickTerrain(
+        Wc3.Model.MapDocument doc, int width, int height,
+        float yawDegrees, float pitchDegrees, float zoom,
+        float px, float py)
+    {
+        if (doc.GetFile("war3map.w3e")?.Model is not MapEnvironment env)
+            return (false, 0f, 0f);
+
+        width = Math.Clamp(width, 16, 4096);
+        height = Math.Clamp(height, 16, 4096);
+
+        int w = (int)env.Width + 1;
+        int h = (int)env.Height + 1;
+        var tiles = env.TerrainTiles;
+        if (tiles is null || tiles.Count < w * h)
+            return (false, 0f, 0f);
+
+        const float TileWorld = TerrainTransform.TileWorld;
+        const float StepWorld = 128f;
+        float originX = -(int)env.Width * (TileWorld / 2f);
+        float originY = -(int)env.Height * (TileWorld / 2f);
+
+        // Height grid (world Z per tilepoint) — identical to the render's vertex Z.
+        var hz = new float[w * h];
+        float minZ = float.MaxValue, maxZ = float.MinValue;
+        for (int k = 0; k < w * h; k++)
+        {
+            float z = (tiles[k].Height + tiles[k].CliffLevel) * StepWorld;
+            hz[k] = z;
+            if (z < minZ) minZ = z;
+            if (z > maxZ) maxZ = z;
+        }
+
+        // Rebuild the exact orbit camera used by RenderPerspectivePng.
+        int W = width, H = height;
+        var center = new Vector3(0f, 0f, (minZ + maxZ) * 0.5f);
+        float span = MathF.Max(w * TileWorld, h * TileWorld);
+        float radius = MathF.Max(span, maxZ - minZ) * 0.5f + TileWorld;
+        float yaw = yawDegrees * (MathF.PI / 180f);
+        float pitch = Math.Clamp(pitchDegrees, 2f, 89f) * (MathF.PI / 180f);
+        var eyeDir = new Vector3(
+            MathF.Cos(pitch) * MathF.Cos(yaw),
+            MathF.Cos(pitch) * MathF.Sin(yaw),
+            MathF.Sin(pitch));
+        float dist = radius / MathF.Max(zoom, 0.05f) * 2.4f;
+        var eye = center + eyeDir * dist;
+        var forward = Vector3.Normalize(center - eye);
+        var right = Vector3.Normalize(Vector3.Cross(forward, Vector3.UnitZ));
+        var up = Vector3.Cross(right, forward);
+        float focal = 0.5f * H / MathF.Tan(0.5f * (48f * MathF.PI / 180f));
+
+        // World-space ray through the pixel: the algebraic inverse of Project().
+        float a = (px - W * 0.5f) / focal;
+        float b = (H * 0.5f - py) / focal;
+        var dir = Vector3.Normalize(forward + a * right + b * up);
+
+        // Only a descending ray can strike the terrain the camera looks down on.
+        if (dir.Z >= -1e-4f)
+            return (false, 0f, 0f);
+
+        // Bilinear terrain height at world (x,y), clamped to the tilepoint grid.
+        float HeightAt(float x, float y)
+        {
+            float gi = Math.Clamp((x - originX) / TileWorld, 0f, w - 1.0001f);
+            float gj = Math.Clamp((y - originY) / TileWorld, 0f, h - 1.0001f);
+            int i0 = (int)gi, j0 = (int)gj;
+            int i1 = Math.Min(i0 + 1, w - 1), j1 = Math.Min(j0 + 1, h - 1);
+            float fi = gi - i0, fj = gj - j0;
+            float z0 = hz[j0 * w + i0] * (1 - fi) + hz[j0 * w + i1] * fi;
+            float z1 = hz[j1 * w + i0] * (1 - fi) + hz[j1 * w + i1] * fi;
+            return z0 * (1 - fj) + z1 * fj;
+        }
+
+        // March the segment where the ray crosses the terrain's Z band. Pad the band
+        // so a perfectly flat map (minZ == maxZ) still has a non-degenerate range.
+        float pad = (maxZ - minZ) * 0.05f + TileWorld;
+        float tEnter = MathF.Max(0f, ((maxZ + pad) - eye.Z) / dir.Z);   // dir.Z < 0 here
+        float tExit = ((minZ - pad) - eye.Z) / dir.Z;
+        if (tExit <= tEnter)
+            return (false, 0f, 0f);
+
+        const int Steps = 256;
+        float stepT = (tExit - tEnter) / Steps;
+        float tPrev = tEnter;
+        float fPrev = (eye + dir * tPrev) is var p0 ? p0.Z - HeightAt(p0.X, p0.Y) : 0f;
+        for (int s = 1; s <= Steps; s++)
+        {
+            float t = tEnter + stepT * s;
+            var p = eye + dir * t;
+            float f = p.Z - HeightAt(p.X, p.Y);
+            if (f <= 0f && fPrev > 0f)
+            {
+                // Sign change between tPrev..t — bisect for a tighter surface hit.
+                float lo = tPrev, hi = t;
+                for (int bi = 0; bi < 12; bi++)
+                {
+                    float mid = 0.5f * (lo + hi);
+                    var pm = eye + dir * mid;
+                    if (pm.Z - HeightAt(pm.X, pm.Y) > 0f) lo = mid; else hi = mid;
+                }
+                var hit = eye + dir * (0.5f * (lo + hi));
+                float maxX = originX + (w - 1) * TileWorld;
+                float maxY = originY + (h - 1) * TileWorld;
+                return (true, Math.Clamp(hit.X, originX, maxX), Math.Clamp(hit.Y, originY, maxY));
+            }
+            tPrev = t; fPrev = f;
+        }
+        return (false, 0f, 0f);
+    }
+
+    /// <summary>
     /// World/pixel mapping for <see cref="RenderTerrainPng"/> so callers (e.g. the
     /// Studio's click-to-place) can turn a pixel in the rendered image back into a
     /// world (x,y). Kept in lockstep with the render loop's scale and north-up flip.

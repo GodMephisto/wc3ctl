@@ -3,24 +3,33 @@
              x:Class="Wc3.Studio.Panels.TerrainView">
     <DockPanel>
 
-        <!-- Caption bar: image dimensions, zoom level, fit/reset -->
+        <!-- Caption bar: image dimensions, zoom level, fit/reset, active placement brush -->
         <Border DockPanel.Dock="Top" BorderThickness="0,0,0,1"
                 BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
                 Padding="8,4">
             <StackPanel Orientation="Horizontal" Spacing="8">
                 <Button Name="FitButton" Content="Fit" IsEnabled="False" Click="OnFitClick"/>
                 <Button Name="ResetButton" Content="1:1" IsEnabled="False" Click="OnResetClick"/>
+                <ToggleButton Name="Mode3DButton" Content="3D" IsEnabled="False" Click="OnToggle3D"
+                              ToolTip.Tip="Toggle between the flat minimap and the 3D in-game view"/>
                 <TextBlock Name="CaptionText" VerticalAlignment="Center" Text=""/>
+                <TextBlock Name="BrushText" VerticalAlignment="Center" Text=""
+                           Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"/>
             </StackPanel>
         </Border>
 
-        <!-- Viewport: rendered terrain with scroll + wheel zoom -->
+        <!-- Viewport: rendered terrain with scroll + wheel zoom; ImageHost catches
+             clicks for placement, MarkerCanvas overlays the placement markers. -->
         <Grid>
             <ScrollViewer Name="ScrollHost"
                           HorizontalScrollBarVisibility="Auto"
                           VerticalScrollBarVisibility="Auto">
-                <Image Name="TerrainImage" Stretch="Fill"
-                       HorizontalAlignment="Left" VerticalAlignment="Top"/>
+                <Panel Name="ImageHost" HorizontalAlignment="Left" VerticalAlignment="Top"
+                       Background="Transparent" PointerPressed="OnTerrainPressed"
+                       PointerMoved="OnPointerMoved" PointerReleased="OnPointerReleased">
+                    <Image Name="TerrainImage" Stretch="Fill"/>
+                    <Canvas Name="MarkerCanvas" IsHitTestVisible="False"/>
+                </Panel>
             </ScrollViewer>
             <TextBlock Name="MessageText"
                        HorizontalAlignment="Center" VerticalAlignment="Center"

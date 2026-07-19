@@ -29,6 +29,23 @@ public partial class MapWorkspaceView : UserControl
         DependenciesPanel.SelectionChanged += OnPortSelectionChanged;
         ObjectsPanel.ObjectSelected += OnObjectSelected;
         ObjectsPanel.DependenciesRequested += OnDependenciesRequested;
+        PalettePanel.PlacementChanged += OnPalettePlacementChanged;
+        TerrainPanel.MapEdited += OnMapEdited;
+    }
+
+    /// <summary>Palette selection → arm the Terrain tab's placement brush and jump there.</summary>
+    private void OnPalettePlacementChanged(object? sender, PaletteRow? row)
+    {
+        TerrainPanel.SetPlacementBrush(row);
+        if (row is not null)
+            PanelTabs.SelectedIndex = 0; // Terrain is the first tab
+    }
+
+    /// <summary>A click-to-place mutated the in-memory map → enable Save.</summary>
+    private void OnMapEdited(object? sender, EventArgs e)
+    {
+        SaveButton.IsEnabled = true;
+        StatusText.Text = "Placed object (unsaved) — click Save to write it to the map.";
     }
 
     /// <summary>

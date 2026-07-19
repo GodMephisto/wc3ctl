@@ -85,9 +85,18 @@ public partial class PaletteView : UserControl, IMapPanel
         StatusText.Text = $"{list.Count} shown · {units} unit(s), {doodads} doodad(s)";
     }
 
+    /// <summary>The currently selected placeable, or null. Consulted by the Terrain
+    /// tab's click-to-place via <see cref="PlacementChanged"/>.</summary>
+    public PaletteRow? SelectedPlacement => PaletteList.SelectedItem as PaletteRow;
+
+    /// <summary>Raised when the selected placeable changes (row click or clear).</summary>
+    public event EventHandler<PaletteRow?>? PlacementChanged;
+
     private void OnSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
-        if (PaletteList.SelectedItem is PaletteRow row)
-            StatusText.Text = $"Selected: {row.Display} — {row.Detail}";
+        var row = PaletteList.SelectedItem as PaletteRow;
+        if (row is not null)
+            StatusText.Text = $"Selected: {row.Display} — {row.Detail}  ·  switch to Terrain and click to place";
+        PlacementChanged?.Invoke(this, row);
     }
 }
