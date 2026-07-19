@@ -1,5 +1,6 @@
 // src/Wc3.Studio/AudioPlayer.cs
 using NAudio.Wave;
+using NAudio.CoreAudioApi;
 
 namespace Wc3.Studio;
 
@@ -18,7 +19,7 @@ namespace Wc3.Studio;
 public sealed class AudioPlayer : IDisposable
 {
     private readonly object _gate = new();
-    private WaveOutEvent? _output;
+    private IWavePlayer? _output;
     private MediaFoundationReader? _reader;
     private string? _tempFile;
 
@@ -43,22 +44,9 @@ public sealed class AudioPlayer : IDisposable
             try
             {
                 _reader = new MediaFoundationReader(_tempFile);
-                // WAVE_MAPPER (-1): route to the current default output device. The NAudio
-                // default, DeviceNumber = 0, opens the *first* enumerated device, which
-                // throws "BadDeviceId calling waveOutOpen" whenever device 0 isn't the
-                // usable default (disabled/absent) — the common cause of that error.
-                _output = new WaveOutEvent { DeviceNumber = -1 };
+                _output = OpenOutput(_reader);   // WaveOut mapper, then WASAPI; clear throw if truly no device
                 _output.PlaybackStopped += OnStopped;
-                _output.Init(_reader);
                 _output.Play();
-            }
-            catch (NAudio.MmException mm) when (mm.Result == NAudio.MmResult.BadDeviceId)
-            {
-                // WAVE_MAPPER still failed → the box genuinely has no usable playback
-                // endpoint (headless/remote session, or audio disabled). Surface that
-                // plainly instead of winmm's raw "BadDeviceId calling waveOutOpen".
-                Teardown();
-                throw new InvalidOperationException("no audio output device is available", mm);
             }
             catch
             {
@@ -66,6 +54,46 @@ public sealed class AudioPlayer : IDisposable
                 throw;
             }
         }
+    }
+
+    /// <summary>
+    /// Opens an initialized output device for <paramref name="reader"/>. Tries the legacy
+    /// WaveOut mapper first (WAVE_MAPPER = the current default device; lowest overhead and
+    /// works on most boxes). If winmm rejects it — which happens on machines whose default
+    /// endpoint the mapper can't resolve, surfacing as "BadDeviceId calling waveOutOpen" —
+    /// it consults the modern Core Audio stack and plays via WASAPI on the default render
+    /// endpoint instead. Only when Core Audio reports no active render endpoint at all
+    /// (headless/remote session, or audio disabled) does it throw a clear, diagnosable
+    /// <see cref="InvalidOperationException"/> rather than winmm's raw device error.
+    /// </summary>
+    private static IWavePlayer OpenOutput(IWaveProvider reader)
+    {
+        WaveOutEvent? waveOut = null;
+        try
+        {
+            waveOut = new WaveOutEvent { DeviceNumber = -1 };   // -1 = WAVE_MAPPER (default device)
+            waveOut.Init(reader);
+            return waveOut;
+        }
+        catch (NAudio.MmException)
+        {
+            waveOut?.Dispose();   // release the half-open winmm handle before falling back
+        }
+
+        // winmm's mapper failed. Ask Core Audio whether a default render endpoint actually
+        // exists; if so, WASAPI can drive it even when the legacy mapper won't.
+        using var enumerator = new MMDeviceEnumerator();
+        var activeEndpoints = enumerator
+            .EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active).Count;
+        if (!enumerator.HasDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia))
+            throw new InvalidOperationException(
+                $"no audio output device is available (active render endpoints: {activeEndpoints})");
+
+        var device = enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
+        // Shared mode + push model; NAudio resamples the clip to the endpoint mix format.
+        var wasapi = new WasapiOut(device, AudioClientShareMode.Shared, false, 200);
+        wasapi.Init(reader);
+        return wasapi;
     }
 
     public void Stop()
