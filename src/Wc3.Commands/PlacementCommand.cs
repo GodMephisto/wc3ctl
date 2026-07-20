@@ -131,7 +131,7 @@ public static class PlacementCommand
     }
 
     /// <summary>Returns the map's parsed MapUnits, creating an empty modern one if absent.</summary>
-    private static MapUnits GetOrCreateUnits(MapDocument doc)
+    internal static MapUnits GetOrCreateUnits(MapDocument doc)
     {
         if (doc.GetFile(UnitsFile)?.Model is MapUnits existing)
             return existing;
@@ -191,7 +191,7 @@ public static class PlacementCommand
     }
 
     /// <summary>Returns the map's parsed MapDoodads, creating an empty modern one if absent.</summary>
-    private static MapDoodads GetOrCreateDoodads(MapDocument doc)
+    internal static MapDoodads GetOrCreateDoodads(MapDocument doc)
     {
         if (doc.GetFile(DoodadsFile)?.Model is MapDoodads existing)
             return existing;
@@ -245,7 +245,7 @@ public static class PlacementCommand
     }
 
     /// <summary>Returns the map's parsed MapRegions, creating an empty modern one if absent.</summary>
-    private static MapRegions GetOrCreateRegions(MapDocument doc)
+    internal static MapRegions GetOrCreateRegions(MapDocument doc)
     {
         if (doc.GetFile(RegionsFile)?.Model is MapRegions existing)
             return existing;
