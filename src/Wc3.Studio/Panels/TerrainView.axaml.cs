@@ -34,8 +34,9 @@ public partial class TerrainView : UserControl, IMapPanel
     private PaletteRow? _brush;
     private Wc3.Render.TerrainRenderer.TerrainTransform _xform;
     private readonly List<(double X, double Y)> _markers = new();
+    private readonly Wc3.Commands.Editing.EditHistory _history = new();
 
-    /// <summary>Raised after a click-to-place mutates the in-memory map.</summary>
+    /// <summary>Raised after a click-to-place (or an undo/redo) mutates the in-memory map.</summary>
     public event EventHandler? MapEdited;
 
     public TerrainView()
@@ -43,12 +44,14 @@ public partial class TerrainView : UserControl, IMapPanel
         InitializeComponent();
         // Tunnel so zooming wins over the ScrollViewer's own wheel scrolling.
         ScrollHost.AddHandler(PointerWheelChangedEvent, OnPointerWheel, RoutingStrategies.Tunnel);
+        _history.Changed += OnHistoryChanged;
     }
 
     public void ShowMap(MapSession session)
     {
         _session = session;
         ClearImage();
+        _history.Clear(); // the previous map's undo stack no longer applies
 
         if (session.Current is null)
         {
@@ -191,24 +194,13 @@ public partial class TerrainView : UserControl, IMapPanel
         double srcX = p.X / _zoom, srcY = p.Y / _zoom;
         var (wx, wy) = _xform.PixelToWorld(srcX, srcY);
 
-        bool ok;
-        string msg;
-        if (_brush.Kind == ObjectKind.Unit)
-        {
-            var r = PlacementCommand.PlaceUnit(doc, _brush.Rawcode, ownerId: 0, x: wx, y: wy);
-            ok = r.Ok; msg = r.Message;
-        }
-        else
-        {
-            var r = PlacementCommand.PlaceDoodad(doc, _brush.Rawcode, x: wx, y: wy);
-            ok = r.Ok; msg = r.Message;
-        }
+        var (ok, msg) = PlaceViaHistory(doc, wx, wy);
 
         if (ok)
         {
             _markers.Add((srcX, srcY));
             RedrawMarkers();
-            CaptionText.Text = $"Placed {_brush.Name ?? _brush.Rawcode} at ({wx:0}, {wy:0})";
+            CaptionText.Text = $"Placed {_brush!.Name ?? _brush.Rawcode} at ({wx:0}, {wy:0})";
             MapEdited?.Invoke(this, EventArgs.Empty);
         }
         else
@@ -277,22 +269,11 @@ public partial class TerrainView : UserControl, IMapPanel
             return;
         }
 
-        bool placed;
-        string msg;
-        if (_brush!.Kind == ObjectKind.Unit)
-        {
-            var r = PlacementCommand.PlaceUnit(doc, _brush.Rawcode, ownerId: 0, x: wx, y: wy);
-            placed = r.Ok; msg = r.Message;
-        }
-        else
-        {
-            var r = PlacementCommand.PlaceDoodad(doc, _brush.Rawcode, x: wx, y: wy);
-            placed = r.Ok; msg = r.Message;
-        }
+        var (placed, msg) = PlaceViaHistory(doc, wx, wy);
 
         if (placed)
         {
-            CaptionText.Text = $"Placed {_brush.Name ?? _brush.Rawcode} at ({wx:0}, {wy:0})";
+            CaptionText.Text = $"Placed {_brush!.Name ?? _brush.Rawcode} at ({wx:0}, {wy:0})";
             DrawMarkerAt(imagePos.X, imagePos.Y);
             MapEdited?.Invoke(this, EventArgs.Empty);
         }
@@ -300,6 +281,65 @@ public partial class TerrainView : UserControl, IMapPanel
         {
             CaptionText.Text = $"Place failed: {msg}";
         }
+    }
+
+    /// <summary>Applies the armed brush at world (wx,wy) through the undo journal so the
+    /// placement can be reverted. Returns (ok, message): on failure the message is the
+    /// placement diagnostic; on success it is the edit's label. Shared by the 2D and 3D
+    /// click paths so both get undo for free.</summary>
+    private (bool ok, string msg) PlaceViaHistory(Wc3.Model.MapDocument doc, float wx, float wy)
+    {
+        if (_brush is null)
+            return (false, "Select a placeable in the Palette tab first.");
+        try
+        {
+            Wc3.Commands.Editing.IMapEdit edit = _brush.Kind == ObjectKind.Unit
+                ? new Wc3.Commands.Editing.PlaceUnitEdit(_brush.Rawcode, ownerId: 0, x: wx, y: wy)
+                : new Wc3.Commands.Editing.PlaceDoodadEdit(_brush.Rawcode, x: wx, y: wy);
+            _history.Do(doc, edit);
+            return (true, edit.Describe);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return (false, ex.Message);
+        }
+    }
+
+    private void OnUndoClick(object? sender, RoutedEventArgs e) => Undo();
+    private void OnRedoClick(object? sender, RoutedEventArgs e) => Redo();
+
+    /// <summary>Reverts the most recent placement and repaints the live view (3D models
+    /// re-render WYSIWYG; the 2D minimap refreshes). No-op if nothing to undo.</summary>
+    public void Undo()
+    {
+        if (_session?.Current is not { } doc || !_history.Undo(doc))
+            return;
+        AfterHistoryEdit();
+    }
+
+    /// <summary>Re-applies the most recently undone placement and repaints. No-op if nothing to redo.</summary>
+    public void Redo()
+    {
+        if (_session?.Current is not { } doc || !_history.Redo(doc))
+            return;
+        AfterHistoryEdit();
+    }
+
+    /// <summary>Repaints after an undo/redo: the click-breadcrumb dots no longer map to the
+    /// changed object set, so clear them, re-render the live view, and flag the map dirty.</summary>
+    private void AfterHistoryEdit()
+    {
+        _markers.Clear();
+        MarkerCanvas?.Children.Clear();
+        RenderCurrent();
+        MapEdited?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>Keeps the Undo/Redo buttons' enablement in sync with the journal depth.</summary>
+    private void OnHistoryChanged()
+    {
+        if (UndoButton is not null) UndoButton.IsEnabled = _history.CanUndo;
+        if (RedoButton is not null) RedoButton.IsEnabled = _history.CanRedo;
     }
 
     /// <summary>Drops a transient placement dot at a pixel (cleared on the next render).</summary>

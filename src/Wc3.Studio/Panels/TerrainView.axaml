@@ -12,6 +12,10 @@
                 <Button Name="ResetButton" Content="1:1" IsEnabled="False" Click="OnResetClick"/>
                 <ToggleButton Name="Mode3DButton" Content="3D" IsEnabled="False" Click="OnToggle3D"
                               ToolTip.Tip="Toggle between the flat minimap and the 3D in-game view"/>
+                <Button Name="UndoButton" Content="↶" IsEnabled="False" Click="OnUndoClick"
+                        ToolTip.Tip="Undo the last placement (in-memory until you save)"/>
+                <Button Name="RedoButton" Content="↷" IsEnabled="False" Click="OnRedoClick"
+                        ToolTip.Tip="Redo the last undone placement"/>
                 <TextBlock Name="CaptionText" VerticalAlignment="Center" Text=""/>
                 <TextBlock Name="BrushText" VerticalAlignment="Center" Text=""
                            Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"/>
