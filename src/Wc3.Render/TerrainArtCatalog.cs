@@ -99,4 +99,51 @@ public sealed class TerrainArtCatalog
             Array.Copy(src.Rgba, y * srcStride, dst, y * dstStride, dstStride);
         return new TextureImage(w, h, dst);
     }
+
+    /// <summary>
+    /// Builds a contiguous RGBA layer array (<c>layerCount * cell * cell * 4</c>) for a map's
+    /// terrain types: real tile textures where available, flat terrain-type colours as fallback.
+    /// Opens the base-game CASC internally (cached); if unavailable, every layer is a flat colour.
+    /// </summary>
+    public static byte[] BuildLayersForMap(Wc3.Model.MapDocument doc, out int layerCount, out int cell)
+    {
+        cell = Cell;
+        var env = doc.GetFile("war3map.w3e")?.Model as MapEnvironment;
+        var types = env?.TerrainTypes;
+        layerCount = Math.Max(1, types?.Count ?? 1);
+
+        TerrainArtCatalog? cat = null;
+        if (Wc3.GameData.GameData.TryOpen(null, out var ctx, out _) && ctx != null)
+            cat = Open(ctx);
+
+        int layerBytes = cell * cell * 4;
+        var data = new byte[layerCount * layerBytes];
+        for (int i = 0; i < layerCount; i++)
+        {
+            byte[]? rgba = null;
+            if (types != null && i < types.Count)
+            {
+                var img = cat?.Resolve(types[i]);
+                rgba = (img != null && img.Width == cell && img.Height == cell && img.Rgba.Length == layerBytes)
+                    ? img.Rgba
+                    : FlatColor(types[i], cell);
+            }
+            rgba ??= Fill(cell, 120, 120, 120);
+            Array.Copy(rgba, 0, data, i * layerBytes, layerBytes);
+        }
+        return data;
+    }
+
+    private static byte[] FlatColor(TerrainType type, int cell)
+    {
+        var c = TerrainRenderer.ColorForTerrainType(type);
+        return Fill(cell, c.R, c.G, c.B);
+    }
+
+    private static byte[] Fill(int cell, byte r, byte g, byte b)
+    {
+        var buf = new byte[cell * cell * 4];
+        for (int p = 0; p < buf.Length; p += 4) { buf[p] = r; buf[p + 1] = g; buf[p + 2] = b; buf[p + 3] = 255; }
+        return buf;
+    }
 }

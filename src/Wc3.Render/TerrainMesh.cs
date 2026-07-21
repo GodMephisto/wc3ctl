@@ -2,17 +2,18 @@
 using System;
 using System.IO;
 using System.Numerics;
-using SixLabors.ImageSharp.PixelFormats;
 using War3Net.Build.Environment;
 
 namespace Wc3.Render;
 
 /// <summary>
 /// GPU-ready terrain geometry derived from a map's <c>war3map.w3e</c> tilepoint grid.
-/// Vertices are interleaved <c>position(3) · normal(3) · colour(3)</c> in WC3 world
-/// space (Z-up), using the exact same height math as
-/// <see cref="TerrainRenderer.RenderPerspectivePng"/> so the GPU mesh lines up with the
-/// CPU render and with <see cref="TerrainRenderer.PickTerrain"/>.
+/// Vertices are interleaved <c>position(3) · normal(3) · uv(2) · layers(4)</c> in WC3 world
+/// space (Z-up). Geometry is emitted <b>per cell</b> (4 verts / cell, not shared) so each
+/// cell can carry its four corner terrain-type layer indices for GPU texture-splat blending;
+/// <c>uv</c> is the corner's 0/1 position within the cell (used both as the tiling texcoord
+/// and as the bilinear blend weight). Height math matches
+/// <see cref="TerrainRenderer.RenderPerspectivePng"/> and <see cref="TerrainRenderer.PickTerrain"/>.
 /// </summary>
 public readonly record struct TerrainMesh(
     float[] Vertices,
@@ -20,8 +21,8 @@ public readonly record struct TerrainMesh(
     Vector3 Center,
     float Radius)
 {
-    /// <summary>Floats per vertex: px,py,pz, nx,ny,nz, r,g,b.</summary>
-    public const int Stride = 9;
+    /// <summary>Floats per vertex: px,py,pz, nx,ny,nz, u,v, l00,l10,l01,l11.</summary>
+    public const int Stride = 12;
 }
 
 /// <summary>Builds a <see cref="TerrainMesh"/> from a parsed map document.</summary>
@@ -38,9 +39,7 @@ public static class TerrainMeshBuilder
         if (tiles is null || tiles.Count < w * h)
             throw new InvalidDataException("terrain tilepoint data is incomplete");
 
-        var typeColors = new Rgba32[env.TerrainTypes.Count];
-        for (int i = 0; i < typeColors.Length; i++)
-            typeColors[i] = TerrainRenderer.ColorForTerrainType(env.TerrainTypes[i]);
+        int typeCount = Math.Max(1, env.TerrainTypes.Count);
 
         const float TileWorld = TerrainRenderer.TerrainTransform.TileWorld; // 128 world units / tile
         const float StepWorld = 128f;                                        // one cliff step in world Z
@@ -60,43 +59,46 @@ public static class TerrainMeshBuilder
                 if (z > maxZ) maxZ = z;
             }
 
-        var verts = new float[n * TerrainMesh.Stride];
+        // Per-grid-point normal (central difference, Z-up; borders clamp to the edge sample).
+        var nrm = new Vector3[n];
         for (int j = 0; j < h; j++)
             for (int i = 0; i < w; i++)
             {
-                int idx = j * w + i;
-                // Central-difference normal (Z-up); borders clamp to the edge sample.
                 float zL = zg[j * w + Math.Max(i - 1, 0)];
                 float zR = zg[j * w + Math.Min(i + 1, w - 1)];
                 float zD = zg[Math.Max(j - 1, 0) * w + i];
                 float zU = zg[Math.Min(j + 1, h - 1) * w + i];
-                var nrm = Vector3.Normalize(new Vector3(-(zR - zL), -(zU - zD), 2f * TileWorld));
-
-                var t = tiles[idx];
-                Vector3 col = (t.Texture >= 0 && t.Texture < typeColors.Length)
-                    ? ToVec(typeColors[t.Texture])
-                    : new Vector3(0.47f, 0.47f, 0.47f);
-
-                int o = idx * TerrainMesh.Stride;
-                verts[o + 0] = originX + i * TileWorld;
-                verts[o + 1] = originY + j * TileWorld;
-                verts[o + 2] = zg[idx];
-                verts[o + 3] = nrm.X; verts[o + 4] = nrm.Y; verts[o + 5] = nrm.Z;
-                verts[o + 6] = col.X; verts[o + 7] = col.Y; verts[o + 8] = col.Z;
+                nrm[j * w + i] = Vector3.Normalize(new Vector3(-(zR - zL), -(zU - zD), 2f * TileWorld));
             }
 
-        // Two triangles per cell, wound CCW as seen from +Z (above).
-        var idxs = new uint[(w - 1) * (h - 1) * 6];
-        int p = 0;
+        int cells = (w - 1) * (h - 1);
+        var verts = new float[cells * 4 * TerrainMesh.Stride];
+        var idxs = new uint[cells * 6];
+        int vp = 0, ip = 0;
+        uint baseV = 0;
+
         for (int j = 0; j < h - 1; j++)
             for (int i = 0; i < w - 1; i++)
             {
-                uint a = (uint)(j * w + i);
-                uint b = a + 1;
-                uint c = (uint)((j + 1) * w + i);
-                uint d = c + 1;
-                idxs[p++] = a; idxs[p++] = b; idxs[p++] = d;
-                idxs[p++] = a; idxs[p++] = d; idxs[p++] = c;
+                int ia = j * w + i;            // SW  uv(0,0)
+                int ib = ia + 1;               // SE  uv(1,0)
+                int ic = (j + 1) * w + i;      // NW  uv(0,1)
+                int id = ic + 1;               // NE  uv(1,1)
+
+                float la = LayerOf(tiles[ia].Texture, typeCount);
+                float lb = LayerOf(tiles[ib].Texture, typeCount);
+                float lc = LayerOf(tiles[ic].Texture, typeCount);
+                float ld = LayerOf(tiles[id].Texture, typeCount);
+
+                Emit(verts, ref vp, originX + i * TileWorld,       originY + j * TileWorld,       zg[ia], nrm[ia], 0f, 0f, la, lb, lc, ld);
+                Emit(verts, ref vp, originX + (i + 1) * TileWorld, originY + j * TileWorld,       zg[ib], nrm[ib], 1f, 0f, la, lb, lc, ld);
+                Emit(verts, ref vp, originX + i * TileWorld,       originY + (j + 1) * TileWorld, zg[ic], nrm[ic], 0f, 1f, la, lb, lc, ld);
+                Emit(verts, ref vp, originX + (i + 1) * TileWorld, originY + (j + 1) * TileWorld, zg[id], nrm[id], 1f, 1f, la, lb, lc, ld);
+
+                // Two triangles (SW,SE,NE) & (SW,NE,NW), wound CCW as seen from +Z.
+                idxs[ip++] = baseV + 0; idxs[ip++] = baseV + 1; idxs[ip++] = baseV + 3;
+                idxs[ip++] = baseV + 0; idxs[ip++] = baseV + 3; idxs[ip++] = baseV + 2;
+                baseV += 4;
             }
 
         var center = new Vector3(0f, 0f, (minZ + maxZ) * 0.5f);
@@ -105,5 +107,15 @@ public static class TerrainMeshBuilder
         return new TerrainMesh(verts, idxs, center, radius);
     }
 
-    private static Vector3 ToVec(Rgba32 c) => new(c.R / 255f, c.G / 255f, c.B / 255f);
+    private static float LayerOf(int tex, int typeCount)
+        => tex < 0 ? 0f : (tex >= typeCount ? typeCount - 1 : tex);
+
+    private static void Emit(float[] buf, ref int o, float px, float py, float pz, Vector3 nrm,
+                             float u, float vv, float la, float lb, float lc, float ld)
+    {
+        buf[o++] = px; buf[o++] = py; buf[o++] = pz;
+        buf[o++] = nrm.X; buf[o++] = nrm.Y; buf[o++] = nrm.Z;
+        buf[o++] = u; buf[o++] = vv;
+        buf[o++] = la; buf[o++] = lb; buf[o++] = lc; buf[o++] = ld;
+    }
 }
