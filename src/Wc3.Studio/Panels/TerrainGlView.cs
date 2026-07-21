@@ -117,11 +117,12 @@ public sealed class TerrainGlView : OpenGlControlBase
                 "uniform sampler2DArray uTiles;\n" +
                 "out vec4 fragColor;\n" +
                 "void main(){\n" +
-                "  vec4 c00 = texture(uTiles, vec3(vUV, vLayers.x));\n" +
-                "  vec4 c10 = texture(uTiles, vec3(vUV, vLayers.y));\n" +
-                "  vec4 c01 = texture(uTiles, vec3(vUV, vLayers.z));\n" +
-                "  vec4 c11 = texture(uTiles, vec3(vUV, vLayers.w));\n" +
-                "  vec3 tex = mix(mix(c00.rgb, c10.rgb, vUV.x), mix(c01.rgb, c11.rgb, vUV.x), vUV.y);\n" +
+                "  vec2 w = smoothstep(0.0, 1.0, vUV);\n" +
+                "  vec4 c00 = texture(uTiles, vec3(vUV, vLayers.x), -0.35);\n" +
+                "  vec4 c10 = texture(uTiles, vec3(vUV, vLayers.y), -0.35);\n" +
+                "  vec4 c01 = texture(uTiles, vec3(vUV, vLayers.z), -0.35);\n" +
+                "  vec4 c11 = texture(uTiles, vec3(vUV, vLayers.w), -0.35);\n" +
+                "  vec3 tex = mix(mix(c00.rgb, c10.rgb, w.x), mix(c01.rgb, c11.rgb, w.x), w.y);\n" +
                 "  float d = max(dot(normalize(vNormal), normalize(uLight)), 0.0);\n" +
                 "  float shade = 0.35 + 0.65 * d;\n" +
                 "  fragColor = vec4(tex * shade, 1.0);\n" +
@@ -261,6 +262,9 @@ public sealed class TerrainGlView : OpenGlControlBase
         _gl.TexParameter(TextureTarget.Texture2DArray, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
         _gl.TexParameter(TextureTarget.Texture2DArray, TextureParameterName.TextureWrapS, (int)TextureWrapMode.Repeat);
         _gl.TexParameter(TextureTarget.Texture2DArray, TextureParameterName.TextureWrapT, (int)TextureWrapMode.Repeat);
+        // Anisotropic filtering (EXT_texture_filter_anisotropic / GL 4.6). The spec clamps the value
+        // to the implementation max; guard in case the pname is unsupported (e.g. plain GL ES).
+        try { _gl.TexParameter(TextureTarget.Texture2DArray, (TextureParameterName)0x84FE, 8f); } catch { }
         _gl.GenerateMipmap(TextureTarget.Texture2DArray);
         _gl.BindTexture(TextureTarget.Texture2DArray, 0);
     }
