@@ -23,6 +23,7 @@ public class McpServerTests
         "sound_add", "sound_list", "sound_remove", "sound_set",
         "terrain_blight", "terrain_cliff", "terrain_deform", "terrain_paint",
         "terrain_ramp", "terrain_stats", "terrain_water",
+        "trigger_catalog_describe", "trigger_catalog_list",
     };
 
     /// <summary>Runs the body against a live in-memory client/server session.</summary>

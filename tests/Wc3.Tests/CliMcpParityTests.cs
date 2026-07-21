@@ -41,6 +41,8 @@ public class CliMcpParityTests
         ["sound_add"] = "sound add",
         ["sound_set"] = "sound set",
         ["sound_remove"] = "sound remove",
+        ["trigger_catalog_list"] = "trigger catalog list",
+        ["trigger_catalog_describe"] = "trigger catalog describe",
     };
 
     // CLI commands that intentionally have no MCP tool (local dev / query utilities).

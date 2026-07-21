@@ -390,6 +390,32 @@ public static class Wc3Tools
         [Description("Sound definition name to remove.")] string name)
         => Run(() => SaveSound(map, out_path, doc => SoundCommand.Remove(doc, name)));
 
+    [McpServerTool(Name = "trigger_catalog_list", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("List GUI-trigger functions from the World-Editor catalog (UI\\TriggerData.txt), optionally filtered by kind and/or a name/display-name search. The catalog is read from an explicit file when given, otherwise from the installed game.")]
+    public static TriggerCatalogListResult TriggerCatalogList(
+        [Description("Path to an explicit TriggerData.txt. When omitted, the catalog is read from the installed game.")] string? file = null,
+        [Description("Warcraft III install directory. When omitted, uses the WC3_GAME_DIR env var, else auto-detects.")] string? game_dir = null,
+        [Description("Filter by kind: event|condition|action|call. Optional.")] string? kind = null,
+        [Description("Case-insensitive substring filter over function name and display name. Optional.")] string? search = null)
+        => Run(() =>
+        {
+            var catalog = TriggerCatalogCommand.Load(file, ResolveGameDir(game_dir), out var source);
+            return TriggerCatalogCommand.List(catalog, source, kind, search);
+        });
+
+    [McpServerTool(Name = "trigger_catalog_describe", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Show full detail for one GUI-trigger function by name (e.g. 'DoNothing'): kind, game version, return type, argument types, display name, parameters layout and defaults. The catalog is read from an explicit file when given, otherwise from the installed game.")]
+    public static TriggerCatalogDetail TriggerCatalogDescribe(
+        [Description("Function name (e.g. DoNothing).")] string name,
+        [Description("Path to an explicit TriggerData.txt. When omitted, the catalog is read from the installed game.")] string? file = null,
+        [Description("Warcraft III install directory. When omitted, uses the WC3_GAME_DIR env var, else auto-detects.")] string? game_dir = null)
+        => Run(() =>
+        {
+            var catalog = TriggerCatalogCommand.Load(file, ResolveGameDir(game_dir), out _);
+            return TriggerCatalogCommand.Describe(catalog, name)
+                ?? throw new McpException($"No such function: {name}");
+        });
+
     // ---- shared plumbing -------------------------------------------------
 
     /// <summary>Expected failures become clean MCP tool errors, never stack traces.</summary>

@@ -835,13 +835,81 @@ public static class Program
         sound.AddCommand(soundSet);
         sound.AddCommand(soundRemove);
 
+        // --- trigger catalog (read-only GUI-trigger reference from UI\TriggerData.txt) ---
+        var trigFileOpt = new Option<string?>("--file",
+            "Read the catalog from an explicit TriggerData.txt instead of the installed game.");
+        var trigKindOpt = new Option<string?>("--kind",
+            "Filter by kind: event|condition|action|call.");
+        var trigSearchOpt = new Option<string?>("--search",
+            "Case-insensitive substring filter over function name and display name.");
+
+        var trigList = new Command("list",
+            "List GUI-trigger functions from the World-Editor catalog.")
+        { trigFileOpt, trigKindOpt, trigSearchOpt };
+        trigList.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var cat = TriggerCatalogCommand.Load(
+                p.GetValueForOption(trigFileOpt), p.GetValueForOption(gameDirOption), out var source);
+            var res = TriggerCatalogCommand.List(cat, source,
+                p.GetValueForOption(trigKindOpt), p.GetValueForOption(trigSearchOpt));
+            Emit(p.GetValueForOption(jsonOption), res,
+                () => res.Total == 0
+                    ? "(no matching functions)"
+                    : string.Join("\n", res.Functions.Select(f =>
+                        $"{f.Kind,-9} {f.Name}" +
+                        (f.ReturnType is null ? "" : $" : {f.ReturnType}") +
+                        $"  ({string.Join(", ", f.ArgumentTypes)})" +
+                        (f.DisplayName is null ? "" : $"  — {f.DisplayName}")))
+                      + $"\n\n{res.Total} function(s) from {res.Source}");
+        }));
+
+        var trigNameArg = new Argument<string>("name", "Function name (e.g. DoNothing).");
+        var trigDescribe = new Command("describe",
+            "Show full detail for one GUI-trigger function.")
+        { trigNameArg, trigFileOpt };
+        trigDescribe.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var cat = TriggerCatalogCommand.Load(
+                p.GetValueForOption(trigFileOpt), p.GetValueForOption(gameDirOption), out _);
+            string name = p.GetValueForArgument(trigNameArg);
+            var d = TriggerCatalogCommand.Describe(cat, name);
+            if (d is null)
+            {
+                Emit(p.GetValueForOption(jsonOption), new { found = false, name },
+                    () => $"No such function: {name}");
+                return;
+            }
+            Emit(p.GetValueForOption(jsonOption), d, () => string.Join("\n", new[]
+            {
+                $"{d.Name}  [{d.Kind}]",
+                d.DisplayName is null ? null : $"  display   : {d.DisplayName}",
+                $"  version   : {d.GameVersion}",
+                d.Kind == "Call" ? $"  in events : {d.UsableInEvents}" : null,
+                d.ReturnType is null ? null : $"  returns   : {d.ReturnType}",
+                $"  args      : {(d.ArgumentTypes.Count == 0 ? "(none)" : string.Join(", ", d.ArgumentTypes))}",
+                d.ParametersLayout is null ? null : $"  layout    : {d.ParametersLayout}",
+                d.Defaults is null ? null : $"  defaults  : {d.Defaults}",
+                d.Category is null ? null : $"  category  : {d.Category}",
+            }.Where(x => x is not null)!));
+        }));
+
+        var trigCatalog = new Command("catalog",
+            "GUI-trigger catalog from UI\\TriggerData.txt: list, describe.");
+        trigCatalog.AddCommand(trigList);
+        trigCatalog.AddCommand(trigDescribe);
+
+        var trigger = new Command("trigger", "GUI trigger tooling (World-Editor catalog).");
+        trigger.AddCommand(trigCatalog);
+
         root.AddCommand(info); root.AddCommand(ls); root.AddCommand(rt);
         root.AddCommand(search); root.AddCommand(diff); root.AddCommand(obj);
         root.AddCommand(extract); root.AddCommand(render); root.AddCommand(renderModel);
         root.AddCommand(script); root.AddCommand(bundle); root.AddCommand(port);
         root.AddCommand(convert); root.AddCommand(validate);
         root.AddCommand(place); root.AddCommand(palette); root.AddCommand(terrain);
-        root.AddCommand(sound);
+        root.AddCommand(sound); root.AddCommand(trigger);
 
         return root;
     }
