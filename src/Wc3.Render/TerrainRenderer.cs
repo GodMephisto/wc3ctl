@@ -458,7 +458,7 @@ public static class TerrainRenderer
     /// inspecting its enum name (e.g. "L_GrassCliff" → green). Names carry a
     /// tileset-letter prefix and a descriptive suffix; we match the suffix.
     /// </summary>
-    private static Rgba32 ColorForTerrainType(TerrainType type)
+    internal static Rgba32 ColorForTerrainType(TerrainType type)
     {
         string name = type.ToString();
         bool Has(string s) => name.IndexOf(s, StringComparison.OrdinalIgnoreCase) >= 0;

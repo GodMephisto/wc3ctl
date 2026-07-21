@@ -62,6 +62,8 @@ public partial class TerrainView : UserControl, IMapPanel
         try
         {
             _xform = Wc3.Render.TerrainRenderer.GetTransform(session.Current);
+            GlView.SetMap(session.Current);
+            GlView.SetCamera(_yaw, _pitch, _camZoom);
         }
         catch (Exception ex)
         {
@@ -74,6 +76,7 @@ public partial class TerrainView : UserControl, IMapPanel
         FitButton.IsEnabled = true;
         ResetButton.IsEnabled = true;
         Mode3DButton.IsEnabled = true;
+        GlButton.IsEnabled = true;
         RenderCurrent();
     }
 
@@ -151,6 +154,7 @@ public partial class TerrainView : UserControl, IMapPanel
         FitButton.IsEnabled = false;
         ResetButton.IsEnabled = false;
         Mode3DButton.IsEnabled = false;
+        GlButton.IsEnabled = false;
         CaptionText.Text = "";
     }
 
@@ -227,6 +231,7 @@ public partial class TerrainView : UserControl, IMapPanel
         _yaw = yaw;
         _pitch = pitch;
         _dragMoved = true;
+        GlView.SetCamera(_yaw, _pitch, _camZoom);
         RenderCurrent(draft: true);
         e.Handled = true;
     }
@@ -369,6 +374,21 @@ public partial class TerrainView : UserControl, IMapPanel
             ResetCamera();
         else
             RenderCurrent();
+    }
+
+    /// <summary>Swaps the experimental GPU viewport (<see cref="TerrainGlView"/>) in front of the
+    /// CPU-rendered <see cref="ScrollHost"/>. S0 milestone: the GL surface clears and draws a test
+    /// triangle to prove the OpenGlControlBase + Silk.NET plumbing works end-to-end.</summary>
+    private void OnToggleGl(object? sender, RoutedEventArgs e)
+    {
+        var showGl = GlButton.IsChecked == true;
+        GlView.IsVisible = showGl;
+        ScrollHost.IsVisible = !showGl;
+        if (showGl)
+        {
+            GlView.SetMap(_session?.Current);
+            GlView.SetCamera(_yaw, _pitch, _camZoom);
+        }
     }
 
     /// <summary>Resets the orbit camera to its default framing and re-renders.</summary>

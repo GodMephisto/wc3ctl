@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:panels="clr-namespace:Wc3.Studio.Panels"
              x:Class="Wc3.Studio.Panels.TerrainView">
     <DockPanel>
 
@@ -12,6 +13,8 @@
                 <Button Name="ResetButton" Content="1:1" IsEnabled="False" Click="OnResetClick"/>
                 <ToggleButton Name="Mode3DButton" Content="3D" IsEnabled="False" Click="OnToggle3D"
                               ToolTip.Tip="Toggle between the flat minimap and the 3D in-game view"/>
+                <ToggleButton Name="GlButton" Content="GL" IsEnabled="False" Click="OnToggleGl"
+                              ToolTip.Tip="Experimental GPU viewport (S0: clears and draws a test triangle)"/>
                 <Button Name="UndoButton" Content="↶" IsEnabled="False" Click="OnUndoClick"
                         ToolTip.Tip="Undo the last placement (in-memory until you save)"/>
                 <Button Name="RedoButton" Content="↷" IsEnabled="False" Click="OnRedoClick"
@@ -35,6 +38,7 @@
                     <Canvas Name="MarkerCanvas" IsHitTestVisible="False"/>
                 </Panel>
             </ScrollViewer>
+            <panels:TerrainGlView Name="GlView" IsVisible="False"/>
             <TextBlock Name="MessageText"
                        HorizontalAlignment="Center" VerticalAlignment="Center"
                        TextWrapping="Wrap" Text="No map loaded."/>
