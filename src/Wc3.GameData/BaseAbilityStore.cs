@@ -26,7 +26,11 @@ public sealed class BaseAbilityStore
         var metaBytes = src.ReadFile(Dir + "abilitymetadata.slk")
             ?? throw new InvalidDataException("abilitymetadata.slk not found in game data");
         var metaTable = SlkTable.Parse(metaBytes);
-        var store = ObjectDataStore.Build(src, ObjectMetadata.FromSlk(metaTable), ObjectDataStore.UnitsDirSlk, null, profile);
+        // "levels" is abilitydata.slk's per-row level count. It caps the leveled-field
+        // expansion (cool1..cool4 and friends) at the ability's real level count.
+        var store = ObjectDataStore.Build(
+            src, ObjectMetadata.FromSlk(metaTable), ObjectDataStore.UnitsDirSlk, null, profile,
+            levelColumn: "levels");
         return new BaseAbilityStore(AbilityMetadata.FromSlk(metaTable), store);
     }
 

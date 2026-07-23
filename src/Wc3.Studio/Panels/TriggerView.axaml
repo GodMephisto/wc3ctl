@@ -1,0 +1,75 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="using:Wc3.Studio.Controls"
+             x:Class="Wc3.Studio.Panels.TriggerView">
+    <UserControl.Styles>
+        <!-- Compact rows in both the trigger tree and the ECA tree (same
+             treatment as the Dependencies tree). -->
+        <Style Selector="TreeView TreeViewItem">
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="Padding" Value="2,1"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Grid>
+        <TextBlock Name="PlaceholderText"
+                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                   Text="Trigger panel, no map open"/>
+
+        <Grid Name="ContentRoot" IsVisible="False" RowDefinitions="Auto,*">
+
+            <!-- Header: counts, the map's script language, and the read-only notice. -->
+            <Border Grid.Row="0" BorderThickness="0,0,0,1"
+                    BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
+                    Padding="8,6">
+                <StackPanel Spacing="2">
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <TextBlock Name="HeaderText" FontWeight="SemiBold" Text="Triggers"/>
+                        <TextBlock Name="LanguageText" Foreground="#8FA3B8"
+                                   VerticalAlignment="Center" Text=""/>
+                    </StackPanel>
+                    <TextBlock FontSize="11" Foreground="#8FA3B8"
+                               Text="Read-only view. Trigger editing is coming in a later update."/>
+                </StackPanel>
+            </Border>
+
+            <Grid Grid.Row="1" ColumnDefinitions="340,4,*">
+
+                <!-- Left: World-Editor style tree, each category with its triggers
+                     underneath, plus a Variables node. Items are built in
+                     code-behind (the Dependencies panel's idiom). -->
+                <Grid Grid.Column="0" RowDefinitions="Auto,*">
+                    <controls:SectionHeader Grid.Row="0" Text="Trigger tree"/>
+                    <TreeView Name="TriggerTree" Grid.Row="1" Margin="4"/>
+                    <TextBlock Name="TreeHint" Grid.Row="1" IsVisible="False"
+                               Margin="12" TextWrapping="Wrap" Foreground="#8FA3B8"
+                               Text="This map has no triggers."/>
+                </Grid>
+
+                <GridSplitter Grid.Column="1" ResizeDirection="Columns" Background="#33555555"/>
+
+                <!-- Right: the selected trigger's detail. GUI triggers show their
+                     event/condition/action tree, custom-text triggers show their
+                     script body in a read-only monospace box. -->
+                <Grid Grid.Column="2" RowDefinitions="Auto,Auto,Auto,*">
+                    <controls:SectionHeader Name="DetailHeader" Grid.Row="0" Text="Details"/>
+                    <TextBlock Name="FlagsText" Grid.Row="1" Margin="8,6,8,0"
+                               FontSize="11" Foreground="#8FA3B8" Text=""/>
+                    <TextBlock Name="DescriptionText" Grid.Row="2" Margin="8,4,8,0"
+                               TextWrapping="Wrap" IsVisible="False" Text=""/>
+                    <Grid Grid.Row="3" Margin="4">
+                        <TreeView Name="EcaTree" IsVisible="False"/>
+                        <TextBox Name="CustomTextBox" IsVisible="False" IsReadOnly="True"
+                                 AcceptsReturn="True" TextWrapping="NoWrap"
+                                 FontFamily="Consolas,Cascadia Mono,Menlo,monospace"
+                                 ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Auto"/>
+                        <TextBlock Name="DetailHint" Margin="8" TextWrapping="Wrap"
+                                   Foreground="#8FA3B8" IsHitTestVisible="False"
+                                   Text="Select a trigger to see its events, conditions and actions."/>
+                    </Grid>
+                </Grid>
+            </Grid>
+        </Grid>
+    </Grid>
+</UserControl>

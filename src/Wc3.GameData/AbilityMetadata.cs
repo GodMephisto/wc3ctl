@@ -8,7 +8,8 @@ public sealed record AbilityFieldMeta(string Code, string SlkName, string Column
 /// row key = "ID" column = the field code; "field" = the column name inside the data SLK;
 /// "slk" = which data file holds it (AbilityData, or "Profile" for TXT profile files);
 /// "displayName" = a WESTRING key. Leveled fields (repeat >= 1) store per-level values in
-/// numbered columns (e.g. Cool -> cool1..cool4) and only resolve on an exact column match in v1.
+/// numbered columns (e.g. Cool -> cool1..cool4). The join in ObjectDataStore expands them
+/// to "code:N" keys, the same convention the map-authored w3a level deltas use.
 /// </summary>
 public sealed class AbilityMetadata
 {

@@ -90,6 +90,9 @@
             <TabItem Header="Script">
                 <panels:ScriptView Name="ScriptPanel"/>
             </TabItem>
+            <TabItem Header="Triggers">
+                <panels:TriggerView Name="TriggersPanel"/>
+            </TabItem>
             <TabItem Header="Strings">
                 <panels:StringImportView Name="StringsPanel"/>
             </TabItem>

@@ -18,15 +18,20 @@ public sealed class ObjectDataStore
     // When set and the first code is missing, its value copies from the second code.
     // Buffs use this: WE shows Bufftip as the name when EditorName is absent.
     private readonly (string Code, string FallbackCode)? _nameFallback;
+    // Data-SLK column holding the object's level count (abilities: "levels"). Caps the
+    // leveled-field expansion so padded copies beyond the real levels stay hidden.
+    private readonly string? _levelColumn;
 
     internal ObjectDataStore(
         ObjectMetadata meta, Dictionary<string, SlkTable> slks,
-        ProfileTxtStore? profile = null, (string Code, string FallbackCode)? nameFallback = null)
+        ProfileTxtStore? profile = null, (string Code, string FallbackCode)? nameFallback = null,
+        string? levelColumn = null)
     {
         _meta = meta;
         _slks = slks;
         _profile = profile ?? ProfileTxtStore.Empty;
         _nameFallback = nameFallback;
+        _levelColumn = levelColumn;
     }
 
     /// <summary>A store that resolves nothing — used when a type's SLKs can't be read.</summary>
@@ -47,17 +52,17 @@ public sealed class ObjectDataStore
     public static ObjectDataStore Build(
         IGameDataSource src, string metadataPath, Func<string, string?> slkPath,
         IReadOnlyCollection<string>? slkNames = null, ProfileTxtStore? profile = null,
-        (string Code, string FallbackCode)? nameFallback = null)
+        (string Code, string FallbackCode)? nameFallback = null, string? levelColumn = null)
     {
         var metaBytes = src.ReadFile(metadataPath)
             ?? throw new InvalidDataException($"{metadataPath} not found in game data");
-        return Build(src, ObjectMetadata.FromSlk(SlkTable.Parse(metaBytes)), slkPath, slkNames, profile, nameFallback);
+        return Build(src, ObjectMetadata.FromSlk(SlkTable.Parse(metaBytes)), slkPath, slkNames, profile, nameFallback, levelColumn);
     }
 
     internal static ObjectDataStore Build(
         IGameDataSource src, ObjectMetadata meta, Func<string, string?> slkPath,
         IReadOnlyCollection<string>? slkNames = null, ProfileTxtStore? profile = null,
-        (string Code, string FallbackCode)? nameFallback = null)
+        (string Code, string FallbackCode)? nameFallback = null, string? levelColumn = null)
     {
         var names = slkNames
             ?? (IReadOnlyCollection<string>)meta.Fields.Select(f => f.SlkName).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
@@ -70,7 +75,7 @@ public sealed class ObjectDataStore
             var bytes = src.ReadFile(path);
             if (bytes != null) slks[name] = SlkTable.Parse(bytes);
         }
-        return new ObjectDataStore(meta, slks, profile, nameFallback);
+        return new ObjectDataStore(meta, slks, profile, nameFallback, levelColumn);
     }
 
     /// <summary>Field-code -> base value for the given object; false if no field resolves.</summary>
@@ -81,12 +86,13 @@ public sealed class ObjectDataStore
         foreach (var fm in _meta.Fields)
         {
             if (!_slks.TryGetValue(fm.SlkName, out var table)) continue;
-            if (table.TryGetRow(rawcode, out var row))
-            {
-                inCatalog = true;
-                if (row.TryGetValue(fm.Column, out var val) && val.Length > 0)
-                    result[fm.Code] = val;
-            }
+            if (!table.TryGetRow(rawcode, out var row)) continue;
+            inCatalog = true;
+            if (!AppliesTo(fm, rawcode)) continue;
+            if (row.TryGetValue(fm.Column, out var val) && val.Length > 0)
+                result[fm.Code] = val;
+            else if (fm.Repeat > 0)
+                AddLeveledSlkField(result, fm, row);
         }
         // Profile fields resolve only for rawcodes the data SLKs know. The ability
         // profile files double as the buff files, so an ungated join would leak
@@ -95,6 +101,7 @@ public sealed class ObjectDataStore
             foreach (var fm in _meta.Fields)
             {
                 if (!fm.SlkName.Equals("Profile", StringComparison.OrdinalIgnoreCase)) continue;
+                if (!AppliesTo(fm, rawcode)) continue;
                 if (_profile.TryGetValue(rawcode, fm.Column, out var raw) && raw.Length > 0)
                     AddProfileField(result, fm, raw);
             }
@@ -126,6 +133,47 @@ public sealed class ObjectDataStore
             for (int level = 1; level <= elements.Count; level++)
                 if (elements[level - 1].Length > 0)
                     result[$"{fm.Code}:{level}"] = elements[level - 1];
+    }
+
+    /// <summary>
+    /// Metadata scoping: a non-empty useSpecific list restricts the field to the listed
+    /// rawcodes (every ability data field carries one, e.g. Hbz1 applies to AHbz and its
+    /// creep variants only, so Blizzard's dataa columns never surface under another
+    /// ability's data codes) and notSpecific excludes the listed rawcodes. Generic
+    /// fields leave both empty and apply everywhere.
+    /// </summary>
+    private static bool AppliesTo(ObjectFieldMeta fm, string rawcode)
+    {
+        if (fm.NotSpecific.Length > 0 && ListContains(fm.NotSpecific, rawcode)) return false;
+        return fm.UseSpecific.Length == 0 || ListContains(fm.UseSpecific, rawcode);
+    }
+
+    private static bool ListContains(string commaList, string rawcode) =>
+        commaList.Split(',').Any(t => t.Trim().Equals(rawcode, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Resolves a leveled SLK field (repeat > 0) whose per-level values live in numbered
+    /// columns (Cool resolves from cool1..cool4). A nonzero metadata "data" tag appends
+    /// its letter to the column base first (Data with data=2 reads DataB columns). Emits
+    /// "code:N" keys matching the map-delta convention, the bare code keeping level 1 so
+    /// flat lookups stay stable. The row's own level count, when the store knows that
+    /// column, caps the expansion because the data SLKs pad the trailing column sets with
+    /// copies of the last real level, and a single-level object stays bare only.
+    /// </summary>
+    private void AddLeveledSlkField(
+        Dictionary<string, string> result, ObjectFieldMeta fm, IReadOnlyDictionary<string, string> row)
+    {
+        string column = fm.Data > 0 ? fm.Column + (char)('A' + fm.Data - 1) : fm.Column;
+        int levels = fm.Repeat;
+        if (_levelColumn is not null && row.TryGetValue(_levelColumn, out var count)
+            && int.TryParse(count, out var n) && n > 0)
+            levels = Math.Min(levels, n);
+        for (int level = 1; level <= levels; level++)
+        {
+            if (!row.TryGetValue(column + level, out var v) || v.Length == 0) continue;
+            if (level == 1) result[fm.Code] = v;
+            if (levels > 1) result[$"{fm.Code}:{level}"] = v;
+        }
     }
 
     /// <summary>Every rawcode present in any loaded data SLK (the object catalog for this
