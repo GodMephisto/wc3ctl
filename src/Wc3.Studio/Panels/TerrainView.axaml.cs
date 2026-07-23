@@ -747,14 +747,19 @@ public partial class TerrainView : UserControl, IMapPanel
     // toggles) and a left DRAG sweeps a marquee box (Shift adds to the selection).
     // With sculpt mode on, a left press or drag runs the terrain brush instead.
     // A press that never moves more than a few pixels counts as a click.
-    private enum GlDrag { None, Orbit, Pan, Marquee, PlaceClick, Sculpt }
+    private enum GlDrag { None, Orbit, Pan, Marquee, PlaceClick, Sculpt, Move, Rotate }
     private GlDrag _glDrag;
     private bool _glDragMoved;
     private bool _glShift; // Shift state at press: additive marquee / click-toggle
+    private bool _glAlt;   // Alt state at press: a widget drag rotates instead of moving
     private Avalonia.Point _glLast;
     private Avalonia.Point _glPressPos;
     private readonly List<int> _selection = new();
     private Rectangle? _marqueeRect;
+    // The widget grabbed by a Move/Rotate drag, and the terrain point the drag started
+    // at (for moving a multi-unit selection by the same delta).
+    private PlacementPick? _dragTarget;
+    private (float X, float Y)? _dragStartWorld;
 
     private void OnGlInputPressed(object? sender, PointerPressedEventArgs e)
     {
@@ -764,6 +769,9 @@ public partial class TerrainView : UserControl, IMapPanel
         _glPressPos = p.Position;
         _glDragMoved = false;
         _glShift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+        _glAlt = e.KeyModifiers.HasFlag(KeyModifiers.Alt);
+        _dragTarget = null;
+        _dragStartWorld = null;
         if (p.Properties.IsRightButtonPressed)
             _glDrag = GlDrag.Orbit;      // a right CLICK (no drag) still cancels the brush
         else if (p.Properties.IsMiddleButtonPressed)
@@ -779,7 +787,21 @@ public partial class TerrainView : UserControl, IMapPanel
                 ApplySculptAt(doc, wx, wy);
         }
         else if (_brush is null)
-            _glDrag = GlDrag.Marquee;    // pointer mode: click selects, drag box-selects
+        {
+            // Pointer mode. If the press lands on a placed widget, grab it: a drag then
+            // MOVES it (Alt = ROTATE), and a plain click (no drag) selects it. On empty
+            // ground a drag sweeps a marquee box. Click vs drag is decided on release.
+            var picked = GlView.PickPlacement(p.Position.X, p.Position.Y);
+            if (picked is { } hit)
+            {
+                _dragTarget = hit;
+                _glDrag = _glAlt ? GlDrag.Rotate : GlDrag.Move;
+                var (g, sx, sy) = GlView.PickGround(p.Position.X, p.Position.Y);
+                _dragStartWorld = g ? (sx, sy) : null;
+            }
+            else
+                _glDrag = GlDrag.Marquee;
+        }
         else
             _glDrag = GlDrag.PlaceClick; // brush armed: click places, a drag does nothing
         e.Pointer.Capture(GlInput);
@@ -855,82 +877,152 @@ public partial class TerrainView : UserControl, IMapPanel
             return;
         }
 
-        if (moved)
-            return; // camera drag (or a dragged brush press): no click action
+        // Move/Rotate drag finished: apply to the grabbed widget (a Move also drags the
+        // rest of a multi-unit selection by the same delta). Applied on release with one
+        // scene rebuild, a live per-frame preview is a follow-up.
+        if ((kind == GlDrag.Move || kind == GlDrag.Rotate) && moved && _dragTarget is { } tgt)
+        {
+            ApplyDragEdit(doc, kind, tgt, p);
+            return;
+        }
 
-        // Right CLICK: cancels the armed tool (WC3-style) → pointer mode; in pointer
-        // mode it is camera intent only, never selection.
+        if (moved)
+            return; // camera drag: no click action
+
+        // Right CLICK cancels the armed tool (WC3-style); middle click is camera only.
         if (e.InitialPressMouseButton == MouseButton.Right)
         {
             if (_brush is not null)
-                ClearPlacementBrush("Placement cancelled · pointer mode — click a unit to select.");
+                ClearPlacementBrush("Placement cancelled · pointer mode, click a unit to select.");
             else if (_sculpt)
                 ExitSculpt("Sculpt off · pointer mode, click a unit to select.");
             return;
         }
         if (e.InitialPressMouseButton != MouseButton.Left)
-            return; // middle click: camera intent only
-
-        // Pointer-mode left click: plain = replace the selection with the widget under
-        // the cursor (a unit joins the unit selection, a doodad becomes THE selected
-        // doodad, empty space clears); Shift = toggle a unit in/out (doodads are
-        // single-pick, so Shift ignores them like empty space).
-        if (kind == GlDrag.Marquee)
-        {
-            var picked = GlView.PickPlacement(p.X, p.Y);
-            if (_glShift)
-            {
-                if (picked is { IsUnit: true } hit)
-                {
-                    if (!_selection.Remove(hit.CreationNumber))
-                        _selection.Add(hit.CreationNumber);
-                    PushSelection($"{_selection.Count} unit(s) selected.");
-                }
-                // Shift-click on a doodad or empty space: keep the selection untouched.
-            }
-            else if (picked is { IsUnit: true } unitHit)
-            {
-                _selection.Clear();
-                _selection.Add(unitHit.CreationNumber);
-                PushSelection($"Selected unit #{unitHit.CreationNumber}");
-            }
-            else if (picked is { IsUnit: false } doodadHit)
-            {
-                // Doodad pick: drop the unit selection (with an empty snapshot so the
-                // host's tracking follows), then highlight and announce the doodad.
-                _selection.Clear();
-                GlView.SetSelectedUnits(_selection);
-                UnitsSelected?.Invoke(Array.Empty<int>());
-                GlView.SetSelectedDoodad(doodadHit.CreationNumber);
-                CaptionText.Text = $"Selected doodad #{doodadHit.CreationNumber}";
-                DoodadSelected?.Invoke(doodadHit.CreationNumber);
-            }
-            else
-            {
-                _selection.Clear();
-                PushSelection("Nothing under the cursor · selection cleared.");
-            }
             return;
-        }
 
         // Brush armed, plain left click: ray-pick the ground and place.
-        var (ok, wx, wy) = GlView.PickGround(p.X, p.Y);
-        if (!ok)
+        if (_brush is not null)
         {
-            CaptionText.Text = "That click missed the ground · aim at the terrain to place.";
+            var (ok, wx, wy) = GlView.PickGround(p.X, p.Y);
+            if (!ok)
+            {
+                CaptionText.Text = "That click missed the ground · aim at the terrain to place.";
+                return;
+            }
+            var (placed, msg) = PlaceViaHistory(doc, wx, wy);
+            CaptionText.Text = placed
+                ? $"Placed {_brush!.Name ?? _brush.Rawcode} at ({wx:0}, {wy:0})"
+                : $"Place failed: {msg}";
+            if (placed)
+                MapEdited?.Invoke(this, EventArgs.Empty);
             return;
         }
 
-        var (placed, msg) = PlaceViaHistory(doc, wx, wy);
-        if (placed)
+        // Pointer-mode left click (no drag): select the widget under the cursor.
+        SelectAtClick(GlView.PickPlacement(p.X, p.Y));
+    }
+
+    /// <summary>The pointer-mode click selection: a unit joins (Shift toggles) the unit
+    /// selection, a doodad becomes THE selected doodad, empty space clears.</summary>
+    private void SelectAtClick(PlacementPick? picked)
+    {
+        if (_glShift)
         {
-            CaptionText.Text = $"Placed {_brush!.Name ?? _brush.Rawcode} at ({wx:0}, {wy:0})";
-            MapEdited?.Invoke(this, EventArgs.Empty);
+            if (picked is { IsUnit: true } hit)
+            {
+                if (!_selection.Remove(hit.CreationNumber))
+                    _selection.Add(hit.CreationNumber);
+                PushSelection($"{_selection.Count} unit(s) selected.");
+            }
+            return; // Shift-click on a doodad or empty space keeps the selection.
+        }
+        if (picked is { IsUnit: true } unitHit)
+        {
+            _selection.Clear();
+            _selection.Add(unitHit.CreationNumber);
+            PushSelection($"Selected unit #{unitHit.CreationNumber}");
+        }
+        else if (picked is { IsUnit: false } doodadHit)
+        {
+            _selection.Clear();
+            GlView.SetSelectedUnits(_selection);
+            UnitsSelected?.Invoke(Array.Empty<int>());
+            GlView.SetSelectedDoodad(doodadHit.CreationNumber);
+            CaptionText.Text = $"Selected doodad #{doodadHit.CreationNumber}";
+            DoodadSelected?.Invoke(doodadHit.CreationNumber);
         }
         else
         {
-            CaptionText.Text = $"Place failed: {msg}";
+            _selection.Clear();
+            PushSelection("Nothing under the cursor · selection cleared.");
         }
+    }
+
+    /// <summary>Applies a finished Move or Rotate drag to the grabbed widget. Move sends
+    /// it (and the rest of a multi-unit selection) to the release terrain point by delta,
+    /// Rotate faces it toward the release point. Rebuilds the scene once, re-highlights.</summary>
+    private void ApplyDragEdit(Wc3.Model.MapDocument doc, GlDrag kind, PlacementPick tgt, Avalonia.Point p)
+    {
+        var (g, wx, wy) = GlView.PickGround(p.X, p.Y);
+        if (!g)
+        {
+            CaptionText.Text = "Drag ended off the terrain, nothing moved.";
+            return;
+        }
+
+        if (kind == GlDrag.Move)
+        {
+            if (tgt.IsUnit)
+            {
+                if (_dragStartWorld is { } s && _selection.Count > 0 && _selection.Contains(tgt.CreationNumber))
+                {
+                    float ddx = wx - s.X, ddy = wy - s.Y;
+                    foreach (var cn in _selection)
+                        if (UnitInstanceCommand.Get(doc, cn) is { } info)
+                            UnitInstanceCommand.SetPosition(doc, cn, info.X + ddx, info.Y + ddy);
+                }
+                else
+                {
+                    UnitInstanceCommand.SetPosition(doc, tgt.CreationNumber, wx, wy);
+                }
+                CaptionText.Text = $"Moved unit #{tgt.CreationNumber} to ({wx:0}, {wy:0})";
+            }
+            else
+            {
+                float z = DoodadInstanceCommand.Get(doc, tgt.CreationNumber)?.Z ?? 0f;
+                DoodadInstanceCommand.SetPosition(doc, tgt.CreationNumber, wx, wy, z);
+                CaptionText.Text = $"Moved doodad #{tgt.CreationNumber} to ({wx:0}, {wy:0})";
+            }
+        }
+        else // Rotate: face the widget toward the release point.
+        {
+            float ox, oy;
+            if (tgt.IsUnit)
+            {
+                if (UnitInstanceCommand.Get(doc, tgt.CreationNumber) is not { } info) return;
+                ox = info.X; oy = info.Y;
+            }
+            else
+            {
+                if (DoodadInstanceCommand.Get(doc, tgt.CreationNumber) is not { } info) return;
+                ox = info.X; oy = info.Y;
+            }
+            float angle = MathF.Atan2(wy - oy, wx - ox);
+            if (tgt.IsUnit)
+                UnitInstanceCommand.SetFacing(doc, tgt.CreationNumber, angle);
+            else
+                DoodadInstanceCommand.SetRotation(doc, tgt.CreationNumber, angle);
+            CaptionText.Text =
+                $"Rotated {(tgt.IsUnit ? "unit" : "doodad")} #{tgt.CreationNumber} to {angle * 180.0 / Math.PI:0} deg";
+        }
+
+        RefreshPlacements();
+        if (tgt.IsUnit)
+            GlView.SetSelectedUnits(_selection.Count > 0 ? _selection : new List<int> { tgt.CreationNumber });
+        else
+            GlView.SetSelectedDoodad(tgt.CreationNumber);
+        MapEdited?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>Capture can vanish mid-drag (alt-tab, window deactivation); drop the drag

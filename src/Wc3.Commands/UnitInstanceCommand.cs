@@ -100,6 +100,12 @@ public static class UnitInstanceCommand
     public static UnitEditResult SetFacing(MapDocument doc, int creationNumber, float radians)
         => Mutate(doc, creationNumber, u => u.Rotation = radians, $"facing set to {radians} rad");
 
+    /// <summary>Moves the unit to map coordinates (x, y), keeping its stored Z. For
+    /// drag-to-move in the viewport.</summary>
+    public static UnitEditResult SetPosition(MapDocument doc, int creationNumber, float x, float y)
+        => Mutate(doc, creationNumber, u => u.Position = new System.Numerics.Vector3(x, y, u.Position.Z),
+            $"moved to ({x:0}, {y:0})");
+
     /// <summary>Sets the gold amount carried by a gold-mine-style unit.</summary>
     public static UnitEditResult SetGold(MapDocument doc, int creationNumber, int amount)
     {
