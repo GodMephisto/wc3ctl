@@ -92,6 +92,35 @@ public class WaterMeshBuilderTests
     }
 
     [Fact]
+    public void Terrain_relative_flood_sits_above_the_brushed_ground()
+    {
+        // The Studio water brush treats its Amount as a DEPTH above the ground and converts
+        // to a stored level via WaterZOffset (see TerrainView.ApplySculptAt). Reproduce that
+        // exact math and assert the rendered water surface lands depth*128 world units above
+        // the ground, never below it. This is the regression guard for the bug where a fresh
+        // Water stroke rendered under the terrain and looked like nothing happened.
+        var doc = BlankTerrain();
+        const int col = 4, row = 4;
+        const float depth = 0.5f;
+
+        float ground = TerrainCommand.GroundLevelAt(doc, col, row)!.Value;
+        float waterLevel = ground + depth - WaterMeshBuilder.WaterZOffset / StepWorld;
+        var r = TerrainCommand.Water(doc, col, row, radius: 0, TerrainCommand.WaterOp.Set, waterLevel);
+        Assert.True(r.Ok, r.Message);
+
+        var mesh = WaterMeshBuilder.Build(doc);
+        Assert.NotEmpty(mesh.Indices);
+
+        float groundZ = ground * StepWorld;                                  // terrain-mesh world Z
+        float waterZ = mesh.Vertices[2];                                     // SW corner surface Z
+        // Within one w3e height-quantum: WaterHeight stores on a 1/512 grid, so the surface
+        // can land up to a fraction of a world unit off the exact target.
+        Assert.True(Math.Abs(waterZ - (groundZ + depth * StepWorld)) < 1f,
+            $"water surface {waterZ} should sit {depth * StepWorld} above ground {groundZ}");
+        Assert.True(waterZ > groundZ, "flooded water must render above the ground it was brushed onto");
+    }
+
+    [Fact]
     public void Drained_water_empties_the_mesh_again()
     {
         var doc = BlankTerrain();

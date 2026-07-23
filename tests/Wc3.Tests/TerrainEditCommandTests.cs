@@ -328,13 +328,12 @@ public class TerrainEditCommandTests
     [Fact]
     public void AddGroundHeightArea_lowering_saturates_at_the_floor_instead_of_wrapping()
     {
-        // A blank map's corners sit at raw 0 — exactly MinGroundHeight (-16). Without the
-        // clamp, lowering would wrap the raw ushort and teleport the ground to +top.
+        // Lowering the ground far past the floor must saturate at MinGroundHeight (-16),
+        // never wrap the raw ushort (which would teleport the ground to +top). A blank map
+        // now starts flat at the standard datum (Height 0), so drive well below the floor.
         var doc = BlankTerrain();
-        Assert.Equal(TerrainEditCommand.MinGroundHeight, Baseline());
-        var r = TerrainEditCommand.AddGroundHeightArea(doc, 4, 4, 1, -0.5f, falloff: false);
+        var r = TerrainEditCommand.AddGroundHeightArea(doc, 4, 4, 1, -100f, falloff: false);
         Assert.True(r.Ok, r.Message);
-        Assert.Equal(0, r.CornersChanged);   // already at the floor
 
         Assert.Equal(TerrainEditCommand.MinGroundHeight, Reload(doc).TerrainTiles[Idx(4, 4)].Height);
     }

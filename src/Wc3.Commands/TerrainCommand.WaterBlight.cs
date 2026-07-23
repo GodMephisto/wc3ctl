@@ -12,6 +12,27 @@ namespace Wc3.Commands;
 /// </summary>
 public static partial class TerrainCommand
 {
+    // ---- Ground query -------------------------------------------------------
+
+    /// <summary>
+    /// The ground surface level at one corner, in cliff-step units: <c>Height + CliffLevel</c>,
+    /// the exact quantity the terrain mesh multiplies by 128 for world Z. Returns null when the
+    /// map has no terrain, the grid is inconsistent, or (col,row) is off-grid. A caller that
+    /// wants water to sit a set depth above the brushed ground reads this, adds the depth, and
+    /// converts to a stored water level, so the water plane never renders under the terrain.
+    /// </summary>
+    public static float? GroundLevelAt(MapDocument doc, int col, int row)
+    {
+        if (doc.GetFile(TerrainFile)?.Model is not MapEnvironment env)
+            return null;
+        int w = (int)env.Width + 1, h = (int)env.Height + 1;
+        var tiles = env.TerrainTiles;
+        if (tiles is null || tiles.Count != w * h) return null;
+        if (col < 0 || col >= w || row < 0 || row >= h) return null;
+        var t = tiles[row * w + col];
+        return t.Height + t.CliffLevel;
+    }
+
     // ---- Water --------------------------------------------------------------
 
     /// <summary>How a water brush stroke changes a tile's water level.</summary>

@@ -343,10 +343,22 @@ public static class BlankMap
             env.TerrainTypes.Add((TerrainType)tileId.FromRawcode());
 
         // War3Net's TerrainTile has no public parameterless ctor surfaced for direct
-        // `new`; construct via reflection (approach verified in the API probe).
+        // `new`; construct via reflection (approach verified in the API probe). A
+        // default-constructed tile has raw height 0, which War3Net normalizes to
+        // Height = (0 - 8192) / 512 = -16, i.e. the ground would sit sixteen cliff-steps
+        // BELOW the standard datum. That is invisible for a flat map (the camera just
+        // frames it), but it breaks anything that reasons about ground level: a water
+        // brush computing "sit N steps above the ground" would land below the water
+        // format's representable floor and wrap. Seat every corner at the standard flat
+        // datum (normalized Height 0, WaterHeight 0) so the blank map behaves like a real one.
         var tileType = typeof(MapEnvironment).Assembly.GetType("War3Net.Build.Environment.TerrainTile")!;
         for (int i = 0; i < verts * verts; i++)
-            env.TerrainTiles.Add((TerrainTile)Activator.CreateInstance(tileType)!);
+        {
+            var tile = (TerrainTile)Activator.CreateInstance(tileType)!;
+            tile.Height = 0f;
+            tile.WaterHeight = 0f;
+            env.TerrainTiles.Add(tile);
+        }
 
         return env;
     }

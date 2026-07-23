@@ -372,7 +372,7 @@ public partial class TerrainView : UserControl, IMapPanel
             SculptTool.Paint => "Sculpt paint: repaints the brushed corners with the chosen ground tile",
             SculptTool.CliffUp => "Sculpt cliff up: raises the cliff plateau layer by 1",
             SculptTool.CliffDown => "Sculpt cliff down: lowers the cliff plateau layer by 1",
-            SculptTool.Water => "Sculpt water: sets water on the brushed corners at level Amount",
+            SculptTool.Water => "Sculpt water: floods the brushed corners with water Amount cliff-layers above the ground",
             _ => "Sculpt",
         });
     }
@@ -452,6 +452,18 @@ public partial class TerrainView : UserControl, IMapPanel
             return;
         }
 
+        // Water: the Amount box is a DEPTH in cliff-layers above the brushed ground, not a raw
+        // stored level. Convert to the stored water level through the renderer's own datum
+        // (WaterZOffset) so the surface sits Amount layers over the terrain and is never hidden
+        // beneath it. This is why a fresh Water stroke used to look like nothing happened: the
+        // old code stored Amount directly, and small values sat below the ground plane.
+        float waterLevel = amount;
+        if (tool == SculptTool.Water)
+        {
+            float ground = TerrainCommand.GroundLevelAt(doc, col, row) ?? 0f;
+            waterLevel = ground + amount - Wc3.Render.WaterMeshBuilder.WaterZOffset / 128f;
+        }
+
         var (ok, msg, changed) = tool switch
         {
             SculptTool.Raise => AsTuple(TerrainCommand.Deform(
@@ -467,7 +479,7 @@ public partial class TerrainView : UserControl, IMapPanel
             SculptTool.CliffDown => AsTuple(TerrainCommand.Cliff(
                 doc, col, row, radius, TerrainCommand.CliffOp.Lower, 1)),
             SculptTool.Water => AsTuple(TerrainCommand.Water(
-                doc, col, row, radius, TerrainCommand.WaterOp.Set, amount)),
+                doc, col, row, radius, TerrainCommand.WaterOp.Set, waterLevel)),
             _ => (false, "unknown sculpt tool", 0),
         };
 
