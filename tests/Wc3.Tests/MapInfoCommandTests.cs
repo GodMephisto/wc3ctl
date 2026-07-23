@@ -92,6 +92,26 @@ public class MapInfoCommandTests
         Assert.Equal(52, fields.PlayableWidth);
         Assert.Equal(52, fields.PlayableHeight);
         Assert.Equal(1, fields.Players);
+
+        // The extended w3i surface: environment, fog, screens and flag toggles.
+        Assert.StartsWith("BL (", fields.CameraBounds);
+        Assert.Equal("LordaeronSummer", fields.Tileset);
+        Assert.Equal("Unspecified", fields.LightEnvironment);
+        Assert.Equal("None", fields.GlobalWeather);
+        Assert.Equal("", fields.SoundEnvironment);
+        Assert.Equal("255,255,255,255", fields.WaterTintColor);
+        Assert.Equal("Linear", fields.FogStyle);
+        Assert.Equal(3000f, fields.FogStartZ);
+        Assert.Equal(5000f, fields.FogEndZ);
+        Assert.Equal(0.5f, fields.FogDensity);
+        Assert.Equal("0,0,0,255", fields.FogColor);
+        Assert.Equal(-1, fields.LoadingScreenIndex);
+        Assert.Equal("", fields.LoadingScreenPath);
+        Assert.Equal("", fields.PrologueTitle);
+        Assert.True(fields.MeleeMap);
+        Assert.False(fields.UseCustomForces);
+        Assert.False(fields.HasTerrainFog);
+        Assert.False(fields.HasWaterTint);
     }
 
     [Fact]
@@ -170,9 +190,78 @@ public class MapInfoCommandTests
     {
         var doc = LoadSynthetic(BuildInfo());
         Assert.Throws<ArgumentException>(() => MapInfoCommand.Set(doc, "PlayableWidth", "10"));
+        Assert.Throws<ArgumentException>(() => MapInfoCommand.Set(doc, "CameraBounds", "0,0"));
         Assert.Throws<ArgumentException>(() => MapInfoCommand.Set(doc, "NoSuchField", "x"));
+        // Malformed values for the typed fields are rejected the same way.
+        Assert.Throws<ArgumentException>(() => MapInfoCommand.Set(doc, "FogColor", "purple"));
+        Assert.Throws<ArgumentException>(() => MapInfoCommand.Set(doc, "FogStartZ", "far"));
+        Assert.Throws<ArgumentException>(() => MapInfoCommand.Set(doc, "MeleeMap", "maybe"));
+        Assert.Throws<ArgumentException>(() => MapInfoCommand.Set(doc, "Tileset", "??"));
         // Rejection happens before any mutation or write-back.
         Assert.Equal("Synthetic Test Map", MapInfoCommand.Read(doc).MapName);
+    }
+
+    [Fact]
+    public void Set_flag_round_trips_and_leaves_every_other_field_unchanged()
+    {
+        var doc = LoadSynthetic(BuildInfo());
+        var before = MapInfoCommand.Read(doc);
+        Assert.False(before.UseCustomForces);
+
+        MapInfoCommand.Set(doc, "UseCustomForces", "true");
+
+        var saved = MapDocument.Load(doc.SaveToBytes());
+        var after = MapInfoCommand.Read(saved);
+        Assert.True(after.UseCustomForces);
+        // Record equality pins every other exposed field as unchanged.
+        Assert.Equal(before with { UseCustomForces = true }, after);
+        // Unexposed flag bits (HasMapPropertiesMenuBeenOpened) survive the toggle too.
+        var reparsed = Assert.IsType<MapInfo>(saved.GetFile("war3map.w3i")!.Model);
+        Assert.True(reparsed.MapFlags.HasFlag(MapFlags.HasMapPropertiesMenuBeenOpened));
+        Assert.True(reparsed.MapFlags.HasFlag(MapFlags.MeleeMap));
+    }
+
+    [Fact]
+    public void Set_fog_color_round_trips_through_save_and_reload()
+    {
+        var doc = LoadSynthetic(BuildInfo());
+        var before = MapInfoCommand.Read(doc);
+
+        MapInfoCommand.Set(doc, "FogColor", "10,20,30,40");
+
+        var after = MapInfoCommand.Read(MapDocument.Load(doc.SaveToBytes()));
+        Assert.Equal("10,20,30,40", after.FogColor);
+        Assert.Equal(before with { FogColor = "10,20,30,40" }, after);
+    }
+
+    [Fact]
+    public void Set_loading_screen_title_round_trips_through_save_and_reload()
+    {
+        var doc = LoadSynthetic(BuildInfo());
+        var before = MapInfoCommand.Read(doc);
+
+        MapInfoCommand.Set(doc, "LoadingScreenTitle", "TRIGSTR_001");
+
+        var after = MapInfoCommand.Read(MapDocument.Load(doc.SaveToBytes()));
+        Assert.Equal("TRIGSTR_001", after.LoadingScreenTitle);
+        Assert.Equal(before with { LoadingScreenTitle = "TRIGSTR_001" }, after);
+    }
+
+    /// <summary>Enum-backed fields accept the War3Net name, the WE tileset letter,
+    /// and the raw 4-letter weather code interchangeably.</summary>
+    [Fact]
+    public void Enum_fields_accept_names_letters_and_weather_codes()
+    {
+        var doc = LoadSynthetic(BuildInfo());
+
+        MapInfoCommand.Set(doc, "Tileset", "N");
+        MapInfoCommand.Set(doc, "GlobalWeather", "RAlr");
+        MapInfoCommand.Set(doc, "FogStyle", "Exponential1");
+
+        var after = MapInfoCommand.Read(MapDocument.Load(doc.SaveToBytes()));
+        Assert.Equal("Northrend", after.Tileset);
+        Assert.Equal("AshenvaleLightRain", after.GlobalWeather);
+        Assert.Equal("Exponential1", after.FogStyle);
     }
 
     [Fact]

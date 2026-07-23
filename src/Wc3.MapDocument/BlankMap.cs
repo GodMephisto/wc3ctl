@@ -48,8 +48,10 @@ public sealed record BlankMapOptions
 /// standard GUI-map skeleton (globals / InitCustomTriggers / main / config) rides along
 /// so ScriptPorter can splice + hook ported trigger code into a blank map.</para>
 ///
-/// <para>Follow-up increment for full external-World-Editor openability: prepend the
-/// HM3W header (PreArchiveData) and add war3map.wpm (pathing).</para>
+/// <para>For external World Editor openability the synthesized bytes carry the full
+/// on-disk .w3x shape: a 512-byte HM3W pre-archive header, a war3map.wpm pathing map
+/// sized to the terrain (all cells unrestricted) and a small placeholder
+/// war3mapMap.tga minimap, alongside the info/terrain/script files.</para>
 /// </summary>
 public static class BlankMap
 {
@@ -84,12 +86,20 @@ public static class BlankMap
 
         var env = BuildEnvironment(o.EnvironmentVersion, o.TileEdge, o.TilesetCode);
 
-        var map = new Map { Info = info, Environment = env, Script = BuildScript(o) };
+        var map = new Map
+        {
+            Info = info,
+            Environment = env,
+            PathingMap = BuildPathingMap(o.TileEdge),
+            Script = BuildScript(o),
+        };
         var files = new List<MpqFile>
         {
             map.GetInfoFile(enc)!,
             map.GetEnvironmentFile(enc)!,
+            map.GetPathingMapFile(enc)!,
             map.GetScriptFile(enc)!,
+            MpqFile.New(new MemoryStream(BuildMinimapTga()), MinimapFileName),
         };
 
         // Generate/overwrite the (listfile) so the named entries (war3map.w3i / .w3e)
@@ -99,9 +109,104 @@ public static class BlankMap
             ListFileCreateMode = MpqFileCreateMode.Overwrite,
         };
 
-        using var ms = new MemoryStream();
-        using (MpqArchive.Create(ms, files, createOpts, leaveOpen: true)) { }
-        return ms.ToArray();
+        using var mpq = new MemoryStream();
+        using (MpqArchive.Create(mpq, files, createOpts, leaveOpen: true)) { }
+
+        // A real .w3x is the 512-byte HM3W block followed by the archive. The MPQ
+        // format resolves internal offsets relative to wherever its own header is
+        // found, so a plain prefix is safe (SyntheticMap and MapDocument.SaveToBytes
+        // concatenate the same way). MapDocument.Load captures the block as
+        // PreArchiveData and Save re-emits it, so it survives every round-trip.
+        using var w3x = new MemoryStream();
+        w3x.Write(BuildW3xHeader(info), 0, W3xHeaderSize);
+        mpq.Position = 0;
+        mpq.CopyTo(w3x);
+        return w3x.ToArray();
+    }
+
+    private const int W3xHeaderSize = 512;
+
+    /// <summary>
+    /// Builds the 512-byte pre-archive block a real .w3x carries: "HM3W" magic, an
+    /// unknown dword (zero in editor-saved maps), the null-terminated map name, the
+    /// map-flags dword and the max-players dword, zero-padded out to the 512-byte
+    /// boundary where the MPQ archive begins (MpqHeader.FindArchiveOffset scans on
+    /// exactly that alignment). The pinned War3Net build has no writer for this block,
+    /// so the documented layout is written directly. The World Editor rejects .w3x
+    /// files without it, which is why a blank map must ship one.
+    /// </summary>
+    private static byte[] BuildW3xHeader(MapInfo info)
+    {
+        var block = new byte[W3xHeaderSize];
+        using var w = new BinaryWriter(new MemoryStream(block));
+        w.Write("HM3W"u8);
+        w.Write(0u);
+
+        // Null-terminated display name. The fixed block leaves 495 bytes for it (512
+        // minus two leading dwords, the terminator and two trailing dwords). Absurdly
+        // long names are truncated here only, war3map.w3i keeps the full text.
+        var name = Encoding.UTF8.GetBytes(info.MapName ?? string.Empty);
+        int room = W3xHeaderSize - (4 + 4 + 1 + 4 + 4);
+        w.Write(name, 0, Math.Min(name.Length, room));
+        w.Write((byte)0);
+
+        w.Write((uint)info.MapFlags);
+        // Max players, floored at 1: the blank map's script configures one player slot
+        // even when the (empty-by-default) w3i player list carries none.
+        w.Write((uint)Math.Max(info.Players?.Count ?? 0, 1));
+        return block;
+    }
+
+    // The pathing grid is 4x4 cells per terrain tile (each cell covers 32x32 world units).
+    private const int PathingCellsPerTile = 4;
+
+    /// <summary>
+    /// Builds the war3map.wpm pathing grid sized to the terrain: TileEdge*4 cells per
+    /// side. A set <see cref="PathingType"/> bit marks that capability as blocked, so
+    /// all-clear cells (the <c>default</c>) leave every cell fully walkable, flyable
+    /// and buildable, the correct default for freshly synthesized flat ground.
+    /// </summary>
+    private static MapPathingMap BuildPathingMap(int tileEdge)
+    {
+        int side = tileEdge * PathingCellsPerTile;
+        return new MapPathingMap(MapPathingMapFormatVersion.v0)
+        {
+            Width = (uint)side,
+            Height = (uint)side,
+            Cells = Enumerable.Repeat(default(PathingType), side * side).ToList(),
+        };
+    }
+
+    private const string MinimapFileName = "war3mapMap.tga";
+
+    /// <summary>
+    /// Builds a small valid war3mapMap.tga minimap: an 18-byte uncompressed truecolor
+    /// TGA header followed by solid grass-green 32-bit BGRA pixels. The World Editor
+    /// regenerates the real minimap from terrain when it saves, so a plain placeholder
+    /// is enough to keep the archive complete for map-preview UIs.
+    /// </summary>
+    private static byte[] BuildMinimapTga()
+    {
+        const int side = 128;
+        // Grass tone matching the Lgrs tile the terrain palette leads with (BGRA order).
+        const byte blue = 44, green = 118, red = 68, alpha = 255;
+
+        var tga = new byte[18 + side * side * 4];
+        tga[2] = 2;                        // image type: uncompressed truecolor
+        tga[12] = (byte)(side & 0xFF);     // width, little-endian
+        tga[13] = (byte)(side >> 8);
+        tga[14] = (byte)(side & 0xFF);     // height, little-endian
+        tga[15] = (byte)(side >> 8);
+        tga[16] = 32;                      // bits per pixel
+        tga[17] = 8;                       // descriptor: 8 alpha bits, bottom-left origin
+        for (int i = 18; i < tga.Length; i += 4)
+        {
+            tga[i] = blue;
+            tga[i + 1] = green;
+            tga[i + 2] = red;
+            tga[i + 3] = alpha;
+        }
+        return tga;
     }
 
     /// <summary>

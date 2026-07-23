@@ -43,6 +43,20 @@ public sealed class TerrainGlView : OpenGlControlBase
     private int _indexCount;
     private bool _meshDirty;
 
+    // Water surface (position-only quads over water cells, built by WaterMeshBuilder),
+    // uploaded like the terrain mesh and drawn as a translucent pass after it so
+    // existing and sculpted water shows in the 3D view.
+    private uint _waterProgram, _waterVao, _waterVbo, _waterEbo;
+    private int _uWaterMvp = -1, _uWaterColor = -1;
+    private float[]? _waterVerts;
+    private uint[]? _waterIndices;
+    private int _waterIndexCount;
+    private bool _waterDirty;
+
+    // Water surface tint: the 2D perspective renderer's water colour (48, 96, 168)
+    // normalized to 0..1, drawn at the same 0.55 alpha, so both views agree.
+    private const float WaterR = 48f / 255f, WaterG = 96f / 255f, WaterB = 168f / 255f, WaterA = 0.55f;
+
     // Placement scene (units/doodads as real textured models, box fallback): each unique
     // mesh + its textures upload to the GPU once and draw per instance with a per-instance
     // world transform + owner colour, honoring each section's material filter mode
@@ -108,6 +122,7 @@ public sealed class TerrainGlView : OpenGlControlBase
             if (doc is null)
             {
                 _verts = null; _indices = null; _indexCount = 0;
+                _waterVerts = null; _waterIndices = null; _waterIndexCount = 0;
                 _heights = null; _scene = null; _sceneDirty = true;
                 return;
             }
@@ -117,6 +132,11 @@ public sealed class TerrainGlView : OpenGlControlBase
             _center = mesh.Center;
             _radius = mesh.Radius;
             _meshDirty = true;
+
+            var water = WaterMeshBuilder.Build(doc);
+            _waterVerts = water.Vertices;
+            _waterIndices = water.Indices;
+            _waterDirty = true;
 
             _layerData = TerrainArtCatalog.BuildLayersForMap(doc, out _layerCount, out _layerCell);
             _texDirty = true;
@@ -131,6 +151,7 @@ public sealed class TerrainGlView : OpenGlControlBase
         {
             Log($"SetMap failed: {ex.Message}");
             _verts = null; _indices = null; _indexCount = 0;
+            _waterVerts = null; _waterIndices = null; _waterIndexCount = 0;
             _scene = null; _sceneDirty = true;
         }
     }
@@ -156,10 +177,11 @@ public sealed class TerrainGlView : OpenGlControlBase
     /// <summary>
     /// Re-reads the map's terrain from the (already mutated) document and re-uploads the
     /// height mesh, mirroring <see cref="RefreshPlacements"/>. Call after a sculpt edit to
-    /// war3map.w3e. Also rebuilds the height field (so ground picks land on the new
-    /// surface) and the placement scene (so widgets ride the new ground Z). The camera
-    /// framing (centre/radius) is intentionally kept so strokes never jump the view, and
-    /// the tile texture array is untouched because the map's tile-type list cannot change here.
+    /// war3map.w3e. Also rebuilds the water surface (so a Water sculpt shows immediately),
+    /// the height field (so ground picks land on the new surface) and the placement scene
+    /// (so widgets ride the new ground Z). The camera framing (centre/radius) is
+    /// intentionally kept so strokes never jump the view, and the tile texture array is
+    /// untouched because the map's tile-type list cannot change here.
     /// </summary>
     public void RefreshTerrain()
     {
@@ -171,6 +193,10 @@ public sealed class TerrainGlView : OpenGlControlBase
             _verts = mesh.Vertices;
             _indices = mesh.Indices;
             _meshDirty = true;
+            var water = WaterMeshBuilder.Build(_doc);
+            _waterVerts = water.Vertices;
+            _waterIndices = water.Indices;
+            _waterDirty = true;
             _heights = TerrainHeightField.TryCreate(_doc);
             _scene = PlacementScene.Build(_doc, _modelResolver);
             _sceneDirty = true;
@@ -646,10 +672,43 @@ public sealed class TerrainGlView : OpenGlControlBase
             _uPlaceOwnerColor = _gl.GetUniformLocation(_placeProgram, "uOwnerColor");
             _uPlaceHighlight = _gl.GetUniformLocation(_placeProgram, "uHighlight");
 
+            // Water program: bare positions through the same MVP, one flat translucent
+            // colour. The terrain shader wants normals, UVs and the tile texture array,
+            // none of which a flat water sheet carries, so a tiny dedicated program is
+            // cleaner than reusing it.
+            string wvsSrc = header +
+                "layout(location=0) in vec3 aPos;\n" +
+                "uniform mat4 uMVP;\n" +
+                "void main(){ gl_Position = uMVP * vec4(aPos, 1.0); }\n";
+            string wfsSrc = header +
+                "uniform vec4 uColor;\n" +
+                "out vec4 fragColor;\n" +
+                "void main(){ fragColor = uColor; }\n";
+            uint wvs = CompileShader(_gl, ShaderType.VertexShader, wvsSrc);
+            uint wfs = CompileShader(_gl, ShaderType.FragmentShader, wfsSrc);
+            _waterProgram = _gl.CreateProgram();
+            _gl.AttachShader(_waterProgram, wvs);
+            _gl.AttachShader(_waterProgram, wfs);
+            _gl.LinkProgram(_waterProgram);
+            _gl.GetProgram(_waterProgram, ProgramPropertyARB.LinkStatus, out int waterLinkOk);
+            if (waterLinkOk == 0)
+                Log("water program link failed: " + _gl.GetProgramInfoLog(_waterProgram));
+            _gl.DetachShader(_waterProgram, wvs);
+            _gl.DetachShader(_waterProgram, wfs);
+            _gl.DeleteShader(wvs);
+            _gl.DeleteShader(wfs);
+            _uWaterMvp = _gl.GetUniformLocation(_waterProgram, "uMVP");
+            _uWaterColor = _gl.GetUniformLocation(_waterProgram, "uColor");
+
+            _waterVao = _gl.GenVertexArray();
+            _waterVbo = _gl.GenBuffer();
+            _waterEbo = _gl.GenBuffer();
+
             _initialized = true;
             _meshDirty = _verts is not null;
             _texDirty = _layerData is not null;
             _sceneDirty = _scene is not null;
+            _waterDirty = _waterVerts is not null;
         }
         catch (Exception ex)
         {
@@ -674,10 +733,11 @@ public sealed class TerrainGlView : OpenGlControlBase
             _gl.Clear((uint)(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit));
 
             if (_meshDirty) UploadMesh();
+            if (_waterDirty) UploadWaterMesh();
             if (_texDirty) UploadTexArray();
             if (_sceneDirty) SyncPlacementScene();
             bool hasPlacements = _instanceGroups.Count > 0;
-            if (_indexCount == 0 && !hasPlacements) return;
+            if (_indexCount == 0 && !hasPlacements && _waterIndexCount == 0) return;
 
             // Orbit camera around the scene centre (matches RenderPerspectivePng).
             float yaw = _yaw * (MathF.PI / 180f);
@@ -814,6 +874,28 @@ public sealed class TerrainGlView : OpenGlControlBase
                 _gl.BindVertexArray(0);
                 _gl.ActiveTexture(TextureUnit.Texture0); // restore the terrain's unit
             }
+
+            // Water: translucent sheet drawn after the opaque terrain and the placements
+            // so it tints whatever sits below the surface. Depth-tested against the
+            // terrain (ground rising above the level still occludes it) but not
+            // depth-written (the ground under shallow water stays visible through the
+            // blend). Blend and depth-mask state is restored right after the draw.
+            if (_waterIndexCount > 0 && _waterProgram != 0)
+            {
+                _gl.UseProgram(_waterProgram);
+                if (_uWaterMvp >= 0)
+                    _gl.UniformMatrix4(_uWaterMvp, 1, false, MemoryMarshal.CreateReadOnlySpan(ref mvp.M11, 16));
+                if (_uWaterColor >= 0)
+                    _gl.Uniform4(_uWaterColor, WaterR, WaterG, WaterB, WaterA);
+                _gl.Enable(EnableCap.Blend);
+                _gl.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
+                _gl.DepthMask(false);
+                _gl.BindVertexArray(_waterVao);
+                _gl.DrawElements(PrimitiveType.Triangles, (uint)_waterIndexCount, DrawElementsType.UnsignedInt, (void*)0);
+                _gl.BindVertexArray(0);
+                _gl.DepthMask(true);
+                _gl.Disable(EnableCap.Blend);
+            }
         }
         catch (Exception ex)
         {
@@ -849,6 +931,34 @@ public sealed class TerrainGlView : OpenGlControlBase
 
         _gl.BindVertexArray(0);
         _indexCount = _indices.Length;
+    }
+
+    /// <summary>Uploads the water surface mesh, mirroring <see cref="UploadMesh"/>.
+    /// An empty mesh (map without water) leaves the index count at zero so the
+    /// water pass skips drawing entirely.</summary>
+    private unsafe void UploadWaterMesh()
+    {
+        _waterDirty = false;
+        _waterIndexCount = 0;
+        if (_gl is null || _waterVerts is null || _waterIndices is null || _waterIndices.Length == 0)
+            return;
+
+        _gl.BindVertexArray(_waterVao);
+
+        _gl.BindBuffer(BufferTargetARB.ArrayBuffer, _waterVbo);
+        _gl.BufferData<float>(BufferTargetARB.ArrayBuffer,
+            (nuint)(_waterVerts.Length * sizeof(float)), _waterVerts.AsSpan(), BufferUsageARB.StaticDraw);
+
+        _gl.BindBuffer(BufferTargetARB.ElementArrayBuffer, _waterEbo);
+        _gl.BufferData<uint>(BufferTargetARB.ElementArrayBuffer,
+            (nuint)(_waterIndices.Length * sizeof(uint)), _waterIndices.AsSpan(), BufferUsageARB.StaticDraw);
+
+        uint stride = (uint)(WaterMesh.Stride * sizeof(float));
+        _gl.VertexAttribPointer(0, 3, VertexAttribPointerType.Float, false, stride, (void*)0);
+        _gl.EnableVertexAttribArray(0);
+
+        _gl.BindVertexArray(0);
+        _waterIndexCount = _waterIndices.Length;
     }
 
     /// <summary>
@@ -1011,8 +1121,12 @@ public sealed class TerrainGlView : OpenGlControlBase
             if (_vbo != 0) _gl.DeleteBuffer(_vbo);
             if (_ebo != 0) _gl.DeleteBuffer(_ebo);
             if (_vao != 0) _gl.DeleteVertexArray(_vao);
+            if (_waterVbo != 0) _gl.DeleteBuffer(_waterVbo);
+            if (_waterEbo != 0) _gl.DeleteBuffer(_waterEbo);
+            if (_waterVao != 0) _gl.DeleteVertexArray(_waterVao);
             if (_texArray != 0) _gl.DeleteTexture(_texArray);
             if (_program != 0) _gl.DeleteProgram(_program);
+            if (_waterProgram != 0) _gl.DeleteProgram(_waterProgram);
             foreach (var gpuMesh in _gpuMeshes.Values)
                 DeletePlacementMesh(gpuMesh);
             if (_placeProgram != 0) _gl.DeleteProgram(_placeProgram);
@@ -1021,6 +1135,8 @@ public sealed class TerrainGlView : OpenGlControlBase
         finally
         {
             _vbo = _ebo = _vao = _texArray = _program = 0;
+            _waterVbo = _waterEbo = _waterVao = _waterProgram = 0;
+            _waterIndexCount = 0;
             _placeProgram = 0;
             _gpuMeshes.Clear();     // GL names die with the context — never reuse them
             _instanceGroups.Clear();

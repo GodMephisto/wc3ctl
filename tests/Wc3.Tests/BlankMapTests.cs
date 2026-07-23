@@ -86,6 +86,72 @@ public class BlankMapTests
     }
 
     [Fact]
+    public void CreateArchiveBytes_StartsWithHm3wHeader()
+    {
+        byte[] bytes = BlankMap.CreateArchiveBytes();
+
+        Assert.Equal("HM3W", Encoding.ASCII.GetString(bytes, 0, 4));
+        // The map name sits after the two leading dwords, null-terminated.
+        byte[] name = Encoding.UTF8.GetBytes("Blank Map");
+        Assert.Equal(name, bytes[8..(8 + name.Length)]);
+        Assert.Equal(0, bytes[8 + name.Length]);
+        // The archive itself begins exactly at the 512-byte boundary the loader scans.
+        Assert.Equal(512, MpqHeader.FindArchiveOffset(bytes));
+    }
+
+    [Fact]
+    public void Create_PreservesHeaderThroughLoadAndSave()
+    {
+        var doc = BlankMap.Create();
+
+        Assert.Equal(512, doc.PreArchiveData.Length);
+        Assert.Equal("HM3W", Encoding.ASCII.GetString(doc.PreArchiveData, 0, 4));
+
+        byte[] saved = doc.SaveToBytes();
+        Assert.Equal("HM3W", Encoding.ASCII.GetString(saved, 0, 4));
+        var reloaded = MapDocument.Load(saved);
+        Assert.Equal(512, reloaded.PreArchiveData.Length);
+    }
+
+    [Fact]
+    public void Create_IncludesAllWalkablePathingMap_SizedToTerrain()
+    {
+        var doc = BlankMap.Create(new BlankMapOptions { TileEdge = 8 });
+
+        var wpm = Assert.IsType<MapPathingMap>(doc.GetFile("war3map.wpm")!.Model);
+        Assert.Equal(8u * 4, wpm.Width);  // 4 pathing cells per terrain tile
+        Assert.Equal(8u * 4, wpm.Height);
+        Assert.Equal(32 * 32, wpm.Cells.Count);
+        // A set PathingType bit means "blocked", so all-clear cells are fully walkable.
+        Assert.All(wpm.Cells, c => Assert.Equal(default, c));
+
+        // Still parses after a full save/load round-trip.
+        var reloaded = MapDocument.Load(doc.SaveToBytes());
+        var wpm2 = Assert.IsType<MapPathingMap>(reloaded.GetFile("war3map.wpm")!.Model);
+        Assert.Equal(wpm.Cells.Count, wpm2.Cells.Count);
+    }
+
+    [Fact]
+    public void Create_IncludesMinimapTga()
+    {
+        var doc = BlankMap.Create();
+
+        var entry = doc.GetFile("war3mapMap.tga");
+        Assert.NotNull(entry);
+        byte[] tga = entry!.RawBytes;
+        Assert.Equal(2, tga[2]);    // uncompressed truecolor
+        Assert.Equal(32, tga[16]);  // 32-bit BGRA
+        int w = tga[12] | (tga[13] << 8);
+        int h = tga[14] | (tga[15] << 8);
+        Assert.True(w > 0 && h > 0);
+        Assert.Equal(18 + w * h * 4, tga.Length); // the full pixel payload is present
+
+        // Raw (unknown-format) files survive the round-trip byte for byte.
+        var reloaded = MapDocument.Load(doc.SaveToBytes());
+        Assert.Equal(tga, reloaded.GetFile("war3mapMap.tga")!.RawBytes);
+    }
+
+    [Fact]
     public void Create_EmitsAStandardJassScriptSkeleton()
     {
         var doc = BlankMap.Create();

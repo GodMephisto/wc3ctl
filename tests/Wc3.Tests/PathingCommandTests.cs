@@ -8,8 +8,8 @@ namespace Wc3.Tests;
 
 public class PathingCommandTests
 {
-    // Distinct width/height so any x/y transposition bug shows up. Attaches a
-    // fresh, all-clear pathing map to a blank doc (BlankMap has no wpm yet).
+    // Distinct width/height so any x/y transposition bug shows up. Replaces the
+    // blank doc's default wpm with a fresh, all-clear W x H pathing map.
     private const int W = 16;
     private const int H = 12;
 
@@ -172,7 +172,11 @@ public class PathingCommandTests
     [Fact]
     public void Paint_ReturnsError_WhenMapHasNoPathingFile()
     {
-        var doc = BlankMap.Create(); // no war3map.wpm attached
+        // BlankMap now ships a wpm, so build a doc without one from scratch.
+        var doc = MapDocument.Load(SyntheticMap.Build(new Dictionary<string, byte[]>
+        {
+            ["war3map.j"] = new byte[] { 0x2F, 0x2F }, // "//"
+        }));
         Assert.Null(doc.GetFile(PathingCommand.PathingFile));
 
         var r = PathingCommand.Paint(doc, 0, 0, 1, PathingType.Walk);

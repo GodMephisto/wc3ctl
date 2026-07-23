@@ -42,16 +42,23 @@ public static class GameData
             }
 
             var wesBytes = src!.ReadFile(WorldEditStringsPath);
+            var strings = wesBytes is null ? WorldEditStrings.Parse("") : WorldEditStrings.FromBytes(wesBytes);
+            // Profile TXT stores fill the fields the metadata SLKs mark "Profile"
+            // (names, tooltips, art refs). Buff sections live inside the ability
+            // profile files, so those two kinds share one store.
+            var itemProfile = ProfileTxtStore.BuildItems(src!, strings);
+            var abilityProfile = ProfileTxtStore.BuildAbilities(src!, strings);
+            var upgradeProfile = ProfileTxtStore.BuildUpgrades(src!, strings);
             ctx = new GameDataContext
             {
                 Units = BaseUnitStore.Build(src!),
-                Abilities = BaseAbilityStore.Build(src!),
-                Items = BuildSafe("item", ObjectDataStore.BuildItems),
+                Abilities = BaseAbilityStore.Build(src!, abilityProfile),
+                Items = BuildSafe("item", s => ObjectDataStore.BuildItems(s, itemProfile)),
                 Destructables = BuildSafe("destructable", ObjectDataStore.BuildDestructables),
                 Doodads = BuildSafe("doodad", ObjectDataStore.BuildDoodads),
-                Buffs = BuildSafe("buff", ObjectDataStore.BuildBuffs),
-                Upgrades = BuildSafe("upgrade", ObjectDataStore.BuildUpgrades),
-                Strings = wesBytes is null ? WorldEditStrings.Parse("") : WorldEditStrings.FromBytes(wesBytes),
+                Buffs = BuildSafe("buff", s => ObjectDataStore.BuildBuffs(s, abilityProfile)),
+                Upgrades = BuildSafe("upgrade", s => ObjectDataStore.BuildUpgrades(s, upgradeProfile)),
+                Strings = strings,
                 UnitNames = UnitNameTable.FromSources(src!),
                 Diagnostics = diags,
                 InstallDir = dir, // lets TryReadFile lazily re-open CASC for raw assets

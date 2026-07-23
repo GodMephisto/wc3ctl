@@ -56,9 +56,21 @@
                             </ListBox.ContextMenu>
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
-                                    <TextBlock Text="{Binding Display}"
-                                               TextTrimming="CharacterEllipsis"
-                                               VerticalAlignment="Center"/>
+                                    <!-- Icon slot + label. The slot is a fixed-size box so
+                                         rows without icon art keep the text aligned. The
+                                         icon decodes lazily off the UI thread (see
+                                         ObjectRow.Icon) and pops in via PropertyChanged. -->
+                                    <Grid ColumnDefinitions="24,*">
+                                        <Border Grid.Column="0" Width="24" Height="24"
+                                                Background="#22000000" CornerRadius="2"
+                                                VerticalAlignment="Center">
+                                            <Image Source="{Binding Icon}" Stretch="Uniform"/>
+                                        </Border>
+                                        <TextBlock Grid.Column="1" Text="{Binding Display}"
+                                                   Margin="6,0,0,0"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   VerticalAlignment="Center"/>
+                                    </Grid>
                                 </DataTemplate>
                             </ListBox.ItemTemplate>
                         </ListBox>

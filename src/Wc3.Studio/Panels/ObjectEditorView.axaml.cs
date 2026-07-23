@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.ComponentModel;
 using Avalonia;
 using Avalonia.Controls;
@@ -46,6 +47,18 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         [ObjectKind.Doodad] = "dfil",
         [ObjectKind.Destructable] = "bfil",
         [ObjectKind.Item] = "ifil",
+    };
+
+    /// <summary>Interface-icon art field per kind, for the object list's row icons
+    /// (same shape as <see cref="ModelFieldCodes"/>). Destructables and doodads have
+    /// no icon art field, so their rows keep the empty icon box.</summary>
+    private static readonly Dictionary<ObjectKind, string> IconFieldCodes = new()
+    {
+        [ObjectKind.Unit] = "uico",
+        [ObjectKind.Item] = "iico",
+        [ObjectKind.Ability] = "aart",
+        [ObjectKind.Buff] = "fart",
+        [ObjectKind.Upgrade] = "gar1",
     };
 
     private MapSession? _session;
@@ -187,9 +200,16 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         var kind = SelectedKind;
         try
         {
+            // One icon loader per list load, like the palette: a kind or map switch
+            // rebuilds rows with a fresh loader, so a decode still in flight can only
+            // ever land on a row the list no longer shows.
+            var icons = IconFieldCodes.TryGetValue(kind.Kind, out var iconField)
+                ? new ObjectIconLoader(doc, kind.Kind, iconField, _session.GameDir)
+                : null;
             _allRows = ObjectListCommand.Execute(doc, kind.Kind, _session.GameDir).Items
                 .Select(i => new ObjectRow(
-                    i.Rawcode, i.Name is null ? i.Rawcode : $"{i.Name} ({i.Rawcode})"))
+                    i.Rawcode, i.Name is null ? i.Rawcode : $"{i.Name} ({i.Rawcode})")
+                { IconLoader = icons })
                 .ToList();
         }
         catch (Exception ex)
@@ -1365,8 +1385,180 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     /// <summary>Type-switcher entry; carried as the combo item's payload.</summary>
     private sealed record KindOption(ObjectKind Kind, string Label);
 
-    /// <summary>Object list row: "Name (rawcode)", or the bare rawcode when nameless.</summary>
-    public sealed record ObjectRow(string Rawcode, string Display);
+    /// <summary>
+    /// Object list row: "Name (rawcode)" (or the bare rawcode when nameless) plus a
+    /// lazily decoded interface icon. Notifies for <see cref="Icon"/>, which lands
+    /// after an off-thread resolve + decode, exactly like the palette's tiles.
+    /// </summary>
+    public sealed class ObjectRow : INotifyPropertyChanged
+    {
+        public ObjectRow(string rawcode, string display)
+        {
+            Rawcode = rawcode;
+            Display = display;
+        }
+
+        public string Rawcode { get; }
+        public string Display { get; }
+        /// <summary>Loader shared by every row of one list load. Null when the kind has
+        /// no icon art (destructables, doodads) - those rows never request anything.</summary>
+        internal ObjectIconLoader? IconLoader { get; init; }
+
+        private Bitmap? _icon;
+        private bool _iconRequested;
+
+        /// <summary>
+        /// The row's decoded icon, or null (pending or absent - the template's icon
+        /// box just stays empty, keeping the text aligned). Lazy like the palette:
+        /// the first read, which happens when the list realizes the row and binds it,
+        /// kicks off an off-thread resolve + decode and the binding refreshes via
+        /// PropertyChanged when it lands. Never blocks the UI thread, never throws.
+        /// A kind or map switch can't show stale icons - it rebuilds rows and loader
+        /// wholesale, so a late decode only ever reaches an unbound row.
+        /// </summary>
+        public Bitmap? Icon
+        {
+            get
+            {
+                if (!_iconRequested)
+                {
+                    _iconRequested = true;
+                    if (IconLoader is not null)
+                    {
+                        if (IconLoader.TryGetCached(Rawcode, out var cached))
+                            _icon = cached;
+                        else
+                            IconLoader.Load(Rawcode, bmp =>
+                            {
+                                if (bmp is null) return; // graceful fallback: empty box
+                                _icon = bmp;
+                                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Icon)));
+                            });
+                    }
+                }
+                return _icon;
+            }
+        }
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+    }
+
+    /// <summary>
+    /// Resolves and decodes object-list row icons off the UI thread, mirroring the
+    /// palette's loader (request coalescing, caching, thread marshalling) with the
+    /// command layer doing all real work. Units resolve through the unit palette,
+    /// whose per-entry art already folds the map's 'uico' delta over the Reforged
+    /// skin-profile art ('uico' is Profile-backed, so the SLK-backed merged fields
+    /// never carry an icon the map didn't override). Every other kind reads its
+    /// merged icon field via <see cref="ObjectGetCommand"/>, where a map delta wins
+    /// over base data. Decoding is <see cref="PaletteCommand.IconPng(MapDocument,
+    /// string, string?)"/> (map imports first, then base-game CASC, BLP/DDS/TGA
+    /// sniffed). The per-rawcode caches are touched on the UI thread only, like the
+    /// palette's. The per-path bitmap cache is consulted inside the off-thread
+    /// resolve (the path is unknown until then), so that one is concurrent. One
+    /// instance per list load.
+    /// </summary>
+    internal sealed class ObjectIconLoader
+    {
+        private readonly MapDocument _doc;
+        private readonly ObjectKind _kind;
+        private readonly string _iconField;
+        private readonly string? _gameDir;
+        private readonly Dictionary<string, Bitmap?> _done = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, List<Action<Bitmap?>>> _pending = new(StringComparer.Ordinal);
+        /// <summary>Decoded art shared across rows - many objects reuse one icon file.</summary>
+        private readonly ConcurrentDictionary<string, Bitmap?> _byPath = new(StringComparer.OrdinalIgnoreCase);
+        /// <summary>rawcode to icon art from the unit palette, built once on first use
+        /// (off-thread, and Lazy coalesces concurrent builders). The first build per
+        /// install can take seconds (CASC open), exactly like the palette tab's load.</summary>
+        private readonly Lazy<Dictionary<string, string>> _unitIcons;
+
+        public ObjectIconLoader(MapDocument doc, ObjectKind kind, string iconField, string? gameDir)
+        {
+            _doc = doc;
+            _kind = kind;
+            _iconField = iconField;
+            _gameDir = gameDir;
+            _unitIcons = new(BuildUnitIcons);
+        }
+
+        /// <summary>A completed lookup for the rawcode (null bitmap = no or undecodable icon).</summary>
+        public bool TryGetCached(string rawcode, out Bitmap? bitmap) =>
+            _done.TryGetValue(rawcode, out bitmap);
+
+        /// <summary>Requests an off-thread resolve + decode. <paramref name="onLoaded"/>
+        /// runs later on the UI thread (null = no icon). Concurrent requests for the
+        /// same rawcode share one lookup.</summary>
+        public void Load(string rawcode, Action<Bitmap?> onLoaded)
+        {
+            if (_done.TryGetValue(rawcode, out var hit)) { onLoaded(hit); return; }
+            if (_pending.TryGetValue(rawcode, out var waiters)) { waiters.Add(onLoaded); return; }
+            _pending[rawcode] = new List<Action<Bitmap?>> { onLoaded };
+            Task.Run(() =>
+            {
+                Bitmap? bmp = null;
+                try
+                {
+                    if (ResolveIconPath(rawcode) is { } path)
+                        bmp = DecodeShared(path);
+                }
+                catch { /* no icon - the row keeps its empty box */ }
+                Dispatcher.UIThread.Post(() =>
+                {
+                    _done[rawcode] = bmp;
+                    if (_pending.Remove(rawcode, out var callbacks))
+                        foreach (var cb in callbacks) cb(bmp);
+                });
+            });
+        }
+
+        /// <summary>The row's icon art path, or null. Non-unit kinds read the merged
+        /// icon field - bare code first, then level 1 for leveled kinds (upgrades
+        /// store 'gar1' per level). Art values can list several paths comma-separated,
+        /// the first one is the icon (as the palette resolves it).</summary>
+        private string? ResolveIconPath(string rawcode)
+        {
+            if (_kind == ObjectKind.Unit)
+                return _unitIcons.Value.TryGetValue(rawcode, out var art) ? art : null;
+            var fields = ObjectGetCommand.Execute(_doc, _kind, rawcode, _gameDir).Fields;
+            var value = FieldValue(fields, _iconField) ?? FieldValue(fields, _iconField + ":1");
+            return string.IsNullOrWhiteSpace(value) ? null : value.Split(',')[0].Trim().Trim('"');
+        }
+
+        private static string? FieldValue(IReadOnlyList<MergedField> fields, string code) =>
+            fields.FirstOrDefault(f => f.Code.Equals(code, StringComparison.OrdinalIgnoreCase))?.Value;
+
+        /// <summary>Every unit palette entry's resolved icon art, keyed by rawcode. The
+        /// map's own units are palette entries too, so one build covers the whole list.</summary>
+        private Dictionary<string, string> BuildUnitIcons()
+        {
+            var icons = new Dictionary<string, string>(StringComparer.Ordinal);
+            try
+            {
+                foreach (var e in PaletteCommand.UnitPalette(_doc, _gameDir).Entries)
+                    if (e.IconPath is { Length: > 0 } art)
+                        icons.TryAdd(e.Rawcode, art);
+            }
+            catch { /* palette unavailable - unit rows stay iconless */ }
+            return icons;
+        }
+
+        /// <summary>Decode via the command layer, one bitmap per distinct art path. A
+        /// rare concurrent double-decode publishes one bitmap and disposes the loser.</summary>
+        private Bitmap? DecodeShared(string path)
+        {
+            if (_byPath.TryGetValue(path, out var cached)) return cached;
+            Bitmap? bmp = null;
+            if (PaletteCommand.IconPng(_doc, path, _gameDir) is { } png)
+            {
+                using var ms = new MemoryStream(png);
+                bmp = new Bitmap(ms);
+            }
+            var winner = _byPath.GetOrAdd(path, bmp);
+            if (!ReferenceEquals(winner, bmp)) bmp?.Dispose();
+            return winner;
+        }
+    }
 
     /// <summary>
     /// Read-only field grid row. Map-sourced fields render gold + semibold, like

@@ -4,8 +4,8 @@ namespace Wc3.GameData;
 /// Resolves a base ability rawcode (e.g. "AHbz") to its default field values by joining
 /// abilitymetadata.slk with the ability data SLKs. The data SLK set is derived from the
 /// metadata's "slk" column (currently just AbilityData -> abilitydata.slk, keyed by "alias");
-/// fields whose slk is "Profile" live in TXT profile files and are not resolved in v1.
-/// The join itself lives in the generic ObjectDataStore.
+/// fields whose slk is "Profile" (names, tooltips, art) resolve from the ability
+/// ProfileTxtStore when one is passed. The join itself lives in the generic ObjectDataStore.
 /// </summary>
 public sealed class BaseAbilityStore
 {
@@ -19,12 +19,14 @@ public sealed class BaseAbilityStore
     /// <summary>Field-code metadata (display names) for consumers building lookups.</summary>
     public AbilityMetadata Metadata => _meta;
 
-    public static BaseAbilityStore Build(IGameDataSource src)
+    public static BaseAbilityStore Build(IGameDataSource src) => Build(src, null);
+
+    public static BaseAbilityStore Build(IGameDataSource src, ProfileTxtStore? profile)
     {
         var metaBytes = src.ReadFile(Dir + "abilitymetadata.slk")
             ?? throw new InvalidDataException("abilitymetadata.slk not found in game data");
         var metaTable = SlkTable.Parse(metaBytes);
-        var store = ObjectDataStore.Build(src, ObjectMetadata.FromSlk(metaTable), ObjectDataStore.UnitsDirSlk);
+        var store = ObjectDataStore.Build(src, ObjectMetadata.FromSlk(metaTable), ObjectDataStore.UnitsDirSlk, null, profile);
         return new BaseAbilityStore(AbilityMetadata.FromSlk(metaTable), store);
     }
 
