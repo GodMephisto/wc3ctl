@@ -10,6 +10,9 @@
         <Style Selector="ListBox#FieldList ListBoxItem">
             <Setter Property="Padding" Value="4,1"/>
             <Setter Property="MinHeight" Value="0"/>
+            <!-- Reference-list sub-rows are display-only: disabling the container
+                 keeps them out of selection (and thus out of the field editor). -->
+            <Setter Property="IsEnabled" Value="{Binding !IsSubRow}"/>
         </Style>
     </UserControl.Styles>
 
@@ -40,8 +43,7 @@
                              TextChanged="OnSearchChanged"/>
                     <Grid Grid.Row="1">
                         <ListBox Name="ObjectList" SelectionMode="Multiple"
-                                 SelectionChanged="OnObjectSelectionChanged"
-                                 DoubleTapped="OnObjectDoubleTapped">
+                                 SelectionChanged="OnObjectSelectionChanged">
                             <!-- Right-click: jump to the Dependencies tab on this object.
                                  A PointerPressed tunnel handler moves the selection to the
                                  row under the pointer before the menu opens. -->
@@ -125,6 +127,37 @@
                                             BorderBrush="#33555555" BorderThickness="1" MaxHeight="180">
                                         <ListBox Name="EditorMulti" SelectionMode="Multiple,Toggle"/>
                                     </Border>
+                                    <!-- Object-reference LIST builder: the current entries in
+                                         order plus Add (searchable picker over the referenced
+                                         kind's map objects), Remove and Up/Down reorder. Apply
+                                         writes the rawcodes comma-joined in list order. -->
+                                    <Border Name="RefListHost" IsVisible="False"
+                                            BorderBrush="#33555555" BorderThickness="1" Padding="4">
+                                        <Grid RowDefinitions="Auto,4,Auto">
+                                            <DockPanel Grid.Row="0">
+                                                <Button Name="RefListAddButton" DockPanel.Dock="Right"
+                                                        Content="Add" Margin="4,0,0,0"
+                                                        Click="OnRefListAddClick"/>
+                                                <controls:SearchableComboBox Name="RefListAddCombo"/>
+                                            </DockPanel>
+                                            <DockPanel Grid.Row="2">
+                                                <StackPanel DockPanel.Dock="Right" Spacing="4"
+                                                            Margin="4,0,0,0">
+                                                    <Button Name="RefListRemoveButton" Content="Remove"
+                                                            MinWidth="70" IsEnabled="False"
+                                                            Click="OnRefListRemoveClick"/>
+                                                    <Button Name="RefListUpButton" Content="Up"
+                                                            MinWidth="70" IsEnabled="False"
+                                                            Click="OnRefListUpClick"/>
+                                                    <Button Name="RefListDownButton" Content="Down"
+                                                            MinWidth="70" IsEnabled="False"
+                                                            Click="OnRefListDownClick"/>
+                                                </StackPanel>
+                                                <ListBox Name="RefListBox" MaxHeight="140"
+                                                         SelectionChanged="OnRefListSelectionChanged"/>
+                                            </DockPanel>
+                                        </Grid>
+                                    </Border>
                                 </Panel>
                             </DockPanel>
                             <TextBlock Name="EditNote" Foreground="#8FA3B8" FontSize="11"
@@ -145,11 +178,14 @@
                                                FontFamily="Consolas,Menlo,monospace"
                                                Foreground="{Binding RowBrush}"
                                                VerticalAlignment="Center"/>
-                                    <TextBlock Grid.Column="2" Text="{Binding Value}"
+                                    <!-- Margin comes from the row: reference-list
+                                         sub-rows indent under their parent's value. -->
+                                    <TextBlock Grid.Column="2" Text="{Binding DisplayValue}"
                                                Foreground="{Binding RowBrush}"
                                                FontWeight="{Binding RowWeight}"
                                                TextTrimming="CharacterEllipsis"
-                                               Margin="4,0" VerticalAlignment="Center"/>
+                                               Margin="{Binding ValueMargin}"
+                                               VerticalAlignment="Center"/>
                                     <TextBlock Grid.Column="3" Text="{Binding Source}"
                                                Foreground="{Binding RowBrush}"
                                                FontWeight="{Binding RowWeight}"

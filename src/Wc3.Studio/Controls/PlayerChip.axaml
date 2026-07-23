@@ -1,0 +1,12 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Wc3.Studio.Controls.PlayerChip">
+    <!-- Grid (not a horizontal StackPanel): the * column constrains the text's width
+         so TextTrimming actually kicks in when the container is narrow. -->
+    <Grid ColumnDefinitions="Auto,*">
+        <Border Name="SwatchBorder" Grid.Column="0" Width="12" Height="12"
+                CornerRadius="2" VerticalAlignment="Center" Margin="0,0,6,0"/>
+        <TextBlock Name="ChipText" Grid.Column="1" VerticalAlignment="Center"
+                   TextTrimming="CharacterEllipsis" Text=""/>
+    </Grid>
+</UserControl>

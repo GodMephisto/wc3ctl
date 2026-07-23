@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
+using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Wc3.Commands;
@@ -13,8 +14,10 @@ namespace Wc3.Studio.Panels;
 /// Dependency graph for one object of any Object Editor kind: the panel
 /// resolves its full closure (abilities, buffs, items, model, textures,
 /// icons, strings) via <see cref="BundleCommand.ResolveObject"/>, then
-/// renders it two ways - a layered node-link graph on a canvas and a
-/// structured tree + files/strings lists beside it. Two ways in: the
+/// renders it two ways - a layered node-link graph on an interactive canvas
+/// (drag empty space to pan, wheel to zoom about the cursor, drag nodes to
+/// rearrange - edges follow) and a structured tree + files/strings lists
+/// beside it. Two ways in: the
 /// workspace pushes the Objects tab's selection through
 /// <see cref="ShowObject"/> (auto-resolving immediately), or the user picks
 /// manually from the combo, which lists the current kind's map objects.
@@ -53,6 +56,25 @@ public partial class DependencyGraphView : UserControl, IMapPanel
     private const double FileGapX = 26, FileGapY = 26;
     private const double BandGap = 100;
 
+    // Canvas interaction (tldraw-style): the canvas carries scale-then-translate
+    // render transforms; wheel zooms about the cursor, dragging empty space pans,
+    // dragging a node repositions it (its edges re-anchor live).
+    private const double MinScale = 0.2, MaxScale = 3.0;
+    private const double WheelZoomStep = 1.1, ButtonZoomStep = 1.25;
+    private readonly ScaleTransform _zoomTransform = new();
+    private readonly TranslateTransform _panTransform = new();
+    /// <summary>Rendered edges keyed by their endpoint visuals, so a node drag can
+    /// re-anchor just the lines/labels touching that node.</summary>
+    private readonly List<GraphEdge> _edges = new();
+    /// <summary>Node being dragged, null while panning or idle.</summary>
+    private Border? _dragNode;
+    /// <summary>True while a press on empty canvas space is panning the view.</summary>
+    private bool _panning;
+    /// <summary>Pointer position at press, viewport coordinates (shared by pan and drag).</summary>
+    private Point _pressPoint;
+    /// <summary>Translate (pan) or node Canvas.Left/Top (drag) at press.</summary>
+    private Point _pressOrigin;
+
     private MapSession? _session;
     /// <summary>Stamp that invalidates in-flight object lists / resolves when the target changes.</summary>
     private int _generation;
@@ -74,7 +96,145 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         InitializeComponent();
         ObjectCombo.Watermark = "Search name or rawcode…";
         ObjectCombo.SelectionChanged += OnObjectPicked;
+
+        // Zoom about the top-left so viewport = canvas * scale + translate holds
+        // exactly (the default origin re-centres the scale about the middle).
+        GraphCanvas.RenderTransformOrigin = new RelativePoint(0, 0, RelativeUnit.Relative);
+        GraphCanvas.RenderTransform = new TransformGroup
+        {
+            Children = { _zoomTransform, _panTransform },
+        };
+        GraphViewport.PointerPressed += OnViewportPointerPressed;
+        GraphViewport.PointerMoved += OnViewportPointerMoved;
+        GraphViewport.PointerReleased += OnViewportPointerReleased;
+        GraphViewport.PointerCaptureLost += (_, _) => { _dragNode = null; _panning = false; };
+        GraphViewport.PointerWheelChanged += OnViewportWheel;
+        ZoomInButton.Click += (_, _) => ZoomAt(ViewportCenter(), ButtonZoomStep);
+        ZoomOutButton.Click += (_, _) => ZoomAt(ViewportCenter(), 1 / ButtonZoomStep);
+        ZoomFitButton.Click += (_, _) => FitView();
+        ZoomResetButton.Click += (_, _) => ResetView();
     }
+
+    // --- canvas interaction: pan / zoom / node drag ---
+
+    /// <summary>A press that no node claimed (nodes mark theirs handled): start a pan.</summary>
+    private void OnViewportPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (!e.GetCurrentPoint(GraphViewport).Properties.IsLeftButtonPressed)
+            return;
+        _panning = true;
+        _pressPoint = e.GetPosition(GraphViewport);
+        _pressOrigin = new Point(_panTransform.X, _panTransform.Y);
+        e.Pointer.Capture(GraphViewport);
+    }
+
+    /// <summary>A press on a node Border: start dragging that node instead of panning.</summary>
+    private void OnNodePointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is not Border node
+            || !e.GetCurrentPoint(GraphViewport).Properties.IsLeftButtonPressed)
+        {
+            return;
+        }
+        _dragNode = node;
+        _pressPoint = e.GetPosition(GraphViewport);
+        _pressOrigin = new Point(Canvas.GetLeft(node), Canvas.GetTop(node));
+        // Capture to the viewport so its Moved/Released handlers drive the drag.
+        e.Pointer.Capture(GraphViewport);
+        e.Handled = true; // don't let the viewport treat this press as a pan
+    }
+
+    private void OnViewportPointerMoved(object? sender, PointerEventArgs e)
+    {
+        var delta = e.GetPosition(GraphViewport) - _pressPoint;
+        if (_dragNode is { } node)
+        {
+            // Viewport delta → canvas delta: divide out the zoom (pan cancels).
+            double scale = _zoomTransform.ScaleX;
+            Canvas.SetLeft(node, _pressOrigin.X + delta.X / scale);
+            Canvas.SetTop(node, _pressOrigin.Y + delta.Y / scale);
+            foreach (var edge in _edges)
+            {
+                if (ReferenceEquals(edge.From, node) || ReferenceEquals(edge.To, node))
+                    PositionEdge(edge);
+            }
+        }
+        else if (_panning)
+        {
+            _panTransform.X = _pressOrigin.X + delta.X;
+            _panTransform.Y = _pressOrigin.Y + delta.Y;
+        }
+    }
+
+    private void OnViewportPointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        _dragNode = null;
+        _panning = false;
+        if (ReferenceEquals(e.Pointer.Captured, GraphViewport))
+            e.Pointer.Capture(null);
+    }
+
+    /// <summary>Wheel (plain or Ctrl) zooms about the cursor.</summary>
+    private void OnViewportWheel(object? sender, PointerWheelEventArgs e)
+    {
+        if (e.Delta.Y == 0)
+            return;
+        ZoomAt(e.GetPosition(GraphViewport),
+            e.Delta.Y > 0 ? WheelZoomStep : 1 / WheelZoomStep);
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// Scale by <paramref name="factor"/> (clamped) keeping the canvas point under
+    /// <paramref name="viewportPoint"/> fixed: with viewport = canvas * s + t, the
+    /// new translate is t' = p - (p - t) * s'/s.
+    /// </summary>
+    private void ZoomAt(Point viewportPoint, double factor)
+    {
+        double oldScale = _zoomTransform.ScaleX;
+        double newScale = Math.Clamp(oldScale * factor, MinScale, MaxScale);
+        if (Math.Abs(newScale - oldScale) < 0.0001)
+            return;
+        double ratio = newScale / oldScale;
+        _panTransform.X = viewportPoint.X - (viewportPoint.X - _panTransform.X) * ratio;
+        _panTransform.Y = viewportPoint.Y - (viewportPoint.Y - _panTransform.Y) * ratio;
+        _zoomTransform.ScaleX = newScale;
+        _zoomTransform.ScaleY = newScale;
+        UpdateZoomLabel();
+    }
+
+    /// <summary>Scale-to-fit the whole graph, centered in the viewport.</summary>
+    private void FitView()
+    {
+        double w = GraphCanvas.Width, h = GraphCanvas.Height;
+        var viewport = GraphViewport.Bounds;
+        // Positive-form guard: Width/Height are NaN before the first render.
+        if (!(w > 0 && h > 0 && viewport.Width > 0 && viewport.Height > 0))
+            return;
+        double scale = Math.Clamp(
+            Math.Min(viewport.Width / w, viewport.Height / h), MinScale, MaxScale);
+        _zoomTransform.ScaleX = scale;
+        _zoomTransform.ScaleY = scale;
+        _panTransform.X = (viewport.Width - w * scale) / 2;
+        _panTransform.Y = (viewport.Height - h * scale) / 2;
+        UpdateZoomLabel();
+    }
+
+    /// <summary>100% zoom, canvas origin back at the viewport's top-left.</summary>
+    private void ResetView()
+    {
+        _zoomTransform.ScaleX = 1;
+        _zoomTransform.ScaleY = 1;
+        _panTransform.X = 0;
+        _panTransform.Y = 0;
+        UpdateZoomLabel();
+    }
+
+    private void UpdateZoomLabel() =>
+        ZoomLabel.Text = $"{_zoomTransform.ScaleX * 100:F0}%";
+
+    private Point ViewportCenter() =>
+        new(GraphViewport.Bounds.Width / 2, GraphViewport.Bounds.Height / 2);
 
     /// <summary>Kind of the object whose closure is shown (tracks the combo's list kind).</summary>
     public ObjectKind SelectedObjectKind { get; private set; } = ObjectKind.Unit;
@@ -82,7 +242,7 @@ public partial class DependencyGraphView : UserControl, IMapPanel
     /// <summary>Rawcode of the object whose closure is shown, null when none.</summary>
     public string? SelectedRawcode { get; private set; }
 
-    /// <summary>"Name (rawcode)" of the selected object, for button/tooltip text.</summary>
+    /// <summary>"Name · kind (rawcode)" of the selected object, for button/tooltip text.</summary>
     public string? SelectedDisplay { get; private set; }
 
     /// <summary>Port seam (porting is unit-rooted): the selected rawcode when it is a
@@ -175,6 +335,8 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         var kindWord = KindPlural(kind).ToLowerInvariant();
         SummaryText.Text = $"Loading {kindWord}…";
         string? gameDir = _session?.GameDir;
+        // Rows read "Name · kind (rawcode)" so the picker always says what it lists.
+        var kindTag = " · " + KindSingular(kind).ToLowerInvariant();
         Task.Run(() =>
         {
             List<SearchableComboBoxItem>? items = null;
@@ -182,7 +344,9 @@ public partial class DependencyGraphView : UserControl, IMapPanel
             try
             {
                 items = ObjectListCommand.Execute(doc, kind, gameDir).Items
-                    .Select(i => new SearchableComboBoxItem(i.Name ?? "", i.Rawcode))
+                    .Select(i => new SearchableComboBoxItem(
+                        (string.IsNullOrWhiteSpace(i.Name) ? i.Rawcode : i.Name) + kindTag,
+                        i.Rawcode))
                     .OrderBy(o => o.Display, StringComparer.OrdinalIgnoreCase)
                     .ToList();
             }
@@ -466,11 +630,17 @@ public partial class DependencyGraphView : UserControl, IMapPanel
     /// the root unit, each further column the next BFS depth of object deps;
     /// files get their own wrapped band along the bottom. Edges are straight
     /// lines between node anchors, labeled with their field codes (parallel
-    /// edges between the same pair coalesce into one labeled line).
+    /// edges between the same pair coalesce into one labeled line). The layout
+    /// is only the starting arrangement - nodes drag freely afterwards, with
+    /// <see cref="PositionEdge"/> re-anchoring their edges live.
     /// </summary>
     private void RenderGraph(UnitBundle bundle)
     {
         GraphCanvas.Children.Clear();
+        _edges.Clear();
+        _dragNode = null;
+        _panning = false;
+        ResetView(); // a fresh graph starts at 100%, origin top-left
         if (bundle.Objects.Count == 0)
         {
             GraphHint.IsVisible = true;
@@ -564,75 +734,61 @@ public partial class DependencyGraphView : UserControl, IMapPanel
             GraphCanvas.Children.Add(bandLabel);
         }
 
-        // --- edges first (nodes draw on top), parallel edges coalesced ---
-        foreach (var group in bundle.Edges.GroupBy(e => (e.From, e.To)))
-        {
-            if (!TryGetRect(group.Key.From, objRects, fileRects, out var from, out _)
-                || !TryGetRect(group.Key.To, objRects, fileRects, out var to, out var toIsFile))
-            {
-                continue; // endpoint we didn't lay out; resolver guarantees make this rare
-            }
-
-            Point p1, p2;
-            if (toIsFile)
-            {
-                p1 = new Point(from.Center.X, from.Bottom);   // object → file: drop down
-                p2 = new Point(to.Center.X, to.Y);
-            }
-            else if (to.X > from.X)
-            {
-                p1 = new Point(from.Right, from.Center.Y);    // deeper column: left→right
-                p2 = new Point(to.X, to.Center.Y);
-            }
-            else if (to.X < from.X)
-            {
-                p1 = new Point(from.X, from.Center.Y);        // back-edge (cycle)
-                p2 = new Point(to.Right, to.Center.Y);
-            }
-            else
-            {
-                p1 = from.Center;                             // same column
-                p2 = to.Center;
-            }
-
-            GraphCanvas.Children.Add(new Line
-            {
-                StartPoint = p1,
-                EndPoint = p2,
-                Stroke = EdgeStroke,
-                StrokeThickness = 1.25,
-            });
-
-            var viaLabel = new TextBlock
-            {
-                Text = string.Join(", ", group.Select(e => e.Via).Distinct()),
-                FontSize = 9,
-                Foreground = MutedText,
-            };
-            Canvas.SetLeft(viaLabel, (p1.X + p2.X) / 2 + 3);
-            Canvas.SetTop(viaLabel, (p1.Y + p2.Y) / 2 - 13);
-            GraphCanvas.Children.Add(viaLabel);
-        }
-
-        // --- nodes on top of the wiring ---
+        // --- node visuals: created and positioned first so edges can anchor to
+        //     them, but added to the canvas after the edges (nodes draw on top) ---
+        var objVisuals = new Dictionary<string, Border>(StringComparer.Ordinal);
         foreach (var node in bundle.Objects)
         {
             var rect = objRects[node.Rawcode];
             var visual = MakeObjectNode(node, node.Rawcode == bundle.RootRawcode);
             Canvas.SetLeft(visual, rect.X);
             Canvas.SetTop(visual, rect.Y);
-            GraphCanvas.Children.Add(visual);
+            MakeDraggable(visual);
+            objVisuals[node.Rawcode] = visual;
         }
+        var fileVisuals = new Dictionary<string, Border>(StringComparer.OrdinalIgnoreCase);
         foreach (var file in bundle.Files)
         {
             var rect = fileRects[file.Path];
             var visual = MakeFileNode(file);
             Canvas.SetLeft(visual, rect.X);
             Canvas.SetTop(visual, rect.Y);
-            GraphCanvas.Children.Add(visual);
+            MakeDraggable(visual);
+            fileVisuals[file.Path] = visual;
         }
 
-        // Explicit size so the ScrollViewer can scroll; slack for edge labels.
+        // --- edges (below the nodes), parallel edges coalesced ---
+        foreach (var group in bundle.Edges.GroupBy(e => (e.From, e.To)))
+        {
+            if (!TryGetVisual(group.Key.From, objVisuals, fileVisuals, out var from, out _)
+                || !TryGetVisual(group.Key.To, objVisuals, fileVisuals, out var to, out var toIsFile))
+            {
+                continue; // endpoint we didn't lay out; resolver guarantees make this rare
+            }
+
+            var edge = new GraphEdge(
+                from, to, toIsFile,
+                new Line { Stroke = EdgeStroke, StrokeThickness = 1.25 },
+                new TextBlock
+                {
+                    Text = string.Join(", ", group.Select(e => e.Via).Distinct()),
+                    FontSize = 9,
+                    Foreground = MutedText,
+                });
+            PositionEdge(edge);
+            _edges.Add(edge);
+            GraphCanvas.Children.Add(edge.Line);
+            GraphCanvas.Children.Add(edge.Label);
+        }
+
+        // --- nodes on top of the wiring ---
+        foreach (var node in bundle.Objects)
+            GraphCanvas.Children.Add(objVisuals[node.Rawcode]);
+        foreach (var file in bundle.Files)
+            GraphCanvas.Children.Add(fileVisuals[file.Path]);
+
+        // Explicit size = the graph's extent, which Fit scales into the viewport;
+        // slack for edge labels.
         double right = objRects.Values.Select(r => r.Right)
             .Concat(fileRects.Values.Select(r => r.Right)).Max();
         double bottom = objRects.Values.Select(r => r.Bottom)
@@ -641,21 +797,74 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         GraphCanvas.Height = bottom + Pad;
     }
 
+    /// <summary>One rendered edge: live endpoint visuals plus the line/label drawn
+    /// for it, so a node drag re-anchors exactly the edges touching that node.</summary>
+    private sealed record GraphEdge(Border From, Border To, bool ToIsFile, Line Line, TextBlock Label);
+
     /// <summary>Edge endpoints are rawcodes (case-sensitive) or file paths (not).</summary>
-    private static bool TryGetRect(
+    private static bool TryGetVisual(
         string key,
-        Dictionary<string, Rect> objRects,
-        Dictionary<string, Rect> fileRects,
-        out Rect rect,
+        Dictionary<string, Border> objVisuals,
+        Dictionary<string, Border> fileVisuals,
+        out Border visual,
         out bool isFile)
     {
-        if (objRects.TryGetValue(key, out rect))
+        if (objVisuals.TryGetValue(key, out visual!))
         {
             isFile = false;
             return true;
         }
         isFile = true;
-        return fileRects.TryGetValue(key, out rect);
+        return fileVisuals.TryGetValue(key, out visual!);
+    }
+
+    /// <summary>A node's current canvas rect (nodes have explicit sizes).</summary>
+    private static Rect VisualRect(Border visual) =>
+        new(Canvas.GetLeft(visual), Canvas.GetTop(visual), visual.Width, visual.Height);
+
+    /// <summary>Wire a node visual for repositioning by drag.</summary>
+    private void MakeDraggable(Border visual)
+    {
+        visual.Cursor = new Cursor(StandardCursorType.SizeAll);
+        visual.PointerPressed += OnNodePointerPressed;
+    }
+
+    /// <summary>
+    /// (Re)anchor an edge's line and label to its endpoints' current rects:
+    /// object → file drops from the bottom edge; otherwise the line leaves the
+    /// side facing the target (falling back to centers in the same column).
+    /// </summary>
+    private static void PositionEdge(GraphEdge edge)
+    {
+        var from = VisualRect(edge.From);
+        var to = VisualRect(edge.To);
+
+        Point p1, p2;
+        if (edge.ToIsFile)
+        {
+            p1 = new Point(from.Center.X, from.Bottom);   // object → file: drop down
+            p2 = new Point(to.Center.X, to.Y);
+        }
+        else if (to.X > from.X)
+        {
+            p1 = new Point(from.Right, from.Center.Y);    // deeper column: left→right
+            p2 = new Point(to.X, to.Center.Y);
+        }
+        else if (to.X < from.X)
+        {
+            p1 = new Point(from.X, from.Center.Y);        // back-edge (cycle)
+            p2 = new Point(to.Right, to.Center.Y);
+        }
+        else
+        {
+            p1 = from.Center;                             // same column
+            p2 = to.Center;
+        }
+
+        edge.Line.StartPoint = p1;
+        edge.Line.EndPoint = p2;
+        Canvas.SetLeft(edge.Label, (p1.X + p2.X) / 2 + 3);
+        Canvas.SetTop(edge.Label, (p1.Y + p2.Y) / 2 - 13);
     }
 
     private static Border MakeObjectNode(BundleNode node, bool isRoot)
@@ -755,6 +964,10 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         GraphCanvas.Children.Clear();
         GraphCanvas.Width = 0;
         GraphCanvas.Height = 0;
+        _edges.Clear();
+        _dragNode = null;
+        _panning = false;
+        ResetView();
         GraphHint.IsVisible = true;
         GraphHint.Text = "Pick an object to see its dependency graph.";
         DepTree.Items.Clear();

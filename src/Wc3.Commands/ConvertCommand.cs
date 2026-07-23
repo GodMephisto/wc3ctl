@@ -13,7 +13,7 @@ namespace Wc3.Commands;
 /// </summary>
 public sealed record ModelExport(string Obj, string Mtl, IReadOnlyDictionary<string, byte[]> Textures);
 
-/// <summary>Format conversions: images (blp/png/jpg/bmp/tga/gif) and model→OBJ.</summary>
+/// <summary>Format conversions: images (blp/dds/png/jpg/bmp/tga/gif) and model→OBJ.</summary>
 public static class ConvertCommand
 {
     /// <summary>Converts image bytes between formats; extensions pick the codecs.</summary>
@@ -88,7 +88,7 @@ public static class ConvertCommand
             }
             catch (Exception)
             {
-                // Undecodable import (e.g. .dds) — material stays plain.
+                // Undecodable import, material stays plain.
             }
         }
 

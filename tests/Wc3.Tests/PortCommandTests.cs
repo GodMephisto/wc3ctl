@@ -175,6 +175,48 @@ public class PortCommandTests
             Assert.Contains(tw3a.NewAbilities, a => a.NewId == to.FromRawcode());
     }
 
+    /// <summary>
+    /// Regression: a unit whose model is REFERENCED as ".mdl" but STORED as ".mdx"
+    /// (the normal WC3 convention) must still have its model binary copied into the
+    /// target. The port's copy step used a plain path lookup that missed the
+    /// .mdl→.mdx swap, so custom models were discovered-but-never-copied.
+    /// </summary>
+    [Fact]
+    public void Copies_a_custom_model_referenced_as_mdl_but_stored_as_mdx()
+    {
+        var w3u = new UnitObjectData(ObjectDataFormatVersion.v2);
+        var unit = new SimpleObjectModification { OldId = "hfoo".FromRawcode(), NewId = "U000".FromRawcode() };
+        unit.Modifications.Add(Str("umdl", "war3mapImported\\raiden.mdl")); // referenced as .mdl
+        w3u.NewUnits.Add(unit);
+
+        var modelBytes = new byte[] { (byte)'M', (byte)'D', (byte)'L', (byte)'X', 1, 2, 3, 4, 5, 6 };
+        var source = MapDocument.Load(SyntheticMap.Build(new Dictionary<string, byte[]>
+        {
+            ["war3map.w3u"] = Ser(w => w.Write(w3u)),
+            ["war3mapImported\\raiden.mdx"] = modelBytes,   // stored as .mdx
+        }));
+        var target = MapDocument.Load(SyntheticMap.Build(new Dictionary<string, byte[]>
+        {
+            ["war3map.w3u"] = Ser(w => w.Write(new UnitObjectData(ObjectDataFormatVersion.v2))),
+            ["war3map.j"] = Encoding.UTF8.GetBytes("function main takes nothing returns nothing\nendfunction\n"),
+        }));
+
+        var bundle = BundleCommand.ResolveUnit(source, "U000", gameDirOverride: null);
+        // Discovery marks the model present through the .mdl→.mdx swap.
+        Assert.Contains(bundle.Files, f => f.Category == "model" && f.PresentInMap
+            && f.Path.EndsWith("raiden.mdl", StringComparison.OrdinalIgnoreCase));
+
+        var result = PortCommand.PortUnit(source, bundle, target);
+
+        // The stored .mdx was copied under its real name (was skipped before the fix).
+        Assert.Contains(result.CopiedFiles, f => f.EndsWith("raiden.mdx", StringComparison.OrdinalIgnoreCase));
+
+        var reloaded = MapDocument.Load(target.SaveToBytes());
+        var copied = reloaded.GetFile("war3mapImported\\raiden.mdx");
+        Assert.NotNull(copied);
+        Assert.True(copied!.RawBytes.SequenceEqual(modelBytes));
+    }
+
     private static SimpleObjectDataModification Str(string code, string value) =>
         new() { Id = code.FromRawcode(), Type = ObjectDataType.String, Value = value };
 

@@ -102,6 +102,10 @@ endfunction
         Assert.True(result.Script.Renamed >= 1);          // Trig_RaidenQ_Actions collided → renamed
         Assert.True(result.Script.InitHooked);
 
+        // A ported script only lives in war3map.j (not the wtg/wct trigger tree), so the
+        // World Editor would wipe it on save — the result must carry the loud warning.
+        Assert.Contains(PortCommand.ScriptDurabilityWarning, result.Warnings);
+
         var reloaded = MapDocument.Load(target.SaveToBytes());
         var j = Encoding.UTF8.GetString(reloaded.GetFile("war3map.j")!.RawBytes);
 
@@ -136,6 +140,19 @@ endfunction
         var result = PortCommand.PortUnit(source, bundle, target);
         // No throw; script info reports it was not ported.
         Assert.True(result.Script is null || result.Script.Functions == 0);
+        // Nothing was ported into war3map.j, so the durability warning must NOT appear.
+        Assert.DoesNotContain(PortCommand.ScriptDurabilityWarning, result.Warnings);
+    }
+
+    [Fact]
+    public void Durability_warning_is_absent_when_script_port_is_opted_out()
+    {
+        var source = SourceMap();
+        var target = TargetMap();
+        var bundle = BundleCommand.ResolveUnit(source, "H000", gameDirOverride: null);
+        var result = PortCommand.PortUnit(source, bundle, target, includeScript: false);
+        Assert.Null(result.Script);
+        Assert.DoesNotContain(PortCommand.ScriptDurabilityWarning, result.Warnings);
     }
 
     private static byte[] Ser(Action<BinaryWriter> write)

@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Wc3.Commands;
+using Wc3.Model;
 
 namespace Wc3.Studio.Panels;
 
@@ -7,11 +8,12 @@ namespace Wc3.Studio.Panels;
 /// editor + Apply for the string fields. All logic lives in Wc3.Commands.</summary>
 public partial class MapInfoView : UserControl, IMapPanel
 {
-    /// <summary>ListBox row; ToString is the display text.</summary>
-    private sealed record FieldRow(string Name, string Value, bool Editable)
+    /// <summary>ListBox row. <paramref name="Value"/> is the raw stored value the editor
+    /// edits (TRIGSTR_ intact); <paramref name="Display"/> is the wts-resolved text shown.</summary>
+    private sealed record FieldRow(string Name, string Value, string Display, bool Editable)
     {
         public override string ToString() =>
-            $"{Name}: {Value}{(Editable ? string.Empty : "   (read-only)")}";
+            $"{Name}: {Display}{(Editable ? string.Empty : "   (read-only)")}";
     }
 
     private MapSession? _session;
@@ -54,15 +56,21 @@ public partial class MapInfoView : UserControl, IMapPanel
         }
 
         HeaderText.Text = "Map info (war3map.w3i)";
+        // Resolve TRIGSTR_ for the displayed text; the editor still edits the raw value.
+        var strings = MapStrings.From(doc);
+        string Disp(string v) => strings.Resolve(v);
+        var width = fields.PlayableWidth.ToString();
+        var height = fields.PlayableHeight.ToString();
+        var players = fields.Players.ToString();
         var rows = new List<FieldRow>
         {
-            new("MapName", fields.MapName, true),
-            new("Author", fields.Author, true),
-            new("Description", fields.Description, true),
-            new("RecommendedPlayers", fields.RecommendedPlayers, true),
-            new("PlayableWidth", fields.PlayableWidth.ToString(), false),
-            new("PlayableHeight", fields.PlayableHeight.ToString(), false),
-            new("Players", fields.Players.ToString(), false),
+            new("MapName", fields.MapName, Disp(fields.MapName), true),
+            new("Author", fields.Author, Disp(fields.Author), true),
+            new("Description", fields.Description, Disp(fields.Description), true),
+            new("RecommendedPlayers", fields.RecommendedPlayers, Disp(fields.RecommendedPlayers), true),
+            new("PlayableWidth", width, width, false),
+            new("PlayableHeight", height, height, false),
+            new("Players", players, players, false),
         };
         FieldList.ItemsSource = rows;
         if (selectField is not null)

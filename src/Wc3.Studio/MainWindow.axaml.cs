@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Text;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
@@ -14,10 +15,44 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        Title = $"wc3ctl Studio · {BuildStamp()}";
         SourceWorkspace.MapChanged += OnWorkspaceMapChanged;
         TargetWorkspace.MapChanged += OnWorkspaceMapChanged;
         SourceWorkspace.PortRequested += OnPortRequested;
         SourceWorkspace.PortPreviewRequested += OnPortPreviewRequested;
+        Opened += OnOpenedAutoLoad;
+    }
+
+    /// <summary>Dev/QA convenience: <c>Wc3.Studio.exe --open &lt;map&gt; [--open-target &lt;map&gt;]</c>
+    /// auto-loads maps on startup so the UI can be driven and screenshotted without the file
+    /// dialog. No-op in normal use (no flags). Runs once, after the window is up.</summary>
+    private void OnOpenedAutoLoad(object? sender, EventArgs e)
+    {
+        Opened -= OnOpenedAutoLoad;
+        var args = Environment.GetCommandLineArgs();
+        for (int i = 1; i < args.Length - 1; i++)
+        {
+            if (string.Equals(args[i], "--open", StringComparison.OrdinalIgnoreCase))
+                TryOpen(SourceWorkspace, args[i + 1]);
+            else if (string.Equals(args[i], "--open-target", StringComparison.OrdinalIgnoreCase))
+                TryOpen(TargetWorkspace, args[i + 1]);
+        }
+
+        static void TryOpen(MapWorkspaceView ws, string path)
+        {
+            try { if (System.IO.File.Exists(path)) ws.OpenMap(path); }
+            catch { /* dev flag, never crash the app over it */ }
+        }
+    }
+
+    /// <summary>Git short-hash + UTC build time baked in at compile (see the
+    /// StampBuildInfo target). Shown in the title bar so a stale build is obvious at a
+    /// glance - no more guessing whether the running binary carries the latest change.</summary>
+    private static string BuildStamp()
+    {
+        var attrs = Assembly.GetExecutingAssembly().GetCustomAttributes<AssemblyMetadataAttribute>();
+        string Meta(string key) => attrs.FirstOrDefault(a => a.Key == key)?.Value ?? "?";
+        return $"{Meta("GitHash")} · built {Meta("BuildTimeUtc")}Z";
     }
 
     /// <summary>
@@ -76,37 +111,58 @@ public partial class MainWindow : Window
     {
         if (!SourceWorkspace.HasMap || SourceWorkspace.Session.MapPath is not { } sourcePath)
         { SourceWorkspace.SetStatus("Open a Source map first."); return; }
-        if (!TargetWorkspace.HasMap || TargetWorkspace.Session.MapPath is not { } targetPath)
-        { SourceWorkspace.SetStatus("Open a Target map first (right pane)."); return; }
+        if (!TargetWorkspace.HasMap || TargetWorkspace.Session.Current is not { } liveTarget)
+        { SourceWorkspace.SetStatus("Open or create a Target map first (right pane)."); return; }
 
+        // A saved target reloads from disk (keeps the open session pristine, writes a sibling
+        // .ported). A blank/unsaved target has no file, so we port into its live in-memory doc
+        // and let the user Save afterward — otherwise porting into a New Blank Map is impossible.
+        var targetPath = TargetWorkspace.Session.MapPath;
         var gameDir = SourceWorkspace.Session.GameDir;
+        var targetLabel = targetPath is not null ? Path.GetFileName(targetPath) : "the target map";
         SourceWorkspace.SetStatus(dryRun
-            ? $"Previewing port of {rawcode} → {Path.GetFileName(targetPath)}…"
-            : $"Porting {rawcode} → {Path.GetFileName(targetPath)}…");
+            ? $"Previewing port of {rawcode} → {targetLabel}…"
+            : $"Porting {rawcode} → {targetLabel}…");
 
         try
         {
             var (result, outPath) = await Task.Run(() =>
             {
                 var source = MapDocument.Load(sourcePath);
-                var target = MapDocument.Load(targetPath);
+                // Saved target → a fresh disk copy; blank/unsaved → the live in-memory doc.
+                var target = targetPath is not null ? MapDocument.Load(targetPath) : liveTarget;
                 var bundle = BundleCommand.ResolveUnit(source, rawcode, gameDir);
                 if (dryRun)
                     return (PortCommand.PreviewPort(source, bundle, target), (string?)null);
                 var r = PortCommand.PortUnit(source, bundle, target);
-                string outp = Path.Combine(
-                    Path.GetDirectoryName(Path.GetFullPath(targetPath)) ?? ".",
-                    Path.GetFileNameWithoutExtension(targetPath) + ".ported" + Path.GetExtension(targetPath));
+                if (targetPath is null)
+                    return (r, (string?)null); // ported into the live in-memory target; user Saves
+                var dir = Path.GetDirectoryName(Path.GetFullPath(targetPath)) ?? ".";
+                var stem = Path.GetFileNameWithoutExtension(targetPath);
+                // Strip a trailing ".ported" so re-porting accumulates into one file, not a chain.
+                if (stem.EndsWith(".ported", StringComparison.OrdinalIgnoreCase))
+                    stem = stem[..^".ported".Length];
+                string outp = Path.Combine(dir, stem + ".ported" + Path.GetExtension(targetPath));
                 target.Save(outp);
                 return (r, (string?)outp);
             });
 
-            SourceWorkspace.SetStatus(outPath is null
-                ? $"Preview: {result.RootRawcode} → {result.RootPortedTo} ({result.Objects.Count} objects, "
-                  + $"{result.CopiedFiles.Count} files, {result.Remaps.Count} remaps) - nothing written."
-                : $"Ported {result.RootRawcode} → {result.RootPortedTo} into {Path.GetFileName(outPath)} "
-                  + $"({result.Objects.Count} objects, {result.CopiedFiles.Count} files, {result.Remaps.Count} remaps).");
-            await ShowPortReport(result, outPath);
+            var summary = $"{result.RootRawcode} → {result.RootPortedTo} "
+                + $"({result.Objects.Count} objects, {result.CopiedFiles.Count} files, {result.Remaps.Count} remaps)";
+            if (dryRun)
+                SourceWorkspace.SetStatus($"Preview: {summary} - nothing written.");
+            else if (outPath is not null)
+            {
+                SourceWorkspace.SetStatus($"Ported {summary} into {Path.GetFileName(outPath)}. Target pane now shows the ported copy.");
+                TargetWorkspace.OpenMap(outPath); // reload the written .ported into the Target pane
+            }
+            else
+            {
+                SourceWorkspace.SetStatus($"Ported {summary} into the target (unsaved) - click Save to write it to disk.");
+                TargetWorkspace.RefreshAfterExternalEdit(); // the live in-memory target was mutated
+            }
+
+            await ShowPortReport(result, outPath, dryRun);
         }
         catch (Exception ex)
         {
@@ -114,8 +170,9 @@ public partial class MainWindow : Window
         }
     }
 
-    /// <summary>Port (or dry-run, when <paramref name="outPath"/> is null) report dialog.</summary>
-    private async Task ShowPortReport(PortResult r, string? outPath)
+    /// <summary>Port report dialog: dry-run preview, a saved .ported file, or an in-memory
+    /// port into an unsaved target (<paramref name="outPath"/> null but not a dry run).</summary>
+    private async Task ShowPortReport(PortResult r, string? outPath, bool dryRun)
     {
         var sb = new StringBuilder();
         string root = r.RootPortedTo == r.RootRawcode ? r.RootRawcode : $"{r.RootRawcode} → {r.RootPortedTo}";
@@ -148,11 +205,15 @@ public partial class MainWindow : Window
             foreach (var w in r.Warnings) sb.AppendLine($"  ! {w}");
         }
         foreach (var d in r.Diagnostics) sb.AppendLine($"note: {d}");
-        sb.AppendLine().AppendLine(outPath is null ? "DRY RUN - nothing written" : $"Saved: {outPath}");
+        sb.AppendLine().AppendLine(dryRun
+            ? "DRY RUN - nothing written"
+            : outPath is not null
+                ? $"Saved: {outPath}"
+                : "Ported into the target in memory - not yet saved (use Save to write it).");
 
         var dialog = new Window
         {
-            Title = outPath is null ? "Port preview (dry run)" : "Port complete",
+            Title = dryRun ? "Port preview (dry run)" : "Port complete",
             Width = 620,
             Height = 520,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,

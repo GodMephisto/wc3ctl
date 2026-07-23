@@ -26,7 +26,7 @@ internal static class MdxParser
 
         uint version = 800;
         var textures = new List<string>();
-        var materialTexture = new List<int>(); // material index -> texture index
+        var materials = new List<(int TextureId, FilterMode Filter)>(); // material index -> base-layer texture + blend mode
         var raw = new List<RawGeoset>();
 
         var sequences = new List<ModelSequence>();
@@ -48,7 +48,7 @@ internal static class MdxParser
             {
                 case "VERS": if (size >= 4) version = ReadU32(bytes, payload); break;
                 case "TEXS": ParseTexs(bytes, payload, end, textures); break;
-                case "MTLS": ParseMtls(bytes, payload, end, materialTexture); break;
+                case "MTLS": ParseMtls(bytes, payload, end, materials); break;
                 case "GEOS": ParseGeos(bytes, payload, end, version, raw); break;
                 case "SEQS":
                     try { ParseSeqs(bytes, payload, end, sequences); } catch { animBroken = true; }
@@ -81,16 +81,16 @@ internal static class MdxParser
         var geosets = new List<Geoset>(raw.Count);
         foreach (var g in raw)
         {
-            int textureId = g.MaterialId >= 0 && g.MaterialId < materialTexture.Count
-                ? materialTexture[g.MaterialId]
-                : -1;
+            var (textureId, filter) = g.MaterialId >= 0 && g.MaterialId < materials.Count
+                ? materials[g.MaterialId]
+                : (-1, FilterMode.None);
             if (textureId < 0 || textureId >= textures.Count) textureId = -1;
 
             int[]? skinBones = null;
             float[]? skinWeights = null;
             if (skeleton is not null)
                 (skinBones, skinWeights) = BuildSkin(g); // never throws; null on inconsistency
-            geosets.Add(new Geoset(g.Vertices, g.Normals, g.Uvs, g.Indices, textureId, skinBones, skinWeights));
+            geosets.Add(new Geoset(g.Vertices, g.Normals, g.Uvs, g.Indices, textureId, skinBones, skinWeights, filter));
         }
         return new Model3D(geosets, textures, skeleton);
     }
@@ -294,8 +294,13 @@ internal static class MdxParser
         }
     }
 
-    /// <summary>MTLS: per-material inclusiveSize records; we only want each material's first-layer texture id.</summary>
-    private static void ParseMtls(byte[] b, int pos, int end, List<int> materialTexture)
+    /// <summary>
+    /// MTLS: per-material inclusiveSize records; we only want each material's base
+    /// (first) layer — its texture id and filter mode. Layer 0 is the surface the
+    /// game draws first; overlay layers (team glow etc.) don't decide the geoset's
+    /// blend mode.
+    /// </summary>
+    private static void ParseMtls(byte[] b, int pos, int end, List<(int TextureId, FilterMode Filter)> materials)
     {
         while (pos + 8 <= end)
         {
@@ -309,18 +314,26 @@ internal static class MdxParser
                 p += 80;
 
             int texId = -1;
+            var filter = FilterMode.None;
             if (p + 8 <= matEnd && ReadTag(b, p) == "LAYS")
             {
                 uint layerCount = ReadU32(b, p + 4);
                 int lp = p + 8;
                 // Layer: inclusiveSize, filterMode, shadingFlags, textureId, ...
                 if (layerCount > 0 && lp + 16 <= matEnd)
+                {
+                    filter = ToFilterMode(ReadU32(b, lp + 4));
                     texId = checked((int)ReadU32(b, lp + 12));
+                }
             }
-            materialTexture.Add(texId);
+            materials.Add((texId, filter));
             pos = matEnd;
         }
     }
+
+    /// <summary>MDX filter modes are u32 0-6; anything else (corrupt/future) degrades to opaque.</summary>
+    private static FilterMode ToFilterMode(uint value)
+        => value <= (uint)FilterMode.Modulate2x ? (FilterMode)value : FilterMode.None;
 
     private static void ParseGeos(byte[] b, int pos, int end, uint version, List<RawGeoset> geosets)
     {

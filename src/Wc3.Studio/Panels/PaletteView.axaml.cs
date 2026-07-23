@@ -1,67 +1,275 @@
+using System.ComponentModel;
 using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Media.Imaging;
+using Avalonia.Threading;
 using Wc3.Commands;
 
 namespace Wc3.Studio.Panels;
 
-/// <summary>Row model for the palette list (reflection-bound from XAML).</summary>
-public sealed class PaletteRow
+/// <summary>Tile model for the palette grid (reflection-bound from XAML). Notifies for
+/// <see cref="Icon"/> (lands after an off-thread decode) and <see cref="IsSelected"/>
+/// (drives the selection highlight).</summary>
+public sealed class PaletteRow : INotifyPropertyChanged
 {
     public ObjectKind Kind { get; init; }
     public string Rawcode { get; init; } = "";
     public string? Name { get; init; }
     public string Source { get; init; } = "";
+    /// <summary>Icon art path from the palette entry (null = no icon for this row).</summary>
+    public string? IconPath { get; init; }
+    /// <summary>Loader shared by every row of one catalog load; null when icons are off (tests).</summary>
+    internal PaletteIconLoader? IconLoader { get; init; }
+
+    private Bitmap? _icon;
+    private bool _iconRequested;
+
+    /// <summary>
+    /// The row's decoded icon, or null (no/undecodable icon — the tile simply stays an
+    /// empty box). Lazy: the first read — which happens when the grid realizes the tile
+    /// and binds it — kicks off an off-thread decode; the binding refreshes via
+    /// PropertyChanged when it lands. Never blocks the UI thread, never throws.
+    /// </summary>
+    public Bitmap? Icon
+    {
+        get
+        {
+            if (!_iconRequested)
+            {
+                _iconRequested = true;
+                if (IconPath is not null && IconLoader is not null)
+                {
+                    if (IconLoader.TryGetCached(IconPath, out var cached))
+                        _icon = cached;
+                    else
+                        IconLoader.Load(IconPath, bmp =>
+                        {
+                            if (bmp is null) return; // graceful fallback: empty tile
+                            _icon = bmp;
+                            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Icon)));
+                        });
+                }
+            }
+            return _icon;
+        }
+    }
+
+    private bool _isSelected;
+    /// <summary>Whether this tile is the armed placement — drives the selection highlight
+    /// via a <c>Classes.selected</c> binding. Set by <see cref="PaletteView"/>.</summary>
+    public bool IsSelected
+    {
+        get => _isSelected;
+        set
+        {
+            if (_isSelected == value) return;
+            _isSelected = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsSelected)));
+        }
+    }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
 
     public string Display => $"{Name ?? "(unnamed)"} ({Rawcode})";
     public string Detail => $"{Kind.ToString().ToLowerInvariant()} · {Source}";
+    /// <summary>Hover label for a grid tile: "Name (rawcode) · kind · source".</summary>
+    public string Tooltip => $"{Display} · {Detail}";
+
+    /// <summary>Whether this type has icon art at all. Most doodads (and hero/custom unit
+    /// variants) have none — WC3 lists those by name, not icon — so those tiles show
+    /// <see cref="TileText"/> instead of an empty box.</summary>
+    public bool HasIconArt => !string.IsNullOrWhiteSpace(IconPath);
+    /// <summary>Fallback tile caption when there's no icon: the name, or the rawcode.</summary>
+    public string TileText => Name is { Length: > 0 } ? Name : Rawcode;
+}
+
+/// <summary>
+/// Decodes palette icon art to Avalonia bitmaps off the UI thread, cached per path.
+/// Resolution and decoding are the command layer's (<see cref="PaletteCommand.IconPng"/>:
+/// map imports first, then base-game CASC, BLP/DDS/TGA sniffed) — this class only adds
+/// caching, request coalescing, and thread marshalling. Both dictionaries are touched on
+/// the UI thread only (requests originate from bindings; completions are posted back),
+/// so no locking is needed. One instance per catalog load: replacing it wholesale when
+/// the map changes means a stale decode can never leak into a newer palette.
+/// </summary>
+internal sealed class PaletteIconLoader
+{
+    private readonly Wc3.Model.MapDocument _doc;
+    private readonly string? _gameDir;
+    private readonly Dictionary<string, Bitmap?> _done = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, List<Action<Bitmap?>>> _pending = new(StringComparer.OrdinalIgnoreCase);
+
+    public PaletteIconLoader(Wc3.Model.MapDocument doc, string? gameDir)
+    {
+        _doc = doc;
+        _gameDir = gameDir;
+    }
+
+    /// <summary>A completed decode for the path (the bitmap is null when it failed).</summary>
+    public bool TryGetCached(string iconPath, out Bitmap? bitmap) =>
+        _done.TryGetValue(iconPath, out bitmap);
+
+    /// <summary>Requests an off-thread decode; <paramref name="onLoaded"/> runs later on
+    /// the UI thread (null bitmap = unresolvable/undecodable). Concurrent requests for
+    /// the same path share one decode.</summary>
+    public void Load(string iconPath, Action<Bitmap?> onLoaded)
+    {
+        if (_done.TryGetValue(iconPath, out var hit)) { onLoaded(hit); return; }
+        if (_pending.TryGetValue(iconPath, out var waiters)) { waiters.Add(onLoaded); return; }
+        _pending[iconPath] = new List<Action<Bitmap?>> { onLoaded };
+        Task.Run(() =>
+        {
+            Bitmap? bmp = null;
+            try
+            {
+                if (PaletteCommand.IconPng(_doc, iconPath, _gameDir) is { } png)
+                {
+                    using var ms = new MemoryStream(png);
+                    bmp = new Bitmap(ms);
+                }
+            }
+            catch { /* no icon — the tile stays an empty box */ }
+            Dispatcher.UIThread.Post(() =>
+            {
+                _done[iconPath] = bmp;
+                if (_pending.Remove(iconPath, out var callbacks))
+                    foreach (var cb in callbacks) cb(bmp);
+            });
+        });
+    }
+}
+
+/// <summary>One palette group: a visible collapsible header (kind · source) plus its
+/// icon tiles. Rendered in PaletteView.axaml as a full-width <c>SectionHeader</c> stacked
+/// over a <c>WrapPanel</c> of tiles — the header is a normal vertical child, so it is
+/// ALWAYS visible (unlike the old mixed-item WrapPanel hack where it vanished).</summary>
+public sealed class PaletteGroup
+{
+    /// <summary>Stable identity for the group's collapsed state (kind·source).</summary>
+    public string Key { get; init; } = "";
+    public string Title { get; init; } = "";
+    public bool Collapsed { get; init; }
+    /// <summary>Tiles are hidden (not built away) while collapsed.</summary>
+    public bool ShowTiles => !Collapsed;
+    public IReadOnlyList<PaletteRow> Tiles { get; init; } = Array.Empty<PaletteRow>();
 }
 
 /// <summary>
 /// Browse/search the things placeable on a map: the union of the base-game unit and
 /// doodad catalogs with the map's own object-data, via <see cref="PaletteCommand"/>.
-/// The selected row is the placement source consulted by the Terrain tab's click-to-place.
+/// The catalog is built off the UI thread (the first game-data open per install hits
+/// CASC/SLK and can take seconds) and presented as an icon grid grouped under visible
+/// kind · source headers, map content ahead of the base bulk. The selected tile is the
+/// placement source consulted by the Terrain tab's click-to-place.
 /// </summary>
 public partial class PaletteView : UserControl, IMapPanel
 {
     private MapSession? _session;
     private List<PaletteRow> _all = new();
+    private List<PaletteGroup> _groups = new();
+    /// <summary>The armed placement tile (its IsSelected drives the highlight), or null.</summary>
+    private PaletteRow? _selected;
+    /// <summary>Stamp that invalidates an in-flight catalog load when the map changes.</summary>
+    private int _generation;
+    /// <summary>True from ShowMap until its load lands; filter events wait for real data.</summary>
+    private bool _loading;
+    /// <summary>Group keys (kind·source) the user has collapsed — their tiles are hidden until
+    /// re-expanded. The base catalog is collapsed by default (it's the ~thousands-tile bulk).</summary>
+    private readonly HashSet<string> _collapsed = new(StringComparer.Ordinal) { "Unit·base", "Doodad·base" };
 
     public PaletteView() => InitializeComponent();
 
     public void ShowMap(MapSession session)
     {
         _session = session;
+        int gen = ++_generation; // drop any load still in flight for the previous map
+        Select(null);            // a new map invalidates the armed placement
         if (session.Current is not { } doc)
         {
+            _loading = false;
             _all = new List<PaletteRow>();
-            PaletteList.ItemsSource = null;
+            _groups = new List<PaletteGroup>();
+            PaletteGroups.ItemsSource = null;
             StatusText.Text = "";
             ContentRoot.IsVisible = false;
             PlaceholderText.IsVisible = true;
             return;
         }
 
-        // Public overloads open GameData internally (map-only if no install is found).
-        var units = PaletteCommand.UnitPalette(doc, session.GameDir);
-        var doodads = PaletteCommand.DoodadPalette(doc, session.GameDir);
-        _all = units.Entries.Select(e => Row(ObjectKind.Unit, e))
-            .Concat(doodads.Entries.Select(e => Row(ObjectKind.Doodad, e)))
-            .ToList();
-
         PlaceholderText.IsVisible = false;
         ContentRoot.IsVisible = true;
-        ApplyFilter();
+        _loading = true;
+        _all = new List<PaletteRow>();
+        _groups = new List<PaletteGroup>();
+        PaletteGroups.ItemsSource = null;
+        StatusText.Text = "Loading palette…";
+
+        // Build the catalog off the UI thread - the first game-data query per install
+        // opens CASC, which can take seconds. The generation stamp drops results that
+        // land after the map changed.
+        string? gameDir = session.GameDir;
+        var icons = new PaletteIconLoader(doc, gameDir);
+        Task.Run(() =>
+        {
+            List<PaletteRow>? rows = null;
+            string? error = null;
+            try
+            {
+                var units = PaletteCommand.UnitPalette(doc, gameDir);
+                var doodads = PaletteCommand.DoodadPalette(doc, gameDir);
+                rows = units.Entries.Select(e => Row(ObjectKind.Unit, e, icons))
+                    .Concat(doodads.Entries.Select(e => Row(ObjectKind.Doodad, e, icons)))
+                    .ToList();
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+            }
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (gen != _generation)
+                    return; // superseded by a newer map
+                _loading = false;
+                if (rows is null)
+                {
+                    StatusText.Text = $"Failed to load palette: {error}";
+                    return;
+                }
+                _all = rows;
+                ApplyFilter();
+            });
+        });
     }
 
-    private static PaletteRow Row(ObjectKind kind, PaletteEntry e) =>
-        new() { Kind = kind, Rawcode = e.Rawcode, Name = e.Name, Source = e.Source };
+    private static PaletteRow Row(ObjectKind kind, PaletteEntry e, PaletteIconLoader icons) =>
+        new()
+        {
+            Kind = kind, Rawcode = e.Rawcode, Name = e.Name, Source = e.Source,
+            IconPath = e.IconPath, IconLoader = icons,
+        };
 
     private void OnSearchChanged(object? sender, TextChangedEventArgs e) => ApplyFilter();
     private void OnKindChanged(object? sender, SelectionChangedEventArgs e) => ApplyFilter();
 
-    /// <summary>Re-apply the search text and kind filter to the full catalog.</summary>
+    /// <summary>Map content first - it's what a mapper places most - then the base bulk.</summary>
+    private static int SourceRank(string source) => source switch
+    {
+        "map-custom" => 0,
+        "map-modified" => 1,
+        "base" => 2,
+        _ => 3,
+    };
+
+    private static string KindPlural(ObjectKind kind) =>
+        kind == ObjectKind.Unit ? "Units" : "Doodads";
+
+    /// <summary>Re-apply the search text and kind filter to the full catalog, then regroup
+    /// the survivors under kind · source headers (empty groups simply don't appear). A
+    /// search expands everything (matches are never hidden inside a collapsed group); with
+    /// no search, the user's collapse choices are honoured.</summary>
     private void ApplyFilter()
     {
-        if (_session?.Current is null) return;
+        if (_loading || _session?.Current is null) return;
 
         var q = (SearchBox.Text ?? "").Trim();
         IEnumerable<PaletteRow> rows = _all;
@@ -77,26 +285,83 @@ public partial class PaletteView : UserControl, IMapPanel
                 r.Rawcode.Contains(q, StringComparison.OrdinalIgnoreCase) ||
                 (r.Name?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false));
 
-        var list = rows.ToList();
-        PaletteList.ItemsSource = list;
+        bool searching = q.Length > 0;
+        int shown = 0;
+        var groups = new List<PaletteGroup>();
+        foreach (var byKind in rows.GroupBy(r => r.Kind)
+                     .OrderBy(g => g.Key == ObjectKind.Unit ? 0 : 1))
+        {
+            foreach (var bySource in byKind.GroupBy(r => r.Source)
+                         .OrderBy(g => SourceRank(g.Key)))
+            {
+                var members = bySource.ToList();
+                var key = $"{byKind.Key}·{bySource.Key}";
+                bool collapsed = !searching && _collapsed.Contains(key);
+                groups.Add(new PaletteGroup
+                {
+                    Key = key,
+                    Title = $"{KindPlural(byKind.Key)} · {bySource.Key} ({members.Count})",
+                    Collapsed = collapsed,
+                    Tiles = members,
+                });
+                if (!collapsed)
+                    shown += members.Count;
+            }
+        }
+        _groups = groups;
+        PaletteGroups.ItemsSource = _groups;
 
         var units = _all.Count(r => r.Kind == ObjectKind.Unit);
         var doodads = _all.Count(r => r.Kind == ObjectKind.Doodad);
-        StatusText.Text = $"{list.Count} shown · {units} unit(s), {doodads} doodad(s)";
+        StatusText.Text = $"{shown} shown · {units} unit(s), {doodads} doodad(s)";
+    }
+
+    /// <summary>Toggle a group's collapsed state and rebuild. The SectionHeader already
+    /// marked the pointer press handled, so the click never falls through to a tile.</summary>
+    private void OnGroupHeaderToggled(object? sender, EventArgs e)
+    {
+        if ((sender as Control)?.DataContext is not PaletteGroup g)
+            return;
+        if (!_collapsed.Add(g.Key)) // Add returns false when already collapsed → expand it
+            _collapsed.Remove(g.Key);
+        ApplyFilter();
+    }
+
+    /// <summary>A tile click arms it as the placement (and highlights it).</summary>
+    private void OnTilePressed(object? sender, PointerPressedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is not PaletteRow row)
+            return;
+        e.Handled = true;
+        Select(row);
+    }
+
+    /// <summary>Sets (or clears, with null) the armed placement, updates the highlight and
+    /// status line, and raises <see cref="PlacementChanged"/>. Idempotent.</summary>
+    private void Select(PaletteRow? row)
+    {
+        if (ReferenceEquals(_selected, row))
+            return;
+        if (_selected is not null)
+            _selected.IsSelected = false;
+        _selected = row;
+        if (row is not null)
+        {
+            row.IsSelected = true;
+            StatusText.Text = $"Selected: {row.Display} — {row.Detail}  ·  click the terrain to place";
+        }
+        PlacementChanged?.Invoke(this, row);
     }
 
     /// <summary>The currently selected placeable, or null. Consulted by the Terrain
     /// tab's click-to-place via <see cref="PlacementChanged"/>.</summary>
-    public PaletteRow? SelectedPlacement => PaletteList.SelectedItem as PaletteRow;
+    public PaletteRow? SelectedPlacement => _selected;
 
-    /// <summary>Raised when the selected placeable changes (row click or clear).</summary>
+    /// <summary>Raised when the selected placeable changes (tile click or clear).</summary>
     public event EventHandler<PaletteRow?>? PlacementChanged;
 
-    private void OnSelectionChanged(object? sender, SelectionChangedEventArgs e)
-    {
-        var row = PaletteList.SelectedItem as PaletteRow;
-        if (row is not null)
-            StatusText.Text = $"Selected: {row.Display} — {row.Detail}  ·  switch to Terrain and click to place";
-        PlacementChanged?.Invoke(this, row);
-    }
+    /// <summary>Clears the palette selection so no placeable is armed (pointer mode).
+    /// Called when the Terrain tab cancels the brush (Esc / right-click) so the palette
+    /// highlight and the terrain brush stay in sync.</summary>
+    public void ClearSelection() => Select(null);
 }

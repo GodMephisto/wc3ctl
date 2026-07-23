@@ -91,12 +91,14 @@ public static class ObjectGetCommand
 
         // Object name: the map's name-field delta wins (TRIGSTR_ refs resolved via
         // war3map.wts); otherwise the base object's name when the kind has one.
-        string? name = ObjectKinds.DeltaName(deltaFields, ObjectKinds.Info(kind), MapStrings.From(doc))
+        var strings = MapStrings.From(doc);
+        string? name = ObjectKinds.DeltaName(deltaFields, ObjectKinds.Info(kind), strings)
             ?? ObjectKinds.BaseName(ctx, kind, baseRawcode);
 
+        // Resolve TRIGSTR_ for DISPLAY (grid), keeping the raw value for editing/write-back.
         return Merge(rawcode, baseRawcode, definedInMap: true, name,
             baseFields ?? new Dictionary<string, string>(), deltaFields,
-            ObjectKinds.FieldNameLookup(ctx, kind), diagnostics);
+            ObjectKinds.FieldNameLookup(ctx, kind), diagnostics, strings.Resolve);
     }
 
     /// <summary>A standard object untouched by the map: base fields only.</summary>
@@ -119,7 +121,8 @@ public static class ObjectGetCommand
         IReadOnlyDictionary<string, string> baseFields,
         IReadOnlyDictionary<string, string> deltaFields,
         Func<string, string> nameLookup,
-        IReadOnlyList<string> diagnostics)
+        IReadOnlyList<string> diagnostics,
+        Func<string, string>? resolveDisplay = null)
     {
         string NameOf(string code)
         {
@@ -127,11 +130,14 @@ public static class ObjectGetCommand
             return string.IsNullOrEmpty(fieldName) ? code : fieldName;
         }
 
+        // Display value = TRIGSTR_ resolved (when a resolver is supplied); raw stays in Value.
+        string Disp(string v) => resolveDisplay is null ? v : resolveDisplay(v);
+
         var merged = new Dictionary<string, MergedField>(StringComparer.OrdinalIgnoreCase);
         foreach (var (code, value) in baseFields)
-            merged[code] = new MergedField(code, NameOf(code), value, "base");
+            merged[code] = new MergedField(code, NameOf(code), value, "base") { Display = Disp(value) };
         foreach (var (code, value) in deltaFields)
-            merged[code] = new MergedField(code, NameOf(code), value, "map");
+            merged[code] = new MergedField(code, NameOf(code), value, "map") { Display = Disp(value) };
 
         var fields = merged.Values
             .OrderBy(f => f.Name, StringComparer.OrdinalIgnoreCase)

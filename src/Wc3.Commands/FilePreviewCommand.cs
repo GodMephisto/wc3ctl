@@ -7,15 +7,15 @@ using Wc3.Render;
 namespace Wc3.Commands;
 
 /// <summary>
-/// How a map file should be shown: decoded text, a PNG (for BLP images), or a hex
+/// How a map file should be shown: decoded text, a PNG (for BLP/DDS images), or a hex
 /// dump for opaque binary. Kind is "text" | "image" | "binary".
 /// </summary>
 public sealed record FilePreview(string Name, string Kind, string Info, string? Text, byte[]? Png);
 
 /// <summary>
 /// Produces a human-viewable preview of a single internal map file. Text formats decode
-/// as UTF-8, .blp images decode + re-encode to PNG, everything else becomes a hex dump —
-/// so a front-end only has to display, never parse.
+/// as UTF-8, .blp/.dds images decode + re-encode to PNG, everything else becomes a hex
+/// dump, so a front-end only has to display, never parse.
 /// </summary>
 public static class FilePreviewCommand
 {
@@ -61,6 +61,20 @@ public static class FilePreviewCommand
             catch
             {
                 // Not a decodable BLP after all — fall through to hex.
+            }
+        }
+
+        if (string.Equals(ext, ".dds", StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                var tex = DdsDecoder.Decode(bytes);
+                return new FilePreview(display, "image",
+                    $"{tex.Width}x{tex.Height} DDS, {bytes.Length:N0} bytes", null, TexturePng.Encode(tex));
+            }
+            catch
+            {
+                // Not a decodable DDS after all, fall through to hex.
             }
         }
 

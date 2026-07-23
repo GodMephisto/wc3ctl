@@ -12,6 +12,14 @@
             <Setter Property="MinHeight" Value="0"/>
             <Setter Property="Padding" Value="8,4"/>
         </Style>
+        <!-- Compact zoom toolbar overlaid on the graph's top-right corner. -->
+        <Style Selector="StackPanel#ZoomBar > Button">
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="MinWidth" Value="28"/>
+            <Setter Property="Padding" Value="7,2"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        </Style>
     </UserControl.Styles>
 
     <Grid>
@@ -32,19 +40,31 @@
             <Grid Grid.Row="1" ColumnDefinitions="*,4,360">
 
                 <!-- Primary: layered node-link graph (objects in depth columns,
-                     files in a bottom band), scrollable in both directions. -->
+                     files in a bottom band) on an interactive canvas - drag empty
+                     space to pan, wheel to zoom about the cursor, drag a node to
+                     move it (its edges follow). The viewport clips; pan/zoom
+                     replace scrollbars. -->
                 <Grid Grid.Column="0">
-                    <ScrollViewer Name="GraphScroll"
-                                  HorizontalScrollBarVisibility="Auto"
-                                  VerticalScrollBarVisibility="Auto"
-                                  Background="#14000000">
-                        <Canvas Name="GraphCanvas"/>
-                    </ScrollViewer>
+                    <Border Name="GraphViewport" ClipToBounds="True" Background="#14000000">
+                        <Canvas Name="GraphCanvas"
+                                HorizontalAlignment="Left" VerticalAlignment="Top"/>
+                    </Border>
                     <TextBlock Name="GraphHint"
                                HorizontalAlignment="Center" VerticalAlignment="Center"
                                Foreground="#8FA3B8" TextWrapping="Wrap" Margin="24"
                                IsHitTestVisible="False"
                                Text="Pick an object to see its dependency graph."/>
+                    <StackPanel Name="ZoomBar" Orientation="Horizontal" Spacing="4"
+                                HorizontalAlignment="Right" VerticalAlignment="Top"
+                                Margin="0,8,12,0">
+                        <TextBlock Name="ZoomLabel" Text="100%" FontSize="11"
+                                   Foreground="#8FA3B8" VerticalAlignment="Center"
+                                   Margin="0,0,4,0"/>
+                        <Button Name="ZoomOutButton" Content="-" ToolTip.Tip="Zoom out"/>
+                        <Button Name="ZoomInButton" Content="+" ToolTip.Tip="Zoom in"/>
+                        <Button Name="ZoomFitButton" Content="Fit" ToolTip.Tip="Fit the whole graph in view"/>
+                        <Button Name="ZoomResetButton" Content="Reset" ToolTip.Tip="Back to 100%, origin top-left"/>
+                    </StackPanel>
                 </Grid>
 
                 <GridSplitter Grid.Column="1" Background="#33555555"/>

@@ -23,4 +23,24 @@
     <ProjectReference Include="..\Wc3.Render\Wc3.Render.csproj" />
     <ProjectReference Include="..\Wc3.GameData\Wc3.GameData.csproj" />
   </ItemGroup>
+
+  <!-- Build stamp: bake the git short-hash + UTC build time into assembly metadata so
+       every build (dev `dotnet run` or a published single-file exe) announces exactly
+       what it is in the title bar - permanently replacing ad-hoc freshness markers.
+       git is best-effort (ContinueOnError) so builds still work without it on PATH. -->
+  <Target Name="StampBuildInfo" BeforeTargets="GetAssemblyAttributes">
+    <Exec Command="git -C &quot;$(MSBuildProjectDirectory)&quot; rev-parse --short HEAD"
+          ConsoleToMSBuild="true" ContinueOnError="true"
+          StandardErrorImportance="low" StandardOutputImportance="low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_GitHash" />
+    </Exec>
+    <PropertyGroup>
+      <_GitHash Condition="'$(_GitHash)' == ''">nogit</_GitHash>
+      <_BuildTimeUtc>$([System.DateTime]::UtcNow.ToString("yyyy-MM-dd HH:mm"))</_BuildTimeUtc>
+    </PropertyGroup>
+    <ItemGroup>
+      <AssemblyMetadata Include="GitHash" Value="$(_GitHash.Trim())" />
+      <AssemblyMetadata Include="BuildTimeUtc" Value="$(_BuildTimeUtc)" />
+    </ItemGroup>
+  </Target>
 </Project>

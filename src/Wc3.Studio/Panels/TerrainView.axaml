@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:panels="clr-namespace:Wc3.Studio.Panels"
+             xmlns:c="using:Wc3.Studio.Controls"
              x:Class="Wc3.Studio.Panels.TerrainView">
     <DockPanel>
 
@@ -8,20 +9,101 @@
         <Border DockPanel.Dock="Top" BorderThickness="0,0,0,1"
                 BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
                 Padding="8,4">
-            <StackPanel Orientation="Horizontal" Spacing="8">
+            <!-- WrapPanel so a narrow viewport wraps the buttons to another row instead of
+                 clipping the trailing ones. Per-child margin gives the spacing a WrapPanel
+                 lacks. Status text lives in its own bottom bar (below), never hidden here. -->
+            <WrapPanel Orientation="Horizontal">
+                <WrapPanel.Styles>
+                    <Style Selector="WrapPanel > Button, WrapPanel > ToggleButton, WrapPanel > TextBlock, WrapPanel > Slider, WrapPanel > StackPanel">
+                        <Setter Property="Margin" Value="0,2,8,2"/>
+                    </Style>
+                </WrapPanel.Styles>
                 <Button Name="FitButton" Content="Fit" IsEnabled="False" Click="OnFitClick"/>
                 <Button Name="ResetButton" Content="1:1" IsEnabled="False" Click="OnResetClick"/>
                 <ToggleButton Name="Mode3DButton" Content="3D" IsEnabled="False" Click="OnToggle3D"
-                              ToolTip.Tip="Toggle between the flat minimap and the 3D in-game view"/>
+                              ToolTip.Tip="Toggle the GPU 3D viewport: right-drag orbit, middle-drag pan, wheel zoom, arrows pan, Home reset; left-click selects (Shift toggles, drag draws a box), Delete removes, or places the armed brush"/>
                 <ToggleButton Name="GlButton" Content="GL" IsEnabled="False" Click="OnToggleGl"
-                              ToolTip.Tip="Experimental GPU viewport (S0: clears and draws a test triangle)"/>
+                              ToolTip.Tip="Alias for the 3D GPU viewport toggle"/>
                 <Button Name="UndoButton" Content="↶" IsEnabled="False" Click="OnUndoClick"
                         ToolTip.Tip="Undo the last placement (in-memory until you save)"/>
                 <Button Name="RedoButton" Content="↷" IsEnabled="False" Click="OnRedoClick"
                         ToolTip.Tip="Redo the last undone placement"/>
-                <TextBlock Name="CaptionText" VerticalAlignment="Center" Text=""/>
-                <TextBlock Name="BrushText" VerticalAlignment="Center" Text=""
+                <ToggleButton Name="RandomRotButton" Content="Rnd rot"
+                              ToolTip.Tip="Randomize the facing of placed units/doodads"/>
+                <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                    <TextBlock VerticalAlignment="Center" Text="Scale"/>
+                    <Slider Name="ScaleVarSlider" Width="90" VerticalAlignment="Center"
+                            Minimum="0" Maximum="0.5" Value="0"
+                            TickFrequency="0.05" IsSnapToTickEnabled="True"
+                            ToolTip.Tip="Random scale variance for placed units/doodads (0 = always 1x)"/>
+                    <TextBlock Name="ScaleVarText" VerticalAlignment="Center" Text="±0%"/>
+                </StackPanel>
+                <!-- Owner assigned to units placed with the brush (doodads have no
+                     owner, so the picker is ignored for them). Loaded from the map's
+                     players/forces on ShowMap, defaulting to Player 1. -->
+                <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                    <TextBlock VerticalAlignment="Center" Text="Place as"/>
+                    <c:OwnerTeamPicker Name="PlaceOwnerPicker" Width="190"
+                                       ToolTip.Tip="Units placed with the palette brush belong to this player (doodads have no owner)"/>
+                </StackPanel>
+                <Button Name="StopPlacingButton" Content="✋ Stop placing" IsEnabled="False"
+                        Click="OnStopPlacingClick"
+                        ToolTip.Tip="Return to pointer mode so a click selects a unit instead of placing (Esc or right-click in the 3D view also cancel)"/>
+                <!-- Terrain sculpting brush. While the toggle is on, a left click or drag
+                     on the terrain (2D minimap or 3D viewport) applies the chosen
+                     TerrainCommand area brush. The option groups below it only show while
+                     sculpting, and each group is its own WrapPanel child so a narrow
+                     toolbar wraps them individually instead of clipping one long row. -->
+                <ToggleButton Name="SculptButton" Content="Sculpt" IsEnabled="False" Click="OnToggleSculpt"
+                              ToolTip.Tip="Terrain brush: left click or drag the map to raise, lower, flatten, paint tiles, step cliffs, or set water (Esc or right-click in the 3D view exits)"/>
+                <StackPanel Name="SculptToolPanel" Orientation="Horizontal" Spacing="4"
+                            VerticalAlignment="Center" IsVisible="False">
+                    <TextBlock VerticalAlignment="Center" Text="Tool"/>
+                    <!-- Item order must match the SculptTool enum in the code-behind. -->
+                    <ComboBox Name="SculptToolBox" Width="112" SelectedIndex="0"
+                              SelectionChanged="OnSculptToolChanged">
+                        <ComboBoxItem Content="Raise"/>
+                        <ComboBoxItem Content="Lower"/>
+                        <ComboBoxItem Content="Flatten"/>
+                        <ComboBoxItem Content="Paint tile"/>
+                        <ComboBoxItem Content="Cliff up"/>
+                        <ComboBoxItem Content="Cliff down"/>
+                        <ComboBoxItem Content="Water"/>
+                    </ComboBox>
+                </StackPanel>
+                <StackPanel Name="SculptSizePanel" Orientation="Horizontal" Spacing="4"
+                            VerticalAlignment="Center" IsVisible="False">
+                    <TextBlock VerticalAlignment="Center" Text="Radius"/>
+                    <Slider Name="SculptRadiusSlider" Width="90" VerticalAlignment="Center"
+                            Minimum="0" Maximum="10" Value="2"
+                            TickFrequency="1" IsSnapToTickEnabled="True"
+                            ToolTip.Tip="Brush radius in terrain corners (0 = a single corner)"/>
+                    <TextBlock Name="SculptRadiusText" VerticalAlignment="Center" Text="r2"/>
+                </StackPanel>
+                <StackPanel Name="SculptAmountPanel" Orientation="Horizontal" Spacing="4"
+                            VerticalAlignment="Center" IsVisible="False">
+                    <TextBlock VerticalAlignment="Center" Text="Amount"/>
+                    <TextBox Name="SculptAmountBox" Width="56" Text="0.5"
+                             ToolTip.Tip="Height step for raise/lower and the absolute level for water (1 = one cliff step)"/>
+                </StackPanel>
+                <StackPanel Name="SculptTilePanel" Orientation="Horizontal" Spacing="4"
+                            VerticalAlignment="Center" IsVisible="False">
+                    <TextBlock VerticalAlignment="Center" Text="Tile"/>
+                    <ComboBox Name="SculptTileBox" Width="110"
+                              ToolTip.Tip="Ground tile painted by the Paint tool (the map's tile-type list, by fourCC id)"/>
+                </StackPanel>
+            </WrapPanel>
+        </Border>
+
+        <!-- Status bar (bottom): the placement-mode indicator and transient messages get
+             their own full-width wrapping line, so a narrow toolbar can never hide them. -->
+        <Border DockPanel.Dock="Bottom" BorderThickness="0,1,0,0"
+                BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
+                Padding="8,3">
+            <StackPanel Spacing="1">
+                <TextBlock Name="BrushText" TextWrapping="Wrap" Text=""
                            Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"/>
+                <TextBlock Name="CaptionText" TextWrapping="Wrap" Text=""/>
             </StackPanel>
         </Border>
 
@@ -33,12 +115,26 @@
                           VerticalScrollBarVisibility="Auto">
                 <Panel Name="ImageHost" HorizontalAlignment="Left" VerticalAlignment="Top"
                        Background="Transparent" PointerPressed="OnTerrainPressed"
-                       PointerMoved="OnPointerMoved" PointerReleased="OnPointerReleased">
+                       PointerMoved="OnTerrainMoved" PointerReleased="OnTerrainReleased">
                     <Image Name="TerrainImage" Stretch="Fill"/>
                     <Canvas Name="MarkerCanvas" IsHitTestVisible="False"/>
                 </Panel>
             </ScrollViewer>
             <panels:TerrainGlView Name="GlView" IsVisible="False"/>
+            <!-- Transparent hit-catcher for the GL viewport: OpenGlControlBase isn't
+                 hit-test-visible, so this sits on top (GL renders through it) and
+                 forwards drag/wheel/keys into the GL camera. Focusable for arrow keys. -->
+            <Border Name="GlInput" Background="Transparent" IsVisible="False"
+                    Focusable="True" Cursor="Hand"
+                    PointerPressed="OnGlInputPressed" PointerMoved="OnGlInputMoved"
+                    PointerReleased="OnGlInputReleased" PointerCaptureLost="OnGlInputCaptureLost"
+                    PointerWheelChanged="OnGlInputWheel"
+                    KeyDown="OnGlInputKeyDown"/>
+            <!-- Marquee overlay: hosts the translucent drag-selection rectangle drawn
+                 while a left-drag box-select is in progress. Never hit-testable, so
+                 GlInput below keeps receiving the drag. Same size as GlInput/GlView,
+                 so their coordinates line up 1:1. -->
+            <Canvas Name="GlOverlay" IsHitTestVisible="False" IsVisible="False"/>
             <TextBlock Name="MessageText"
                        HorizontalAlignment="Center" VerticalAlignment="Center"
                        TextWrapping="Wrap" Text="No map loaded."/>

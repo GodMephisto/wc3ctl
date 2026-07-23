@@ -12,7 +12,14 @@ public sealed record DiffEntry(string Name, string Change);
 public sealed record DiffResult(IReadOnlyList<DiffEntry> Entries);
 public sealed record RoundtripResult(
     bool Faithful, IReadOnlyList<string> Mismatches, IReadOnlyList<string> ExcludedNotes);
-public sealed record MergedField(string Code, string Name, string Value, string Source); // Source: "base" | "map"
+public sealed record MergedField(string Code, string Name, string Value, string Source) // Source: "base" | "map"
+{
+    private readonly string? _display;
+    /// <summary><see cref="Value"/> with TRIGSTR_ references resolved against war3map.wts,
+    /// for DISPLAY only. The raw <see cref="Value"/> is what editing / write-back use, so the
+    /// string-table reference is never clobbered. Defaults to Value when not set.</summary>
+    public string Display { get => _display ?? Value; init => _display = value; }
+}
 public sealed record MergedObjectResult(
     string Rawcode, bool Found, string? BaseRawcode, string? Name,
     IReadOnlyList<MergedField> Fields, IReadOnlyList<string> Diagnostics);
@@ -23,7 +30,10 @@ public sealed record ObjectListResult(IReadOnlyList<ObjectListItem> Items);
 // the install), "map-custom" (a New* doodad defined by the map), or "map-modified" (a
 // base doodad the map edits in place). BaseRawcode = the base a map entry derives from
 // (null for pure base-catalog rows). Name is null when unresolvable (no install / WESTRING).
-public sealed record PaletteEntry(string Rawcode, string? Name, string Source, string? BaseRawcode);
+// IconPath = the entry's icon art (units: 'uico' delta, else the base skin profile's Art);
+// null when the kind has no icon (doodads) or nothing resolves. Decode via PaletteCommand.IconPng.
+public sealed record PaletteEntry(
+    string Rawcode, string? Name, string Source, string? BaseRawcode, string? IconPath = null);
 public sealed record DoodadPaletteResult(
     bool Ok, string Message, IReadOnlyList<PaletteEntry> Entries, IReadOnlyList<string> Diagnostics);
 // Same shape as DoodadPaletteResult, over the unit catalog (ObjectKind.Unit) instead.

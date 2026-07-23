@@ -74,4 +74,43 @@ public sealed class GameDataContext
             return false;
         }
     }
+
+    /// <summary>
+    /// Searches the install's CASC listfile for entries whose full storage path contains
+    /// <paramref name="substring"/> (ordinal, case-insensitive). Returns up to
+    /// <paramref name="max"/> full storage paths, w3mod-layer prefixes included — the
+    /// discovery tool for "where does this asset actually live?" when a read misses.
+    /// Empty when the install/CASC is unavailable — never throws.
+    /// </summary>
+    public IReadOnlyList<string> FindFiles(string substring, int max = 100)
+    {
+        if (string.IsNullOrWhiteSpace(substring) || InstallDir is null)
+            return Array.Empty<string>();
+
+        lock (_cascLock)
+        {
+            if (_casc is null)
+            {
+                if (_cascFailed) return Array.Empty<string>();
+                if (!CascGameDataSource.TryOpen(InstallDir, out _casc, out _))
+                {
+                    _cascFailed = true;
+                    return Array.Empty<string>();
+                }
+            }
+
+            var hits = new List<string>();
+            try
+            {
+                foreach (var name in _casc!.EnumerateFileNames())
+                {
+                    if (!name.Contains(substring, StringComparison.OrdinalIgnoreCase)) continue;
+                    hits.Add(name);
+                    if (hits.Count >= max) break;
+                }
+            }
+            catch { /* enumeration unsupported/failed — report what we have */ }
+            return hits;
+        }
+    }
 }

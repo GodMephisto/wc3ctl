@@ -15,7 +15,7 @@ internal static class MdlParser
     {
         var tok = new Tokenizer(text);
         var textures = new List<string>();
-        var materialTexture = new List<int>(); // material index -> texture index
+        var materials = new List<(int TextureId, FilterMode Filter)>(); // material index -> base-layer texture + blend mode
         var raw = new List<(float[] Vertices, float[] Normals, float[] Uvs, int[] Indices, int MaterialId)>();
 
         for (string? t = tok.Next(); t is not null; t = tok.Next())
@@ -23,7 +23,7 @@ internal static class MdlParser
             switch (t)
             {
                 case "Textures": ParseTextures(tok, textures); break;
-                case "Materials": ParseMaterials(tok, materialTexture); break;
+                case "Materials": ParseMaterials(tok, materials); break;
                 case "Geoset": raw.Add(ParseGeoset(tok)); break;
                 case "{": tok.SkipBalanced(); break; // block of an unhandled keyword
                 default: break; // stray keywords/arguments stream by harmlessly
@@ -33,11 +33,11 @@ internal static class MdlParser
         var geosets = new List<Geoset>(raw.Count);
         foreach (var g in raw)
         {
-            int textureId = g.MaterialId >= 0 && g.MaterialId < materialTexture.Count
-                ? materialTexture[g.MaterialId]
-                : -1;
+            var (textureId, filter) = g.MaterialId >= 0 && g.MaterialId < materials.Count
+                ? materials[g.MaterialId]
+                : (-1, FilterMode.None);
             if (textureId < 0 || textureId >= textures.Count) textureId = -1;
-            geosets.Add(new Geoset(g.Vertices, g.Normals, g.Uvs, g.Indices, textureId));
+            geosets.Add(new Geoset(g.Vertices, g.Normals, g.Uvs, g.Indices, textureId, FilterMode: filter));
         }
         return new Model3D(geosets, textures);
     }
@@ -73,12 +73,13 @@ internal static class MdlParser
         }
     }
 
-    /// <summary>Materials <n> { Material { Layer { static TextureID <n>, } } ... }</summary>
-    private static void ParseMaterials(Tokenizer tok, List<int> materialTexture)
+    /// <summary>Materials <n> { Material { Layer { FilterMode <mode>, static TextureID <n>, } } ... }</summary>
+    private static void ParseMaterials(Tokenizer tok, List<(int TextureId, FilterMode Filter)> materials)
     {
         if (!tok.SkipToOpenBrace()) return;
         int depth = 1;
         int texId = -1;
+        var filter = FilterMode.None;
         bool sawLayer = false;
 
         for (string? t = tok.Next(); t is not null; t = tok.Next())
@@ -89,21 +90,35 @@ internal static class MdlParser
                 depth--;
                 if (depth == 1) // closed a Material block
                 {
-                    materialTexture.Add(texId);
-                    (texId, sawLayer) = (-1, false);
+                    materials.Add((texId, filter));
+                    (texId, filter, sawLayer) = (-1, FilterMode.None, false);
                 }
                 if (depth == 0) return;
                 continue;
             }
             if (depth == 2 && t == "Layer")
             {
-                if (sawLayer) { tok.SkipToOpenBrace(); tok.SkipBalanced(); continue; } // only the first layer
+                if (sawLayer) { tok.SkipToOpenBrace(); tok.SkipBalanced(); continue; } // only the base (first) layer
                 sawLayer = true;
             }
             else if (depth == 3 && t == "TextureID" && texId < 0 && int.TryParse(tok.Next(), out var id))
                 texId = id;
+            else if (depth == 3 && t == "FilterMode" && tok.Next() is { } mode)
+                filter = ParseFilterMode(mode);
         }
     }
+
+    /// <summary>MDL FilterMode keyword → enum; unknown words degrade to opaque.</summary>
+    private static FilterMode ParseFilterMode(string word) => word switch
+    {
+        "Transparent" => FilterMode.Transparent,
+        "Blend" => FilterMode.Blend,
+        "Additive" => FilterMode.Additive,
+        "AddAlpha" => FilterMode.AddAlpha,
+        "Modulate" => FilterMode.Modulate,
+        "Modulate2x" => FilterMode.Modulate2x,
+        _ => FilterMode.None,
+    };
 
     private static (float[], float[], float[], int[], int) ParseGeoset(Tokenizer tok)
     {

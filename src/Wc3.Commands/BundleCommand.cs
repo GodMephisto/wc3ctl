@@ -15,9 +15,12 @@ namespace Wc3.Commands;
 /// trigger string, so a later wave can graph the result and port it into another
 /// map. Breadth-first reference crawl over merged object fields: 4-char tokens
 /// that resolve as objects become nodes, path-like tokens become file deps, and
-/// map-imported models contribute their textures. Only map-defined (custom)
-/// objects are recursed — base-game objects are recorded as leaf nodes since
-/// they already exist in any target map.
+/// map-imported models contribute their textures. With game data available, only
+/// fields whose metadata TYPE is an object-reference type (unitCode, abilList, ...)
+/// may add object nodes — a value that merely looks like a rawcode elsewhere is a
+/// false positive; without game data the crawl stays permissive (any 4-char token
+/// is a candidate). Only map-defined (custom) objects are recursed — base-game
+/// objects are recorded as leaf nodes since they already exist in any target map.
 /// </summary>
 public static class BundleCommand
 {
@@ -71,6 +74,21 @@ public static class BundleCommand
         bool capped = false;
 
         bool IsCustom(ObjectKind kind, string rawcode) => mapIds[kind].Contains(rawcode.FromRawcode());
+
+        // Per (kind, field-code) "may this field's value reference objects?" — memoized
+        // because the metadata probe also enumerates the store's distinct field values.
+        var refFieldCache = new Dictionary<(ObjectKind Kind, string Code), bool>();
+        bool IsReferenceField(ObjectKind kind, string fieldCode)
+        {
+            // No game data → field types are unknowable; keep the historical permissive
+            // crawl (any 4-char token is a candidate) rather than regress that path.
+            if (ctx is null) return true;
+            if (refFieldCache.TryGetValue((kind, fieldCode), out var known)) return known;
+            bool isRef = ObjectKinds.TryGetFieldOptions(ctx, kind, fieldCode, out var type, out _, out _)
+                && IsObjectReferenceType(type);
+            refFieldCache[(kind, fieldCode)] = isRef;
+            return isRef;
+        }
 
         void AddEdge(string from, string to, string via)
         {
@@ -149,7 +167,7 @@ public static class BundleCommand
             }
         }
 
-        void ScanField(string from, MergedField field)
+        void ScanField(ObjectKind kind, string from, MergedField field)
         {
             var value = field.Value;
             if (string.IsNullOrWhiteSpace(value)) return;
@@ -161,14 +179,17 @@ public static class BundleCommand
                     stringSet.Add(resolved);
             }
 
-            // Cross-references are 4-char rawcodes or comma-separated lists of them;
+            // Cross-references are 4-char rawcodes or comma-separated lists of them —
+            // but only in fields whose metadata type says they hold object references;
             // asset references are file-path strings (variation fields may list several).
+            // The field code rides on every edge as its Via (the WHY of the inclusion).
+            bool mayReferenceObjects = IsReferenceField(kind, field.Code);
             foreach (var raw in value.Split(','))
             {
                 var token = raw.Trim();
                 if (token.Length == 0) continue;
                 if (LooksLikeAssetPath(token)) AddFileRef(from, token, field.Code);
-                else if (token.Length == 4 && token.All(c => c is >= ' ' and <= '~'))
+                else if (mayReferenceObjects && token.Length == 4 && token.All(c => c is >= ' ' and <= '~'))
                     AddObjectRef(from, token, field.Code);
             }
         }
@@ -192,8 +213,9 @@ public static class BundleCommand
         while (queue.Count > 0)
         {
             var (rawcode, merged) = queue.Dequeue();
+            var kind = nodes[rawcode].Kind; // enqueue always records the node first
             foreach (var field in merged.Fields)
-                ScanField(rawcode, field);
+                ScanField(kind, rawcode, field);
         }
 
         if (capped) diagnostics.Add($"node cap ({MaxNodes}) reached — dependency closure truncated");
@@ -379,6 +401,19 @@ public static class BundleCommand
         for (int i = prev.Index + prev.Length; i < m.Index; i++)
             if (!char.IsWhiteSpace(body[i])) return false;
         return true;
+    }
+
+    /// <summary>Metadata type tokens whose values are object rawcodes: a known object
+    /// stem + "Code" (single) or "List" (comma-separated). Non-object lists like
+    /// "targetList"/"stringList" stay out — the stem whitelist (the same one the
+    /// Studio object editor uses) keeps this conservative.</summary>
+    private static bool IsObjectReferenceType(string type)
+    {
+        var t = type.ToLowerInvariant();
+        if (!t.EndsWith("code", StringComparison.Ordinal) && !t.EndsWith("list", StringComparison.Ordinal))
+            return false;
+        return t[..^4] is "unit" or "abil" or "ability" or "heroability" or "abilityskin"
+            or "item" or "tech" or "upgrade" or "buff" or "effect";
     }
 
     /// <summary>A token references an asset iff it carries a known media extension

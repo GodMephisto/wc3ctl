@@ -253,22 +253,31 @@ public static class RenderModelCommand
         return null;
     }
 
-    /// <summary>Both slash conventions x {as-given, sibling .mdx/.mdl, extensionless + either}.</summary>
+    /// <summary>Both slash conventions x {as-given, sibling .mdx/.mdl, extensionless + either,
+    /// variation-0 + either}. The variation-0 forms come last so they can never shadow an
+    /// exact hit: classic doodads with variations store one model file per variation and no
+    /// bare file (dfil says ...\Ruins_Flower; CASC only has ruins_flower0.mdx..ruins_flower4.mdx),
+    /// so once the plain forms miss we try the "&lt;name&gt;0" file — variation 0 always exists
+    /// when variations do, and is what the World Editor previews.</summary>
     private static IEnumerable<string> PathCandidates(string path)
     {
         foreach (var p in new[] { path, path.Replace('/', '\\'), path.Replace('\\', '/') }.Distinct())
         {
             yield return p;
             var ext = Path.GetExtension(p);
-            if (ext.Equals(".mdx", StringComparison.OrdinalIgnoreCase))
-                yield return Path.ChangeExtension(p, ".mdl");
-            else if (ext.Equals(".mdl", StringComparison.OrdinalIgnoreCase))
-                yield return Path.ChangeExtension(p, ".mdx");
+            bool hasModelExt = ext.Equals(".mdx", StringComparison.OrdinalIgnoreCase)
+                || ext.Equals(".mdl", StringComparison.OrdinalIgnoreCase);
+            if (hasModelExt)
+                yield return Path.ChangeExtension(
+                    p, ext.Equals(".mdx", StringComparison.OrdinalIgnoreCase) ? ".mdl" : ".mdx");
             else
             {
                 yield return p + ".mdx";
                 yield return p + ".mdl";
             }
+            var stem = hasModelExt ? p[..^ext.Length] : p;
+            yield return stem + "0.mdx";
+            yield return stem + "0.mdl";
         }
     }
 

@@ -54,6 +54,12 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     private int _unsavedEdits;
     /// <summary>The current kind's full object list; SearchBox filters this in memory.</summary>
     private List<ObjectRow> _allRows = new();
+    /// <summary>rawcode → display name across every kind's map objects, for reference
+    /// fields (lazy; dropped on map change and after edits - see <see cref="RefNames"/>).</summary>
+    private Dictionary<string, string>? _refNames;
+    /// <summary>Metadata type per (kind, bare field code), cached so classifying a
+    /// field grid never re-derives the same field's option set twice.</summary>
+    private readonly Dictionary<(ObjectKind Kind, string Code), (string Type, bool IsList)> _fieldTypes = new();
     /// <summary>Internal name of the double-clicked object's map-imported model, when it has one.</summary>
     private string? _modelEntryName;
 
@@ -78,11 +84,16 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     /// <summary>The last (kind, rawcode) surfaced through <see cref="ObjectSelected"/>.</summary>
     private (ObjectKind Kind, string Rawcode)? _lastNotified;
 
+    /// <summary>Anchor row for Shift+click range selection (the last plain-clicked row).</summary>
+    private ObjectRow? _anchor;
+
     // --- typed field editor: one control shown per field, chosen from its metadata ---
-    private enum EditorMode { Text, Combo, Multi }
+    private enum EditorMode { Text, Combo, Multi, RefList }
     private EditorMode _editorMode = EditorMode.Text;
     /// <summary>Multiselect tokens in display order, so Apply joins deterministically.</summary>
     private IReadOnlyList<string> _editorMultiTokens = Array.Empty<string>();
+    /// <summary>Reference-list builder entries (rawcodes in list order); Apply joins them.</summary>
+    private List<string> _refListTokens = new();
     /// <summary>Above this many derivable options a field is treated as free text (paths,
     /// ids, and other high-cardinality fields aren't real enumerations).</summary>
     private const int MaxEditorOptions = 200;
@@ -120,6 +131,8 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     {
         _session = session;
         _unsavedEdits = 0;
+        _refNames = null;   // another map's objects; rebuild lazily
+        _fieldTypes.Clear(); // GameDir may differ per session
         StatusText.Text = "";
 
         if (session.Current is null)
@@ -155,7 +168,12 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     private void RefreshObjectList()
     {
         ClearFieldPane();
+        _anchor = null; // rows are rebuilt with new instances; the old anchor is stale
         _suppress = true;
+        // Start each kind/map with an unfiltered list: a search typed for the previous
+        // kind would otherwise carry over and filter the new kind to nothing, which reads
+        // as "this kind is empty" (the "can't see abilities" bug).
+        SearchBox.Text = "";
         ObjectList.ItemsSource = null;
         _suppress = false;
         _allRows = new List<ObjectRow>();
@@ -261,8 +279,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     {
         if (_suppress)
             return;
-        HideModelArea();   // model info is per double-clicked object; drop it on reselect
-        RefreshFieldPane((FieldList.SelectedItem as FieldRow)?.Code);
+        ApplySelectionToPanes(); // keyboard nav (arrow keys) still routes through here
     }
 
     /// <summary>
@@ -292,16 +309,17 @@ public partial class ObjectEditorView : UserControl, IMapPanel
             SelectedHeader.Text =
                 $"{result.Name ?? first.Rawcode} ({first.Rawcode}) - {baseInfo} - {result.Fields.Count} field(s)";
 
-            var rows = result.Fields.Select(f => new FieldRow(f)).ToList();
+            var rows = BuildFieldRows(result.Fields);
             _suppress = true;
             FieldList.ItemsSource = rows;
             _suppress = false;
 
             // Keep the edited field selected across object switches and post-Apply
             // refreshes; the selection handler reloads EditorBox from the new row.
-            var keep = preserveFieldCode is null
+            // Sub-rows are display-only children and never the preserved selection.
+            var keep = string.IsNullOrEmpty(preserveFieldCode)
                 ? null
-                : rows.FirstOrDefault(r => r.Code == preserveFieldCode);
+                : rows.FirstOrDefault(r => !r.IsSubRow && r.Code == preserveFieldCode);
             FieldList.SelectedItem = keep;
             if (keep is null)
                 ResetEditor();
@@ -338,24 +356,247 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         ObjectSelected?.Invoke(this, (kind, rawcode));
     }
 
+    // --- reference fields: show referenced objects' names next to their rawcodes ---
+
+    /// <summary>
+    /// Grid rows for the merged fields. Object-reference fields get their referenced
+    /// objects' names: a single reference inline ("A000 (Naginata Combo)"), a reference
+    /// LIST as indented read-only sub-rows ("A000 - Naginata Combo") under the parent
+    /// row, one per entry. Every other field is one plain row, exactly as before.
+    /// </summary>
+    private List<FieldRow> BuildFieldRows(IReadOnlyList<MergedField> fields)
+    {
+        var kind = SelectedKind.Kind;
+        var rows = new List<FieldRow>(fields.Count);
+        foreach (var f in fields)
+        {
+            if (!LooksLikeRawcodes(f.Value) || !IsReferenceField(kind, f.Code, out var isList))
+            {
+                rows.Add(new FieldRow(f));
+                continue;
+            }
+            if (isList)
+            {
+                rows.Add(new FieldRow(f));
+                bool mapSource = f.Source == "map";
+                foreach (var token in f.Value.Split(',',
+                    StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                    rows.Add(FieldRow.SubRow(ReferenceLabel(token), mapSource));
+            }
+            else
+            {
+                var token = f.Value.Trim();
+                var display = RefNames().TryGetValue(token, out var name)
+                    ? $"{token} ({name})"
+                    : f.Display;
+                rows.Add(new FieldRow(f, display));
+            }
+        }
+        return rows;
+    }
+
+    /// <summary>Cheap value gate before the metadata lookup: only values carrying a
+    /// 4-char alphanumeric token (alone or in a comma list) can hold rawcodes, so
+    /// ints/reals/paths never cost an option-set scan.</summary>
+    private static bool LooksLikeRawcodes(string value) =>
+        value.Contains(',')
+            ? value.Split(',').Any(t => IsRawcodeShaped(t.Trim()))
+            : IsRawcodeShaped(value.Trim());
+
+    private static bool IsRawcodeShaped(string token) =>
+        token.Length == 4 && token.All(char.IsLetterOrDigit);
+
+    /// <summary>True when the field's metadata type says its value is (a list of)
+    /// object rawcodes. Cached per (kind, bare code); leveled keys ("code:N") resolve
+    /// by the bare code. No game data ⇒ never a reference (renders as today).</summary>
+    private bool IsReferenceField(ObjectKind kind, string fieldCode, out bool isList)
+    {
+        int colon = fieldCode.IndexOf(':');
+        var code = colon < 0 ? fieldCode : fieldCode[..colon];
+        if (!_fieldTypes.TryGetValue((kind, code), out var t))
+        {
+            try
+            {
+                var opt = ObjectFieldOptionsCommand.Execute(kind, code, _session?.GameDir);
+                t = (opt.Type, opt.IsList);
+            }
+            catch
+            {
+                t = ("", false);
+            }
+            _fieldTypes[(kind, code)] = t;
+        }
+        isList = t.IsList;
+        return IsObjectReferenceType(t.Type);
+    }
+
+    /// <summary>Metadata type tokens whose values are object rawcodes: a known object
+    /// stem + "Code" (single) or "List" (comma-separated). Non-object lists like
+    /// "targetList"/"stringList" stay out - the stem whitelist keeps this conservative.</summary>
+    private static bool IsObjectReferenceType(string type)
+    {
+        var t = type.ToLowerInvariant();
+        if (!t.EndsWith("code", StringComparison.Ordinal) && !t.EndsWith("list", StringComparison.Ordinal))
+            return false;
+        return t[..^4] is "unit" or "abil" or "ability" or "heroability" or "abilityskin"
+            or "item" or "tech" or "upgrade" or "buff" or "effect";
+    }
+
+    /// <summary>"rawcode - name" when the rawcode resolves to a map object, else the bare rawcode.</summary>
+    private string ReferenceLabel(string rawcode) =>
+        RefNames().TryGetValue(rawcode, out var name) ? $"{rawcode} - {name}" : rawcode;
+
+    /// <summary>
+    /// rawcode → name over every kind's map objects, built once per map from
+    /// <see cref="ObjectListCommand"/> (first hit across kinds wins) and dropped after
+    /// edits, which can rename. One list pass per kind keeps resolving 500+ references
+    /// out of the per-rawcode command path; base-game-only rawcodes stay unresolved
+    /// and render bare.
+    /// </summary>
+    private Dictionary<string, string> RefNames()
+    {
+        if (_refNames is not null)
+            return _refNames;
+        var names = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (_session?.Current is { } doc)
+        {
+            foreach (var kind in Kinds)
+            {
+                try
+                {
+                    foreach (var item in ObjectListCommand.Execute(doc, kind.Kind, _session.GameDir).Items)
+                        if (item.Name is { Length: > 0 } name)
+                            names.TryAdd(item.Rawcode, name);
+                }
+                catch
+                {
+                    // A kind that fails to enumerate just resolves no names.
+                }
+            }
+        }
+        return _refNames = names;
+    }
+
     // --- right-click → "Show dependencies" ---
 
     /// <summary>
-    /// Right-click targets the row under the pointer (like Explorer): when it is
-    /// outside the current selection, the selection moves to it, so the context
-    /// menu always acts on the row the user clicked. Clicks inside the current
-    /// selection keep it - "Show dependencies" then uses the primary object.
+    /// Owns the object list's mouse selection so plain clicks SWITCH the shown
+    /// object (World-Editor style) instead of piling up a multi-selection.
+    /// Avalonia's <c>SelectionMode="Multiple"</c> otherwise accumulates on every
+    /// plain click, and the detail pane + the Dependencies/Port seam only ever
+    /// follow the FIRST selected object - so after one click the panel appeared
+    /// frozen and porting targeted the wrong unit. This tunnel handler runs before
+    /// the ListBox's own selection logic and marks the event handled, giving:
+    ///   • plain left-click  → select only that row (switch)
+    ///   • Ctrl+left-click   → toggle that row in/out of the selection
+    ///   • Shift+left-click  → range from the anchor to that row
+    ///   • double-click      → open the model preview (was DoubleTapped)
+    ///   • right-click       → retarget to the row under the pointer for the menu
+    /// Keyboard navigation stays with the ListBox's default (arrow keys) handling.
     /// </summary>
     private void OnObjectListPointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (!e.GetCurrentPoint(ObjectList).Properties.IsRightButtonPressed)
-            return;
+        var props = e.GetCurrentPoint(ObjectList).Properties;
         var row = (e.Source as Control)?.FindAncestorOfType<ListBoxItem>(includeSelf: true)
             ?.DataContext as ObjectRow;
-        if (row is null || SelectedObjects().Contains(row))
+
+        if (props.IsRightButtonPressed)
+        {
+            // Explorer-style: move the selection to the clicked row unless it is
+            // already part of the current selection (so "Show dependencies" acts
+            // on what the user clicked). Left to the default menu open otherwise.
+            if (row is not null && !SelectedObjects().Contains(row))
+            {
+                _suppress = true;
+                ObjectList.SelectedItems?.Clear();
+                ObjectList.SelectedItem = row;
+                _suppress = false;
+                _anchor = row;
+                ApplySelectionToPanes();
+            }
             return;
+        }
+
+        if (!props.IsLeftButtonPressed || row is null)
+            return; // clicks on empty space fall through to the default (no-op)
+
+        // We own the click (marked handled below), so the list won't get focus from the
+        // ListBoxItem's own press handling - give it focus explicitly so arrow keys work.
+        ObjectList.Focus();
+
+        bool ctrl = e.KeyModifiers.HasFlag(KeyModifiers.Control);
+        bool shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+        // Only a PLAIN double-click opens the preview; a fast Ctrl/Shift double is just
+        // two toggles/ranges and must not collapse the multi-selection.
+        bool preview = e.ClickCount >= 2 && !ctrl && !shift;
+
+        // Mutate selection silently, then refresh the field pane exactly once - each
+        // SelectedItems change would otherwise re-run ObjectGetCommand (N times for a range).
+        _suppress = true;
+        if (ctrl)
+        {
+            if (SelectedObjects().Contains(row))
+                ObjectList.SelectedItems?.Remove(row);
+            else
+                ObjectList.SelectedItems?.Add(row);
+            _anchor = row;
+        }
+        else if (shift && _anchor is not null)
+        {
+            SelectRange(_anchor, row);
+        }
+        else
+        {
+            SelectSingle(row);
+            _anchor = row;
+        }
+        _suppress = false;
+        ApplySelectionToPanes();
+        e.Handled = true; // suppress Avalonia's Multiple-mode accumulate
+
+        if (preview)
+            ShowSelectedObjectModel();
+    }
+
+    /// <summary>Reflect the current selection in the detail panes: drop the per-object
+    /// model preview and re-merge the (first) selected object's fields, keeping the
+    /// edited field selected. Called once per selection gesture (mouse or keyboard).</summary>
+    private void ApplySelectionToPanes()
+    {
+        HideModelArea();
+        RefreshFieldPane((FieldList.SelectedItem as FieldRow)?.Code);
+    }
+
+    /// <summary>Make <paramref name="row"/> the only selected object.</summary>
+    private void SelectSingle(ObjectRow row)
+    {
+        var current = SelectedObjects();
+        if (current.Count == 1 && ReferenceEquals(current[0], row))
+            return; // already the sole selection - don't churn the field pane
         ObjectList.SelectedItems?.Clear();
         ObjectList.SelectedItem = row;
+    }
+
+    /// <summary>Select the inclusive range between two rows in the visible (filtered) list.</summary>
+    private void SelectRange(ObjectRow anchor, ObjectRow target)
+    {
+        if (ObjectList.ItemsSource is not IEnumerable<ObjectRow> src)
+        {
+            SelectSingle(target);
+            return;
+        }
+        var rows = src.ToList();
+        int a = rows.IndexOf(anchor), b = rows.IndexOf(target);
+        if (a < 0 || b < 0)
+        {
+            SelectSingle(target);
+            return;
+        }
+        if (a > b)
+            (a, b) = (b, a);
+        ObjectList.SelectedItems?.Clear();
+        for (int i = a; i <= b; i++)
+            ObjectList.SelectedItems?.Add(rows[i]);
     }
 
     private void OnObjectContextMenuOpening(object? sender, CancelEventArgs e)
@@ -399,12 +640,12 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     }
 
     /// <summary>
-    /// Double-click: resolve the object's model file from its merged fields.
-    /// Map-imported models render as a rotatable preview; base-game models
-    /// (not in the map) render from CASC when a WC3 install is available,
+    /// Double-click: resolve the (first) selected object's model file from its
+    /// merged fields. Map-imported models render as a rotatable preview; base-game
+    /// models (not in the map) render from CASC when a WC3 install is available,
     /// otherwise only their path shows.
     /// </summary>
-    private void OnObjectDoubleTapped(object? sender, TappedEventArgs e)
+    private void ShowSelectedObjectModel()
     {
         if (_session?.Current is not { } doc)
             return;
@@ -672,7 +913,9 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     {
         if (_suppress)
             return;
-        if (FieldList.SelectedItem is FieldRow row)
+        // Sub-rows (a reference list's expanded entries) are display-only; their
+        // containers are disabled, but guard anyway so they never reach the editor.
+        if (FieldList.SelectedItem is FieldRow { IsSubRow: false } row)
         {
             FieldEditLabel.Text = $"{row.Name} ({row.Code})";
             ConfigureEditor(row);
@@ -684,11 +927,12 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         }
     }
 
-    /// <summary>Pick the editor control from the field's metadata: enumerated fields get a
-    /// searchable dropdown (single value) or a checklist (list types); everything else -
-    /// ints, reals, strings, paths, or fields with no derivable option set - stays free
-    /// text. The current value is always kept selectable so out-of-range data is never
-    /// silently lost.</summary>
+    /// <summary>Pick the editor control from the field's metadata: object-reference LISTS
+    /// (a unit's abilities, an item drop set, …) get the add/remove/reorder builder;
+    /// other enumerated fields get a searchable dropdown (single value) or a checklist
+    /// (list types); everything else - ints, reals, strings, paths, or fields with no
+    /// derivable option set - stays free text. The current value is always kept
+    /// selectable so out-of-range data is never silently lost.</summary>
     private void ConfigureEditor(FieldRow row)
     {
         ObjectFieldOptionsResult opt;
@@ -704,7 +948,11 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         bool freeText = opt.Options.Count == 0
             || opt.Options.Count > MaxEditorOptions
             || IsFreeTextType(opt.Type);
-        if (!freeText && opt.IsList)
+        // Metadata-gated (not value-gated) so an EMPTY reference list still gets the
+        // builder - that's exactly when the user wants to add the first entry.
+        if (opt.IsList && IsObjectReferenceType(opt.Type))
+            ShowRefListEditor(row, opt.Type);
+        else if (!freeText && opt.IsList)
             ShowMultiEditor(row, opt.Options);
         else if (!freeText)
             ShowComboEditor(row, opt.Options);
@@ -712,6 +960,11 @@ public partial class ObjectEditorView : UserControl, IMapPanel
             ShowTextEditor(row);
 
         UpdateEditNote(opt);
+        // The grid shows resolved text for wts references; the editor holds the raw token,
+        // so flag it rather than let the user think the box "lost" the readable value.
+        if (row.Value.Contains("TRIGSTR_", StringComparison.Ordinal))
+            EditNote.Text = "String-table reference (war3map.wts) — the grid shows the resolved "
+                + "text; editing here replaces the reference with a literal value.";
     }
 
     /// <summary>Metadata types edited as free text; anything else with a small option set
@@ -729,6 +982,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         EditorBox.IsVisible = true;
         EditorCombo.IsVisible = false;
         EditorMultiHost.IsVisible = false;
+        RefListHost.IsVisible = false;
     }
 
     private void ShowComboEditor(FieldRow row, IReadOnlyList<string> options)
@@ -744,6 +998,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         EditorBox.IsVisible = false;
         EditorCombo.IsVisible = true;
         EditorMultiHost.IsVisible = false;
+        RefListHost.IsVisible = false;
     }
 
     private void ShowMultiEditor(FieldRow row, IReadOnlyList<string> options)
@@ -766,6 +1021,142 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         EditorBox.IsVisible = false;
         EditorCombo.IsVisible = false;
         EditorMultiHost.IsVisible = true;
+        RefListHost.IsVisible = false;
+    }
+
+    // --- object-reference LIST builder (EditorMode.RefList) ---
+
+    /// <summary>
+    /// Editable builder for object-reference LIST fields (e.g. a unit's abilities
+    /// 'uhab' = "A000,A001"): the current entries in order ("rawcode - name" via
+    /// <see cref="ReferenceLabel"/>), an Add picker over the referenced kind's map
+    /// objects, Remove and Up/Down reorder. <see cref="CurrentEditorValue"/> joins
+    /// the rawcodes comma-separated in list order, so the normal Apply path (bulk
+    /// multi-select write via ObjectSetCommand) works unchanged. The read-only
+    /// sub-row expansion in the grid above stays as the at-a-glance display.
+    /// </summary>
+    private void ShowRefListEditor(FieldRow row, string type)
+    {
+        _editorMode = EditorMode.RefList;
+        _refListTokens = (row.Value ?? "")
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToList();
+        RefreshRefListRows(selectIndex: -1);
+        RefListAddCombo.Watermark = "Search object to add…";
+        // No auto-selection: adding is a deliberate pick, never a default first item.
+        RefListAddCombo.SetItems(RefListCandidates(type), selectId: null,
+            selectFirstWhenNoMatch: false);
+        EditorBox.IsVisible = false;
+        EditorCombo.IsVisible = false;
+        EditorMultiHost.IsVisible = false;
+        RefListHost.IsVisible = true;
+    }
+
+    /// <summary>
+    /// Add-picker choices: the map's objects of the referenced kind, resolved from
+    /// the field's metadata type stem (abilList → Abilities, …). Enumeration failure
+    /// just yields an empty picker - the existing entries are never affected.
+    /// </summary>
+    private List<SearchableComboBoxItem> RefListCandidates(string type)
+    {
+        if (_session?.Current is not { } doc)
+            return new List<SearchableComboBoxItem>();
+        try
+        {
+            return ObjectListCommand.Execute(doc, RefTargetKind(type), _session.GameDir).Items
+                .Select(i => new SearchableComboBoxItem(i.Name ?? i.Rawcode, i.Rawcode))
+                .ToList();
+        }
+        catch
+        {
+            return new List<SearchableComboBoxItem>();
+        }
+    }
+
+    /// <summary>The kind a reference type's values name, from the stems
+    /// <see cref="IsObjectReferenceType"/> accepts. Ambiguous stems ("tech" can name
+    /// units or upgrades) fall back to the current kind.</summary>
+    private ObjectKind RefTargetKind(string type)
+    {
+        var t = type.ToLowerInvariant();
+        var stem = t.Length >= 4 ? t[..^4] : t; // strip the "code"/"list" suffix
+        return stem switch
+        {
+            "unit" => ObjectKind.Unit,
+            "abil" or "ability" or "heroability" or "abilityskin" => ObjectKind.Ability,
+            "item" => ObjectKind.Item,
+            "upgrade" => ObjectKind.Upgrade,
+            "buff" or "effect" => ObjectKind.Buff,
+            _ => SelectedKind.Kind,
+        };
+    }
+
+    /// <summary>One builder row: index + "rawcode - name" label. The index keeps
+    /// duplicate rawcodes distinct, so selection and reorder stay unambiguous.</summary>
+    private sealed record RefListEntry(int Index, string Display)
+    {
+        public override string ToString() => Display;
+    }
+
+    /// <summary>Rebuild the builder's rows from the token list and re-select
+    /// <paramref name="selectIndex"/> (clamped; -1 = no selection).</summary>
+    private void RefreshRefListRows(int selectIndex)
+    {
+        RefListBox.ItemsSource = _refListTokens
+            .Select((t, i) => new RefListEntry(i, ReferenceLabel(t)))
+            .ToList();
+        RefListBox.SelectedIndex = Math.Min(selectIndex, _refListTokens.Count - 1);
+        UpdateRefListButtons();
+    }
+
+    /// <summary>Append the picked candidate (duplicates allowed - list order matters).</summary>
+    private void OnRefListAddClick(object? sender, RoutedEventArgs e)
+    {
+        if (_editorMode != EditorMode.RefList)
+            return;
+        if (RefListAddCombo.SelectedId is not { Length: > 0 } rawcode)
+        {
+            StatusText.Text = "Pick an object to add first.";
+            return;
+        }
+        _refListTokens.Add(rawcode);
+        RefreshRefListRows(_refListTokens.Count - 1);
+    }
+
+    private void OnRefListRemoveClick(object? sender, RoutedEventArgs e)
+    {
+        int i = RefListBox.SelectedIndex;
+        if (_editorMode != EditorMode.RefList || i < 0 || i >= _refListTokens.Count)
+            return;
+        _refListTokens.RemoveAt(i);
+        RefreshRefListRows(i); // clamps to the new last entry when the tail was removed
+    }
+
+    private void OnRefListUpClick(object? sender, RoutedEventArgs e) => MoveRefListEntry(-1);
+
+    private void OnRefListDownClick(object? sender, RoutedEventArgs e) => MoveRefListEntry(+1);
+
+    /// <summary>Swap the selected entry with its neighbour, keeping it selected.</summary>
+    private void MoveRefListEntry(int delta)
+    {
+        int i = RefListBox.SelectedIndex, j = i + delta;
+        if (_editorMode != EditorMode.RefList
+            || i < 0 || i >= _refListTokens.Count || j < 0 || j >= _refListTokens.Count)
+            return;
+        (_refListTokens[i], _refListTokens[j]) = (_refListTokens[j], _refListTokens[i]);
+        RefreshRefListRows(j);
+    }
+
+    private void OnRefListSelectionChanged(object? sender, SelectionChangedEventArgs e) =>
+        UpdateRefListButtons();
+
+    /// <summary>Remove/Up/Down act on the selected entry (Add is always live).</summary>
+    private void UpdateRefListButtons()
+    {
+        int i = RefListBox.SelectedIndex, n = _refListTokens.Count;
+        RefListRemoveButton.IsEnabled = i >= 0 && i < n;
+        RefListUpButton.IsEnabled = i > 0 && i < n;
+        RefListDownButton.IsEnabled = i >= 0 && i < n - 1;
     }
 
     /// <summary>The value to write, read from whichever editor is currently shown.</summary>
@@ -774,6 +1165,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         EditorMode.Combo => EditorCombo.SelectedId ?? "",
         EditorMode.Multi => string.Join(",",
             _editorMultiTokens.Where(t => EditorMulti.SelectedItems?.Contains(t) == true)),
+        EditorMode.RefList => string.Join(",", _refListTokens),
         _ => EditorBox.Text ?? "",
     };
 
@@ -783,6 +1175,8 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         {
             EditorMode.Combo => $"Enumerated field (type '{opt.Type}') — pick a value the base game already uses.",
             EditorMode.Multi => $"List field (type '{opt.Type}') — check tokens to include; saved comma-separated.",
+            EditorMode.RefList => $"Object-reference list (type '{opt.Type}') — add, remove and reorder entries; "
+                + "Apply saves the rawcodes comma-separated in list order.",
             _ when opt.Diagnostic is { } d => $"Free-text field. ({d})",
             _ => "Free-text field; leveled fields (code:N) edit that level/variation only.",
         };
@@ -793,10 +1187,12 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         FieldEditLabel.Text = "Select a field to edit";
         _editorMode = EditorMode.Text;
         _editorMultiTokens = Array.Empty<string>();
+        _refListTokens = new List<string>();
         EditorBox.Text = "";
         EditorBox.IsVisible = true;
         EditorCombo.IsVisible = false;
         EditorMultiHost.IsVisible = false;
+        RefListHost.IsVisible = false;
         EditNote.Text = "";
         UpdateApplyState();
     }
@@ -806,7 +1202,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     private void UpdateApplyState()
     {
         ApplyButton.IsEnabled = _session?.Current is not null
-            && FieldList.SelectedItem is FieldRow
+            && FieldList.SelectedItem is FieldRow { IsSubRow: false }
             && SelectedObjects().Count > 0;
     }
 
@@ -818,7 +1214,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
             StatusText.Text = "No map open.";
             return;
         }
-        if (FieldList.SelectedItem is not FieldRow row)
+        if (FieldList.SelectedItem is not FieldRow { IsSubRow: false } row)
         {
             StatusText.Text = "Select a field first.";
             return;
@@ -857,6 +1253,8 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         }
 
         _unsavedEdits += applied;
+        if (applied > 0)
+            _refNames = null; // an edit can rename an object other rows reference
 
         // Re-merge so the grid shows the new value with its gold map-source
         // highlight; then report, so diagnostics don't clobber the summary.
@@ -907,6 +1305,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         }
 
         _unsavedEdits++;
+        _refNames = null; // the newcomer is now a resolvable reference target
         // Clear the search so the fresh object is visible, then hand selection to it.
         _suppress = true;
         SearchBox.Text = "";
@@ -971,27 +1370,54 @@ public partial class ObjectEditorView : UserControl, IMapPanel
 
     /// <summary>
     /// Read-only field grid row. Map-sourced fields render gold + semibold, like
-    /// the World Editor's modified-field highlight.
+    /// the World Editor's modified-field highlight. A reference-list field is
+    /// followed by display-only SUB-rows ("rawcode - name", one per entry) that
+    /// share the parent's colour but are never selectable or editable.
     /// </summary>
     public sealed class FieldRow
     {
         private static readonly IBrush BaseBrush = new SolidColorBrush(Color.Parse("#C8CDD3"));
         private static readonly IBrush MapBrush = new SolidColorBrush(Color.Parse("#E8C56A"));
 
-        public FieldRow(MergedField field)
+        private readonly bool _mapSource;
+
+        public FieldRow(MergedField field, string? displayOverride = null)
         {
             Code = field.Code;
             Name = field.Name;
             Value = field.Value;
+            DisplayValue = displayOverride ?? field.Display;
             Source = field.Source;
+            _mapSource = field.Source == "map";
         }
+
+        private FieldRow(string display, bool mapSource)
+        {
+            Code = "";
+            Name = "";
+            Value = "";
+            DisplayValue = display;
+            Source = "";
+            IsSubRow = true;
+            _mapSource = mapSource;
+        }
+
+        /// <summary>An expanded reference-list entry rendered beneath its field row.</summary>
+        public static FieldRow SubRow(string display, bool mapSource) => new(display, mapSource);
 
         public string Code { get; }
         public string Name { get; }
+        /// <summary>Raw stored value (TRIGSTR_ refs intact) — what the editor edits and writes back.</summary>
         public string Value { get; }
+        /// <summary>TRIGSTR_-resolved value shown in the grid; equals Value when not a reference.</summary>
+        public string DisplayValue { get; }
         public string Source { get; }
+        /// <summary>Display-only child of a reference-list field (not a field itself).</summary>
+        public bool IsSubRow { get; }
 
-        public IBrush RowBrush => Source == "map" ? MapBrush : BaseBrush;
-        public FontWeight RowWeight => Source == "map" ? FontWeight.SemiBold : FontWeight.Normal;
+        public IBrush RowBrush => _mapSource ? MapBrush : BaseBrush;
+        public FontWeight RowWeight => _mapSource && !IsSubRow ? FontWeight.SemiBold : FontWeight.Normal;
+        /// <summary>Sub-rows indent their text under the parent's value column.</summary>
+        public Thickness ValueMargin => IsSubRow ? new Thickness(24, 0, 4, 0) : new Thickness(4, 0);
     }
 }

@@ -40,6 +40,8 @@ public sealed record Model3D(
 /// <paramref name="SkinBones"/>/<paramref name="SkinWeights"/> are optional skinning
 /// data: 4 slots per vertex, bone node ObjectIds with normalized weights (unused
 /// slots have weight 0). Null when the geoset carries no usable attachment data.
+/// <paramref name="FilterMode"/> is the blend mode of the geoset's material (its
+/// base layer); <see cref="FilterMode.None"/> when the geoset has no material.
 /// </summary>
 public sealed record Geoset(
     float[] Vertices,
@@ -48,4 +50,23 @@ public sealed record Geoset(
     int[] Indices,
     int TextureId,
     int[]? SkinBones = null,
-    float[]? SkinWeights = null);
+    float[]? SkinWeights = null,
+    FilterMode FilterMode = FilterMode.None);
+
+/// <summary>
+/// WC3 material-layer blend mode, as stored in MDX layer records (u32 0-6) and MDL
+/// <c>FilterMode</c> keywords. <see cref="None"/> renders opaque (a texture's alpha
+/// channel is utility data — team colour, reflections — not transparency);
+/// <see cref="Transparent"/> is an alpha-tested cutout; the rest blend against the
+/// frame buffer (<see cref="Additive"/> glows being the common case).
+/// </summary>
+public enum FilterMode
+{
+    None = 0,
+    Transparent = 1,
+    Blend = 2,
+    Additive = 3,
+    AddAlpha = 4,
+    Modulate = 5,
+    Modulate2x = 6,
+}

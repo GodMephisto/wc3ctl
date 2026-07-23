@@ -175,14 +175,15 @@ public class TerrainCommandTests
 
     // --- texture / tile paint -----------------------------------------------
 
-    // BlankMap.Create leaves TerrainTypes empty, so paint validation (which mirrors the
-    // renderer's index-into-TerrainTypes semantics) rejects texture writes. Seed a few
-    // ground types so a successful paint can be exercised; the enum values are arbitrary
-    // (any valid TerrainType passes validation and the tile stores a plain byte index).
+    // Seed EXACTLY `groundTypes` ground types (clearing the blank map's default Lordaeron
+    // palette first) so paint validation, which mirrors the renderer's index-into-TerrainTypes
+    // semantics, has a known count; the enum values are arbitrary (any valid TerrainType passes
+    // validation and the tile stores a plain byte index).
     private static MapDocument SeededTerrain(int groundTypes = 4)
     {
         var doc = BlankTerrain();
         var env = Env(doc);
+        env.TerrainTypes.Clear();
         var all = Enum.GetValues<TerrainType>();
         for (int i = 0; i < groundTypes && i < all.Length; i++)
             env.TerrainTypes.Add(all[i]);
@@ -190,11 +191,14 @@ public class TerrainCommandTests
     }
 
     [Fact]
-    public void Paint_on_a_blank_map_is_rejected_because_it_has_no_ground_types()
+    public void Paint_with_no_ground_types_is_rejected()
     {
-        // Empty TerrainTypes → a texture index has nothing to reference, matching the
-        // renderer's "fall back to neutral colour" behaviour rather than writing garbage.
-        var r = TerrainCommand.Paint(BlankTerrain(), 4, 4, 1, textureIndex: 0);
+        // No TerrainTypes → a texture index has nothing to reference, matching the renderer's
+        // "fall back to neutral colour" behaviour rather than writing garbage. (A default blank
+        // map now ships a ground palette, so clear it to exercise the no-types guard.)
+        var doc = BlankTerrain();
+        Env(doc).TerrainTypes.Clear();
+        var r = TerrainCommand.Paint(doc, 4, 4, 1, textureIndex: 0);
         Assert.False(r.Ok);
         Assert.Contains("ground tile-types", r.Message);
     }

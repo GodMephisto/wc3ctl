@@ -7,8 +7,9 @@ using Wc3.Modeling;
 namespace Wc3.Render;
 
 /// <summary>
-/// Converts image bytes between WC3's .blp and standard formats
+/// Converts image bytes between WC3's .blp/.dds and standard formats
 /// (.png/.jpg/.jpeg/.bmp/.tga, plus any source format ImageSharp sniffs).
+/// DDS is source-only (no encoder), decoded via <see cref="DdsDecoder"/>.
 /// Produced .blp files are BLP1 JPEG-content with mipmaps; WC3 stores the JPEG
 /// channels as BGRA, so RGBA pixels are swapped before encoding (round-trip
 /// through <see cref="BlpDecoder"/> is proven in tests).
@@ -29,6 +30,11 @@ public static class TextureConvert
             var tex = BlpDecoder.Decode(data);
             return Image.LoadPixelData<Rgba32>(tex.Rgba, tex.Width, tex.Height);
         }
+        if (Normalize(fromExt) == ".dds")
+        {
+            var tex = DdsDecoder.Decode(data);
+            return Image.LoadPixelData<Rgba32>(tex.Rgba, tex.Width, tex.Height);
+        }
         try
         {
             return Image.Load<Rgba32>(data);
@@ -36,7 +42,7 @@ public static class TextureConvert
         catch (UnknownImageFormatException ex)
         {
             throw new NotSupportedException(
-                $"unsupported source image format '{fromExt}' — use .blp, .png, .jpg, .jpeg, .bmp, .tga or .gif", ex);
+                $"unsupported source image format '{fromExt}' — use .blp, .dds, .png, .jpg, .jpeg, .bmp, .tga or .gif", ex);
         }
     }
 

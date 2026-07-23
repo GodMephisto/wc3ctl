@@ -25,6 +25,11 @@ public class ModelResolveTests
     [InlineData("war3mapImported\\hero.mdl", "war3mapImported\\hero.mdx")] // referenced .mdx, stored .mdl
     [InlineData("war3mapImported\\hero.mdx", "war3mapImported/hero.mdx")]  // slash variant
     [InlineData("war3mapImported\\hero.mdx", "war3mapImported\\hero")]     // extensionless reference
+    // Classic variation-style storage: no bare file, one model per variation — the
+    // resolver falls back to the "<name>0" (variation 0) file.
+    [InlineData("war3mapImported\\bush0.mdx", "war3mapImported\\bush")]     // extensionless reference
+    [InlineData("war3mapImported\\bush0.mdx", "war3mapImported\\bush.mdx")] // .mdx reference
+    [InlineData("war3mapImported\\bush0.mdl", "war3mapImported\\bush.mdl")] // .mdl reference
     public void Resolves_across_extension_swap_and_slash_variants(string stored, string referenced)
     {
         var doc = MapWith(stored);
@@ -38,5 +43,19 @@ public class ModelResolveTests
     {
         var doc = MapWith("war3mapImported\\hero.mdx");
         Assert.Null(RenderModelCommand.FindModelEntry(doc, "war3mapImported\\missing.mdl"));
+    }
+
+    [Fact]
+    public void An_exact_file_beats_the_variation0_fallback()
+    {
+        // Both bush.mdx and bush0.mdx exist: the plain name must win — the variation
+        // fallback only fires when every non-suffixed form misses.
+        var doc = MapDocument.Load(SyntheticMap.Build(new Dictionary<string, byte[]>
+        {
+            ["war3mapImported\\bush.mdx"] = new byte[] { 1, 2, 3, 4 },
+            ["war3mapImported\\bush0.mdx"] = new byte[] { 5, 6, 7, 8 },
+        }));
+        var entry = RenderModelCommand.FindModelEntry(doc, "war3mapImported\\bush");
+        Assert.Equal("war3mapImported\\bush.mdx", entry!.FileName);
     }
 }

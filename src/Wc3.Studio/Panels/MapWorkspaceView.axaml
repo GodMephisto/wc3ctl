@@ -44,11 +44,39 @@
 
         <!-- This workspace's own panel instances; loaded lazily per tab. -->
         <TabControl Name="PanelTabs" SelectionChanged="OnPanelTabsSelectionChanged">
-            <TabItem Header="Terrain">
-                <panels:TerrainView Name="TerrainPanel"/>
-            </TabItem>
-            <TabItem Header="Palette">
-                <panels:PaletteView Name="PalettePanel"/>
+            <!-- Terrain hosts the 3D viewport PLUS a World-Editor-style side
+                 dock (Palette / Unit / Players sub-tabs). The viewport column
+                 is elastic; the dock starts at 360px and stays user-resizable
+                 via the splitter (see LoadSelectedPanel for the dock's
+                 load-together flow and the sub-tab auto-switch handlers). -->
+            <TabItem Header="Terrain" Name="TerrainTab">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" MinWidth="240"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="400" MinWidth="340"/>
+                    </Grid.ColumnDefinitions>
+                    <panels:TerrainView Grid.Column="0" Name="TerrainPanel"/>
+                    <GridSplitter Grid.Column="1" Width="4" ResizeDirection="Columns"/>
+                    <TabControl Grid.Column="2" Name="DockTabs">
+                        <TabItem Header="Palette" Name="PaletteDockTab">
+                            <panels:PaletteView Name="PalettePanel"/>
+                        </TabItem>
+                        <!-- Unit properties: follows the 3D viewport's unit
+                             pick (see OnTerrainUnitsSelected). -->
+                        <TabItem Header="Unit" Name="UnitDockTab">
+                            <panels:UnitPropertiesView Name="UnitPropsPanel"/>
+                        </TabItem>
+                        <!-- Doodad properties: follows the 3D viewport's doodad
+                             pick (see OnTerrainDoodadSelected). -->
+                        <TabItem Header="Doodad" Name="DoodadDockTab">
+                            <panels:DoodadPropertiesView Name="DoodadPropsPanel"/>
+                        </TabItem>
+                        <TabItem Header="Players" Name="PlayersDockTab">
+                            <panels:PlayerForceView Name="PlayersPanel"/>
+                        </TabItem>
+                    </TabControl>
+                </Grid>
             </TabItem>
             <TabItem Header="Map Info">
                 <panels:MapInfoView Name="MapInfoPanel"/>

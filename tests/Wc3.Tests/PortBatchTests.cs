@@ -168,6 +168,10 @@ endfunction
         Assert.True(r.Script.InitHooked);
         Assert.All(r.Units, u => Assert.Null(u.Script)); // per-unit script superseded by the merge
 
+        // The merged script lives in war3map.j only (not the wtg/wct trigger tree), so the
+        // batch result must carry the World-Editor-wipes-it warning.
+        Assert.Contains(PortCommand.ScriptDurabilityWarning, r.Warnings);
+
         var reloaded = MapDocument.Load(target.SaveToBytes());
         var j = Encoding.UTF8.GetString(reloaded.GetFile("war3map.j")!.RawBytes);
 
