@@ -51,11 +51,54 @@ public static class PlacementCommand
             return new(false, $"invalid owner id {ownerId} — must be >= 0");
 
         var units = GetOrCreateUnits(doc);
-
-        int typeId = typeRawcode.FromRawcode();
         int creationNumber = NextCreationNumber(units);
+        units.Units.Add(NewUnitData(typeRawcode.FromRawcode(), ownerId, x, y, z, rotation, scale, creationNumber));
 
-        units.Units.Add(new UnitData
+        doc.AddOrReplaceModelFile(UnitsFile, units);
+        return new(true, $"placed {typeRawcode} (owner {ownerId}) at ({x}, {y}) as unit #{creationNumber}", creationNumber);
+    }
+
+    /// <summary>The owner id the World Editor writes for a preplaced item in
+    /// war3mapUnits.doo. Items have no real owning player, so they occupy the slot just
+    /// past neutral passive (15). Kept as a named constant so item placement matches what
+    /// the editor produces rather than scattering a magic 16.</summary>
+    public const int ItemOwnerId = 16;
+
+    public sealed record PlaceItemResult(bool Ok, string Message, int CreationNumber = -1);
+
+    /// <summary>
+    /// Places a preplaced item of type <paramref name="itemRawcode"/> at map coordinates
+    /// (<paramref name="x"/>, <paramref name="y"/>). Items share war3mapUnits.doo with units
+    /// (the rawcode's presence in the item catalog is what makes WC3 spawn it as a ground
+    /// item), so this mirrors <see cref="PlaceUnit"/> exactly but pins the owner to
+    /// <see cref="ItemOwnerId"/>. Returns the assigned CreationNumber.
+    /// </summary>
+    public static PlaceItemResult PlaceItem(
+        MapDocument doc,
+        string itemRawcode,
+        float x,
+        float y,
+        float z = 0f,
+        float rotation = 0f,
+        float scale = 1f)
+    {
+        if (itemRawcode is null || itemRawcode.Length != 4)
+            return new(false, $"invalid item rawcode '{itemRawcode}' — expected 4 characters");
+
+        var units = GetOrCreateUnits(doc);
+        int creationNumber = NextCreationNumber(units);
+        units.Units.Add(NewUnitData(itemRawcode.FromRawcode(), ItemOwnerId, x, y, z, rotation, scale, creationNumber));
+
+        doc.AddOrReplaceModelFile(UnitsFile, units);
+        return new(true, $"placed item {itemRawcode} at ({x}, {y}) as widget #{creationNumber}", creationNumber);
+    }
+
+    /// <summary>Builds a war3mapUnits.doo entry with the World-Editor defaults, shared by
+    /// unit and item placement so the default set (skin, hero fields, -1 sentinels, the
+    /// lists War3Net's writer dereferences unconditionally) lives in exactly one place.</summary>
+    private static UnitData NewUnitData(
+        int typeId, int ownerId, float x, float y, float z, float rotation, float scale, int creationNumber) =>
+        new()
         {
             TypeId = typeId,
             OwnerId = ownerId,
@@ -82,11 +125,7 @@ public static class PlacementCommand
             InventoryData = new List<InventoryItemData>(),
             AbilityData = new List<ModifiedAbilityData>(),
             ItemTableSets = new List<RandomItemSet>(),
-        });
-
-        doc.AddOrReplaceModelFile(UnitsFile, units);
-        return new(true, $"placed {typeRawcode} (owner {ownerId}) at ({x}, {y}) as unit #{creationNumber}", creationNumber);
-    }
+        };
 
     /// <summary>The 4-character type id the World Editor uses for a start location inside
     /// war3mapUnits.doo. A start location is stored as a preplaced "unit" of this type owned

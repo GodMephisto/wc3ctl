@@ -56,6 +56,44 @@ public static class PaletteCommand
         return new UnitPaletteResult(true, msg, entries, diagnostics);
     }
 
+    /// <summary>CLI default overload for the item palette. Locates the install (or override).</summary>
+    public static ItemPaletteResult ItemPalette(MapDocument doc, string? gameDirOverride)
+    {
+        GameData.GameData.TryOpen(gameDirOverride, out var ctx, out var diag);
+        return ItemPalette(doc, ctx, string.IsNullOrEmpty(diag) ? null : diag);
+    }
+
+    /// <summary>Item palette over the item catalog (war3map.w3t overlaid by war3mapSkin.w3t).
+    /// Base names resolve through the item profile TXTs. Icons come from the map's 'iico'
+    /// delta or the item skin profile's Art. Items place via
+    /// <see cref="PlacementCommand.PlaceItem"/>.</summary>
+    internal static ItemPaletteResult ItemPalette(MapDocument doc, GameDataContext? ctx, string? openDiag = null)
+    {
+        var (entries, diagnostics, msg) =
+            BuildPalette(doc, ctx, ObjectKind.Item, ctx?.Items.Rawcodes, "item", openDiag);
+        return new ItemPaletteResult(true, msg, entries, diagnostics);
+    }
+
+    /// <summary>CLI default overload for the destructable palette. Locates the install (or override).</summary>
+    public static DestructablePaletteResult DestructablePalette(MapDocument doc, string? gameDirOverride)
+    {
+        GameData.GameData.TryOpen(gameDirOverride, out var ctx, out var diag);
+        return DestructablePalette(doc, ctx, string.IsNullOrEmpty(diag) ? null : diag);
+    }
+
+    /// <summary>Destructable palette over the destructable catalog (war3map.w3b overlaid by
+    /// war3mapSkin.w3b). Base names are SLK-backed WESTRING refs, resolved when the editor
+    /// strings know them. Destructables place through
+    /// <see cref="PlacementCommand.PlaceDoodad"/> because war3map.doo holds doodads and
+    /// destructables alike.</summary>
+    internal static DestructablePaletteResult DestructablePalette(
+        MapDocument doc, GameDataContext? ctx, string? openDiag = null)
+    {
+        var (entries, diagnostics, msg) =
+            BuildPalette(doc, ctx, ObjectKind.Destructable, ctx?.Destructables.Rawcodes, "destructable", openDiag);
+        return new DestructablePaletteResult(true, msg, entries, diagnostics);
+    }
+
     /// <summary>Kind-generic palette builder: unions the base-game catalog (<paramref
     /// name="baseRawcodes"/>) with the map's own object-data for <paramref name="kind"/>,
     /// folding the map's name/source in where they overlap. Deterministic order: base catalog

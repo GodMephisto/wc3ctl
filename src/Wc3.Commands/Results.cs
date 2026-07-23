@@ -39,6 +39,15 @@ public sealed record DoodadPaletteResult(
 // Same shape as DoodadPaletteResult, over the unit catalog (ObjectKind.Unit) instead.
 public sealed record UnitPaletteResult(
     bool Ok, string Message, IReadOnlyList<PaletteEntry> Entries, IReadOnlyList<string> Diagnostics);
+// Same shape over the item catalog (ObjectKind.Item). Items place into war3mapUnits.doo
+// via PlacementCommand.PlaceItem.
+public sealed record ItemPaletteResult(
+    bool Ok, string Message, IReadOnlyList<PaletteEntry> Entries, IReadOnlyList<string> Diagnostics);
+// Same shape over the destructable catalog (ObjectKind.Destructable). Destructables place
+// through PlacementCommand.PlaceDoodad because war3map.doo holds doodads and destructables
+// alike (the TypeId decides which catalog resolves it).
+public sealed record DestructablePaletteResult(
+    bool Ok, string Message, IReadOnlyList<PaletteEntry> Entries, IReadOnlyList<string> Diagnostics);
 public sealed record ExtractedItem(string? Name, int BlockIndex, byte[] Bytes);
 public sealed record ExtractResult(IReadOnlyList<ExtractedItem> Items);
 

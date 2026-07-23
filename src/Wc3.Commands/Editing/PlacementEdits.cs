@@ -65,40 +65,33 @@ public sealed class PlaceDoodadEdit : IMapEdit
 }
 
 /// <summary>
-/// Places a unit (war3mapUnits.doo). Mirrors <see cref="PlaceDoodadEdit"/>:
-/// construct once via <see cref="PlacementCommand.PlaceUnit"/>, then add/remove
-/// the captured <see cref="UnitData"/> by reference so redo is byte-faithful.
+/// Shared undo/redo mechanics for anything that appends a <see cref="UnitData"/> to
+/// war3mapUnits.doo, which holds units AND preplaced items alike. The first Apply
+/// constructs the entry through the subclass (so the World-Editor defaults live in
+/// PlacementCommand), captures it, and later Applies re-add that exact instance while
+/// Revert removes it, keeping the CreationNumber (and any trigger reference keyed off
+/// it) stable across undo/redo. Subclasses supply only the initial placement and label.
 /// </summary>
-public sealed class PlaceUnitEdit : IMapEdit
+public abstract class MapUnitsEdit : IMapEdit
 {
-    private readonly string _type;
-    private readonly int _ownerId;
-    private readonly float _x, _y, _z, _rotation, _scale;
     private UnitData? _placed;
-
-    public PlaceUnitEdit(string typeRawcode, int ownerId, float x, float y,
-        float z = 0f, float rotation = 0f, float scale = 1f)
-    {
-        _type = typeRawcode;
-        _ownerId = ownerId;
-        _x = x; _y = y; _z = z;
-        _rotation = rotation; _scale = scale;
-    }
 
     /// <summary>CreationNumber assigned on first Apply (-1 before then).</summary>
     public int CreationNumber => _placed?.CreationNumber ?? -1;
 
-    public string Describe => $"Place unit {_type}";
+    public abstract string Describe { get; }
+
+    /// <summary>Places the entry for the first time; returns the command outcome.</summary>
+    protected abstract (bool Ok, string Message, int CreationNumber) PlaceFirst(MapDocument doc);
 
     public void Apply(MapDocument doc)
     {
         if (_placed is null)
         {
-            var r = PlacementCommand.PlaceUnit(doc, _type, _ownerId, _x, _y, _z, _rotation, _scale);
+            var r = PlaceFirst(doc);
             if (!r.Ok)
                 throw new InvalidOperationException(r.Message);
-            var units = ModelOf(doc);
-            _placed = units.Units.First(u => u.CreationNumber == r.CreationNumber);
+            _placed = ModelOf(doc).Units.First(u => u.CreationNumber == r.CreationNumber);
         }
         else
         {
@@ -119,6 +112,61 @@ public sealed class PlaceUnitEdit : IMapEdit
     private static MapUnits ModelOf(MapDocument doc) =>
         doc.GetFile(PlacementCommand.UnitsFile)?.Model as MapUnits
         ?? throw new InvalidOperationException("war3mapUnits.doo missing after placement");
+}
+
+/// <summary>
+/// Places a unit (war3mapUnits.doo) owned by a player. Mirrors <see cref="PlaceDoodadEdit"/>
+/// via <see cref="MapUnitsEdit"/>.
+/// </summary>
+public sealed class PlaceUnitEdit : MapUnitsEdit
+{
+    private readonly string _type;
+    private readonly int _ownerId;
+    private readonly float _x, _y, _z, _rotation, _scale;
+
+    public PlaceUnitEdit(string typeRawcode, int ownerId, float x, float y,
+        float z = 0f, float rotation = 0f, float scale = 1f)
+    {
+        _type = typeRawcode;
+        _ownerId = ownerId;
+        _x = x; _y = y; _z = z;
+        _rotation = rotation; _scale = scale;
+    }
+
+    public override string Describe => $"Place unit {_type}";
+
+    protected override (bool, string, int) PlaceFirst(MapDocument doc)
+    {
+        var r = PlacementCommand.PlaceUnit(doc, _type, _ownerId, _x, _y, _z, _rotation, _scale);
+        return (r.Ok, r.Message, r.CreationNumber);
+    }
+}
+
+/// <summary>
+/// Places a preplaced item (a <see cref="UnitData"/> in war3mapUnits.doo owned by the item
+/// slot). Same undo/redo mechanics as <see cref="PlaceUnitEdit"/>; differs only in the
+/// initial placement call, which pins the owner to <see cref="PlacementCommand.ItemOwnerId"/>.
+/// </summary>
+public sealed class PlaceItemEdit : MapUnitsEdit
+{
+    private readonly string _type;
+    private readonly float _x, _y, _z, _rotation, _scale;
+
+    public PlaceItemEdit(string typeRawcode, float x, float y,
+        float z = 0f, float rotation = 0f, float scale = 1f)
+    {
+        _type = typeRawcode;
+        _x = x; _y = y; _z = z;
+        _rotation = rotation; _scale = scale;
+    }
+
+    public override string Describe => $"Place item {_type}";
+
+    protected override (bool, string, int) PlaceFirst(MapDocument doc)
+    {
+        var r = PlacementCommand.PlaceItem(doc, _type, _x, _y, _z, _rotation, _scale);
+        return (r.Ok, r.Message, r.CreationNumber);
+    }
 }
 
 /// <summary>

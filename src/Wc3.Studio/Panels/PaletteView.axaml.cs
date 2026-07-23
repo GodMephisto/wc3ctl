@@ -175,7 +175,8 @@ public partial class PaletteView : UserControl, IMapPanel
     private bool _loading;
     /// <summary>Group keys (kind·source) the user has collapsed — their tiles are hidden until
     /// re-expanded. The base catalog is collapsed by default (it's the ~thousands-tile bulk).</summary>
-    private readonly HashSet<string> _collapsed = new(StringComparer.Ordinal) { "Unit·base", "Doodad·base" };
+    private readonly HashSet<string> _collapsed = new(StringComparer.Ordinal)
+        { "Unit·base", "Doodad·base", "Item·base", "Destructable·base" };
 
     public PaletteView() => InitializeComponent();
 
@@ -217,8 +218,12 @@ public partial class PaletteView : UserControl, IMapPanel
             {
                 var units = PaletteCommand.UnitPalette(doc, gameDir);
                 var doodads = PaletteCommand.DoodadPalette(doc, gameDir);
+                var items = PaletteCommand.ItemPalette(doc, gameDir);
+                var destructables = PaletteCommand.DestructablePalette(doc, gameDir);
                 rows = units.Entries.Select(e => Row(ObjectKind.Unit, e, icons))
                     .Concat(doodads.Entries.Select(e => Row(ObjectKind.Doodad, e, icons)))
+                    .Concat(items.Entries.Select(e => Row(ObjectKind.Item, e, icons)))
+                    .Concat(destructables.Entries.Select(e => Row(ObjectKind.Destructable, e, icons)))
                     .ToList();
             }
             catch (Exception ex)
@@ -260,8 +265,24 @@ public partial class PaletteView : UserControl, IMapPanel
         _ => 3,
     };
 
-    private static string KindPlural(ObjectKind kind) =>
-        kind == ObjectKind.Unit ? "Units" : "Doodads";
+    private static string KindPlural(ObjectKind kind) => kind switch
+    {
+        ObjectKind.Unit => "Units",
+        ObjectKind.Doodad => "Doodads",
+        ObjectKind.Item => "Items",
+        ObjectKind.Destructable => "Destructables",
+        _ => kind.ToString() + "s",
+    };
+
+    /// <summary>Display order of the kind groups (units first, base bulk last).</summary>
+    private static int KindRank(ObjectKind kind) => kind switch
+    {
+        ObjectKind.Unit => 0,
+        ObjectKind.Item => 1,
+        ObjectKind.Doodad => 2,
+        ObjectKind.Destructable => 3,
+        _ => 4,
+    };
 
     /// <summary>Re-apply the search text and kind filter to the full catalog, then regroup
     /// the survivors under kind · source headers (empty groups simply don't appear). A
@@ -273,11 +294,13 @@ public partial class PaletteView : UserControl, IMapPanel
 
         var q = (SearchBox.Text ?? "").Trim();
         IEnumerable<PaletteRow> rows = _all;
-        // 0 = All, 1 = Units, 2 = Doodads (see XAML ComboBox order).
+        // 0 = All, 1 = Units, 2 = Doodads, 3 = Items, 4 = Destructables (see XAML order).
         rows = KindFilter.SelectedIndex switch
         {
             1 => rows.Where(r => r.Kind == ObjectKind.Unit),
             2 => rows.Where(r => r.Kind == ObjectKind.Doodad),
+            3 => rows.Where(r => r.Kind == ObjectKind.Item),
+            4 => rows.Where(r => r.Kind == ObjectKind.Destructable),
             _ => rows,
         };
         if (q.Length > 0)
@@ -289,7 +312,7 @@ public partial class PaletteView : UserControl, IMapPanel
         int shown = 0;
         var groups = new List<PaletteGroup>();
         foreach (var byKind in rows.GroupBy(r => r.Kind)
-                     .OrderBy(g => g.Key == ObjectKind.Unit ? 0 : 1))
+                     .OrderBy(g => KindRank(g.Key)))
         {
             foreach (var bySource in byKind.GroupBy(r => r.Source)
                          .OrderBy(g => SourceRank(g.Key)))
@@ -311,9 +334,10 @@ public partial class PaletteView : UserControl, IMapPanel
         _groups = groups;
         PaletteGroups.ItemsSource = _groups;
 
-        var units = _all.Count(r => r.Kind == ObjectKind.Unit);
-        var doodads = _all.Count(r => r.Kind == ObjectKind.Doodad);
-        StatusText.Text = $"{shown} shown · {units} unit(s), {doodads} doodad(s)";
+        int Count(ObjectKind k) => _all.Count(r => r.Kind == k);
+        StatusText.Text =
+            $"{shown} shown · {Count(ObjectKind.Unit)} unit(s), {Count(ObjectKind.Doodad)} doodad(s), "
+            + $"{Count(ObjectKind.Item)} item(s), {Count(ObjectKind.Destructable)} destructable(s)";
     }
 
     /// <summary>Toggle a group's collapsed state and rebuild. The SectionHeader already

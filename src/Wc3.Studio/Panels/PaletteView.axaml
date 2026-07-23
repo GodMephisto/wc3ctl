@@ -23,6 +23,8 @@
                     <ComboBoxItem>All</ComboBoxItem>
                     <ComboBoxItem>Units</ComboBoxItem>
                     <ComboBoxItem>Doodads</ComboBoxItem>
+                    <ComboBoxItem>Items</ComboBoxItem>
+                    <ComboBoxItem>Destructables</ComboBoxItem>
                 </ComboBox>
             </Grid>
 

@@ -141,6 +141,58 @@ public class PlacementCommandTests
         Assert.Null(doc.GetFile(PlacementCommand.UnitsFile)); // nothing written on rejection
     }
 
+    // ---- Items (UnitData in war3mapUnits.doo) -----------------------------
+
+    [Fact]
+    public void PlaceItem_WritesItemEntryOwnedByItemSlot_AndSurvivesRoundTrip()
+    {
+        var doc = BlankMap.Create();
+
+        // tdst = Boots of Speed, a standard item rawcode.
+        var result = PlacementCommand.PlaceItem(doc, "bspd", x: 320f, y: -64f, rotation: 0.5f);
+        Assert.True(result.Ok, result.Message);
+        Assert.Equal(0, result.CreationNumber);
+
+        byte[] saved = doc.SaveToBytes();
+        var reloaded = MapDocument.Load(saved);
+
+        var units = reloaded.GetFile(PlacementCommand.UnitsFile)?.Model as MapUnits;
+        Assert.NotNull(units);
+        var item = Assert.Single(units!.Units);
+        Assert.Equal("bspd".FromRawcode(), item.TypeId);
+        Assert.Equal(PlacementCommand.ItemOwnerId, item.OwnerId);   // items sit in the item slot, not a player
+        Assert.Equal(320f, item.Position.X);
+        Assert.Equal(-64f, item.Position.Y);
+        Assert.Equal(0.5f, item.Rotation);
+
+        Assert.DoesNotContain(reloaded.Diagnostics, d => d.Severity == DiagnosticSeverity.Warning);
+    }
+
+    [Fact]
+    public void PlaceItem_SharesTheCreationNumberSequenceWithUnits()
+    {
+        var doc = BlankMap.Create();
+        var u = PlacementCommand.PlaceUnit(doc, "hfoo", 0, 0f, 0f);
+        var i = PlacementCommand.PlaceItem(doc, "bspd", 64f, 0f);
+        Assert.Equal(0, u.CreationNumber);
+        Assert.Equal(1, i.CreationNumber);   // one shared war3mapUnits.doo sequence
+
+        var units = doc.GetFile(PlacementCommand.UnitsFile)?.Model as MapUnits;
+        Assert.Equal(2, units!.Units.Count);
+    }
+
+    [Theory]
+    [InlineData("abc")]    // too short
+    [InlineData("abcde")]  // too long
+    [InlineData(null)]
+    public void PlaceItem_RejectsBadInput(string rawcode)
+    {
+        var doc = BlankMap.Create();
+        var result = PlacementCommand.PlaceItem(doc, rawcode, 0f, 0f);
+        Assert.False(result.Ok);
+        Assert.Null(doc.GetFile(PlacementCommand.UnitsFile)); // nothing written on rejection
+    }
+
     // ---- Doodads (war3map.doo) --------------------------------------------
 
     [Fact]

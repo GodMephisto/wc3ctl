@@ -646,13 +646,18 @@ public partial class TerrainView : UserControl, IMapPanel
 
         try
         {
-            // Units belong to the toolbar's "Place as" player (doodads have no owner).
-            Wc3.Commands.Editing.IMapEdit edit = _brush.Kind == ObjectKind.Unit
-                ? new Wc3.Commands.Editing.PlaceUnitEdit(_brush.Rawcode,
+            // Route by kind: units carry the toolbar's "Place as" owner, items go to the
+            // item slot, doodads and destructables share war3map.doo (both have no owner).
+            Wc3.Commands.Editing.IMapEdit edit = _brush.Kind switch
+            {
+                ObjectKind.Unit => new Wc3.Commands.Editing.PlaceUnitEdit(_brush.Rawcode,
                     ownerId: PlaceOwnerPicker.SelectedOwnerId ?? 0, x: wx, y: wy,
-                    rotation: rotation, scale: scale)
-                : new Wc3.Commands.Editing.PlaceDoodadEdit(_brush.Rawcode, x: wx, y: wy,
-                    rotation: rotation, scale: scale);
+                    rotation: rotation, scale: scale),
+                ObjectKind.Item => new Wc3.Commands.Editing.PlaceItemEdit(_brush.Rawcode,
+                    x: wx, y: wy, rotation: rotation, scale: scale),
+                _ => new Wc3.Commands.Editing.PlaceDoodadEdit(_brush.Rawcode, x: wx, y: wy,
+                    rotation: rotation, scale: scale),
+            };
             _history.Do(doc, edit);
             GlView.RefreshPlacements(); // GL markers track the live widget set
             return (true, edit.Describe);
