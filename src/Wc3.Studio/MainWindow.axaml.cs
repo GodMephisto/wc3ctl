@@ -38,6 +38,16 @@ public partial class MainWindow : Window
                 TryOpen(TargetWorkspace, args[i + 1]);
         }
 
+        // After the maps load, optionally select a Source tab / dock sub-tab so a panel
+        // can be screenshotted directly (--tab Triggers, --dock Unit).
+        for (int i = 1; i < args.Length - 1; i++)
+        {
+            if (string.Equals(args[i], "--tab", StringComparison.OrdinalIgnoreCase))
+                SourceWorkspace.SelectTab(args[i + 1]);
+            else if (string.Equals(args[i], "--dock", StringComparison.OrdinalIgnoreCase))
+                SourceWorkspace.SelectDock(args[i + 1]);
+        }
+
         static void TryOpen(MapWorkspaceView ws, string path)
         {
             try { if (System.IO.File.Exists(path)) ws.OpenMap(path); }

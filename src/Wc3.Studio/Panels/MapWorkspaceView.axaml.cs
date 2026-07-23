@@ -57,6 +57,24 @@ public partial class MapWorkspaceView : UserControl
         PlayersPanel.MapEdited += OnPlayersEdited;
     }
 
+    /// <summary>Dev/QA: select a top-level tab by its header text (drives the --tab startup
+    /// flag so a panel can be screenshotted without clicking). Triggers the same lazy load a
+    /// user click would. No-op if no tab matches.</summary>
+    public void SelectTab(string header)
+    {
+        foreach (var item in PanelTabs.Items)
+            if (item is TabItem t && string.Equals(t.Header as string, header, StringComparison.OrdinalIgnoreCase))
+            { PanelTabs.SelectedItem = t; return; }
+    }
+
+    /// <summary>Dev/QA: select a Terrain-tab dock sub-tab (Palette/Unit/Doodad/Players) by header.</summary>
+    public void SelectDock(string header)
+    {
+        foreach (var item in DockTabs.Items)
+            if (item is TabItem t && string.Equals(t.Header as string, header, StringComparison.OrdinalIgnoreCase))
+            { DockTabs.SelectedItem = t; return; }
+    }
+
     /// <summary>Palette selection → arm the Terrain tab's placement brush and jump
     /// there, with the Palette sub-tab front in the side dock so the armed row's
     /// highlight stays visible next to the viewport.</summary>
