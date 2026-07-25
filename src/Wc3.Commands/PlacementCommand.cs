@@ -293,4 +293,33 @@ public static class PlacementCommand
 
     private static int NextRegionCreationNumber(MapRegions regions) =>
         regions.Regions.Count == 0 ? 0 : regions.Regions.Max(r => r.CreationNumber) + 1;
+
+    /// <summary>One region's identity and bounds, for listing/editing front-ends.</summary>
+    public sealed record RegionInfo(
+        int CreationNumber, string Name, float Left, float Bottom, float Right, float Top);
+
+    /// <summary>Lists the map's regions (war3map.w3r) in file order. Empty when the map has none.</summary>
+    public static IReadOnlyList<RegionInfo> ListRegions(MapDocument doc)
+    {
+        if (doc.GetFile(RegionsFile)?.Model is not MapRegions regions)
+            return Array.Empty<RegionInfo>();
+        return regions.Regions
+            .Select(r => new RegionInfo(r.CreationNumber, r.Name, r.Left, r.Bottom, r.Right, r.Top))
+            .ToList();
+    }
+
+    /// <summary>Removes the first region with the given name (case-insensitive) and writes
+    /// war3map.w3r. A miss returns Ok=false so the caller can report it.</summary>
+    public static PlaceRegionResult RemoveRegion(MapDocument doc, string name)
+    {
+        if (doc.GetFile(RegionsFile)?.Model is not MapRegions regions)
+            return new(false, $"map has no {RegionsFile} (no regions to remove)");
+        var match = regions.Regions.FirstOrDefault(
+            r => string.Equals(r.Name, name, StringComparison.OrdinalIgnoreCase));
+        if (match is null)
+            return new(false, $"no region named '{name}'");
+        regions.Regions.Remove(match);
+        doc.AddOrReplaceModelFile(RegionsFile, regions);
+        return new(true, $"removed region '{name}'", match.CreationNumber);
+    }
 }

@@ -1,0 +1,41 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Wc3.Studio.Controls.CatalogEditorView">
+    <Grid>
+        <!-- Empty-state / error line (see ShowHint). -->
+        <TextBlock Name="PlaceholderText"
+                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                   TextWrapping="Wrap" TextAlignment="Center" Margin="24"
+                   Text="No map open"/>
+
+        <DockPanel Name="ContentRoot" IsVisible="False">
+            <!-- Title + one-line subtitle. -->
+            <Border DockPanel.Dock="Top" BorderBrush="#33555555"
+                    BorderThickness="0,0,0,1" Padding="8,6">
+                <StackPanel Spacing="2">
+                    <TextBlock Name="TitleText" FontWeight="SemiBold"/>
+                    <TextBlock Name="SubtitleText" FontSize="11" Foreground="#8FA3B8"
+                               TextWrapping="Wrap"/>
+                </StackPanel>
+            </Border>
+
+            <!-- The owning panel drops its "add new" form here. -->
+            <Border DockPanel.Dock="Top" Name="AddBorder" BorderBrush="#33555555"
+                    BorderThickness="0,0,0,1" Padding="8,6">
+                <ContentControl Name="AddHost"/>
+            </Border>
+
+            <!-- Status / last-action line. -->
+            <Border DockPanel.Dock="Bottom" BorderBrush="#33555555"
+                    BorderThickness="0,1,0,0" Padding="8,4">
+                <TextBlock Name="StatusText" TextWrapping="Wrap" Text=""/>
+            </Border>
+
+            <!-- One card per catalog entry, built in code by the owning panel (no
+                 virtualization, so editable controls never hit the recycling pitfall). -->
+            <ScrollViewer>
+                <StackPanel Name="ItemHost" Margin="8" Spacing="8"/>
+            </ScrollViewer>
+        </DockPanel>
+    </Grid>
+</UserControl>

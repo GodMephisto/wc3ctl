@@ -310,4 +310,39 @@ public class PlacementCommandTests
         Assert.False(result.Ok);
         Assert.Null(doc.GetFile(PlacementCommand.RegionsFile)); // nothing written on rejection
     }
+
+    [Fact]
+    public void ListRegions_ReturnsPlacedRegions_EmptyWhenNone()
+    {
+        var doc = BlankMap.Create();
+        Assert.Empty(PlacementCommand.ListRegions(doc)); // no region file yet
+
+        PlacementCommand.PlaceRegion(doc, "spawn", -256f, -256f, 256f, 256f);
+        PlacementCommand.PlaceRegion(doc, "arena", 0f, 0f, 512f, 512f);
+
+        var regions = PlacementCommand.ListRegions(doc);
+        Assert.Equal(2, regions.Count);
+        var spawn = regions.Single(r => r.Name == "spawn");
+        Assert.Equal(-256f, spawn.Left);
+        Assert.Equal(256f, spawn.Top);
+    }
+
+    [Fact]
+    public void RemoveRegion_DeletesByName_AndReportsMisses()
+    {
+        var doc = BlankMap.Create();
+        PlacementCommand.PlaceRegion(doc, "spawn", 0f, 0f, 64f, 64f);
+        PlacementCommand.PlaceRegion(doc, "arena", 64f, 0f, 128f, 64f);
+
+        var ok = PlacementCommand.RemoveRegion(doc, "SPAWN"); // case-insensitive
+        Assert.True(ok.Ok, ok.Message);
+        Assert.Equal(new[] { "arena" }, PlacementCommand.ListRegions(doc).Select(r => r.Name));
+
+        var miss = PlacementCommand.RemoveRegion(doc, "nope");
+        Assert.False(miss.Ok);
+
+        // The edit persists through a save/reload.
+        var reloaded = MapDocument.Load(doc.SaveToBytes());
+        Assert.Equal(new[] { "arena" }, PlacementCommand.ListRegions(reloaded).Select(r => r.Name));
+    }
 }

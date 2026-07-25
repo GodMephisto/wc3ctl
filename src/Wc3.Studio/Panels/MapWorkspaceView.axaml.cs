@@ -55,6 +55,9 @@ public partial class MapWorkspaceView : UserControl
         DoodadPropsPanel.DoodadEdited += OnDoodadEdited;
         DoodadPropsPanel.DoodadRemoved += OnDoodadRemoved;
         PlayersPanel.MapEdited += OnPlayersEdited;
+        RegionsPanel.MapEdited += OnMapEdited;
+        CamerasPanel.MapEdited += OnMapEdited;
+        SoundsPanel.MapEdited += OnMapEdited;
     }
 
     /// <summary>Dev/QA: select a top-level tab by its header text (drives the --tab startup

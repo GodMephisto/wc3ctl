@@ -96,6 +96,15 @@
             <TabItem Header="Strings">
                 <panels:StringImportView Name="StringsPanel"/>
             </TabItem>
+            <TabItem Header="Regions">
+                <panels:RegionsView Name="RegionsPanel"/>
+            </TabItem>
+            <TabItem Header="Cameras">
+                <panels:CamerasView Name="CamerasPanel"/>
+            </TabItem>
+            <TabItem Header="Sounds">
+                <panels:SoundsView Name="SoundsPanel"/>
+            </TabItem>
             <TabItem Header="Dependencies" Name="DependenciesTab">
                 <panels:DependencyGraphView Name="DependenciesPanel"/>
             </TabItem>

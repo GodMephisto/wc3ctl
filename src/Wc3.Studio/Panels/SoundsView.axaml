@@ -1,0 +1,8 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="using:Wc3.Studio.Controls"
+             x:Class="Wc3.Studio.Panels.SoundsView">
+    <c:CatalogEditorView Name="Catalog"
+                         Title="Sounds (war3map.w3s)"
+                         Subtitle="The map's sound catalog. Add or remove definitions and edit a field inline; Save writes the map."/>
+</UserControl>
