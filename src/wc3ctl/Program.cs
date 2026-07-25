@@ -683,6 +683,24 @@ public static class Program
                 () => $"{r.Message}\nsaved: {dest}");
         }
 
+        // Generic save-and-report for any (Ok, Message) mutation result. On failure emits the
+        // message and sets exit 1; on success saves to --out (or a sibling .edited) and reports.
+        void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok, string message)
+        {
+            if (!ok)
+            {
+                Emit(json, new { Ok = false, Message = message }, () => message);
+                exitCode[0] = 1;
+                return;
+            }
+            var dest = outOpt ?? Path.Combine(
+                Path.GetDirectoryName(map) ?? "",
+                Path.GetFileNameWithoutExtension(map) + ".edited" + Path.GetExtension(map));
+            doc.Save(dest);
+            Emit(json, new { Ok = true, Message = message, SavedTo = dest },
+                () => $"{message}\nsaved: {dest}");
+        }
+
         var tCX = new Argument<int>("cx", "Brush centre tile X (column).");
         var tCY = new Argument<int>("cy", "Brush centre tile Y (row).");
         var tRadius = new Argument<int>("radius", "Brush radius in tiles.");
@@ -867,6 +885,106 @@ public static class Program
         sound.AddCommand(soundSet);
         sound.AddCommand(soundRemove);
 
+        // ---- camera: edit the map's camera catalog (war3map.w3c) ----
+        var camList = new Command("list", "List the map's cameras.") { mapArg };
+        camList.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var cams = CameraCommand.List(MapDocument.Load(p.GetValueForArgument(mapArg)));
+            Emit(p.GetValueForOption(jsonOption), cams,
+                () => cams.Count == 0
+                    ? "(no cameras)"
+                    : string.Join("\n", cams.Select(c =>
+                        $"{c.Name}  target=({c.TargetX:0},{c.TargetY:0})  rot={c.Rotation:0}  aoa={c.AngleOfAttack:0}  dist={c.TargetDistance:0}  fov={c.FieldOfView:0}")));
+        }));
+
+        var camNameArg = new Argument<string>("name", "Camera name.");
+        var camXArg = new Argument<float>("x", "Camera target X (map coordinates).");
+        var camYArg = new Argument<float>("y", "Camera target Y (map coordinates).");
+        var camAdd = new Command("add", "Add a camera at a target position and save the edited map.")
+        { mapArg, camNameArg, camXArg, camYArg, setOut };
+        camAdd.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = CameraCommand.Add(doc, p.GetValueForArgument(camNameArg),
+                p.GetValueForArgument(camXArg), p.GetValueForArgument(camYArg));
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message);
+        }));
+
+        var camFieldArg = new Argument<string>("field",
+            "Field: " + string.Join("|", CameraCommand.EditableFields) + ".");
+        var camValueArg = new Argument<string>("value", "New value for the field.");
+        var camSet = new Command("set", "Set a field on a camera and save the edited map.")
+        { mapArg, camNameArg, camFieldArg, camValueArg, setOut };
+        camSet.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = CameraCommand.Set(doc, p.GetValueForArgument(camNameArg),
+                p.GetValueForArgument(camFieldArg), p.GetValueForArgument(camValueArg));
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message);
+        }));
+
+        var camRemove = new Command("remove", "Remove a camera and save the edited map.")
+        { mapArg, camNameArg, setOut };
+        camRemove.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = CameraCommand.Remove(doc, p.GetValueForArgument(camNameArg));
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message);
+        }));
+
+        var camera = new Command("camera",
+            "Camera catalog editing (war3map.w3c): list, add, set, remove.");
+        camera.AddCommand(camList);
+        camera.AddCommand(camAdd);
+        camera.AddCommand(camSet);
+        camera.AddCommand(camRemove);
+
+        // ---- pathing: HiveWE-style brush over the pathing map (war3map.wpm) ----
+        var pathCX = new Argument<int>("cx", "Brush centre pathing-cell X.");
+        var pathCY = new Argument<int>("cy", "Brush centre pathing-cell Y.");
+        var pathRadius = new Argument<int>("radius", "Brush radius in pathing cells.");
+        var pathFlagsArg = new Argument<string>("flags",
+            "Pathing bits to affect (comma-separated): Walk, Fly, Build, Blight, Water. "
+            + "A set bit RESTRICTS that capability (Walk set = units cannot walk there).");
+        var pathOpOpt = new Option<PathingCommand.BrushOp>(
+            "--op", () => PathingCommand.BrushOp.Set, "How the bits combine: Set, Clear or Toggle.");
+        var pathShapeOpt = new Option<PathingCommand.BrushShape>(
+            "--shape", () => PathingCommand.BrushShape.Circle, "Brush footprint: Circle or Square.");
+        var pathPaint = new Command("paint",
+            "Paint pathing bits over a brush and save the edited map. Writes war3map.wpm.")
+        { mapArg, pathCX, pathCY, pathRadius, pathFlagsArg, pathOpOpt, pathShapeOpt, setOut };
+        pathPaint.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var flagText = p.GetValueForArgument(pathFlagsArg).Replace(" ", "");
+            if (!Enum.TryParse<War3Net.Build.Environment.PathingType>(flagText, ignoreCase: true, out var flags))
+            {
+                var msg = $"unknown pathing flag(s) '{flagText}'. Valid: "
+                    + string.Join(", ", Enum.GetNames(typeof(War3Net.Build.Environment.PathingType)));
+                Emit(p.GetValueForOption(jsonOption), new { Ok = false, Message = msg }, () => msg);
+                exitCode[0] = 1;
+                return;
+            }
+            var doc = MapDocument.Load(map);
+            var r = PathingCommand.Paint(doc,
+                p.GetValueForArgument(pathCX), p.GetValueForArgument(pathCY),
+                p.GetValueForArgument(pathRadius), flags,
+                p.GetValueForOption(pathOpOpt), p.GetValueForOption(pathShapeOpt));
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc,
+                r.Ok, r.Ok ? $"{r.Message} ({r.CellsChanged} cells)" : r.Message);
+        }));
+        var pathing = new Command("pathing",
+            "Pathing-map editing (war3map.wpm): paint walk/build/fly/water bits over a brush.");
+        pathing.AddCommand(pathPaint);
+
         // --- trigger catalog (read-only GUI-trigger reference from UI\TriggerData.txt) ---
         var trigFileOpt = new Option<string?>("--file",
             "Read the catalog from an explicit TriggerData.txt instead of the installed game.");
@@ -941,7 +1059,8 @@ public static class Program
         root.AddCommand(script); root.AddCommand(bundle); root.AddCommand(port);
         root.AddCommand(convert); root.AddCommand(validate);
         root.AddCommand(place); root.AddCommand(palette); root.AddCommand(terrain);
-        root.AddCommand(sound); root.AddCommand(trigger);
+        root.AddCommand(sound); root.AddCommand(camera); root.AddCommand(pathing);
+        root.AddCommand(trigger);
 
         return root;
     }
