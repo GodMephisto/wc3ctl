@@ -70,10 +70,31 @@ public sealed class PaletteRow : INotifyPropertyChanged
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
+    /// <summary>How many times this type is actually placed on the map (0 if unplaced).</summary>
+    public int PlacedCount { get; init; }
+    /// <summary>Whether the map's script (war3map.j) references this rawcode - the "in use"
+    /// signal for maps that spawn characters at runtime instead of pre-placing them.</summary>
+    public bool InScript { get; init; }
+
+    /// <summary>Used = placed on the map or referenced by the script. Among look-alike rawcodes,
+    /// the used one is the real character; unused ones are stale/duplicate leftovers.</summary>
+    public bool IsUsed => PlacedCount > 0 || InScript;
+    /// <summary>Corner badge: the placement count when placed, else a tick for script-referenced.</summary>
+    public string UsageBadge => PlacedCount > 0 ? $"×{PlacedCount}" : (InScript ? "✓" : "");
+
     public string Display => $"{Name ?? "(unnamed)"} ({Rawcode})";
     public string Detail => $"{Kind.ToString().ToLowerInvariant()} · {Source}";
-    /// <summary>Hover label for a grid tile: "Name (rawcode) · kind · source".</summary>
-    public string Tooltip => $"{Display} · {Detail}";
+    /// <summary>Hover label: identity plus why this rawcode is (or is not) in use.</summary>
+    public string Tooltip
+    {
+        get
+        {
+            var use = PlacedCount > 0 ? $"placed {PlacedCount}x on the map"
+                : InScript ? "referenced by the map script"
+                : "not placed and not referenced by the script (likely unused)";
+            return $"{Display} · {Detail} · {use}";
+        }
+    }
 
     /// <summary>Whether this type has icon art at all. Most doodads (and hero/custom unit
     /// variants) have none — WC3 lists those by name, not icon — so those tiles show
@@ -220,7 +241,14 @@ public partial class PaletteView : UserControl, IMapPanel
                 var doodads = PaletteCommand.DoodadPalette(doc, gameDir);
                 var items = PaletteCommand.ItemPalette(doc, gameDir);
                 var destructables = PaletteCommand.DestructablePalette(doc, gameDir);
-                rows = units.Entries.Select(e => Row(ObjectKind.Unit, e, icons))
+                // How many times each unit type is actually placed on the map: the signal for
+                // "which of these look-alike rawcodes is the real one" - the placed one is in use.
+                var placed = UnitInstanceCommand.List(doc)
+                    .GroupBy(u => u.TypeRawcode, StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
+                var scriptCodes = ScriptRawcodes(doc);
+                rows = units.Entries.Select(e => Row(ObjectKind.Unit, e, icons,
+                        placed.GetValueOrDefault(e.Rawcode), scriptCodes.Contains(e.Rawcode)))
                     .Concat(doodads.Entries.Select(e => Row(ObjectKind.Doodad, e, icons)))
                     .Concat(items.Entries.Select(e => Row(ObjectKind.Item, e, icons)))
                     .Concat(destructables.Entries.Select(e => Row(ObjectKind.Destructable, e, icons)))
@@ -246,12 +274,32 @@ public partial class PaletteView : UserControl, IMapPanel
         });
     }
 
-    private static PaletteRow Row(ObjectKind kind, PaletteEntry e, PaletteIconLoader icons) =>
+    private static PaletteRow Row(ObjectKind kind, PaletteEntry e, PaletteIconLoader icons,
+        int placedCount = 0, bool inScript = false) =>
         new()
         {
             Kind = kind, Rawcode = e.Rawcode, Name = e.Name, Source = e.Source,
-            IconPath = e.IconPath, IconLoader = icons,
+            IconPath = e.IconPath, IconLoader = icons, PlacedCount = placedCount, InScript = inScript,
         };
+
+    /// <summary>The set of 4-character rawcodes the map script references, from its 'xxxx'
+    /// FourCC literals. One scan yields an O(1) "is this type used by the script" lookup - the
+    /// usage signal for maps that spawn units at runtime rather than pre-placing them.</summary>
+    private static HashSet<string> ScriptRawcodes(Wc3.Model.MapDocument doc)
+    {
+        var codes = new HashSet<string>(StringComparer.Ordinal);
+        if (doc.GetFile("war3map.j")?.RawBytes is not { Length: > 0 } bytes)
+            return codes;
+        var text = System.Text.Encoding.UTF8.GetString(bytes);
+        for (int i = 0; i + 5 < text.Length; i++)
+            if (text[i] == '\'' && text[i + 5] == '\'')
+            {
+                var code = text.Substring(i + 1, 4);
+                if (code.All(c => c is (>= 'A' and <= 'Z') or (>= 'a' and <= 'z') or (>= '0' and <= '9')))
+                    codes.Add(code);
+            }
+        return codes;
+    }
 
     private void OnSearchChanged(object? sender, TextChangedEventArgs e) => ApplyFilter();
     private void OnKindChanged(object? sender, SelectionChangedEventArgs e) => ApplyFilter();

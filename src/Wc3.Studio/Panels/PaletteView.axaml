@@ -94,6 +94,17 @@
                                                                TextTrimming="CharacterEllipsis"
                                                                VerticalAlignment="Center"
                                                                TextAlignment="Center"/>
+                                                    <!-- "in use" badge: the count when placed, a tick
+                                                         when only script-referenced. Marks the
+                                                         look-alike rawcode that is actually used. -->
+                                                    <Border IsVisible="{Binding IsUsed}"
+                                                            Background="#CC1E7A34" CornerRadius="3"
+                                                            Padding="3,0" Margin="0,2,2,0"
+                                                            HorizontalAlignment="Right" VerticalAlignment="Top">
+                                                        <TextBlock Text="{Binding UsageBadge}"
+                                                                   FontSize="10" FontWeight="Bold"
+                                                                   Foreground="White"/>
+                                                    </Border>
                                                 </Panel>
                                             </Border>
                                         </DataTemplate>
