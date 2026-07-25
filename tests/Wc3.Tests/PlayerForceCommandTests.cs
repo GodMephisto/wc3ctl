@@ -12,13 +12,15 @@ public class PlayerForceCommandTests
     private const string CorpusMapPath =
         @"C:\Users\GodMephisto\Documents\Warcraft III\Maps\Download\GGGA_V0.02a.w3x";
 
-    /// <summary>Blank map whose parsed MapInfo is seeded with three players and two
-    /// forces (players 0+1 in force 0, player 2 in force 1) — BlankMap itself
-    /// synthesizes an empty player/force list, so the fixture adds its own.</summary>
+    /// <summary>Blank map whose parsed MapInfo is seeded with exactly three players and two
+    /// forces (players 0 and 1 in force 0, player 2 in force 1). BlankMap now ships one default
+    /// player and force, so the fixture clears those first to control the exact set.</summary>
     private static MapDocument Fixture()
     {
         var doc = BlankMap.Create();
         var info = (MapInfo)doc.GetFile(MapInfoCommand.FileName)!.Model!;
+        info.Players.Clear();
+        info.Forces.Clear();
 
         for (int id = 0; id < 3; id++)
         {
@@ -95,8 +97,12 @@ public class PlayerForceCommandTests
     [Fact]
     public void GetPlayersAndForces_AreEmptyWhenInfoHasNone()
     {
-        // BlankMap synthesizes empty player/force lists — the read APIs must not throw.
+        // The read APIs must not throw when a map defines no players or forces. BlankMap now
+        // ships one default player and force, so clear them to exercise the empty path.
         var doc = BlankMap.Create();
+        var info = (MapInfo)doc.GetFile(MapInfoCommand.FileName)!.Model!;
+        info.Players.Clear();
+        info.Forces.Clear();
         Assert.Empty(PlayerForceCommand.GetPlayers(doc));
         Assert.Empty(PlayerForceCommand.GetForces(doc));
     }

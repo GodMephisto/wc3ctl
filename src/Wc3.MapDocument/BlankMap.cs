@@ -1,5 +1,6 @@
 // src/Wc3.MapDocument/BlankMap.cs
 using System.Globalization;
+using System.Numerics;
 using System.Reflection;
 using System.Text;
 using War3Net.Build;
@@ -72,16 +73,43 @@ public static class BlankMap
         // which never emits a preamble, so this only affects the script file.
         var enc = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
 
+        // World-Z half-extent of the map (each tile is 128 world units, centred on origin).
+        float half = o.TileEdge * 64f;
         var info = new MapInfo(o.InfoVersion)
         {
             MapName = o.MapName,
             MapAuthor = o.MapAuthor,
             MapDescription = o.MapDescription,
             RecommendedPlayers = o.RecommendedPlayers,
-            // Explicit (it is also the enum default): GetScriptFile names the script
-            // file off this — Jass → "war3map.j".
+            // Explicit (it is also the enum default). GetScriptFile names the script file off
+            // this, Jass gives "war3map.j".
             ScriptLanguage = ScriptLanguage.Jass,
+            // Warcraft III will not list or load a map that has no playable area, no camera
+            // bounds, or no players, so a blank map must carry real ones. Without these a
+            // freshly created map never shows up in the game's map picker.
+            PlayableMapAreaWidth = o.TileEdge,
+            PlayableMapAreaHeight = o.TileEdge,
+            CameraBounds = new Quadrilateral(-half, half, half, -half),
+            CameraBoundsComplements = new RectangleMargins(0, 0, 0, 0),
+            MapFlags = MapFlags.MeleeMap,
+            Tileset = (Tileset)(byte)o.TilesetCode,
         };
+        // One playable slot (red, human, user) at the centre, in a single force. Matches what
+        // the JASS skeleton sets up with SetPlayers(1) and DefineStartLocation(0, ...).
+        info.Players.Add(new PlayerData
+        {
+            Id = 0,
+            Controller = PlayerController.User,
+            Race = PlayerRace.Human,
+            Flags = 0,
+            Name = "Player 1",
+            StartPosition = new Vector2(0f, 0f),
+            AllyLowPriorityFlags = new Bitmask32(0),
+            AllyHighPriorityFlags = new Bitmask32(0),
+            EnemyLowPriorityFlags = new Bitmask32(0),
+            EnemyHighPriorityFlags = new Bitmask32(0),
+        });
+        info.Forces.Add(new ForceData { Flags = 0, Players = new Bitmask32(-1), Name = "Force 1" });
         EnsureSerializable(info);
 
         var env = BuildEnvironment(o.EnvironmentVersion, o.TileEdge, o.TilesetCode);
