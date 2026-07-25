@@ -42,6 +42,8 @@ public class CliMcpParityTests
         ["player_set_force"] = "player set-force",
         ["force_list"] = "force list",
         ["force_set_flags"] = "force set-flags",
+        ["region_list"] = "region list",
+        ["region_remove"] = "region remove",
         ["new_map"] = "new",
         ["terrain_stats"] = "terrain stats",
         ["terrain_deform"] = "terrain deform",

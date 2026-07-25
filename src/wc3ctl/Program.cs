@@ -1172,6 +1172,33 @@ public static class Program
         var trigger = new Command("trigger", "GUI trigger tooling (World-Editor catalog).");
         trigger.AddCommand(trigCatalog);
 
+        // ---- region: list and remove regions (war3map.w3r). Add via 'place region' ----
+        var regionList = new Command("list", "List the map's regions.") { mapArg };
+        regionList.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var regions = PlacementCommand.ListRegions(MapDocument.Load(p.GetValueForArgument(mapArg)));
+            Emit(p.GetValueForOption(jsonOption), regions,
+                () => regions.Count == 0 ? "(no regions)" : string.Join("\n", regions.Select(rg =>
+                    $"[{rg.CreationNumber}] {rg.Name}  [{rg.Left:0},{rg.Bottom:0}]..[{rg.Right:0},{rg.Top:0}]")));
+        }));
+
+        var regionNameArg = new Argument<string>("name", "Region name to remove.");
+        var regionRemove = new Command("remove", "Remove a region by name and save the edited map.")
+        { mapArg, regionNameArg, setOut };
+        regionRemove.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = PlacementCommand.RemoveRegion(doc, p.GetValueForArgument(regionNameArg));
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message);
+        }));
+
+        var region = new Command("region", "Region tooling for war3map.w3r, list and remove. Add via 'place region'.");
+        region.AddCommand(regionList);
+        region.AddCommand(regionRemove);
+
         root.AddCommand(info); root.AddCommand(ls); root.AddCommand(rt);
         root.AddCommand(search); root.AddCommand(diff); root.AddCommand(obj);
         root.AddCommand(extract); root.AddCommand(render); root.AddCommand(renderModel);
@@ -1180,7 +1207,7 @@ public static class Program
         root.AddCommand(place); root.AddCommand(palette); root.AddCommand(terrain);
         root.AddCommand(sound); root.AddCommand(camera); root.AddCommand(pathing);
         root.AddCommand(mapInfo); root.AddCommand(player); root.AddCommand(force);
-        root.AddCommand(newMap); root.AddCommand(trigger);
+        root.AddCommand(region); root.AddCommand(newMap); root.AddCommand(trigger);
 
         return root;
     }
