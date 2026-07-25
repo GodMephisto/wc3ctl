@@ -6,12 +6,18 @@ using Avalonia.Layout;
 using Avalonia.Threading;
 using Wc3.Commands;
 using Wc3.Model;
+using Wc3.Studio.Controls;
+using Wc3.Studio.Dialogs;
 using Wc3.Studio.Panels;
 
 namespace Wc3.Studio;
 
 public partial class MainWindow : Window
 {
+    /// <summary>Persisted install/map folders, loaded once at startup and applied to both
+    /// workspaces and the shared file picker (see <see cref="ApplySettings"/>).</summary>
+    private StudioSettings _settings = StudioSettings.Load();
+
     public MainWindow()
     {
         InitializeComponent();
@@ -20,7 +26,30 @@ public partial class MainWindow : Window
         TargetWorkspace.MapChanged += OnWorkspaceMapChanged;
         SourceWorkspace.PortRequested += OnPortRequested;
         SourceWorkspace.PortPreviewRequested += OnPortPreviewRequested;
+        ApplySettings();
         Opened += OnOpenedAutoLoad;
+    }
+
+    /// <summary>Pushes the saved folders into the running app: the Warcraft III install goes to
+    /// both map sessions (null keeps auto-detect), and the map folder seeds the shared picker so
+    /// Open Map starts there. Called at startup and after the Settings dialog saves.</summary>
+    private void ApplySettings()
+    {
+        SourceWorkspace.Session.GameDir = _settings.GameDir;
+        TargetWorkspace.Session.GameDir = _settings.GameDir;
+        FilePicker.SeedLastDirectory(_settings.MapsDir);
+    }
+
+    private async void OnSettingsClick(object? sender, RoutedEventArgs e)
+    {
+        var updated = await new SettingsDialog(_settings).ShowDialog<StudioSettings?>(this);
+        if (updated is null)
+            return; // cancelled, nothing changes
+
+        _settings = updated;
+        _settings.Save();
+        ApplySettings();
+        StatusText.Text = "Settings saved. The Warcraft III install and map folder are remembered for next time.";
     }
 
     /// <summary>Dev/QA convenience: <c>Wc3.Studio.exe --open &lt;map&gt; [--open-target &lt;map&gt;]</c>
