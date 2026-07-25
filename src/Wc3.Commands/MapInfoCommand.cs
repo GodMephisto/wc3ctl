@@ -8,10 +8,12 @@ using War3Net.Build.Info;
 
 namespace Wc3.Commands;
 
-/// <summary>Editable snapshot of war3map.w3i. String fields are raw (TRIGSTR_ keys are
-/// NOT resolved. Resolving would break the reference on write-back). Colors are
-/// "R,G,B,A" byte strings. Tileset, light environment, weather and fog style carry the
-/// War3Net enum name (an unknown weather id degrades to its raw 4-letter code).
+/// <summary>Editable snapshot of war3map.w3i. Text fields (name, author, description,
+/// loading/prologue) are resolved against war3map.wts so callers show real text, not the raw
+/// TRIGSTR_ key. Front-ends diff against this snapshot and only write changed fields, so an
+/// untouched TRIGSTR reference is preserved on save. Colors are "R,G,B,A" byte strings.
+/// Tileset, light environment, weather and fog style carry the War3Net enum name (an unknown
+/// weather id degrades to its raw 4-letter code).
 /// Fields the map's w3i format version predates read as defaults, and setting them
 /// does not change the file bytes (the writer only emits what the version carries).
 /// CameraBounds and the playable dimensions are informational and read-only.</summary>
@@ -138,7 +140,7 @@ public static class MapInfoCommand
                 ((int)s).ToString(CultureInfo.InvariantCulture)))
             .ToList();
 
-    public static MapInfoFields Read(MapDocument doc) => ToFields(GetInfo(doc));
+    public static MapInfoFields Read(MapDocument doc) => ToFields(GetInfo(doc), MapStrings.From(doc));
 
     /// <summary>Sets one editable field and writes the re-serialized w3i back into the
     /// in-memory document (persisted on the next Save). Returns the updated snapshot.</summary>
@@ -151,7 +153,7 @@ public static class MapInfoCommand
         // it so in-memory readers keep seeing the mutated MapInfo. The two stay
         // consistent — the override bytes were serialized from this very model.
         entry.Model = info;
-        return ToFields(info);
+        return ToFields(info, MapStrings.From(doc));
     }
 
     /// <summary>Pure field mapping onto the War3Net model (hermetically testable).
@@ -213,11 +215,18 @@ public static class MapInfoCommand
         ?? throw new InvalidOperationException(
             $"{FileName} is missing or could not be parsed; map info is not editable.");
 
-    private static MapInfoFields ToFields(MapInfo info) => new(
-        MapName: info.MapName ?? string.Empty,
-        Author: info.MapAuthor ?? string.Empty,
-        Description: info.MapDescription ?? string.Empty,
-        RecommendedPlayers: info.RecommendedPlayers ?? string.Empty,
+    // The identity/loading/prologue fields can be TRIGSTR_ references into war3map.wts (the
+    // World Editor stores "Gutsy Geoid Game" as e.g. TRIGSTR_4084). Resolve them for display
+    // so the panel shows real text, not the raw key - the reason Map Info looked "erased".
+    // Non-TRIGSTR values pass through unchanged, so codes/hex fields stay as-is.
+    private static MapInfoFields ToFields(MapInfo info, MapStrings strings)
+    {
+        string R(string? s) => strings.Resolve(s ?? string.Empty);
+        return new(
+        MapName: R(info.MapName),
+        Author: R(info.MapAuthor),
+        Description: R(info.MapDescription),
+        RecommendedPlayers: R(info.RecommendedPlayers),
         PlayableWidth: info.PlayableMapAreaWidth,
         PlayableHeight: info.PlayableMapAreaHeight,
         Players: info.Players?.Count ?? 0,
@@ -234,12 +243,12 @@ public static class MapInfoCommand
         FogColor: ColorText(info.FogColor),
         LoadingScreenIndex: info.LoadingScreenBackgroundNumber,
         LoadingScreenPath: info.LoadingScreenPath ?? string.Empty,
-        LoadingScreenTitle: info.LoadingScreenTitle ?? string.Empty,
-        LoadingScreenSubtitle: info.LoadingScreenSubtitle ?? string.Empty,
-        LoadingScreenText: info.LoadingScreenText ?? string.Empty,
-        PrologueTitle: info.PrologueScreenTitle ?? string.Empty,
-        PrologueSubtitle: info.PrologueScreenSubtitle ?? string.Empty,
-        PrologueText: info.PrologueScreenText ?? string.Empty,
+        LoadingScreenTitle: R(info.LoadingScreenTitle),
+        LoadingScreenSubtitle: R(info.LoadingScreenSubtitle),
+        LoadingScreenText: R(info.LoadingScreenText),
+        PrologueTitle: R(info.PrologueScreenTitle),
+        PrologueSubtitle: R(info.PrologueScreenSubtitle),
+        PrologueText: R(info.PrologueScreenText),
         MeleeMap: Has(info, MapFlags.MeleeMap),
         HideMinimapInPreview: Has(info, MapFlags.HideMinimapInPreviewScreens),
         ModifyAllyPriorities: Has(info, MapFlags.ModifyAllyPriorities),
@@ -255,6 +264,7 @@ public static class MapInfoCommand
         HasWaterTint: Has(info, MapFlags.HasWaterTintingColor),
         ItemClassification: Has(info, MapFlags.UseItemClassificationSystem),
         AccurateProbabilities: Has(info, MapFlags.AccurateProbabilityForCalculations));
+    }
 
     private static bool Has(MapInfo info, MapFlags bit) => (info.MapFlags & bit) != 0;
 

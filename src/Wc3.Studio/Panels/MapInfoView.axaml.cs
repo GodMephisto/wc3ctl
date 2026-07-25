@@ -61,8 +61,10 @@ public partial class MapInfoView : UserControl, IMapPanel
 
         _loaded = f;
         var inv = CultureInfo.InvariantCulture;
-        // TRIGSTR_ keys stay raw in the boxes (editing must keep the reference); the
-        // wts-resolved text shows as the row hint instead.
+        // MapInfoCommand.Read resolves TRIGSTR_ references against war3map.wts, so the boxes
+        // show real text (the map title, not "TRIGSTR_4084"). Apply diffs against these loaded
+        // values, so an untouched field is never rewritten and its TRIGSTR reference survives;
+        // editing a field replaces it with the typed literal.
         var strings = MapStrings.From(doc);
 
         SizeText.Text = $"Playable area {f.PlayableWidth} x {f.PlayableHeight}, {f.Players} player slot(s)";

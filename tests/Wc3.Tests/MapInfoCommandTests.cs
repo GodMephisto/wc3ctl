@@ -3,7 +3,9 @@ using System.Drawing;
 using System.Numerics;
 using System.Text;
 using War3Net.Build.Common;
+using War3Net.Build.Extensions;
 using War3Net.Build.Info;
+using War3Net.Build.Script;
 using Wc3.Commands;
 using Wc3.Model;
 
@@ -78,6 +80,35 @@ public class MapInfoCommandTests
         foreach (var (name, bytes) in extraFiles ?? new Dictionary<string, byte[]>())
             files[name] = bytes;
         return MapDocument.Load(SyntheticMap.Build(files));
+    }
+
+    private static byte[] Wts(params (uint Key, string Value)[] entries)
+    {
+        var wts = new TriggerStrings();
+        foreach (var (key, value) in entries)
+            wts.Strings.Add(new TriggerString { Key = key, Value = value });
+        using var ms = new MemoryStream();
+        using (var sw = new StreamWriter(ms, Encoding.UTF8, leaveOpen: true)) sw.WriteTriggerStrings(wts);
+        return ms.ToArray();
+    }
+
+    [Fact]
+    public void Read_resolves_trigstr_names_against_the_wts()
+    {
+        // The World Editor stores the map title as a TRIGSTR_ reference into war3map.wts.
+        // Read must resolve it so the panel shows real text ("Gutsy Geoid Game"), not the raw
+        // key - the reason Map Info looked erased. Unresolved keys just fall through.
+        var info = BuildInfo();
+        info.MapName = "TRIGSTR_100";
+        info.MapAuthor = "TRIGSTR_101";
+        var doc = LoadSynthetic(info, new Dictionary<string, byte[]>
+        {
+            ["war3map.wts"] = Wts((100u, "Gutsy Geoid Game"), (101u, "GodMephisto")),
+        });
+
+        var fields = MapInfoCommand.Read(doc);
+        Assert.Equal("Gutsy Geoid Game", fields.MapName);
+        Assert.Equal("GodMephisto", fields.Author);
     }
 
     [Fact]
