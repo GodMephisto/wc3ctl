@@ -55,6 +55,18 @@
                     <TextBlock Name="PositionText" Foreground="#8FA3B8"
                                Margin="0,0,0,6" Text=""/>
 
+                    <!-- The unit type's abilities, resolved to names (UnitAbilitiesCommand). -->
+                    <TextBlock Name="AbilitiesHeader" FontWeight="SemiBold" FontSize="11"
+                               Text="Abilities" Margin="0,2,0,0"/>
+                    <ItemsControl Name="AbilitiesList" Margin="0,0,0,6">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding}" FontSize="11" Foreground="#8FA3B8"
+                                           TextTrimming="CharacterEllipsis"/>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
                     <c:LabeledField Label="Owner">
                         <c:LabeledField.FieldContent>
                             <c:OwnerTeamPicker Name="OwnerPicker"/>

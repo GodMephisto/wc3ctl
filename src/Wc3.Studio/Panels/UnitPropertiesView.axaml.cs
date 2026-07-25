@@ -222,6 +222,16 @@ public partial class UnitPropertiesView : UserControl, IMapPanel
         ScaleYBox.Text = info.Scale.Sy.ToString("0.###", inv);
         ScaleZBox.Text = info.Scale.Sz.ToString("0.###", inv);
         FacingBox.Text = (info.Rotation * 180.0 / Math.PI).ToString("0.##", inv);
+
+        // The unit type's abilities, resolved from rawcodes to names so a character's
+        // spells are actually readable (game-data is already warm from TypeLabel above).
+        var abilities = UnitAbilitiesCommand.ForUnitType(doc, info.TypeRawcode, _session?.GameDir);
+        var abilityLabels = abilities
+            .Select(a => (a.Name ?? a.Rawcode) + (a.IsHeroAbility ? "  (hero)" : ""))
+            .ToList();
+        AbilitiesList.ItemsSource = abilityLabels;
+        AbilitiesHeader.Text = abilityLabels.Count == 0 ? "Abilities: none" : $"Abilities ({abilityLabels.Count})";
+
         StatusText.Text = "";
         PlaceholderText.IsVisible = false;
         ContentRoot.IsVisible = true;
