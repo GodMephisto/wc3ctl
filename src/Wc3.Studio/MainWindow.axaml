@@ -27,12 +27,15 @@
                        Text="Open a source map (port from) and a target map (port into)."/>
         </Border>
 
-        <!-- Center: two fully independent map workspaces, source | target. -->
-        <Grid ColumnDefinitions="*,Auto,*">
+        <!-- Center: two fully independent map workspaces, source | target. The Target pane
+             starts hidden (columns 1 and 2 collapsed to 0 width) so a single map fills the
+             window; it is revealed by RevealTargetPane on Open Target / Port. -->
+        <Grid Name="PanesGrid" ColumnDefinitions="*,0,0">
             <panels:MapWorkspaceView Grid.Column="0" Name="SourceWorkspace" Role="Source"/>
-            <GridSplitter Grid.Column="1" Width="4" ResizeDirection="Columns"
-                          Background="#33555555"/>
-            <panels:MapWorkspaceView Grid.Column="2" Name="TargetWorkspace" Role="Target"/>
+            <GridSplitter Grid.Column="1" Name="PaneSplitter" Width="4" ResizeDirection="Columns"
+                          Background="#33555555" IsVisible="False"/>
+            <panels:MapWorkspaceView Grid.Column="2" Name="TargetWorkspace" Role="Target"
+                                     IsVisible="False"/>
         </Grid>
 
     </DockPanel>

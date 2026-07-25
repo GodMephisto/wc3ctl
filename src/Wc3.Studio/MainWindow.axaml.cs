@@ -35,7 +35,10 @@ public partial class MainWindow : Window
             if (string.Equals(args[i], "--open", StringComparison.OrdinalIgnoreCase))
                 TryOpen(SourceWorkspace, args[i + 1]);
             else if (string.Equals(args[i], "--open-target", StringComparison.OrdinalIgnoreCase))
+            {
+                RevealTargetPane();
                 TryOpen(TargetWorkspace, args[i + 1]);
+            }
         }
 
         // After the maps load, optionally select a Source tab / dock sub-tab so a panel
@@ -75,8 +78,24 @@ public partial class MainWindow : Window
     private async void OnOpenSourceMapClick(object? sender, RoutedEventArgs e) =>
         await SourceWorkspace.PickAndOpenMapAsync();
 
-    private async void OnOpenTargetMapClick(object? sender, RoutedEventArgs e) =>
+    private async void OnOpenTargetMapClick(object? sender, RoutedEventArgs e)
+    {
+        RevealTargetPane();
         await TargetWorkspace.PickAndOpenMapAsync();
+    }
+
+    /// <summary>Reveals the Target pane (and the splitter) the first time it is needed - opening
+    /// a target map or porting. The window starts as a single Source pane so one map fills it;
+    /// pressing Port or Open Target brings the second pane in as a half-width split.</summary>
+    private void RevealTargetPane()
+    {
+        if (TargetWorkspace.IsVisible)
+            return;
+        PanesGrid.ColumnDefinitions[1].Width = new GridLength(4);
+        PanesGrid.ColumnDefinitions[2].Width = new GridLength(1, GridUnitType.Star);
+        PaneSplitter.IsVisible = true;
+        TargetWorkspace.IsVisible = true;
+    }
 
     private void OnExitClick(object? sender, RoutedEventArgs e) => Close();
 
@@ -107,15 +126,21 @@ public partial class MainWindow : Window
     /// works on a fresh reload of each map on disk, so the open sessions stay untouched
     /// and the result is written to a sibling &lt;target&gt;.ported.&lt;ext&gt; (never clobbers).
     /// </summary>
-    private async void OnPortRequested(object? sender, string rawcode) =>
+    private async void OnPortRequested(object? sender, string rawcode)
+    {
+        RevealTargetPane(); // pressing Port brings in the Target pane so a map can be set up there
         await RunPort(rawcode, dryRun: false);
+    }
 
     /// <summary>
     /// Dry-run preview: computes the identical report through PortCommand.PreviewPort
     /// (same code path as the real port) and shows it — nothing is written anywhere.
     /// </summary>
-    private async void OnPortPreviewRequested(object? sender, string rawcode) =>
+    private async void OnPortPreviewRequested(object? sender, string rawcode)
+    {
+        RevealTargetPane();
         await RunPort(rawcode, dryRun: true);
+    }
 
     private async Task RunPort(string rawcode, bool dryRun)
     {
