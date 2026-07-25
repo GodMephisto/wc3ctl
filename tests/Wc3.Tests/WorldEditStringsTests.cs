@@ -68,4 +68,30 @@ public class WorldEditStringsTests
         Assert.True(wes.TryGet("WESTRING_A", out var val));
         Assert.Equal("a", val);
     }
+
+    [Fact]
+    public void FromByteSources_merges_files_and_skips_nulls()
+    {
+        // The real use: worldeditstrings.txt (UI labels) + worldeditgamestrings.txt
+        // (WESTRING_DEST_* / WESTRING_DOODAD_* object names) merged into one table.
+        byte[] Ui(string s) => System.Text.Encoding.UTF8.GetBytes(s);
+        var wes = WorldEditStrings.FromByteSources(
+            Ui("[WorldEditStrings]\nWESTRING_UI_LABEL=Label\n"),
+            null, // a missing file is simply skipped
+            Ui("[WorldEditGameStrings]\nWESTRING_DEST_SUMMER_TREE_WALL=Summer Tree Wall\n"));
+
+        Assert.True(wes.TryGet("WESTRING_UI_LABEL", out var label));
+        Assert.Equal("Label", label);
+        Assert.True(wes.TryGet("WESTRING_DEST_SUMMER_TREE_WALL", out var tree));
+        Assert.Equal("Summer Tree Wall", tree);
+    }
+
+    [Fact]
+    public void FromByteSources_later_file_overrides_earlier_key()
+    {
+        byte[] Ui(string s) => System.Text.Encoding.UTF8.GetBytes(s);
+        var wes = WorldEditStrings.FromByteSources(Ui("WESTRING_A=first\n"), Ui("WESTRING_A=second\n"));
+        Assert.True(wes.TryGet("WESTRING_A", out var val));
+        Assert.Equal("second", val);
+    }
 }

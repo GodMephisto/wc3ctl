@@ -10,6 +10,9 @@ namespace Wc3.GameData;
 public static class GameData
 {
     private const string WorldEditStringsPath = @"war3.w3mod:_locales\enus.w3mod:ui\worldeditstrings.txt";
+    // Object names for destructables/doodads (WESTRING_DEST_* / WESTRING_DOODAD_*) live in
+    // this parallel file, not worldeditstrings.txt, so both are merged into one Strings table.
+    private const string WorldEditGameStringsPath = @"war3.w3mod:_locales\enus.w3mod:ui\worldeditgamestrings.txt";
 
     // Base game data (SLK tables, editor strings) is assumed stable for the process
     // lifetime, so successful builds are cached per resolved install directory and
@@ -41,8 +44,9 @@ public static class GameData
                 catch (Exception ex) { diags.Add($"could not read base {type} data: {ex.Message}"); return ObjectDataStore.Empty; }
             }
 
-            var wesBytes = src!.ReadFile(WorldEditStringsPath);
-            var strings = wesBytes is null ? WorldEditStrings.Parse("") : WorldEditStrings.FromBytes(wesBytes);
+            var strings = WorldEditStrings.FromByteSources(
+                src!.ReadFile(WorldEditStringsPath),
+                src!.ReadFile(WorldEditGameStringsPath));
             // Profile TXT stores fill the fields the metadata SLKs mark "Profile"
             // (names, tooltips, art refs). Buff sections live inside the ability
             // profile files, so those two kinds share one store.
