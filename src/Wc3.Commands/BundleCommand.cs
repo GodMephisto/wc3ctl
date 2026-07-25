@@ -228,7 +228,7 @@ public static class BundleCommand
             .OrderBy(rc => rc, StringComparer.Ordinal)
             .Prepend(rootRawcode)
             .ToList();
-        var functions = ResolveScriptClosure(doc, seedRawcodes, diagnostics);
+        var functions = ResolveScriptClosure(doc, seedRawcodes, diagnostics, AddFileRef);
 
         return new UnitBundle(
             rootRawcode,
@@ -248,6 +248,11 @@ public static class BundleCommand
     private const int MaxFunctions = 4000;
 
     private static readonly Regex Identifier = new(@"[A-Za-z_][A-Za-z0-9_]*", RegexOptions.Compiled);
+
+    /// <summary>A double-quoted JASS string literal (captures the inner text). Used to pull
+    /// asset paths out of spell handlers - AddSpecialEffect("war3mapImported\\x.mdx") and the
+    /// like - so trigger-driven skill models get carried by the port.</summary>
+    private static readonly Regex StringLiteral = new("\"([^\"]*)\"", RegexOptions.Compiled);
 
     /// <summary>A global declaration with an initializer: "[constant] type Name = ...".</summary>
     private static readonly Regex GlobalInitializer =
@@ -270,7 +275,8 @@ public static class BundleCommand
     /// are not analyzed.
     /// </summary>
     private static IReadOnlyList<BundleFunction> ResolveScriptClosure(
-        MapDocument doc, IReadOnlyList<string> seedRawcodes, List<string> diagnostics)
+        MapDocument doc, IReadOnlyList<string> seedRawcodes, List<string> diagnostics,
+        Action<string, string, string> addFileRef)
     {
         var entry = doc.GetFile("war3map.j") ?? doc.GetFile("scripts\\war3map.j");
         if (entry is null)
@@ -379,6 +385,19 @@ public static class BundleCommand
             }
         }
         if (capped) diagnostics.Add($"function cap ({MaxFunctions}) reached — script closure truncated");
+
+        // Custom skills are usually trigger-driven: the visual effect models live as string
+        // literals inside the spell handlers (AddSpecialEffect("war3mapImported\\x.mdx"), dummy
+        // unit model swaps, ...), NOT in the ability object fields. Scan every closure function
+        // body for asset-path literals so those models/textures/sounds port along with the skill.
+        foreach (var name in reasons.Keys)
+            foreach (Match sl in StringLiteral.Matches(bodies[name]))
+            {
+                // Unescape JASS string escapes: a path in source is "war3mapImported\\x.mdx"
+                // (doubled backslashes) but the map stores it single-slashed, so match that.
+                var path = sl.Groups[1].Value.Replace(@"\\", @"\");
+                if (LooksLikeAssetPath(path)) addFileRef(name, path, "script");
+            }
 
         return reasons
             .Select(kv => new BundleFunction(kv.Key, byName[kv.Key].StartLine, byName[kv.Key].EndLine, kv.Value))
