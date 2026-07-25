@@ -190,6 +190,32 @@ public class SoundCommandTests
         Assert.Empty(SoundCommand.List(doc));
     }
 
+    [Fact]
+    public void ImportedAudioFiles_lists_only_audio_assets_sorted()
+    {
+        // A map can be full of imported audio yet define no sounds - this surfaces those files
+        // (the World Editor's Import Manager) so they can be turned into definitions.
+        var doc = MapDocument.Load(SyntheticMap.Build(new Dictionary<string, byte[]>
+        {
+            [@"Voices\Reimu\Reimu_Book.mp3"] = new byte[] { 1 },
+            [@"Units\Human\Attack1.wav"] = new byte[] { 2 },
+            [@"war3map.j"] = new byte[] { 3 },              // not audio
+            [@"Textures\foo.blp"] = new byte[] { 4 },        // not audio
+        }));
+
+        var audio = SoundCommand.ImportedAudioFiles(doc);
+        Assert.Equal(new[] { @"Units\Human\Attack1.wav", @"Voices\Reimu\Reimu_Book.mp3" }, audio);
+    }
+
+    [Theory]
+    [InlineData(@"Voices\Reimu\Reimu_Book.mp3", "gg_snd_Reimu_Book")]
+    [InlineData(@"a b-c.wav", "gg_snd_a_b_c")]
+    [InlineData("plain.ogg", "gg_snd_plain")]
+    public void SoundNameForFile_derives_a_clean_label(string path, string expected)
+    {
+        Assert.Equal(expected, SoundCommand.SoundNameForFile(path));
+    }
+
     // ---- pure ApplyField mapping ----
 
     [Fact]

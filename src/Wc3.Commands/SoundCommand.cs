@@ -38,6 +38,37 @@ public static class SoundCommand
             ? s.Sounds.Select(ToFields).ToList()
             : Array.Empty<SoundFields>();
 
+    /// <summary>Audio file extensions the World Editor imports as sounds.</summary>
+    private static readonly string[] AudioExtensions =
+        { ".mp3", ".wav", ".flac", ".ogg", ".aif", ".aiff", ".mid" };
+
+    /// <summary>
+    /// The map's imported audio FILES (raw assets in the archive, the World Editor's Import
+    /// Manager), sorted by path. These are distinct from the sound DEFINITIONS <see cref="List"/>
+    /// returns: a definition (war3map.w3s) names a file and gives it volume/channel/3D settings
+    /// so triggers and units can play it. A map can be packed with audio yet define no sounds -
+    /// so this is what makes the imported mp3/wav visible next to the (often empty) definitions.
+    /// </summary>
+    public static IReadOnlyList<string> ImportedAudioFiles(MapDocument doc) =>
+        doc.Files
+            .Select(f => f.FileName)
+            .Where(n => n is not null
+                && AudioExtensions.Any(e => n.EndsWith(e, StringComparison.OrdinalIgnoreCase)))
+            .Select(n => n!)
+            .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+    /// <summary>A World-Editor-style sound label derived from a file path: the bare file name
+    /// (no folders, no extension) prefixed with <c>gg_snd_</c>, non-identifier chars replaced
+    /// with underscores. Callers ensure uniqueness (Add rejects a duplicate name).</summary>
+    public static string SoundNameForFile(string filePath)
+    {
+        var stem = Path.GetFileNameWithoutExtension(filePath ?? "");
+        var cleaned = new string((stem ?? "").Select(c => char.IsLetterOrDigit(c) ? c : '_').ToArray());
+        if (cleaned.Length == 0) cleaned = "sound";
+        return "gg_snd_" + cleaned;
+    }
+
     public static SoundOpResult Add(MapDocument doc, string name, string? file)
     {
         if (string.IsNullOrWhiteSpace(name))
