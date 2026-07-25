@@ -16,14 +16,16 @@ public class McpServerTests
     // Underscore (0x5F) sorts before lowercase letters, so families group naturally.
     private static readonly string[] ExpectedTools =
     {
-        "bundle_unit", "list_files", "map_info",
+        "bundle_unit", "camera_add", "camera_list", "camera_remove",
+        "camera_set", "force_list", "force_set_flags", "list_files",
+        "map_info", "map_info_get", "map_info_set", "new_map",
         "object_get", "object_list", "object_new", "object_set",
-        "palette_doodad", "place_doodad", "place_region", "place_start_location", "place_unit",
-        "port_unit", "render_model",
-        "sound_add", "sound_list", "sound_remove", "sound_set",
-        "terrain_blight", "terrain_cliff", "terrain_deform", "terrain_paint",
-        "terrain_ramp", "terrain_stats", "terrain_water",
-        "trigger_catalog_describe", "trigger_catalog_list",
+        "palette_doodad", "pathing_paint", "place_doodad", "place_item",
+        "place_region", "place_start_location", "place_unit", "player_list",
+        "player_set_force", "port_unit", "render_model", "sound_add",
+        "sound_list", "sound_remove", "sound_set", "terrain_blight",
+        "terrain_cliff", "terrain_deform", "terrain_paint", "terrain_ramp",
+        "terrain_stats", "terrain_water", "trigger_catalog_describe", "trigger_catalog_list",
     };
 
     /// <summary>Runs the body against a live in-memory client/server session.</summary>

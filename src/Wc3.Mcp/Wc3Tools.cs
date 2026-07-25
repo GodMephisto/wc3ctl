@@ -233,6 +233,23 @@ public static class Wc3Tools
             return (r.Ok, r.Message, r.CreationNumber);
         }));
 
+    [McpServerTool(Name = "place_item", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Place a preplaced item of the given type at world (x, y) and save the edited map to out_path. Items share war3mapUnits.doo with units (WC3 spawns a ground item because the rawcode is an item), so the item has no owning player. The input map is NEVER modified in place. Returns the assigned creation number.")]
+    public static PlacementToolResult PlaceItem(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map). Created/overwritten; parent directories are created as needed.")] string out_path,
+        [Description("Four-character item type rawcode, e.g. 'bspd' (Boots of Speed).")] string type_rawcode,
+        [Description("World X coordinate.")] float x,
+        [Description("World Y coordinate.")] float y,
+        [Description("Height above ground in world units. Default 0.")] float z = 0f,
+        [Description("Facing angle in radians. Default 0.")] float rotation = 0f,
+        [Description("Uniform scale. Default 1.")] float scale = 1f)
+        => Run(() => SavePlacement(map, out_path, doc =>
+        {
+            var r = PlacementCommand.PlaceItem(doc, type_rawcode, x, y, z, rotation, scale);
+            return (r.Ok, r.Message, r.CreationNumber);
+        }));
+
     // ---- terrain editing -------------------------------------------------
 
     private const string ShapeValues = "circle|square";
@@ -390,6 +407,175 @@ public static class Wc3Tools
         [Description("Sound definition name to remove.")] string name)
         => Run(() => SaveSound(map, out_path, doc => SoundCommand.Remove(doc, name)));
 
+    // ---- camera catalog (war3map.w3c) ------------------------------------
+
+    // Compile-time mirror of CameraCommand.EditableFields (attribute args must be const).
+    private const string CameraFieldValues =
+        "Name|TargetX|TargetY|ZOffset|Rotation|AngleOfAttack|TargetDistance|Roll|" +
+        "FieldOfView|FarClippingPlane|NearClippingPlane|LocalPitch|LocalYaw|LocalRoll";
+
+    [McpServerTool(Name = "camera_list", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("List the map's cameras (war3map.w3c): each camera's name, target position, rotation, angle of attack, distance and field of view.")]
+    public static IReadOnlyList<CameraFields> CameraList(
+        [Description("Path to a .w3x/.w3m map file.")] string map)
+        => Run(() => CameraCommand.List(LoadMap(map)));
+
+    [McpServerTool(Name = "camera_add", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Add a camera at a target position and save the edited map to out_path. The input map is NEVER modified in place. Rejects a blank or duplicate name.")]
+    public static EditToolResult CameraAdd(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Camera name (unique).")] string name,
+        [Description("Camera target X (world coordinate).")] float target_x,
+        [Description("Camera target Y (world coordinate).")] float target_y)
+        => Run(() => SaveEdit(map, out_path, doc =>
+        {
+            var r = CameraCommand.Add(doc, name, target_x, target_y);
+            return (r.Ok, r.Message);
+        }));
+
+    [McpServerTool(Name = "camera_set", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Set a field on a camera and save the edited map to out_path. The input map is NEVER modified in place. Editable fields: " + CameraFieldValues + ".")]
+    public static EditToolResult CameraSet(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Camera name to edit.")] string name,
+        [Description("Field to set: " + CameraFieldValues + ".")] string field,
+        [Description("New value (parsed to the field's type).")] string value)
+        => Run(() => SaveEdit(map, out_path, doc =>
+        {
+            var r = CameraCommand.Set(doc, name, field, value);
+            return (r.Ok, r.Message);
+        }));
+
+    [McpServerTool(Name = "camera_remove", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = false)]
+    [Description("Remove a camera and save the edited map to out_path. The input map is NEVER modified in place.")]
+    public static EditToolResult CameraRemove(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Camera name to remove.")] string name)
+        => Run(() => SaveEdit(map, out_path, doc =>
+        {
+            var r = CameraCommand.Remove(doc, name);
+            return (r.Ok, r.Message);
+        }));
+
+    // ---- pathing map (war3map.wpm) ---------------------------------------
+
+    private const string PathingFlagValues = "Walk|Fly|Build|Blight|Water";
+
+    [McpServerTool(Name = "pathing_paint", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Paint pathing bits over a circular or square brush and save the edited map to out_path. The input map is NEVER modified in place. Flags (comma-separated): " + PathingFlagValues + " - a SET bit RESTRICTS that capability (Walk set = ground units cannot walk there). op: set|clear|toggle.")]
+    public static EditToolResult PathingPaint(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Brush centre pathing-cell X (4 cells per terrain tile).")] int center_x,
+        [Description("Brush centre pathing-cell Y.")] int center_y,
+        [Description("Brush radius in pathing cells (>= 0).")] int radius,
+        [Description("Comma-separated pathing bits: " + PathingFlagValues + ".")] string flags,
+        [Description("How the bits combine: set|clear|toggle. Default set.")] string op = "set",
+        [Description("Brush footprint: circle|square. Default circle.")] string shape = "circle")
+        => Run(() => SaveEdit(map, out_path, doc =>
+        {
+            var flagText = (flags ?? "").Replace(" ", "");
+            if (!Enum.TryParse<War3Net.Build.Environment.PathingType>(flagText, ignoreCase: true, out var parsed))
+                throw new McpException($"invalid pathing flag(s) '{flags}'; expected a comma-separated subset of: " + PathingFlagValues);
+            var r = PathingCommand.Paint(doc, center_x, center_y, radius, parsed,
+                ParseEnum<PathingCommand.BrushOp>(op, "op"),
+                ParseEnum<PathingCommand.BrushShape>(shape, "shape"));
+            return (r.Ok, r.Ok ? $"{r.Message} ({r.CellsChanged} cells)" : r.Message);
+        }));
+
+    // ---- scenario: map-info, players, forces (war3map.w3i) ---------------
+
+    // Compile-time mirror of MapInfoCommand.EditableFields (attribute args must be const).
+    private const string MapInfoFieldValues =
+        "MapName|Author|Description|RecommendedPlayers|Tileset|LightEnvironment|GlobalWeather|" +
+        "SoundEnvironment|WaterTintColor|FogStyle|FogStartZ|FogEndZ|FogDensity|FogColor";
+
+    [McpServerTool(Name = "map_info_get", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Read the map's editable scenario fields (war3map.w3i): name, author, description, recommended players, tileset, environment, fog and the map-option flags. Richer than map_info; this is the field set map_info_set edits.")]
+    public static MapInfoFields MapInfoGet(
+        [Description("Path to a .w3x/.w3m map file.")] string map)
+        => Run(() => MapInfoCommand.Read(LoadMap(map)));
+
+    [McpServerTool(Name = "map_info_set", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Set a scenario field and save the edited map to out_path. The input map is NEVER modified in place. Editable fields: " + MapInfoFieldValues + " (and the map-option booleans).")]
+    public static EditToolResult MapInfoSet(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Field to set: " + MapInfoFieldValues + ".")] string field,
+        [Description("New value (parsed to the field's type).")] string value)
+        => Run(() => SaveEdit(map, out_path, doc =>
+        {
+            MapInfoCommand.Set(doc, field, value); // throws on bad field -> clean MCP error via Run
+            return (true, $"set {field} = {value}");
+        }));
+
+    [McpServerTool(Name = "player_list", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("List the map's player slots (war3map.w3i): each player's id, name, color, race, controller and whether its start position is fixed.")]
+    public static IReadOnlyList<PlayerInfo> PlayerList(
+        [Description("Path to a .w3x/.w3m map file.")] string map)
+        => Run(() => PlayerForceCommand.GetPlayers(LoadMap(map)));
+
+    [McpServerTool(Name = "player_set_force", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Move a player into a force (team) and save the edited map to out_path. The input map is NEVER modified in place.")]
+    public static EditToolResult PlayerSetForce(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Player id (0-based).")] int player_id,
+        [Description("Force index (0-based).")] int force_index)
+        => Run(() => SaveEdit(map, out_path, doc =>
+        {
+            var r = PlayerForceCommand.SetPlayerForce(doc, player_id, force_index);
+            return (r.Ok, r.Message);
+        }));
+
+    [McpServerTool(Name = "force_list", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("List the map's forces/teams (war3map.w3i): each force's index, name, member player ids and alliance/sharing flags.")]
+    public static IReadOnlyList<ForceInfo> ForceList(
+        [Description("Path to a .w3x/.w3m map file.")] string map)
+        => Run(() => PlayerForceCommand.GetForces(LoadMap(map)));
+
+    [McpServerTool(Name = "force_set_flags", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Set a force's alliance/sharing flags and save the edited map to out_path. The input map is NEVER modified in place.")]
+    public static EditToolResult ForceSetFlags(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Force index (0-based).")] int force_index,
+        [Description("Allied.")] bool allied,
+        [Description("Allied victory.")] bool allied_victory,
+        [Description("Shared vision.")] bool shared_vision,
+        [Description("Shared unit control.")] bool shared_unit_control,
+        [Description("Shared advanced unit control.")] bool shared_adv_unit_control)
+        => Run(() => SaveEdit(map, out_path, doc =>
+        {
+            var r = PlayerForceCommand.SetForceFlags(doc, force_index, allied, allied_victory,
+                shared_vision, shared_unit_control, shared_adv_unit_control);
+            return (r.Ok, r.Message);
+        }));
+
+    [McpServerTool(Name = "new_map", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Create a blank, World-Editor-openable map (.w3x) at out_path. No input map. Returns where it was written.")]
+    public static EditToolResult NewMap(
+        [Description("Output map file path to create.")] string out_path,
+        [Description("Map name. Default 'Blank Map'.")] string? name = null,
+        [Description("Playable size in tiles per edge. Default 32.")] int? tiles = null)
+        => Run(() =>
+        {
+            if (string.IsNullOrWhiteSpace(out_path)) throw new McpException("out_path is required");
+            var opts = new BlankMapOptions();
+            if (!string.IsNullOrEmpty(name)) opts = opts with { MapName = name! };
+            if (tiles is { } t) opts = opts with { TileEdge = t };
+            byte[] bytes;
+            try { bytes = BlankMap.CreateArchiveBytes(opts); }
+            catch (Exception ex) { throw new McpException(ex.Message); }
+            string full = Path.GetFullPath(out_path);
+            if (Path.GetDirectoryName(full) is { Length: > 0 } dir) Directory.CreateDirectory(dir);
+            File.WriteAllBytes(full, bytes);
+            return new EditToolResult(full, $"created \"{opts.MapName}\" ({opts.TileEdge}x{opts.TileEdge} tiles, {bytes.Length} bytes)");
+        });
+
     [McpServerTool(Name = "trigger_catalog_list", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("List GUI-trigger functions from the World-Editor catalog (UI\\TriggerData.txt), optionally filtered by kind and/or a name/display-name search. The catalog is read from an explicit file when given, otherwise from the installed game.")]
     public static TriggerCatalogListResult TriggerCatalogList(
@@ -495,6 +681,21 @@ public static class Wc3Tools
         return new SoundToolResult(full, r.Message);
     }
 
+    /// <summary>Load the map, apply an (Ok, Message) mutation, and save the edited copy to
+    /// out_path. Shared by the camera, pathing, map-info, player and force write tools.</summary>
+    private static EditToolResult SaveEdit(
+        string map, string outPath, Func<MapDocument, (bool Ok, string Message)> edit)
+    {
+        string full = ResolveOutPath(map, outPath);
+        var doc = LoadMap(map);
+        var (ok, message) = edit(doc);
+        if (!ok) throw new McpException(message);
+
+        if (Path.GetDirectoryName(full) is { Length: > 0 } dir) Directory.CreateDirectory(dir);
+        doc.Save(full);
+        return new EditToolResult(full, message);
+    }
+
     /// <summary>Parse a string into an enum (case-insensitive); clean MCP error on failure.</summary>
     private static TEnum ParseEnum<TEnum>(string value, string paramName) where TEnum : struct, Enum
     {
@@ -550,3 +751,7 @@ public sealed record ObjectNewToolResult(string SavedTo, string Message, string?
 
 /// <summary>sound_* write outcome: where the edited map was written plus a human-readable message.</summary>
 public sealed record SoundToolResult(string SavedTo, string Message);
+
+/// <summary>Generic write outcome for camera/pathing/map-info/player/force/new tools:
+/// where the edited (or created) map was written plus a human-readable message.</summary>
+public sealed record EditToolResult(string SavedTo, string Message);
