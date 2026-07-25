@@ -22,10 +22,11 @@ public class McpServerTests
         "object_get", "object_list", "object_new", "object_set",
         "palette_doodad", "pathing_paint", "place_doodad", "place_item",
         "place_region", "place_start_location", "place_unit", "player_list",
-        "player_set_force", "port_unit", "render_model", "sound_add",
-        "sound_list", "sound_remove", "sound_set", "terrain_blight",
-        "terrain_cliff", "terrain_deform", "terrain_paint", "terrain_ramp",
-        "terrain_stats", "terrain_water", "trigger_catalog_describe", "trigger_catalog_list",
+        "player_set_force", "port_unit", "region_list", "region_remove",
+        "render_model", "sound_add", "sound_list", "sound_remove",
+        "sound_set", "terrain_blight", "terrain_cliff", "terrain_deform",
+        "terrain_paint", "terrain_ramp", "terrain_stats", "terrain_water",
+        "trigger_catalog_describe", "trigger_catalog_list",
     };
 
     /// <summary>Runs the body against a live in-memory client/server session.</summary>

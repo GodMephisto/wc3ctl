@@ -576,6 +576,24 @@ public static class Wc3Tools
             return new EditToolResult(full, $"created \"{opts.MapName}\" ({opts.TileEdge}x{opts.TileEdge} tiles, {bytes.Length} bytes)");
         });
 
+    [McpServerTool(Name = "region_list", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("List the map's rectangular regions (war3map.w3r), each with its creation number, name, and bounds. Add regions with place_region.")]
+    public static IReadOnlyList<PlacementCommand.RegionInfo> RegionList(
+        [Description("Path to a .w3x/.w3m map file.")] string map)
+        => Run(() => PlacementCommand.ListRegions(LoadMap(map)));
+
+    [McpServerTool(Name = "region_remove", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = false)]
+    [Description("Remove a region by name and save the edited map to out_path. The input map is NEVER modified in place.")]
+    public static EditToolResult RegionRemove(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Region name to remove.")] string name)
+        => Run(() => SaveEdit(map, out_path, doc =>
+        {
+            var r = PlacementCommand.RemoveRegion(doc, name);
+            return (r.Ok, r.Message);
+        }));
+
     [McpServerTool(Name = "trigger_catalog_list", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("List GUI-trigger functions from the World-Editor catalog (UI\\TriggerData.txt), optionally filtered by kind and/or a name/display-name search. The catalog is read from an explicit file when given, otherwise from the installed game.")]
     public static TriggerCatalogListResult TriggerCatalogList(
