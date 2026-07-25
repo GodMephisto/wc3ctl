@@ -42,8 +42,12 @@ public static class CameraCommand
     };
 
     /// <summary>Lists every camera in document order.</summary>
+    // A map with no war3map.w3c simply has no cameras - return an empty list rather than
+    // throwing, so listing works everywhere (add creates the file on first use).
     public static IReadOnlyList<CameraFields> List(MapDocument doc) =>
-        GetCameras(doc).Cameras.Select(ToFields).ToList();
+        doc.GetFile(FileName)?.Model is MapCameras c
+            ? c.Cameras.Select(ToFields).ToList()
+            : Array.Empty<CameraFields>();
 
     /// <summary>Adds a new camera at the given target position and writes the re-serialized
     /// w3c back into the in-memory document (persisted on the next Save). Rejects a blank

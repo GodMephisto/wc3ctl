@@ -31,8 +31,12 @@ public static class SoundCommand
         "ConeInside", "ConeOutside", "ConeOutsideVolume",
     };
 
+    // A map with no war3map.w3s simply has no sounds - return an empty catalog rather than
+    // throwing, so listing works everywhere (add creates the file on first use).
     public static IReadOnlyList<SoundFields> List(MapDocument doc) =>
-        GetSounds(doc).Sounds.Select(ToFields).ToList();
+        doc.GetFile(FileName)?.Model is MapSounds s
+            ? s.Sounds.Select(ToFields).ToList()
+            : Array.Empty<SoundFields>();
 
     public static SoundOpResult Add(MapDocument doc, string name, string? file)
     {

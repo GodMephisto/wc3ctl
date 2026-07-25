@@ -182,10 +182,12 @@ public class SoundCommandTests
     }
 
     [Fact]
-    public void List_throws_when_catalog_absent()
+    public void List_returns_empty_when_catalog_absent()
     {
+        // A map with no war3map.w3s just has no sounds; listing must not throw (a fresh map
+        // or one that never defined a sound is a normal, editable state - Add creates the file).
         var doc = EmptyMap();
-        Assert.Throws<InvalidOperationException>(() => SoundCommand.List(doc));
+        Assert.Empty(SoundCommand.List(doc));
     }
 
     // ---- pure ApplyField mapping ----

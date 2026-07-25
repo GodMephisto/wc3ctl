@@ -1,6 +1,5 @@
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Metadata;
 
 namespace Wc3.Studio.Controls;
 
@@ -41,9 +40,9 @@ public partial class CatalogEditorView : UserControl
         set => SetValue(SubtitleProperty, value);
     }
 
-    /// <summary>The "add new entry" form shown above the list (the control's content slot,
-    /// so plain child syntax works too). Hidden when null.</summary>
-    [Content]
+    /// <summary>The "add new entry" form shown above the list. Set in code by the owning
+    /// panel; hidden when null. (Deliberately NOT the [Content] property - this control
+    /// derives from ContentControl, whose own Content holds the shell's visual tree.)</summary>
     public object? AddContent
     {
         get => GetValue(AddContentProperty);

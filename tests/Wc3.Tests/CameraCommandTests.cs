@@ -34,6 +34,14 @@ public class CameraCommandTests
         }));
 
     [Fact]
+    public void List_returns_empty_when_catalog_absent()
+    {
+        // A map with no war3map.w3c just has no cameras; listing must not throw.
+        var doc = MapDocument.Load(SyntheticMap.Build(new Dictionary<string, byte[]>()));
+        Assert.Empty(CameraCommand.List(doc));
+    }
+
+    [Fact]
     public void List_reads_cameras_in_order()
     {
         var doc = Doc(Cam("Alpha", 128f, 256f), Cam("Beta", 512f, 64f));
@@ -179,13 +187,13 @@ public class CameraCommandTests
     }
 
     [Fact]
-    public void Read_throws_when_w3c_missing()
+    public void List_returns_empty_when_w3c_missing_but_other_files_present()
     {
         var doc = MapDocument.Load(SyntheticMap.Build(new Dictionary<string, byte[]>
         {
             ["war3map.j"] = new byte[] { 1, 2, 3 },
         }));
-        Assert.Throws<InvalidOperationException>(() => CameraCommand.List(doc));
+        Assert.Empty(CameraCommand.List(doc));
     }
 
     // ---- pure ApplyField coverage (no MapDocument) ----
