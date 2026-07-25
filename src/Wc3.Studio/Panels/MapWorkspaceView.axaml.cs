@@ -388,23 +388,10 @@ public partial class MapWorkspaceView : UserControl
     /// <summary>Shows the OS map picker, then loads the chosen map into this workspace.</summary>
     public async Task PickAndOpenMapAsync()
     {
-        var storage = TopLevel.GetTopLevel(this)?.StorageProvider;
-        if (storage is null)
-            return;
-        var files = await storage.OpenFilePickerAsync(new FilePickerOpenOptions
-        {
-            Title = $"Open Warcraft III map - {_role}",
-            AllowMultiple = false,
-            FileTypeFilter = new[]
-            {
-                new FilePickerFileType("Warcraft III maps") { Patterns = new[] { "*.w3x", "*.w3m" } },
-                FilePickerFileTypes.All,
-            },
-        });
-        if (files.Count == 1 && files[0].TryGetLocalPath() is { } path)
-        {
+        var path = await Controls.FilePicker.PickOpenAsync(this, $"Open Warcraft III map - {_role}",
+            new Controls.FilePicker.Filter("Warcraft III maps", new[] { "*.w3x", "*.w3m" }));
+        if (path is not null)
             OpenMap(path);
-        }
     }
 
     public void OpenMap(string path)

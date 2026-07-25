@@ -1,0 +1,11 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Wc3.Studio.Controls.FilePathBox">
+    <Grid ColumnDefinitions="*,Auto">
+        <TextBox Name="PathBox" Grid.Column="0" TextChanged="OnTextChanged"/>
+        <Button Name="BrowseButton" Grid.Column="1" Content="Browse…"
+                Padding="10,2" Margin="4,0,0,0" Click="OnBrowse"
+                VerticalAlignment="Center"
+                ToolTip.Tip="Pick a file (opens where you last browsed)"/>
+    </Grid>
+</UserControl>

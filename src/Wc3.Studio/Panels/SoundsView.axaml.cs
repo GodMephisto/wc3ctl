@@ -1,3 +1,4 @@
+using System.IO;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
@@ -20,7 +21,7 @@ public partial class SoundsView : UserControl, IMapPanel
 
     private MapSession? _session;
     private TextBox? _addName;
-    private TextBox? _addFile;
+    private FilePathBox? _addFile;
     private IReadOnlyList<string> _allAudio = Array.Empty<string>();
 
     /// <summary>Raised after an edit mutated the in-memory map; the workspace enables Save.</summary>
@@ -50,7 +51,14 @@ public partial class SoundsView : UserControl, IMapPanel
         Grid.SetColumn(_addName, 0);
         grid.Children.Add(_addName);
 
-        _addFile = new TextBox { Watermark = "Sound file path (optional)", Margin = new Avalonia.Thickness(6, 0, 6, 0) };
+        _addFile = new FilePathBox
+        {
+            Watermark = "Sound file (Browse to import audio from disk)",
+            DialogTitle = "Choose an audio file to import",
+            FilterName = "Audio",
+            FilterPatterns = "*.mp3,*.wav,*.flac,*.ogg,*.aif,*.aiff",
+            Margin = new Avalonia.Thickness(6, 0, 6, 0),
+        };
         Grid.SetColumn(_addFile, 1);
         grid.Children.Add(_addFile);
 
@@ -97,14 +105,39 @@ public partial class SoundsView : UserControl, IMapPanel
         Catalog.SetStatus($"{sounds.Count} sound definition(s).");
     }
 
-    private void AddSound()
+    private async void AddSound()
     {
         if (_session?.Current is not { } doc) return;
         var name = _addName?.Text?.Trim() ?? "";
         if (name.Length == 0) { Catalog.SetStatus("Enter a sound name to add."); return; }
-        Mutate(() => SoundCommand.Add(doc, name, string.IsNullOrWhiteSpace(_addFile?.Text) ? null : _addFile!.Text));
-        if (_addName is not null) _addName.Text = "";
-        if (_addFile is not null) _addFile.Text = "";
+
+        // The file box holds either a manual in-archive path or a disk file the user browsed
+        // to. A disk file gets imported into the map first (war3mapImported\<name>) and the
+        // definition references that, so browsing a file on disk "just works" end to end.
+        string? filePath = string.IsNullOrWhiteSpace(_addFile?.Text) ? null : _addFile!.Text!.Trim();
+        if (filePath is not null && File.Exists(filePath))
+        {
+            try
+            {
+                var bytes = await File.ReadAllBytesAsync(filePath);
+                var importName = "war3mapImported\\" + Path.GetFileName(filePath);
+                FileEditCommand.AddOrReplace(doc, importName, bytes);
+                filePath = importName;
+                _allAudio = SoundCommand.ImportedAudioFiles(doc); // the import may add a new audio file
+                ApplyAudioFilter();
+            }
+            catch (Exception ex) { Catalog.SetStatus($"Import failed: {ex.Message}"); return; }
+        }
+
+        var r = SoundCommand.Add(doc, name, filePath);
+        Refresh();
+        Catalog.SetStatus(r.Message);
+        if (r.Ok)
+        {
+            MapEdited?.Invoke(this, EventArgs.Empty);
+            if (_addName is not null) _addName.Text = "";
+            if (_addFile is not null) _addFile.Text = "";
+        }
     }
 
     /// <summary>Runs a mutating command, reports it, refreshes the list, and flags the map

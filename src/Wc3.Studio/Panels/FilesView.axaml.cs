@@ -250,14 +250,8 @@ public partial class FilesView : UserControl, IMapPanel
     private async void OnImportReplaceClick(object? sender, RoutedEventArgs e)
     {
         if (_session?.Current is not { } doc) return;
-        var storage = TopLevel.GetTopLevel(this)?.StorageProvider;
-        if (storage is null) return;
-        var files = await storage.OpenFilePickerAsync(new FilePickerOpenOptions
-        {
-            Title = "Import or replace a file in the map",
-            AllowMultiple = false,
-        });
-        if (files.Count != 1 || files[0].TryGetLocalPath() is not { } path) return;
+        var path = await Controls.FilePicker.PickOpenAsync(this, "Import or replace a file in the map");
+        if (path is null) return;
 
         // Replace the selected file if one is highlighted; otherwise add under the disk name.
         var selectedName = FileList.SelectedItems?.OfType<FileRow>().FirstOrDefault()?.Name;
@@ -279,21 +273,14 @@ public partial class FilesView : UserControl, IMapPanel
     private async void OnSaveMapClick(object? sender, RoutedEventArgs e)
     {
         if (_session?.Current is not { } doc) return;
-        var storage = TopLevel.GetTopLevel(this)?.StorageProvider;
-        if (storage is null) return;
 
         var mapPath = _session.MapPath;
         var ext = mapPath is not null ? Path.GetExtension(mapPath) : ".w3x";
         var suggested = mapPath is not null
             ? Path.GetFileNameWithoutExtension(mapPath) + ".edited" + ext
             : "map.edited.w3x";
-        var file = await storage.SaveFilePickerAsync(new FilePickerSaveOptions
-        {
-            Title = "Save map with edits",
-            SuggestedFileName = suggested,
-            DefaultExtension = ext.TrimStart('.'),
-        });
-        if (file?.TryGetLocalPath() is not { } dest) return;
+        var dest = await Controls.FilePicker.PickSaveAsync(this, "Save map with edits", suggested, ext.TrimStart('.'));
+        if (dest is null) return;
         try
         {
             await Task.Run(() => doc.Save(dest));
