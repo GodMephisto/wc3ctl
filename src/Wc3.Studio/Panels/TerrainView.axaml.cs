@@ -36,6 +36,9 @@ public partial class TerrainView : UserControl, IMapPanel
     private bool _sculpt;
     private bool _sculptDrag2D;                 // a left-drag stroke is live on the 2D minimap
     private (int Col, int Row)? _sculptLastCorner; // drag throttle: re-apply only on a new corner
+    // Full tile snapshot taken when a sculpt stroke starts; diffed against the grid on
+    // release to record ONE undo entry for the whole stroke (null when no stroke is live).
+    private Wc3.Commands.Editing.TerrainSculptEdit.TileState[]? _strokeBefore;
     private bool _glTerrainStale;               // sculpted while 2D showed, GL mesh needs a rebuild
 
     private readonly Random _rng = new();
@@ -507,6 +510,53 @@ public partial class TerrainView : UserControl, IMapPanel
             $"Sculpt: {SculptToolLabel(tool)} terrain radius {radius} at ({wx:0}, {wy:0}), {changed} corners changed";
     }
 
+    /// <summary>Snapshots the terrain grid at the start of a sculpt stroke so the whole
+    /// stroke can be recorded as one undo entry on release. Cheap transient copy; discarded
+    /// once the stroke is committed or abandoned.</summary>
+    private void BeginSculptStroke(Wc3.Model.MapDocument doc)
+    {
+        _strokeBefore = null;
+        if (doc.GetFile(Wc3.Commands.TerrainCommand.TerrainFile)?.Model
+            is not War3Net.Build.Environment.MapEnvironment env || env.TerrainTiles is not { } tiles)
+            return;
+        var snap = new Wc3.Commands.Editing.TerrainSculptEdit.TileState[tiles.Count];
+        for (int i = 0; i < tiles.Count; i++)
+            snap[i] = Wc3.Commands.Editing.TerrainSculptEdit.Capture(i, tiles[i]);
+        _strokeBefore = snap;
+    }
+
+    /// <summary>Ends a sculpt stroke: diffs the grid against the pre-stroke snapshot and, if
+    /// anything changed, records ONE TerrainSculptEdit on the undo journal (the stroke has
+    /// already been applied live, so its Apply is an idempotent no-op here). One stroke =
+    /// one undo/redo step.</summary>
+    private void CommitSculptStroke(Wc3.Model.MapDocument doc)
+    {
+        var before = _strokeBefore;
+        _strokeBefore = null;
+        if (before is null
+            || doc.GetFile(Wc3.Commands.TerrainCommand.TerrainFile)?.Model
+                is not War3Net.Build.Environment.MapEnvironment env || env.TerrainTiles is not { } tiles)
+            return;
+
+        var changedBefore = new List<Wc3.Commands.Editing.TerrainSculptEdit.TileState>();
+        var changedAfter = new List<Wc3.Commands.Editing.TerrainSculptEdit.TileState>();
+        int n = Math.Min(before.Length, tiles.Count);
+        for (int i = 0; i < n; i++)
+        {
+            var now = Wc3.Commands.Editing.TerrainSculptEdit.Capture(i, tiles[i]);
+            if (!now.Equals(before[i]))
+            {
+                changedBefore.Add(before[i]);
+                changedAfter.Add(now);
+            }
+        }
+        if (changedBefore.Count == 0)
+            return; // a stroke that changed nothing (e.g. flatten on already-flat ground)
+
+        _history.Do(doc, new Wc3.Commands.Editing.TerrainSculptEdit(
+            $"Sculpt {changedAfter.Count} tile(s)", changedBefore, changedAfter));
+    }
+
     private void ClearImage()
     {
         TerrainImage.Source = null;
@@ -567,6 +617,7 @@ public partial class TerrainView : UserControl, IMapPanel
             _sculptDrag2D = true;
             _sculptLastCorner = null;
             e.Pointer.Capture(ImageHost);
+            BeginSculptStroke(doc);
             ApplySculptAt(doc, wx, wy);
             e.Handled = true;
             return;
@@ -605,6 +656,7 @@ public partial class TerrainView : UserControl, IMapPanel
         if (!pt.Properties.IsLeftButtonPressed)
         {
             _sculptDrag2D = false; // the release never reached us (capture lost), end the stroke
+            CommitSculptStroke(doc); // still record what the stroke changed so far
             return;
         }
         var (wx, wy) = _xform.PixelToWorld(pt.Position.X / _zoom, pt.Position.Y / _zoom);
@@ -614,7 +666,8 @@ public partial class TerrainView : UserControl, IMapPanel
         e.Handled = true;
     }
 
-    /// <summary>Ends a live 2D sculpt stroke (no-op for ordinary clicks).</summary>
+    /// <summary>Ends a live 2D sculpt stroke (no-op for ordinary clicks) and records the whole
+    /// stroke as one undo entry.</summary>
     private void OnTerrainReleased(object? sender, PointerReleasedEventArgs e)
     {
         if (!_sculptDrag2D)
@@ -622,6 +675,8 @@ public partial class TerrainView : UserControl, IMapPanel
         _sculptDrag2D = false;
         e.Pointer.Capture(null);
         e.Handled = true;
+        if (_session?.Current is { } doc)
+            CommitSculptStroke(doc);
     }
 
     /// <summary>Applies the armed brush at world (wx,wy) through the undo journal so the
@@ -696,7 +751,11 @@ public partial class TerrainView : UserControl, IMapPanel
         _markers.Clear();
         MarkerCanvas?.Children.Clear();
         GlView.RefreshPlacements();
-        if (!_is3D)
+        // An undone/redone edit may be a terrain sculpt, so rebuild the terrain too: the GL
+        // mesh in 3D, or the 2D minimap render otherwise (RenderCurrent repaints terrain).
+        if (_is3D)
+            GlView.RefreshTerrain();
+        else
             RenderCurrent();
         MapEdited?.Invoke(this, EventArgs.Empty);
     }
@@ -800,8 +859,11 @@ public partial class TerrainView : UserControl, IMapPanel
             _glDrag = GlDrag.Sculpt;
             _sculptLastCorner = null;
             var (hit, wx, wy) = GlView.PickGround(p.Position.X, p.Position.Y);
-            if (hit && _session?.Current is { } doc)
-                ApplySculptAt(doc, wx, wy);
+            if (_session?.Current is { } doc)
+            {
+                BeginSculptStroke(doc); // snapshot even if the first pick missed, so the stroke is tracked
+                if (hit) ApplySculptAt(doc, wx, wy);
+            }
         }
         else if (_brush is null)
         {
@@ -872,9 +934,13 @@ public partial class TerrainView : UserControl, IMapPanel
         if (kind == GlDrag.None || _session?.Current is not { } doc)
             return;
 
-        // Sculpt strokes apply on press and on drag, the release itself is a no-op.
+        // Sculpt strokes apply live on press and on drag; the release records the whole
+        // stroke as one undo entry.
         if (kind == GlDrag.Sculpt)
+        {
+            CommitSculptStroke(doc);
             return;
+        }
 
         var p = e.GetPosition(GlInput);
 

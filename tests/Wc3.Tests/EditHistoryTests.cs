@@ -26,6 +26,77 @@ public class EditHistoryTests
     private static MapRegions? Regions(MapDocument doc) =>
         doc.GetFile(PlacementCommand.RegionsFile)?.Model as MapRegions;
 
+    private static MapEnvironment Env(MapDocument doc) =>
+        (MapEnvironment)doc.GetFile(TerrainCommand.TerrainFile)!.Model!;
+
+    // Mirrors TerrainView.CommitSculptStroke: diff the grid against a pre-stroke snapshot
+    // and record ONE edit for whatever the stroke changed.
+    private static TerrainSculptEdit BuildSculptEdit(
+        TerrainSculptEdit.TileState[] before, MapDocument doc)
+    {
+        var tiles = Env(doc).TerrainTiles;
+        var b = new List<TerrainSculptEdit.TileState>();
+        var a = new List<TerrainSculptEdit.TileState>();
+        for (int i = 0; i < tiles.Count; i++)
+        {
+            var now = TerrainSculptEdit.Capture(i, tiles[i]);
+            if (!now.Equals(before[i])) { b.Add(before[i]); a.Add(now); }
+        }
+        return new TerrainSculptEdit($"Sculpt {a.Count} tile(s)", b, a);
+    }
+
+    private static TerrainSculptEdit.TileState[] Snapshot(MapDocument doc)
+    {
+        var tiles = Env(doc).TerrainTiles;
+        var snap = new TerrainSculptEdit.TileState[tiles.Count];
+        for (int i = 0; i < tiles.Count; i++) snap[i] = TerrainSculptEdit.Capture(i, tiles[i]);
+        return snap;
+    }
+
+    [Fact]
+    public void TerrainSculpt_Undo_RestoresHeights_Redo_ReappliesThem()
+    {
+        var doc = BlankMap.Create(new BlankMapOptions { TileEdge = 8 });
+        var hist = new EditHistory();
+
+        // A stroke: snapshot, raise a patch, then record the diff as one edit (the stroke
+        // already ran, so Do's Apply is an idempotent no-op).
+        var before = Snapshot(doc);
+        var r = TerrainCommand.Deform(doc, 4, 4, radius: 2, TerrainCommand.HeightOp.Raise, amount: 3f);
+        Assert.True(r.Ok, r.Message);
+        int centerIdx = 4 * 9 + 4; // (Width+1) = 9 columns on an 8-tile map
+        float raised = Env(doc).TerrainTiles[centerIdx].Height;
+
+        hist.Do(doc, BuildSculptEdit(before, doc));
+        Assert.Equal(raised, Env(doc).TerrainTiles[centerIdx].Height); // Do did not disturb the result
+
+        // One Undo reverts the WHOLE stroke back to the pre-stroke height.
+        Assert.True(hist.Undo(doc));
+        Assert.Equal(before[centerIdx].Height, Env(doc).TerrainTiles[centerIdx].Height);
+
+        // One Redo re-applies it exactly.
+        Assert.True(hist.Redo(doc));
+        Assert.Equal(raised, Env(doc).TerrainTiles[centerIdx].Height);
+    }
+
+    [Fact]
+    public void TerrainSculpt_Water_RoundTripsThroughUndoRedo()
+    {
+        var doc = BlankMap.Create(new BlankMapOptions { TileEdge = 8 });
+        var hist = new EditHistory();
+
+        var before = Snapshot(doc);
+        TerrainCommand.Water(doc, 4, 4, radius: 1, TerrainCommand.WaterOp.Set, amount: 1f);
+        int idx = 4 * 9 + 4;
+        Assert.True(Env(doc).TerrainTiles[idx].IsWater);
+
+        hist.Do(doc, BuildSculptEdit(before, doc));
+        Assert.True(hist.Undo(doc));
+        Assert.False(Env(doc).TerrainTiles[idx].IsWater); // water flag cleared on undo
+        Assert.True(hist.Redo(doc));
+        Assert.True(Env(doc).TerrainTiles[idx].IsWater);  // and restored on redo
+    }
+
     [Fact]
     public void PlaceDoodad_Undo_RemovesIt_Redo_RestoresSameCreationNumber()
     {
