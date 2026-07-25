@@ -985,6 +985,125 @@ public static class Program
             "Pathing-map editing (war3map.wpm): paint walk/build/fly/water bits over a brush.");
         pathing.AddCommand(pathPaint);
 
+        // ---- map-info: read/edit the editable scenario fields (war3map.w3i) ----
+        var miGet = new Command("get", "Show the map's editable scenario fields.") { mapArg };
+        miGet.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var f = MapInfoCommand.Read(MapDocument.Load(p.GetValueForArgument(mapArg)));
+            Emit(p.GetValueForOption(jsonOption), f, () => string.Join("\n", new[]
+            {
+                $"Name        : {f.MapName}",
+                $"Author      : {f.Author}",
+                $"Description : {f.Description}",
+                $"Players rec : {f.RecommendedPlayers}",
+                $"Tileset     : {f.Tileset}",
+                $"Playable    : {f.PlayableWidth} x {f.PlayableHeight}",
+            }));
+        }));
+        var miFieldArg = new Argument<string>("field",
+            "Field: " + string.Join("|", MapInfoCommand.EditableFields) + ".");
+        var miValueArg = new Argument<string>("value", "New value for the field.");
+        var miSet = new Command("set", "Set a scenario field and save the edited map.")
+        { mapArg, miFieldArg, miValueArg, setOut };
+        miSet.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var f = MapInfoCommand.Set(doc, p.GetValueForArgument(miFieldArg), p.GetValueForArgument(miValueArg));
+            var dest = p.GetValueForOption(setOut) ?? Path.Combine(
+                Path.GetDirectoryName(map) ?? "",
+                Path.GetFileNameWithoutExtension(map) + ".edited" + Path.GetExtension(map));
+            doc.Save(dest);
+            Emit(p.GetValueForOption(jsonOption), new { Ok = true, Fields = f, SavedTo = dest },
+                () => $"set {p.GetValueForArgument(miFieldArg)} = {p.GetValueForArgument(miValueArg)}\nsaved: {dest}");
+        }));
+        var mapInfo = new Command("map-info",
+            "Scenario fields (war3map.w3i): get, set (name, author, description, tileset, ...).");
+        mapInfo.AddCommand(miGet);
+        mapInfo.AddCommand(miSet);
+
+        // ---- player / force: the Scenario Players and Forces dialogs (war3map.w3i) ----
+        var playerList = new Command("list", "List the map's player slots.") { mapArg };
+        playerList.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var players = PlayerForceCommand.GetPlayers(MapDocument.Load(p.GetValueForArgument(mapArg)));
+            Emit(p.GetValueForOption(jsonOption), players,
+                () => players.Count == 0 ? "(no players)" : string.Join("\n", players.Select(pl =>
+                    $"[{pl.Id}] {pl.Name}  {pl.Race}/{pl.Controller}  rgb=({pl.Color.R},{pl.Color.G},{pl.Color.B})  fixedStart={pl.FixedStartPosition}")));
+        }));
+        var pfPlayerId = new Argument<int>("player", "Player id (0-based).");
+        var pfForceIndex = new Argument<int>("force", "Force index (0-based).");
+        var playerSetForce = new Command("set-force",
+            "Move a player into a force and save the edited map.")
+        { mapArg, pfPlayerId, pfForceIndex, setOut };
+        playerSetForce.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = PlayerForceCommand.SetPlayerForce(doc,
+                p.GetValueForArgument(pfPlayerId), p.GetValueForArgument(pfForceIndex));
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message);
+        }));
+        var player = new Command("player", "Player slots (war3map.w3i): list, set-force.");
+        player.AddCommand(playerList);
+        player.AddCommand(playerSetForce);
+
+        var forceList = new Command("list", "List the map's forces (teams).") { mapArg };
+        forceList.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var forces = PlayerForceCommand.GetForces(MapDocument.Load(p.GetValueForArgument(mapArg)));
+            Emit(p.GetValueForOption(jsonOption), forces,
+                () => forces.Count == 0 ? "(no forces)" : string.Join("\n", forces.Select(f =>
+                    $"[{f.Index}] {f.Name}  players=[{string.Join(",", f.PlayerIds)}]  allied={f.Allied} alliedVictory={f.AlliedVictory} vision={f.SharedVision} control={f.SharedUnitControl}")));
+        }));
+        var ffAllied = new Argument<bool>("allied", "Allied.");
+        var ffAlliedVictory = new Argument<bool>("alliedVictory", "Allied victory.");
+        var ffVision = new Argument<bool>("sharedVision", "Shared vision.");
+        var ffControl = new Argument<bool>("sharedControl", "Shared unit control.");
+        var ffAdvControl = new Argument<bool>("sharedAdvControl", "Shared advanced unit control.");
+        var forceSetFlags = new Command("set-flags",
+            "Set a force's alliance/sharing flags and save the edited map.")
+        { mapArg, pfForceIndex, ffAllied, ffAlliedVictory, ffVision, ffControl, ffAdvControl, setOut };
+        forceSetFlags.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = PlayerForceCommand.SetForceFlags(doc, p.GetValueForArgument(pfForceIndex),
+                p.GetValueForArgument(ffAllied), p.GetValueForArgument(ffAlliedVictory),
+                p.GetValueForArgument(ffVision), p.GetValueForArgument(ffControl),
+                p.GetValueForArgument(ffAdvControl));
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message);
+        }));
+        var force = new Command("force", "Forces / teams (war3map.w3i): list, set-flags.");
+        force.AddCommand(forceList);
+        force.AddCommand(forceSetFlags);
+
+        // ---- new: create a blank, World-Editor-openable map ----
+        var newOut = new Argument<string>("out", "Path to write the new .w3x/.w3m map.");
+        var newNameOpt = new Option<string?>("--name", "Map name (default: Blank Map).");
+        var newTilesOpt = new Option<int?>("--tiles", "Playable size in tiles per edge (default: 32).");
+        var newMap = new Command("new", "Create a blank, World-Editor-openable map at the given path.")
+        { newOut, newNameOpt, newTilesOpt };
+        newMap.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var opts = new BlankMapOptions();
+            if (p.GetValueForOption(newNameOpt) is { } n && n.Length > 0) opts = opts with { MapName = n };
+            if (p.GetValueForOption(newTilesOpt) is { } t) opts = opts with { TileEdge = t };
+            byte[] bytes = BlankMap.CreateArchiveBytes(opts);
+            string dest = p.GetValueForArgument(newOut);
+            File.WriteAllBytes(dest, bytes);
+            Emit(p.GetValueForOption(jsonOption),
+                new { Ok = true, MapName = opts.MapName, opts.TileEdge, Bytes = bytes.Length, SavedTo = dest },
+                () => $"created \"{opts.MapName}\" ({opts.TileEdge}x{opts.TileEdge} tiles, {bytes.Length} bytes)\nsaved: {dest}");
+        }));
+
         // --- trigger catalog (read-only GUI-trigger reference from UI\TriggerData.txt) ---
         var trigFileOpt = new Option<string?>("--file",
             "Read the catalog from an explicit TriggerData.txt instead of the installed game.");
@@ -1060,7 +1179,8 @@ public static class Program
         root.AddCommand(convert); root.AddCommand(validate);
         root.AddCommand(place); root.AddCommand(palette); root.AddCommand(terrain);
         root.AddCommand(sound); root.AddCommand(camera); root.AddCommand(pathing);
-        root.AddCommand(trigger);
+        root.AddCommand(mapInfo); root.AddCommand(player); root.AddCommand(force);
+        root.AddCommand(newMap); root.AddCommand(trigger);
 
         return root;
     }
