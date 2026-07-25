@@ -1,0 +1,76 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="using:Wc3.Studio.Controls"
+             x:Class="Wc3.Studio.Panels.DoodadPropertiesView">
+    <Grid>
+        <!-- Doubles as the empty-state hint and the error line (see ShowHint). -->
+        <TextBlock Name="PlaceholderText"
+                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                   TextWrapping="Wrap" TextAlignment="Center" Margin="24"
+                   Text="Click a doodad in the 3D view (Terrain tab) to edit its properties."/>
+
+        <DockPanel Name="ContentRoot" IsVisible="False">
+            <!-- Apply / Remove + result line pinned at the bottom. -->
+            <Border DockPanel.Dock="Bottom" BorderBrush="#33555555"
+                    BorderThickness="0,1,0,0" Padding="8,6">
+                <DockPanel>
+                    <Button Name="ApplyButton" DockPanel.Dock="Right" Content="Apply"
+                            Margin="8,0,0,0" VerticalAlignment="Top" Click="OnApplyClick"
+                            ToolTip.Tip="Write the changed fields to the placed doodad (in memory), use Save to write the map."/>
+                    <Button Name="RemoveButton" DockPanel.Dock="Right" Content="Remove"
+                            Margin="8,0,0,0" VerticalAlignment="Top" Click="OnRemoveClick"
+                            ToolTip.Tip="Delete this placed doodad from the map (in memory), use Save to write the map."/>
+                    <TextBlock Name="StatusText" TextWrapping="Wrap"
+                               VerticalAlignment="Center" Text=""/>
+                </DockPanel>
+            </Border>
+
+            <ScrollViewer>
+                <!-- Stretch with no MinWidth so the editor fits the ~400px side dock. -->
+                <StackPanel Margin="10" Spacing="2" HorizontalAlignment="Stretch">
+                    <TextBlock Name="HeaderText" FontWeight="SemiBold" FontSize="14" Text=""/>
+                    <TextBlock Name="TypeText" Text=""/>
+                    <TextBlock Name="PositionText" Foreground="#8FA3B8"
+                               Margin="0,0,0,6" Text=""/>
+
+                    <c:LabeledField Label="Rotation" Hint="degrees">
+                        <c:LabeledField.FieldContent>
+                            <TextBox Name="RotationBox" Width="80" HorizontalAlignment="Left"
+                                     MinHeight="0" Padding="4,3"/>
+                        </c:LabeledField.FieldContent>
+                    </c:LabeledField>
+
+                    <c:LabeledField Label="Scale">
+                        <c:LabeledField.FieldContent>
+                            <!-- Compact X/Y/Z boxes so the row fits the dock, the
+                                 "1 = normal size" hint lives in the tooltip. -->
+                            <StackPanel Orientation="Horizontal" Spacing="4"
+                                        ToolTip.Tip="1 = normal size">
+                                <TextBlock Text="X" Foreground="#8FA3B8" VerticalAlignment="Center"/>
+                                <TextBox Name="ScaleXBox" Width="48" MinHeight="0" Padding="4,3"/>
+                                <TextBlock Text="Y" Foreground="#8FA3B8" VerticalAlignment="Center"/>
+                                <TextBox Name="ScaleYBox" Width="48" MinHeight="0" Padding="4,3"/>
+                                <TextBlock Text="Z" Foreground="#8FA3B8" VerticalAlignment="Center"/>
+                                <TextBox Name="ScaleZBox" Width="48" MinHeight="0" Padding="4,3"/>
+                            </StackPanel>
+                        </c:LabeledField.FieldContent>
+                    </c:LabeledField>
+
+                    <c:LabeledField Label="Variation" Hint="which model variant, 0 or more">
+                        <c:LabeledField.FieldContent>
+                            <TextBox Name="VariationBox" Width="80" HorizontalAlignment="Left"
+                                     MinHeight="0" Padding="4,3"/>
+                        </c:LabeledField.FieldContent>
+                    </c:LabeledField>
+
+                    <c:LabeledField Label="Life %" Hint="0..100">
+                        <c:LabeledField.FieldContent>
+                            <TextBox Name="LifeBox" Width="80" HorizontalAlignment="Left"
+                                     MinHeight="0" Padding="4,3"/>
+                        </c:LabeledField.FieldContent>
+                    </c:LabeledField>
+                </StackPanel>
+            </ScrollViewer>
+        </DockPanel>
+    </Grid>
+</UserControl>

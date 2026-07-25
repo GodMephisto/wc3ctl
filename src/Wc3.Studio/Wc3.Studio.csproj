@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.2.*" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.2.*" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.*" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.2.*" />
+    <PackageReference Include="Silk.NET.OpenGL" Version="2.22.0" />
+    <PackageReference Include="NAudio" Version="2.2.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Wc3.Commands\Wc3.Commands.csproj" />
+    <ProjectReference Include="..\Wc3.MapDocument\Wc3.MapDocument.csproj" />
+    <ProjectReference Include="..\Wc3.Render\Wc3.Render.csproj" />
+    <ProjectReference Include="..\Wc3.GameData\Wc3.GameData.csproj" />
+  </ItemGroup>
+
+  <!-- Build stamp: bake the git short-hash + UTC build time into assembly metadata so
+       every build (dev `dotnet run` or a published single-file exe) announces exactly
+       what it is in the title bar - permanently replacing ad-hoc freshness markers.
+       git is best-effort (ContinueOnError) so builds still work without it on PATH. -->
+  <Target Name="StampBuildInfo" BeforeTargets="GetAssemblyAttributes">
+    <Exec Command="git -C &quot;$(MSBuildProjectDirectory)&quot; rev-parse --short HEAD"
+          ConsoleToMSBuild="true" ContinueOnError="true"
+          StandardErrorImportance="low" StandardOutputImportance="low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_GitHash" />
+    </Exec>
+    <PropertyGroup>
+      <_GitHash Condition="'$(_GitHash)' == ''">nogit</_GitHash>
+      <_BuildTimeUtc>$([System.DateTime]::UtcNow.ToString("yyyy-MM-dd HH:mm"))</_BuildTimeUtc>
+    </PropertyGroup>
+    <ItemGroup>
+      <AssemblyMetadata Include="GitHash" Value="$(_GitHash.Trim())" />
+      <AssemblyMetadata Include="BuildTimeUtc" Value="$(_BuildTimeUtc)" />
+    </ItemGroup>
+  </Target>
+</Project>

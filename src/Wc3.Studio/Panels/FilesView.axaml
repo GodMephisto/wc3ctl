@@ -1,0 +1,113 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Wc3.Studio.Panels.FilesView">
+
+    <UserControl.Styles>
+        <!-- Compact rows so header and row columns line up. -->
+        <Style Selector="ListBox#FileList ListBoxItem">
+            <Setter Property="Padding" Value="8,3"/>
+            <Setter Property="MinHeight" Value="0"/>
+        </Style>
+        <Style Selector="Button.columnHeader">
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Padding" Value="4,4"/>
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Grid>
+        <TextBlock Name="PlaceholderText"
+                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                   Text="No map loaded"/>
+
+        <DockPanel Name="ContentRoot" IsVisible="False">
+
+            <!-- Toolbar -->
+            <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="8" Margin="8">
+                <Button Name="ExtractAllButton" Content="Extract All…" Click="OnExtractAllClick"/>
+                <Button Name="ExtractSelectedButton" Content="Extract Selected…" Click="OnExtractSelectedClick"/>
+                <Button Name="ExportButton" Content="Export…" Click="OnExportClick" IsEnabled="False"
+                        ToolTip.Tip="Convert and save the selected file: .blp → image, .mdx/.mdl → OBJ + MTL + textures, anything else raw."/>
+                <Button Name="ImportButton" Content="Import / Replace…" Click="OnImportReplaceClick"
+                        ToolTip.Tip="Add a file from disk, or (if a file is selected) replace its bytes. Edits stay in memory until Save Map As…"/>
+                <Button Name="SaveMapButton" Content="Save Map As…" Click="OnSaveMapClick"
+                        ToolTip.Tip="Write the map with your in-session edits to a new file (never overwrites the original)."/>
+                <TextBlock Name="SummaryText" VerticalAlignment="Center"/>
+            </StackPanel>
+
+            <!-- Status line -->
+            <Border DockPanel.Dock="Bottom" Padding="8,4">
+                <TextBlock Name="StatusText" TextWrapping="Wrap"/>
+            </Border>
+
+            <!-- File grid (left) + content preview (right); double-click a file to preview.
+                 The list gets the larger share so its Name + 3 columns fit without the fixed
+                 columns crowding out (and overlapping) the Name column. -->
+            <Grid ColumnDefinitions="1.5*,4,*" Margin="8,0">
+                <Grid Grid.Column="0" RowDefinitions="Auto,Auto,*">
+                    <TextBox Grid.Row="0" Name="FilterBox" Watermark="Filter files by name…"
+                             Margin="8,0,8,4" TextChanged="OnFilterChanged"/>
+                    <!-- Column widths MUST match the row template below so header and cells
+                         line up; Name is star (min-0, ellipsis) so the fixed columns can
+                         never squeeze it negative and overlap. -->
+                    <Grid Grid.Row="1" ColumnDefinitions="*,84,58,58" Margin="8,0,8,2">
+                        <Button Grid.Column="0" Name="NameHeader" Classes="columnHeader" Content="Name" Click="OnSortByName"/>
+                        <Button Grid.Column="1" Name="SizeHeader" Classes="columnHeader" Content="Size" Click="OnSortBySize"/>
+                        <Button Grid.Column="2" Name="KnownHeader" Classes="columnHeader" Content="Known" Click="OnSortByKnown"/>
+                        <Button Grid.Column="3" Name="ParsedHeader" Classes="columnHeader" Content="Parsed" Click="OnSortByParsed"/>
+                    </Grid>
+                    <ListBox Grid.Row="2" Name="FileList" SelectionMode="Multiple"
+                             SelectionChanged="OnFileSelectionChanged"
+                             DoubleTapped="OnFileDoubleTapped">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Grid ColumnDefinitions="*,84,58,58">
+                                    <TextBlock Grid.Column="0" Text="{Binding DisplayName}"
+                                               TextTrimming="CharacterEllipsis"
+                                               ToolTip.Tip="{Binding DisplayName}"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding SizeText}" TextAlignment="Right" Margin="0,0,8,0"/>
+                                    <TextBlock Grid.Column="2" Text="{Binding KnownText}" TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Grid.Column="3" Text="{Binding ParsedText}" TextTrimming="CharacterEllipsis"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
+
+                <GridSplitter Grid.Column="1" Background="#33555555"/>
+
+                <!-- Preview pane -->
+                <DockPanel Grid.Column="2" Margin="8,0,0,0">
+                    <TextBlock Name="PreviewHeader" DockPanel.Dock="Top" FontWeight="SemiBold"
+                               TextWrapping="Wrap" Margin="0,2,0,6"
+                               Text="Double-click a file to preview its contents"/>
+                    <StackPanel Name="PreviewActions" DockPanel.Dock="Top" IsVisible="False"
+                                Orientation="Horizontal" Spacing="8" Margin="0,0,0,6">
+                        <Button Name="HexButton" Content="Hex" Click="OnHexToggleClick"
+                                ToolTip.Tip="Toggle a hex dump of the raw bytes."/>
+                        <Button Name="EditButton" Content="Edit" Click="OnEditToggleClick" IsEnabled="False"
+                                ToolTip.Tip="Edit this text file, then Save to map."/>
+                        <Button Name="SaveTextButton" Content="Save to map" Click="OnSaveTextClick" IsEnabled="False"
+                                ToolTip.Tip="Write your text edits back into the in-memory map (then Save Map As… to persist)."/>
+                    </StackPanel>
+                    <StackPanel Name="AudioControls" DockPanel.Dock="Top" IsVisible="False"
+                                Orientation="Horizontal" Spacing="8" Margin="0,0,0,6">
+                        <Button Name="PlayButton" Content="▶ Play" Click="OnPlayClick"/>
+                        <Button Name="StopButton" Content="■ Stop" Click="OnStopClick" IsEnabled="False"/>
+                    </StackPanel>
+                    <Panel>
+                        <TextBox Name="PreviewText" IsVisible="False" IsReadOnly="True"
+                                 AcceptsReturn="True" TextWrapping="NoWrap"
+                                 FontFamily="Consolas,Menlo,monospace" FontSize="12"
+                                 BorderThickness="0" Background="Transparent"/>
+                        <Image Name="PreviewImage" IsVisible="False" Stretch="Uniform"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Panel>
+                </DockPanel>
+            </Grid>
+
+        </DockPanel>
+    </Grid>
+</UserControl>

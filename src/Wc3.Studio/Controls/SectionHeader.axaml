@@ -1,0 +1,19 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Wc3.Studio.Controls.SectionHeader">
+    <!-- A clearly VISIBLE section bar: semi-opaque gray reads on both light and dark
+         themes, 1px bottom border, bold BaseHigh text. The ▾/▸ glyph shows only when
+         Collapsible (see code-behind). -->
+    <Border Name="Bar" Background="#66888888" BorderBrush="#99AAAAAA"
+            BorderThickness="0,0,0,1" Padding="6,5,6,4"
+            PointerPressed="OnBarPressed">
+        <StackPanel Orientation="Horizontal" Spacing="6">
+            <TextBlock Name="GlyphText" FontSize="12" FontWeight="Bold" IsVisible="False"
+                       Foreground="{DynamicResource SystemControlForegroundBaseHighBrush}"
+                       Text="▾"/>
+            <TextBlock Name="TitleText" FontSize="12" FontWeight="Bold"
+                       Foreground="{DynamicResource SystemControlForegroundBaseHighBrush}"
+                       Text=""/>
+        </StackPanel>
+    </Border>
+</UserControl>

@@ -1,0 +1,16 @@
+# Build output
+bin/
+obj/
+artifacts/
+[Bb]uild/
+*.user
+.vs/
+
+# Publish output
+dist/
+dist-studio/
+dist-mcp/
+
+# OS / editor
+.DS_Store
+Thumbs.db

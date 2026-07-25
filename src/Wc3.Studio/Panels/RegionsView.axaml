@@ -1,0 +1,8 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="using:Wc3.Studio.Controls"
+             x:Class="Wc3.Studio.Panels.RegionsView">
+    <c:CatalogEditorView Name="Catalog"
+                         Title="Regions (war3map.w3r)"
+                         Subtitle="The map's rectangular regions. Add by bounds or remove; Save writes the map."/>
+</UserControl>

@@ -1,0 +1,130 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="using:Wc3.Studio.Controls"
+             x:Class="Wc3.Studio.Panels.UnitPropertiesView">
+    <Grid>
+        <!-- Doubles as the empty-state hint and the error line (see ShowHint). -->
+        <TextBlock Name="PlaceholderText"
+                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                   TextWrapping="Wrap" TextAlignment="Center" Margin="24"
+                   Text="Click a unit in the 3D view (Terrain tab) to edit its properties."/>
+
+        <!-- Multi-select view: compact bulk actions for 2+ selected units (owner
+             reassignment + removal). The single-unit editor is ContentRoot below. -->
+        <StackPanel Name="MultiRoot" IsVisible="False" Margin="10" Spacing="8"
+                    HorizontalAlignment="Stretch">
+            <TextBlock Name="MultiHeaderText" FontWeight="SemiBold" FontSize="14"
+                       TextWrapping="Wrap" Text=""/>
+            <TextBlock Text="Bulk edits apply to every selected unit."
+                       Foreground="#8FA3B8" FontSize="11" TextWrapping="Wrap"/>
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <TextBlock Grid.Column="0" Text="Owner" VerticalAlignment="Center"
+                           Margin="0,0,8,0"/>
+                <!-- Players grouped under their team, neutrals last; the grouped list,
+                     swatches and header styling all live in OwnerTeamPicker. -->
+                <c:OwnerTeamPicker Grid.Column="1" Name="MultiOwnerPicker"
+                                   PlaceholderText="(pick an owner)"/>
+                <Button Grid.Column="2" Name="MultiApplyOwnerButton" Content="Apply"
+                        Margin="8,0,0,0" Click="OnMultiApplyOwnerClick"
+                        ToolTip.Tip="Set this owner on every selected unit (in memory); use Save to write the map."/>
+            </Grid>
+            <Button Name="MultiRemoveButton" Content="Remove selected" HorizontalAlignment="Left"
+                    Click="OnMultiRemoveClick"
+                    ToolTip.Tip="Delete every selected unit from the map (in memory); use Save to write the map."/>
+            <TextBlock Name="MultiStatusText" TextWrapping="Wrap" Text=""/>
+        </StackPanel>
+
+        <DockPanel Name="ContentRoot" IsVisible="False">
+            <!-- Apply + result line pinned at the bottom. -->
+            <Border DockPanel.Dock="Bottom" BorderBrush="#33555555"
+                    BorderThickness="0,1,0,0" Padding="8,6">
+                <DockPanel>
+                    <Button Name="ApplyButton" DockPanel.Dock="Right" Content="Apply"
+                            Margin="8,0,0,0" VerticalAlignment="Top" Click="OnApplyClick"
+                            ToolTip.Tip="Write the changed fields to the placed unit (in memory); use Save to write the map."/>
+                    <TextBlock Name="StatusText" TextWrapping="Wrap"
+                               VerticalAlignment="Center" Text=""/>
+                </DockPanel>
+            </Border>
+
+            <ScrollViewer>
+                <!-- Stretch with no MinWidth: the editor must fit the ~400px side dock. -->
+                <StackPanel Margin="10" Spacing="2" HorizontalAlignment="Stretch">
+                    <TextBlock Name="HeaderText" FontWeight="SemiBold" FontSize="14" Text=""/>
+                    <TextBlock Name="TypeText" Text=""/>
+                    <TextBlock Name="PositionText" Foreground="#8FA3B8"
+                               Margin="0,0,0,6" Text=""/>
+
+                    <!-- The unit type's abilities, resolved to names (UnitAbilitiesCommand). -->
+                    <TextBlock Name="AbilitiesHeader" FontWeight="SemiBold" FontSize="11"
+                               Text="Abilities" Margin="0,2,0,0"/>
+                    <ItemsControl Name="AbilitiesList" Margin="0,0,0,6">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding}" FontSize="11" Foreground="#8FA3B8"
+                                           TextTrimming="CharacterEllipsis"/>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <c:LabeledField Label="Owner">
+                        <c:LabeledField.FieldContent>
+                            <c:OwnerTeamPicker Name="OwnerPicker"/>
+                        </c:LabeledField.FieldContent>
+                    </c:LabeledField>
+
+                    <c:LabeledField Label="Hero Level" Hint="1 or more (heroes only)">
+                        <c:LabeledField.FieldContent>
+                            <TextBox Name="HeroLevelBox" Width="80" HorizontalAlignment="Left"
+                                     MinHeight="0" Padding="4,3"/>
+                        </c:LabeledField.FieldContent>
+                    </c:LabeledField>
+
+                    <c:LabeledField Label="HP %" Hint="0..100, -1 = default">
+                        <c:LabeledField.FieldContent>
+                            <TextBox Name="HpBox" Width="80" HorizontalAlignment="Left"
+                                     MinHeight="0" Padding="4,3"/>
+                        </c:LabeledField.FieldContent>
+                    </c:LabeledField>
+
+                    <c:LabeledField Label="Mana %" Hint="0..100, -1 = default">
+                        <c:LabeledField.FieldContent>
+                            <TextBox Name="ManaBox" Width="80" HorizontalAlignment="Left"
+                                     MinHeight="0" Padding="4,3"/>
+                        </c:LabeledField.FieldContent>
+                    </c:LabeledField>
+
+                    <c:LabeledField Label="Gold" Hint="gold mines only">
+                        <c:LabeledField.FieldContent>
+                            <TextBox Name="GoldBox" Width="80" HorizontalAlignment="Left"
+                                     MinHeight="0" Padding="4,3"/>
+                        </c:LabeledField.FieldContent>
+                    </c:LabeledField>
+
+                    <c:LabeledField Label="Scale">
+                        <c:LabeledField.FieldContent>
+                            <!-- Compact X/Y/Z boxes so the row fits the dock; the
+                                 "1 = normal size" hint moved into the tooltip. -->
+                            <StackPanel Orientation="Horizontal" Spacing="4"
+                                        ToolTip.Tip="1 = normal size">
+                                <TextBlock Text="X" Foreground="#8FA3B8" VerticalAlignment="Center"/>
+                                <TextBox Name="ScaleXBox" Width="48" MinHeight="0" Padding="4,3"/>
+                                <TextBlock Text="Y" Foreground="#8FA3B8" VerticalAlignment="Center"/>
+                                <TextBox Name="ScaleYBox" Width="48" MinHeight="0" Padding="4,3"/>
+                                <TextBlock Text="Z" Foreground="#8FA3B8" VerticalAlignment="Center"/>
+                                <TextBox Name="ScaleZBox" Width="48" MinHeight="0" Padding="4,3"/>
+                            </StackPanel>
+                        </c:LabeledField.FieldContent>
+                    </c:LabeledField>
+
+                    <c:LabeledField Label="Facing" Hint="degrees">
+                        <c:LabeledField.FieldContent>
+                            <TextBox Name="FacingBox" Width="80" HorizontalAlignment="Left"
+                                     MinHeight="0" Padding="4,3"/>
+                        </c:LabeledField.FieldContent>
+                    </c:LabeledField>
+                </StackPanel>
+            </ScrollViewer>
+        </DockPanel>
+    </Grid>
+</UserControl>

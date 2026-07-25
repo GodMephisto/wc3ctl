@@ -1,0 +1,191 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="using:Wc3.Studio.Controls"
+             x:Class="Wc3.Studio.Panels.MapInfoView">
+    <Grid>
+        <!-- Doubles as the empty-state hint and the error line (see ShowHint). -->
+        <TextBlock Name="PlaceholderText"
+                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                   TextWrapping="Wrap" TextAlignment="Center" Margin="24"
+                   Text="No map open."/>
+
+        <DockPanel Name="ContentRoot" IsVisible="False">
+            <!-- Apply + result line pinned at the bottom. -->
+            <Border DockPanel.Dock="Bottom" BorderBrush="#33555555"
+                    BorderThickness="0,1,0,0" Padding="8,6">
+                <DockPanel>
+                    <Button Name="ApplyButton" DockPanel.Dock="Right" Content="Apply"
+                            Margin="8,0,0,0" VerticalAlignment="Top"
+                            ToolTip.Tip="Write the changed fields to war3map.w3i (in memory). Use Save to write the map."/>
+                    <TextBlock Name="StatusText" TextWrapping="Wrap"
+                               VerticalAlignment="Center" Text=""/>
+                </DockPanel>
+            </Border>
+
+            <ScrollViewer>
+                <!-- Capped width keeps the rows readable in the full-width tab while
+                     still shrinking cleanly when the window narrows. -->
+                <StackPanel Margin="10" Spacing="2" MaxWidth="640"
+                            HorizontalAlignment="Left">
+                    <TextBlock Name="HeaderText" FontWeight="SemiBold" FontSize="14"
+                               Text="Map info (war3map.w3i)"/>
+                    <TextBlock Name="SizeText" Foreground="#8FA3B8"
+                               TextWrapping="Wrap" Text=""/>
+                    <TextBlock Name="CameraText" Foreground="#8FA3B8"
+                               TextWrapping="Wrap" Margin="0,0,0,4" Text=""/>
+
+                    <c:SectionHeader Text="Description"/>
+                    <c:LabeledField Name="NameField" Label="Name">
+                        <c:LabeledField.FieldContent>
+                            <TextBox Name="NameBox" MinHeight="0" Padding="4,3"/>
+                        </c:LabeledField.FieldContent>
+                    </c:LabeledField>
+                    <c:LabeledField Name="AuthorField" Label="Author">
+                        <c:LabeledField.FieldContent>
+                            <TextBox Name="AuthorBox" MinHeight="0" Padding="4,3"/>
+                        </c:LabeledField.FieldContent>
+                    </c:LabeledField>
+                    <c:LabeledField Name="DescriptionField" Label="Description">
+                        <c:LabeledField.FieldContent>
+                            <TextBox Name="DescriptionBox" AcceptsReturn="True"
+                                     TextWrapping="Wrap" MinHeight="56" Padding="4,3"/>
+                        </c:LabeledField.FieldContent>
+                    </c:LabeledField>
+                    <c:LabeledField Name="SuggestedField" Label="Players"
+                                    Hint="suggested players line, e.g. 2-4">
+                        <c:LabeledField.FieldContent>
+                            <TextBox Name="SuggestedBox" MinHeight="0" Padding="4,3"/>
+                        </c:LabeledField.FieldContent>
+                    </c:LabeledField>
+
+                    <c:SectionHeader Text="Environment"/>
+                    <c:LabeledField Label="Tileset">
+                        <c:LabeledField.FieldContent>
+                            <c:SearchableComboBox Name="TilesetPicker"/>
+                        </c:LabeledField.FieldContent>
+                    </c:LabeledField>
+                    <c:LabeledField Label="Light" Hint="light environment, usually the tileset itself">
+                        <c:LabeledField.FieldContent>
+                            <c:SearchableComboBox Name="LightPicker"/>
+                        </c:LabeledField.FieldContent>
+                    </c:LabeledField>
+                    <c:LabeledField Label="Weather">
+                        <c:LabeledField.FieldContent>
+                            <c:SearchableComboBox Name="WeatherPicker"/>
+                        </c:LabeledField.FieldContent>
+                    </c:LabeledField>
+                    <c:LabeledField Label="Sound" Hint="sound environment label, e.g. Default">
+                        <c:LabeledField.FieldContent>
+                            <TextBox Name="SoundBox" MinHeight="0" Padding="4,3"/>
+                        </c:LabeledField.FieldContent>
+                    </c:LabeledField>
+                    <!-- 82 = the LabeledField label column (76) + its gap (6), so the
+                         checkboxes line up with the editors. -->
+                    <CheckBox Name="TintWaterCheck" Content="Tint water" Margin="82,2,0,0"/>
+                    <c:LabeledField Label="Tint color" Hint="R,G,B,A (0..255)">
+                        <c:LabeledField.FieldContent>
+                            <TextBox Name="WaterTintBox" Width="140" HorizontalAlignment="Left"
+                                     MinHeight="0" Padding="4,3"/>
+                        </c:LabeledField.FieldContent>
+                    </c:LabeledField>
+
+                    <c:SectionHeader Text="Fog"/>
+                    <CheckBox Name="UseFogCheck" Content="Use terrain fog" Margin="82,2,0,0"/>
+                    <c:LabeledField Label="Style">
+                        <c:LabeledField.FieldContent>
+                            <c:SearchableComboBox Name="FogStylePicker"/>
+                        </c:LabeledField.FieldContent>
+                    </c:LabeledField>
+                    <c:LabeledField Label="Start Z">
+                        <c:LabeledField.FieldContent>
+                            <TextBox Name="FogStartBox" Width="100" HorizontalAlignment="Left"
+                                     MinHeight="0" Padding="4,3"/>
+                        </c:LabeledField.FieldContent>
+                    </c:LabeledField>
+                    <c:LabeledField Label="End Z">
+                        <c:LabeledField.FieldContent>
+                            <TextBox Name="FogEndBox" Width="100" HorizontalAlignment="Left"
+                                     MinHeight="0" Padding="4,3"/>
+                        </c:LabeledField.FieldContent>
+                    </c:LabeledField>
+                    <c:LabeledField Label="Density">
+                        <c:LabeledField.FieldContent>
+                            <TextBox Name="FogDensityBox" Width="100" HorizontalAlignment="Left"
+                                     MinHeight="0" Padding="4,3"/>
+                        </c:LabeledField.FieldContent>
+                    </c:LabeledField>
+                    <c:LabeledField Label="Color" Hint="R,G,B,A (0..255)">
+                        <c:LabeledField.FieldContent>
+                            <TextBox Name="FogColorBox" Width="140" HorizontalAlignment="Left"
+                                     MinHeight="0" Padding="4,3"/>
+                        </c:LabeledField.FieldContent>
+                    </c:LabeledField>
+
+                    <c:SectionHeader Text="Loading Screen"/>
+                    <c:LabeledField Label="Preset" Hint="campaign preset index, -1 = none">
+                        <c:LabeledField.FieldContent>
+                            <TextBox Name="LoadingIndexBox" Width="80" HorizontalAlignment="Left"
+                                     MinHeight="0" Padding="4,3"/>
+                        </c:LabeledField.FieldContent>
+                    </c:LabeledField>
+                    <c:LabeledField Label="Path" Hint="custom loading screen model, overrides the preset">
+                        <c:LabeledField.FieldContent>
+                            <TextBox Name="LoadingPathBox" MinHeight="0" Padding="4,3"/>
+                        </c:LabeledField.FieldContent>
+                    </c:LabeledField>
+                    <c:LabeledField Name="LoadingTitleField" Label="Title">
+                        <c:LabeledField.FieldContent>
+                            <TextBox Name="LoadingTitleBox" MinHeight="0" Padding="4,3"/>
+                        </c:LabeledField.FieldContent>
+                    </c:LabeledField>
+                    <c:LabeledField Name="LoadingSubtitleField" Label="Subtitle">
+                        <c:LabeledField.FieldContent>
+                            <TextBox Name="LoadingSubtitleBox" MinHeight="0" Padding="4,3"/>
+                        </c:LabeledField.FieldContent>
+                    </c:LabeledField>
+                    <c:LabeledField Name="LoadingTextField" Label="Text">
+                        <c:LabeledField.FieldContent>
+                            <TextBox Name="LoadingTextBox" AcceptsReturn="True"
+                                     TextWrapping="Wrap" MinHeight="56" Padding="4,3"/>
+                        </c:LabeledField.FieldContent>
+                    </c:LabeledField>
+
+                    <c:SectionHeader Text="Prologue"/>
+                    <c:LabeledField Name="PrologueTitleField" Label="Title">
+                        <c:LabeledField.FieldContent>
+                            <TextBox Name="PrologueTitleBox" MinHeight="0" Padding="4,3"/>
+                        </c:LabeledField.FieldContent>
+                    </c:LabeledField>
+                    <c:LabeledField Name="PrologueSubtitleField" Label="Subtitle">
+                        <c:LabeledField.FieldContent>
+                            <TextBox Name="PrologueSubtitleBox" MinHeight="0" Padding="4,3"/>
+                        </c:LabeledField.FieldContent>
+                    </c:LabeledField>
+                    <c:LabeledField Name="PrologueTextField" Label="Text">
+                        <c:LabeledField.FieldContent>
+                            <TextBox Name="PrologueTextBox" AcceptsReturn="True"
+                                     TextWrapping="Wrap" MinHeight="56" Padding="4,3"/>
+                        </c:LabeledField.FieldContent>
+                    </c:LabeledField>
+
+                    <c:SectionHeader Text="Map Options"/>
+                    <StackPanel Spacing="2" Margin="4,4,0,0">
+                        <CheckBox Name="MeleeCheck" Content="Melee map"/>
+                        <CheckBox Name="HideMinimapCheck" Content="Hide minimap in preview screens"/>
+                        <CheckBox Name="AllyPrioritiesCheck" Content="Modify ally priorities"/>
+                        <CheckBox Name="MaskedPartialCheck" Content="Masked areas are partially visible"/>
+                        <CheckBox Name="FixedSettingsCheck" Content="Fixed player settings (for custom forces)"/>
+                        <CheckBox Name="CustomForcesCheck" Content="Use custom forces"/>
+                        <CheckBox Name="CustomTechCheck" Content="Use custom techtree"/>
+                        <CheckBox Name="CustomAbilitiesCheck" Content="Use custom abilities"/>
+                        <CheckBox Name="CustomUpgradesCheck" Content="Use custom upgrades"/>
+                        <CheckBox Name="CliffWavesCheck" Content="Show water waves on cliff shores"/>
+                        <CheckBox Name="RollingWavesCheck" Content="Show water waves on rolling shores"/>
+                        <CheckBox Name="ItemClassCheck" Content="Use item classification system"/>
+                        <CheckBox Name="AccurateProbCheck" Content="Accurate probability for calculations"/>
+                    </StackPanel>
+                </StackPanel>
+            </ScrollViewer>
+        </DockPanel>
+    </Grid>
+</UserControl>

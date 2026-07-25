@@ -1,0 +1,121 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:panels="using:Wc3.Studio.Panels"
+             xmlns:c="using:Wc3.Studio.Controls"
+             x:Class="Wc3.Studio.Panels.PaletteView">
+    <Grid>
+
+        <!-- Shown until a map is open. -->
+        <TextBlock Name="PlaceholderText" Margin="8,6"
+                   VerticalAlignment="Top" TextWrapping="Wrap"
+                   Text="Palette - no map open"/>
+
+        <!-- Search + kind filter over the placeable unit and doodad catalogs. -->
+        <Grid Name="ContentRoot" IsVisible="False" RowDefinitions="Auto,Auto,*">
+
+            <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="8,6,8,0">
+                <TextBox Name="SearchBox" Grid.Column="0"
+                         Watermark="Search name or rawcode…"
+                         TextChanged="OnSearchChanged"/>
+                <ComboBox Name="KindFilter" Grid.Column="1" Margin="6,0,0,0"
+                          SelectedIndex="0" SelectionChanged="OnKindChanged"
+                          ToolTip.Tip="Filter by placeable kind.">
+                    <ComboBoxItem>All</ComboBoxItem>
+                    <ComboBoxItem>Units</ComboBoxItem>
+                    <ComboBoxItem>Doodads</ComboBoxItem>
+                    <ComboBoxItem>Items</ComboBoxItem>
+                    <ComboBoxItem>Destructables</ComboBoxItem>
+                </ComboBox>
+            </Grid>
+
+            <TextBlock Name="StatusText" Grid.Row="1" Margin="8,4"
+                       FontSize="11" TextWrapping="Wrap" Text=""/>
+
+            <!-- Icon grid, grouped: each group is a FULL-WIDTH SectionHeader (a normal
+                 vertical child → always visible) stacked over a WrapPanel of icon-only
+                 tiles. Vertical scroll only; horizontal disabled so the tile WrapPanel is
+                 width-constrained and actually wraps. -->
+            <ScrollViewer Grid.Row="2" Margin="8,0,8,8"
+                          HorizontalScrollBarVisibility="Disabled"
+                          VerticalScrollBarVisibility="Auto">
+                <ItemsControl Name="PaletteGroups">
+                    <ItemsControl.Styles>
+                        <!-- Icon tile; the full "Name (rawcode) · kind · source" label is
+                             the hover tooltip. Highlighted when its row IsSelected. -->
+                        <Style Selector="Border.tile">
+                            <Setter Property="Padding" Value="3"/>
+                            <Setter Property="Margin" Value="1"/>
+                            <Setter Property="CornerRadius" Value="3"/>
+                            <Setter Property="Background" Value="Transparent"/>
+                            <Setter Property="BorderThickness" Value="2"/>
+                            <Setter Property="BorderBrush" Value="Transparent"/>
+                            <Setter Property="Cursor" Value="Hand"/>
+                        </Style>
+                        <Style Selector="Border.tile:pointerover">
+                            <Setter Property="Background" Value="#22FFFFFF"/>
+                        </Style>
+                        <Style Selector="Border.tile.selected">
+                            <Setter Property="BorderBrush" Value="#4F8CFF"/>
+                            <Setter Property="Background" Value="#334F8CFF"/>
+                        </Style>
+                    </ItemsControl.Styles>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type panels:PaletteGroup}">
+                            <StackPanel>
+                                <c:SectionHeader Text="{Binding Title}" Collapsed="{Binding Collapsed}"
+                                                 Collapsible="True" Margin="0,4,0,2"
+                                                 Toggled="OnGroupHeaderToggled"
+                                                 ToolTip.Tip="Click to collapse/expand this group"/>
+                                <ItemsControl ItemsSource="{Binding Tiles}"
+                                              IsVisible="{Binding ShowTiles}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel/>
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type panels:PaletteRow}">
+                                            <!-- Icon when the type has art (units mostly do);
+                                                 otherwise the name as text (doodads + custom/
+                                                 hero units have no icon). Hover shows the full
+                                                 "Name (rawcode) · …" either way. -->
+                                            <Border Classes="tile"
+                                                    Classes.selected="{Binding IsSelected}"
+                                                    PointerPressed="OnTilePressed"
+                                                    ToolTip.Tip="{Binding Tooltip}">
+                                                <Panel MinHeight="44">
+                                                    <Image Source="{Binding Icon}"
+                                                           Width="44" Height="44" Stretch="Uniform"
+                                                           IsVisible="{Binding HasIconArt}"/>
+                                                    <TextBlock Text="{Binding TileText}"
+                                                               IsVisible="{Binding !HasIconArt}"
+                                                               MaxWidth="118" FontSize="11"
+                                                               TextWrapping="Wrap" MaxLines="2"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               VerticalAlignment="Center"
+                                                               TextAlignment="Center"/>
+                                                    <!-- "in use" badge: the count when placed, a tick
+                                                         when only script-referenced. Marks the
+                                                         look-alike rawcode that is actually used. -->
+                                                    <Border IsVisible="{Binding IsUsed}"
+                                                            Background="#CC1E7A34" CornerRadius="3"
+                                                            Padding="3,0" Margin="0,2,2,0"
+                                                            HorizontalAlignment="Right" VerticalAlignment="Top">
+                                                        <TextBlock Text="{Binding UsageBadge}"
+                                                                   FontSize="10" FontWeight="Bold"
+                                                                   Foreground="White"/>
+                                                    </Border>
+                                                </Panel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+
+        </Grid>
+    </Grid>
+</UserControl>

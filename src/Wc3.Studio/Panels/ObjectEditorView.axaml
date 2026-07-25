@@ -1,0 +1,220 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="using:Wc3.Studio.Controls"
+             x:Class="Wc3.Studio.Panels.ObjectEditorView">
+    <UserControl.Styles>
+        <Style Selector="ListBox#ObjectList ListBoxItem">
+            <Setter Property="Padding" Value="6,3"/>
+            <Setter Property="MinHeight" Value="0"/>
+        </Style>
+        <Style Selector="ListBox#FieldList ListBoxItem">
+            <Setter Property="Padding" Value="4,1"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <!-- Reference-list sub-rows are display-only: disabling the container
+                 keeps them out of selection (and thus out of the field editor). -->
+            <Setter Property="IsEnabled" Value="{Binding !IsSubRow}"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Grid>
+        <TextBlock Name="PlaceholderText"
+                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                   Text="Object editor panel - no map open"/>
+
+        <Grid Name="ContentRoot" IsVisible="False" RowDefinitions="Auto,*,Auto">
+            <!-- Type switcher: all 7 Object Editor kinds. New… derives a fresh
+                 custom object of the current kind from the selected object. -->
+            <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" Margin="6,4">
+                <TextBlock Text="Type:" VerticalAlignment="Center"/>
+                <!-- Searchable type switcher; SelectionChanged is wired in code
+                     (CLR event with a SearchableComboBoxItem payload). -->
+                <controls:SearchableComboBox Name="KindCombo" MinWidth="150"/>
+                <Button Name="NewObjectButton" Content="New…" Click="OnNewObjectClick"
+                        ToolTip.Tip="Create a new custom object of this kind based on the selected one"/>
+                <TextBlock Name="ListCountText" VerticalAlignment="Center"
+                           Foreground="#8FA3B8" Text=""/>
+            </StackPanel>
+
+            <Grid Grid.Row="1" ColumnDefinitions="300,4,*">
+                <!-- Master: search + the map's objects of the selected kind (multi-select). -->
+                <Grid Grid.Column="0" RowDefinitions="Auto,*,Auto">
+                    <TextBox Grid.Row="0" Name="SearchBox" Margin="4,0,4,4"
+                             Watermark="Search name or rawcode…"
+                             TextChanged="OnSearchChanged"/>
+                    <Grid Grid.Row="1">
+                        <ListBox Name="ObjectList" SelectionMode="Multiple"
+                                 SelectionChanged="OnObjectSelectionChanged">
+                            <!-- Right-click: jump to the Dependencies tab on this object.
+                                 A PointerPressed tunnel handler moves the selection to the
+                                 row under the pointer before the menu opens. -->
+                            <ListBox.ContextMenu>
+                                <ContextMenu Opening="OnObjectContextMenuOpening">
+                                    <MenuItem Name="ShowDependenciesItem"
+                                              Header="Show dependencies"
+                                              Click="OnShowDependenciesClick"/>
+                                </ContextMenu>
+                            </ListBox.ContextMenu>
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <!-- Icon slot + label. The slot is a fixed-size box so
+                                         rows without icon art keep the text aligned. The
+                                         icon decodes lazily off the UI thread (see
+                                         ObjectRow.Icon) and pops in via PropertyChanged. -->
+                                    <Grid ColumnDefinitions="24,*">
+                                        <Border Grid.Column="0" Width="24" Height="24"
+                                                Background="#22000000" CornerRadius="2"
+                                                VerticalAlignment="Center">
+                                            <Image Source="{Binding Icon}" Stretch="Uniform"/>
+                                        </Border>
+                                        <TextBlock Grid.Column="1" Text="{Binding Display}"
+                                                   Margin="6,0,0,0"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   VerticalAlignment="Center"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                        <TextBlock Name="EmptyListText" IsVisible="False"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   TextWrapping="Wrap" Margin="12" Foreground="#8FA3B8"/>
+                    </Grid>
+                    <!-- Model preview of the double-clicked object: map-imported
+                         models render in-window (drag the image to orbit the
+                         camera); base-game models only show their path. -->
+                    <Border Grid.Row="2" Name="ModelArea" IsVisible="False"
+                            BorderBrush="#33555555" BorderThickness="0,1,0,0" Padding="4">
+                        <StackPanel Spacing="4">
+                            <TextBlock Name="ModelText" TextWrapping="Wrap" FontSize="11"/>
+                            <Border Name="PreviewBorder" IsVisible="False" Height="240"
+                                    Background="#22000000" ClipToBounds="True"
+                                    Cursor="Hand"
+                                    PointerPressed="OnPreviewPointerPressed"
+                                    PointerMoved="OnPreviewPointerMoved"
+                                    PointerReleased="OnPreviewPointerReleased"
+                                    PointerWheelChanged="OnPreviewWheel">
+                                <Image Name="PreviewImage" Stretch="Uniform"/>
+                            </Border>
+                            <TextBlock Name="PreviewHint" IsVisible="False" FontSize="11"
+                                       Foreground="#8FA3B8" Text="Drag to rotate, scroll to zoom"/>
+                            <Button Name="ExtractModelButton" Content="Extract model…"
+                                    IsEnabled="False" Click="OnExtractModelClick"/>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+
+                <GridSplitter Grid.Column="1" Background="#33555555"/>
+
+                <!-- Detail: merged fields (base ⊕ map) of the first selected object,
+                     read-only grid + a dedicated editor box below. -->
+                <DockPanel Grid.Column="2" Margin="4,0,0,0">
+                    <TextBlock Name="SelectedHeader" DockPanel.Dock="Top"
+                               FontWeight="SemiBold" Margin="6,4" Text=""/>
+                    <TextBlock Name="MultiSelectNote" DockPanel.Dock="Top" IsVisible="False"
+                               Foreground="#E8C56A" Margin="6,0,6,4" Text=""/>
+                    <Grid DockPanel.Dock="Top" ColumnDefinitions="230,56,*,72" Margin="8,2">
+                        <TextBlock Grid.Column="0" Text="Field" FontWeight="SemiBold"/>
+                        <TextBlock Grid.Column="1" Text="Code" FontWeight="SemiBold"/>
+                        <TextBlock Grid.Column="2" Text="Value" FontWeight="SemiBold" Margin="4,0"/>
+                        <TextBlock Grid.Column="3" Text="Source" FontWeight="SemiBold"/>
+                    </Grid>
+
+                    <!-- Dedicated field editor: select a row above, edit here, Apply
+                         writes to every selected object of the current kind. -->
+                    <Border DockPanel.Dock="Bottom" BorderBrush="#33555555"
+                            BorderThickness="0,1,0,0" Padding="6,4">
+                        <StackPanel Spacing="4">
+                            <TextBlock Name="FieldEditLabel" FontWeight="SemiBold"
+                                       Text="Select a field to edit"/>
+                            <DockPanel>
+                                <Button Name="ApplyButton" DockPanel.Dock="Right"
+                                        Content="Apply" Margin="6,0,0,0" VerticalAlignment="Top"
+                                        IsEnabled="False" Click="OnApplyClick"/>
+                                <!-- Exactly one editor is visible at a time; the field's
+                                     metadata type picks it (see ConfigureEditor). The text
+                                     box is the always-available fallback. -->
+                                <Panel>
+                                    <TextBox Name="EditorBox" MinHeight="0" Padding="4,3"/>
+                                    <controls:SearchableComboBox Name="EditorCombo" IsVisible="False"/>
+                                    <Border Name="EditorMultiHost" IsVisible="False"
+                                            BorderBrush="#33555555" BorderThickness="1" MaxHeight="180">
+                                        <ListBox Name="EditorMulti" SelectionMode="Multiple,Toggle"/>
+                                    </Border>
+                                    <!-- Object-reference LIST builder: the current entries in
+                                         order plus Add (searchable picker over the referenced
+                                         kind's map objects), Remove and Up/Down reorder. Apply
+                                         writes the rawcodes comma-joined in list order. -->
+                                    <Border Name="RefListHost" IsVisible="False"
+                                            BorderBrush="#33555555" BorderThickness="1" Padding="4">
+                                        <Grid RowDefinitions="Auto,4,Auto">
+                                            <DockPanel Grid.Row="0">
+                                                <Button Name="RefListAddButton" DockPanel.Dock="Right"
+                                                        Content="Add" Margin="4,0,0,0"
+                                                        Click="OnRefListAddClick"/>
+                                                <controls:SearchableComboBox Name="RefListAddCombo"/>
+                                            </DockPanel>
+                                            <DockPanel Grid.Row="2">
+                                                <StackPanel DockPanel.Dock="Right" Spacing="4"
+                                                            Margin="4,0,0,0">
+                                                    <Button Name="RefListRemoveButton" Content="Remove"
+                                                            MinWidth="70" IsEnabled="False"
+                                                            Click="OnRefListRemoveClick"/>
+                                                    <Button Name="RefListUpButton" Content="Up"
+                                                            MinWidth="70" IsEnabled="False"
+                                                            Click="OnRefListUpClick"/>
+                                                    <Button Name="RefListDownButton" Content="Down"
+                                                            MinWidth="70" IsEnabled="False"
+                                                            Click="OnRefListDownClick"/>
+                                                </StackPanel>
+                                                <ListBox Name="RefListBox" MaxHeight="140"
+                                                         SelectionChanged="OnRefListSelectionChanged"/>
+                                            </DockPanel>
+                                        </Grid>
+                                    </Border>
+                                </Panel>
+                            </DockPanel>
+                            <TextBlock Name="EditNote" Foreground="#8FA3B8" FontSize="11"
+                                       TextWrapping="Wrap" Text=""/>
+                        </StackPanel>
+                    </Border>
+
+                    <ListBox Name="FieldList" SelectionChanged="OnFieldSelectionChanged">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Grid ColumnDefinitions="230,56,*,72">
+                                    <TextBlock Grid.Column="0" Text="{Binding Name}"
+                                               Foreground="{Binding RowBrush}"
+                                               FontWeight="{Binding RowWeight}"
+                                               TextTrimming="CharacterEllipsis"
+                                               VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding Code}"
+                                               FontFamily="Consolas,Menlo,monospace"
+                                               Foreground="{Binding RowBrush}"
+                                               VerticalAlignment="Center"/>
+                                    <!-- Margin comes from the row: reference-list
+                                         sub-rows indent under their parent's value. -->
+                                    <TextBlock Grid.Column="2" Text="{Binding DisplayValue}"
+                                               Foreground="{Binding RowBrush}"
+                                               FontWeight="{Binding RowWeight}"
+                                               TextTrimming="CharacterEllipsis"
+                                               Margin="{Binding ValueMargin}"
+                                               VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="3" Text="{Binding Source}"
+                                               Foreground="{Binding RowBrush}"
+                                               FontWeight="{Binding RowWeight}"
+                                               VerticalAlignment="Center"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+            </Grid>
+
+            <DockPanel Grid.Row="2" Margin="6,4">
+                <Button Name="SaveEditsButton" DockPanel.Dock="Right"
+                        Content="Save Edits" Click="OnSaveEditsClick"/>
+                <TextBlock Name="StatusText" TextWrapping="Wrap"
+                           VerticalAlignment="Center" Margin="0,0,8,0" Text=""/>
+            </DockPanel>
+        </Grid>
+    </Grid>
+</UserControl>

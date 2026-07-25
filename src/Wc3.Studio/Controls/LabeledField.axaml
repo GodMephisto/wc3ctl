@@ -1,0 +1,16 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Wc3.Studio.Controls.LabeledField">
+    <!-- Fixed label column + a stretching editor slot; the optional dim hint sits
+         UNDER the editor (not beside it) so a row never overflows a narrow dock. -->
+    <Grid ColumnDefinitions="76,*" Margin="0,2">
+        <TextBlock Name="LabelText" Grid.Column="0" VerticalAlignment="Center"
+                   Margin="0,0,6,0" TextWrapping="Wrap" Text=""/>
+        <StackPanel Grid.Column="1" Spacing="2">
+            <ContentControl Name="Slot" HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Stretch"/>
+            <TextBlock Name="HintText" Foreground="#8FA3B8" FontSize="11"
+                       TextWrapping="Wrap" IsVisible="False" Text=""/>
+        </StackPanel>
+    </Grid>
+</UserControl>

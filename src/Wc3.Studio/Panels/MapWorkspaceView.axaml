@@ -1,0 +1,114 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:panels="using:Wc3.Studio.Panels"
+             x:Class="Wc3.Studio.Panels.MapWorkspaceView">
+    <DockPanel>
+
+        <!-- Header: role label + open button, with a per-workspace status line. -->
+        <Border DockPanel.Dock="Top" BorderThickness="0,0,0,1"
+                BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
+                Padding="8,4">
+            <StackPanel Spacing="4">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBlock Name="RoleText" FontWeight="SemiBold"
+                               VerticalAlignment="Center" Text="Map"/>
+                    <Button Name="OpenMapButton" Content="Open Map…" Click="OnOpenMapClick"/>
+                    <Button Name="SaveButton" Content="Save" IsEnabled="False" Click="OnSaveClick"
+                            ToolTip.Tip="Write the map (with any edits) back to its .w3x file on disk."/>
+                    <Button Name="TestButton" Content="Test in WC3" IsEnabled="False" Click="OnTestClick"
+                            ToolTip.Tip="Save, then launch Warcraft III on this map."/>
+                    <!-- Port seam (Source only): a later wave enables this and wires
+                         it across both workspaces via MainWindow.Workspaces. The
+                         Border carries the tooltip because disabled controls don't
+                         receive the pointer events that trigger ToolTip. -->
+                    <Border Name="PortButtonHost" IsVisible="False"
+                            ToolTip.Tip="Pick a unit in the Dependencies tab, then port it into the Target map.">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <Button Name="PreviewPortButton" Content="Preview…"
+                                    IsEnabled="False" Click="OnPreviewPortClick"
+                                    ToolTip.Tip="Dry run: show exactly what the port would change without writing anything."/>
+                            <Button Name="PortButton" Content="Port selected → Target ▶"
+                                    IsEnabled="False" Click="OnPortClick"
+                                    ToolTip.Tip="Pick a unit in the Dependencies tab, then port it into the Target map."/>
+                        </StackPanel>
+                    </Border>
+                    <!-- Target only: porting into a fresh map. Creation itself is a
+                         follow-up slice (see OnNewBlankMapClick). -->
+                    <Button Name="NewBlankMapButton" Content="New Blank Map"
+                            IsVisible="False" Click="OnNewBlankMapClick"/>
+                </StackPanel>
+                <TextBlock Name="StatusText" FontSize="11" TextWrapping="Wrap"
+                           Text="No map open."/>
+            </StackPanel>
+        </Border>
+
+        <!-- This workspace's own panel instances; loaded lazily per tab. -->
+        <TabControl Name="PanelTabs" SelectionChanged="OnPanelTabsSelectionChanged">
+            <!-- Terrain hosts the 3D viewport PLUS a World-Editor-style side
+                 dock (Palette / Unit / Players sub-tabs). The viewport column
+                 is elastic; the dock starts at 360px and stays user-resizable
+                 via the splitter (see LoadSelectedPanel for the dock's
+                 load-together flow and the sub-tab auto-switch handlers). -->
+            <TabItem Header="Terrain" Name="TerrainTab">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" MinWidth="240"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="400" MinWidth="340"/>
+                    </Grid.ColumnDefinitions>
+                    <panels:TerrainView Grid.Column="0" Name="TerrainPanel"/>
+                    <GridSplitter Grid.Column="1" Width="4" ResizeDirection="Columns"/>
+                    <TabControl Grid.Column="2" Name="DockTabs">
+                        <TabItem Header="Palette" Name="PaletteDockTab">
+                            <panels:PaletteView Name="PalettePanel"/>
+                        </TabItem>
+                        <!-- Unit properties: follows the 3D viewport's unit
+                             pick (see OnTerrainUnitsSelected). -->
+                        <TabItem Header="Unit" Name="UnitDockTab">
+                            <panels:UnitPropertiesView Name="UnitPropsPanel"/>
+                        </TabItem>
+                        <!-- Doodad properties: follows the 3D viewport's doodad
+                             pick (see OnTerrainDoodadSelected). -->
+                        <TabItem Header="Doodad" Name="DoodadDockTab">
+                            <panels:DoodadPropertiesView Name="DoodadPropsPanel"/>
+                        </TabItem>
+                        <TabItem Header="Players" Name="PlayersDockTab">
+                            <panels:PlayerForceView Name="PlayersPanel"/>
+                        </TabItem>
+                    </TabControl>
+                </Grid>
+            </TabItem>
+            <TabItem Header="Map Info">
+                <panels:MapInfoView Name="MapInfoPanel"/>
+            </TabItem>
+            <TabItem Header="Objects">
+                <panels:ObjectEditorView Name="ObjectsPanel"/>
+            </TabItem>
+            <TabItem Header="Files">
+                <panels:FilesView Name="FilesPanel"/>
+            </TabItem>
+            <TabItem Header="Script">
+                <panels:ScriptView Name="ScriptPanel"/>
+            </TabItem>
+            <TabItem Header="Triggers">
+                <panels:TriggerView Name="TriggersPanel"/>
+            </TabItem>
+            <TabItem Header="Strings">
+                <panels:StringImportView Name="StringsPanel"/>
+            </TabItem>
+            <TabItem Header="Regions">
+                <panels:RegionsView Name="RegionsPanel"/>
+            </TabItem>
+            <TabItem Header="Cameras">
+                <panels:CamerasView Name="CamerasPanel"/>
+            </TabItem>
+            <TabItem Header="Sounds">
+                <panels:SoundsView Name="SoundsPanel"/>
+            </TabItem>
+            <TabItem Header="Dependencies" Name="DependenciesTab">
+                <panels:DependencyGraphView Name="DependenciesPanel"/>
+            </TabItem>
+        </TabControl>
+
+    </DockPanel>
+</UserControl>

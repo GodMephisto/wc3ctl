@@ -1,0 +1,33 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Wc3.Studio.Panels.PlayerForceView">
+    <Grid>
+        <!-- Doubles as the empty-state hint and the error line (see ShowHint). -->
+        <TextBlock Name="PlaceholderText"
+                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                   TextWrapping="Wrap" TextAlignment="Center" Margin="24"
+                   Text="Players and forces panel - no map open"/>
+
+        <DockPanel Name="ContentRoot" IsVisible="False">
+            <Border DockPanel.Dock="Top" BorderBrush="#33555555"
+                    BorderThickness="0,0,0,1" Padding="8,6">
+                <StackPanel Spacing="2">
+                    <TextBlock FontWeight="SemiBold" Text="Players and Forces (war3map.w3i)"/>
+                    <TextBlock FontSize="11" Foreground="#8FA3B8" TextWrapping="Wrap"
+                               Text="Flag changes apply immediately (in memory); use each player's team dropdown to move them. Save writes the map."/>
+                </StackPanel>
+            </Border>
+
+            <Border DockPanel.Dock="Bottom" BorderBrush="#33555555"
+                    BorderThickness="0,1,0,0" Padding="8,4">
+                <TextBlock Name="StatusText" TextWrapping="Wrap" Text=""/>
+            </Border>
+
+            <!-- One card per force, built in code (BuildCards) - no virtualization,
+                 so the editable controls never hit the ListBox-recycling pitfall. -->
+            <ScrollViewer>
+                <StackPanel Name="ForceList" Margin="8" Spacing="8"/>
+            </ScrollViewer>
+        </DockPanel>
+    </Grid>
+</UserControl>
