@@ -362,6 +362,38 @@ public static class Program
         }));
         place.AddCommand(placeStartLoc);
 
+        var placeItemRawcode = new Argument<string>("rawcode", "Four-character item type rawcode.");
+        var placeItem = new Command("item",
+            "Place a preplaced item at (x, y) and save the edited map. Writes war3mapUnits.doo (item slot).")
+        { mapArg, placeItemRawcode, placeXArg, placeYArg, placeZOpt, placeRotOpt, placeScaleOpt, setOut };
+        placeItem.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = PlacementCommand.PlaceItem(doc,
+                p.GetValueForArgument(placeItemRawcode),
+                p.GetValueForArgument(placeXArg),
+                p.GetValueForArgument(placeYArg),
+                p.GetValueForOption(placeZOpt),
+                p.GetValueForOption(placeRotOpt),
+                p.GetValueForOption(placeScaleOpt));
+            if (!r.Ok)
+            {
+                Emit(p.GetValueForOption(jsonOption), r, () => r.Message);
+                exitCode[0] = 1;
+                return;
+            }
+            var dest = p.GetValueForOption(setOut) ?? Path.Combine(
+                Path.GetDirectoryName(map) ?? "",
+                Path.GetFileNameWithoutExtension(map) + ".edited" + Path.GetExtension(map));
+            doc.Save(dest);
+            Emit(p.GetValueForOption(jsonOption),
+                new { r.Ok, r.Message, r.CreationNumber, SavedTo = dest },
+                () => $"{r.Message}\nsaved: {dest}");
+        }));
+        place.AddCommand(placeItem);
+
         // ---- palette: the doodad types placeable on a map (base catalog ⊕ map object-data) ----
         var palette = new Command("palette",
             "List the doodad types placeable on a map (base-game catalog + the map's own object-data).")
