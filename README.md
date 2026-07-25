@@ -1,52 +1,52 @@
-# wc3ctl — Warcraft III map toolkit
+# wc3ctl, a Warcraft III map toolkit
 
-A byte-faithful toolkit for inspecting and editing Warcraft III `.w3x`/`.w3m`
-maps, built as a World Editor replacement with three front-ends over one shared
-command layer:
+A byte-faithful toolkit for inspecting and editing Warcraft III `.w3x` and `.w3m`
+maps, built as a World Editor replacement. It has three front-ends over one
+shared command layer.
 
-- **`wc3ctl`** — a command-line tool (`--json` on every command for scripting).
-- **Studio** — an Avalonia desktop editor (terrain, objects, placement, map
-  settings, triggers viewer, and more).
-- **MCP server** — exposes the same operations to MCP-capable agents.
+- `wc3ctl`, a command-line tool (pass `--json` on any command for scripting).
+- Studio, an Avalonia desktop editor (terrain, objects, placement, map settings,
+  triggers viewer, and more).
+- An MCP server that exposes the same operations to MCP-capable agents.
 
-Everything runs through `Wc3.Commands`, so the CLI, GUI, and MCP surfaces stay
-in lockstep. Untouched files are written back byte-for-byte; only edited
+Everything runs through `Wc3.Commands`, so the CLI, GUI, and MCP surfaces stay in
+lockstep. Untouched files are written back byte for byte, and only edited
 sub-files are re-serialized.
 
 ## What it does
 
-- **Inspect & round-trip** — open an MPQ-based map (including the 512-byte
+- **Inspect and round-trip.** Open an MPQ-based map (including the 512-byte
   pre-archive header), parse every known `war3map.*` file into a typed model,
   preserve everything else as raw bytes, and save so untouched files compare
   byte-identical to the original. Parse failures degrade to diagnostics, never
   crashes.
-- **Object data** — merged base-game data (via the installed game's CASC
-  storage) overlaid with the map's deltas, for all seven object kinds (units,
-  items, abilities, destructables, doodads, buffs, upgrades), with per-level
-  ability fields and byte-faithful write-back.
-- **Placement** — place and remove units, items, doodads, destructables, and
-  regions; set start locations; edit placed-unit properties.
-- **Terrain** — height/cliff/water/blight/texture brushes with undo/redo, plus
-  terrain and model rendering to PNG.
-- **Map setup** — scenario info (name, author, description, tileset, fog, …),
-  players and forces, cameras, sounds, and the imported-audio catalog.
-- **Porting** — resolve an object's full dependency closure (objects, buffs,
+- **Object data.** Merged base-game data (via the installed game's CASC storage)
+  overlaid with the map's deltas, for all seven object kinds (units, items,
+  abilities, destructables, doodads, buffs, upgrades), with per-level ability
+  fields and byte-faithful write-back.
+- **Placement.** Place and remove units, items, doodads, destructables, and
+  regions, set start locations, and edit placed-unit properties.
+- **Terrain.** Height, cliff, water, blight, and texture brushes with undo and
+  redo, plus terrain and model rendering to PNG.
+- **Map setup.** Scenario info (name, author, description, tileset, fog, and
+  more), players and forces, cameras, sounds, and the imported-audio catalog.
+- **Porting.** Resolve an object's full dependency closure (objects, buffs,
   summoned units, referenced files, and the JASS functions that implement its
   skills) and inject it into another map, auto-remapping rawcode collisions.
 
 ## Projects
 
-| Project | Purpose |
-| --- | --- |
-| `src/Wc3.MapDocument` | Core model: load/save, per-file raw + dirty tracking, format registry |
-| `src/Wc3.GameData` | Reforged base data via CASC (objects, strings, profiles) |
-| `src/Wc3.Modeling` | MDX/MDL geometry parsing + BLP texture decode |
-| `src/Wc3.Render` | Terrain heightmap and model rendering |
-| `src/Wc3.Commands` | Shared command layer (front-end-agnostic result records) |
-| `src/wc3ctl` | CLI front-end (System.CommandLine) |
-| `src/Wc3.Studio` | Avalonia desktop editor |
-| `src/Wc3.Mcp` | MCP server (stdio) |
-| `tests/Wc3.Tests` | xUnit suite: hermetic tests + opt-in corpus/GameData tests |
+- `src/Wc3.MapDocument`, the core model (load and save, per-file raw plus dirty
+  tracking, format registry).
+- `src/Wc3.GameData`, Reforged base data via CASC (objects, strings, profiles).
+- `src/Wc3.Modeling`, MDX and MDL geometry parsing plus BLP texture decode.
+- `src/Wc3.Render`, terrain heightmap and model rendering.
+- `src/Wc3.Commands`, the shared command layer (front-end-agnostic result records).
+- `src/wc3ctl`, the CLI front-end (System.CommandLine).
+- `src/Wc3.Studio`, the Avalonia desktop editor.
+- `src/Wc3.Mcp`, the MCP server over stdio.
+- `tests/Wc3.Tests`, the xUnit suite (hermetic tests plus opt-in corpus and
+  GameData tests).
 
 ## CLI
 
@@ -70,11 +70,11 @@ wc3ctl render <map> -o out.png
 
 Add `--json` to any command for machine-readable output.
 
-Resolving base game data requires an installed Warcraft III (Reforged); its data
+Resolving base game data requires an installed Warcraft III (Reforged). Its data
 lives in CASC storage. The install is auto-detected, or pass `--game-dir <path>`.
 Without an install, commands still work on map deltas only and say so.
 
-## Build & test
+## Build and test
 
 Requires the .NET 8 SDK.
 
@@ -85,7 +85,7 @@ dotnet test --filter "Category=GameData"                     # needs an installe
 dotnet test --filter "Category=Corpus"                       # needs a real .w3x on disk
 ```
 
-Publish (self-contained, win-x64):
+Publish a self-contained win-x64 build.
 
 ```bash
 dotnet publish src/wc3ctl        -c Release -r win-x64 --self-contained -o dist
@@ -94,7 +94,7 @@ dotnet publish src/Wc3.Mcp       -c Release -r win-x64 --self-contained -o dist-
 ```
 
 `wc3ctl` needs the native `CascLib.dll` beside `wc3ctl.exe` (produced in the
-publish output; keep them together).
+publish output, keep them together).
 
 ## Fidelity
 
