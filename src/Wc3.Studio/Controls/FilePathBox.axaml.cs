@@ -30,6 +30,9 @@ public partial class FilePathBox : UserControl
     public static readonly StyledProperty<string> FilterPatternsProperty =
         AvaloniaProperty.Register<FilePathBox, string>(nameof(FilterPatterns), "*.*");
 
+    public static readonly StyledProperty<bool> PickFolderProperty =
+        AvaloniaProperty.Register<FilePathBox, bool>(nameof(PickFolder));
+
     private bool _syncing;
 
     public FilePathBox() => InitializeComponent();
@@ -69,6 +72,14 @@ public partial class FilePathBox : UserControl
         set => SetValue(FilterPatternsProperty, value);
     }
 
+    /// <summary>When true, Browse picks a folder instead of a file (the file-type filter is
+    /// ignored). Lets the same control serve folder inputs like the install and map folders.</summary>
+    public bool PickFolder
+    {
+        get => GetValue(PickFolderProperty);
+        set => SetValue(PickFolderProperty, value);
+    }
+
     private void OnTextChanged(object? sender, TextChangedEventArgs e)
     {
         if (_syncing) return;
@@ -79,10 +90,16 @@ public partial class FilePathBox : UserControl
 
     private async void OnBrowse(object? sender, RoutedEventArgs e)
     {
-        var patterns = FilterPatterns
-            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        var picked = await FilePicker.PickOpenAsync(this, DialogTitle,
-            new FilePicker.Filter(FilterName, patterns));
+        string? picked;
+        if (PickFolder)
+            picked = await FilePicker.PickFolderAsync(this, DialogTitle);
+        else
+        {
+            var patterns = FilterPatterns
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            picked = await FilePicker.PickOpenAsync(this, DialogTitle,
+                new FilePicker.Filter(FilterName, patterns));
+        }
         if (picked is not null)
             Text = picked;
     }

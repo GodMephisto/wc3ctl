@@ -12,6 +12,8 @@
                 <MenuItem Header="Open _Source Map…" Click="OnOpenSourceMapClick"/>
                 <MenuItem Header="Open _Target Map…" Click="OnOpenTargetMapClick"/>
                 <Separator/>
+                <MenuItem Header="_Settings…" Click="OnSettingsClick"/>
+                <Separator/>
                 <MenuItem Header="E_xit" Click="OnExitClick"/>
             </MenuItem>
             <MenuItem Header="_Help">
