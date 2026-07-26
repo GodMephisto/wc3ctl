@@ -22,7 +22,15 @@ public sealed record BlankMapOptions
     public string MapName { get; init; } = "Blank Map";
     public string MapAuthor { get; init; } = "wc3ctl";
     public string MapDescription { get; init; } = "Created with wc3ctl.";
-    public string RecommendedPlayers { get; init; } = "1";
+    public string RecommendedPlayers { get; init; } = "2";
+
+    /// <summary>
+    /// Number of playable (user) slots the map defines. Two by default, because Warcraft III will not
+    /// build a multiplayer lobby for a one-player map (hosting it shows an empty "0/1" slot list with
+    /// nothing to join). Each slot is a human-controllable player in one shared force, so the map hosts
+    /// as a real custom game.
+    /// </summary>
+    public int PlayerCount { get; init; } = 2;
 
     /// <summary>Playable area is TileEdge x TileEdge tiles (TileEdge+1 vertices per side).</summary>
     public int TileEdge { get; init; } = 32;
@@ -99,22 +107,28 @@ public static class BlankMap
             MapFlags = MapFlags.UseCustomForces | MapFlags.FixedPlayerSettingsForCustomForces,
             Tileset = (Tileset)(byte)o.TilesetCode,
         };
-        // One playable slot (red, human, user) at the centre, in a single force. Matches what
-        // the JASS skeleton sets up with SetPlayers(1) and DefineStartLocation(0, ...).
-        info.Players.Add(new PlayerData
+        // N playable (human/user) slots in one shared force, spread across the centre. Matches the
+        // JASS skeleton's SetPlayers(n) / per-player InitCustomPlayerSlots / DefineStartLocation.
+        int players = Math.Max(o.PlayerCount, 1);
+        int forceMask = players >= 32 ? -1 : (1 << players) - 1; // bits 0..players-1
+        for (int i = 0; i < players; i++)
         {
-            Id = 0,
-            Controller = PlayerController.User,
-            Race = PlayerRace.Human,
-            Flags = 0,
-            Name = "Player 1",
-            StartPosition = new Vector2(0f, 0f),
-            AllyLowPriorityFlags = new Bitmask32(0),
-            AllyHighPriorityFlags = new Bitmask32(0),
-            EnemyLowPriorityFlags = new Bitmask32(0),
-            EnemyHighPriorityFlags = new Bitmask32(0),
-        });
-        info.Forces.Add(new ForceData { Flags = 0, Players = new Bitmask32(-1), Name = "Force 1" });
+            float sx = (i - (players - 1) / 2f) * 256f;
+            info.Players.Add(new PlayerData
+            {
+                Id = i,
+                Controller = PlayerController.User,
+                Race = PlayerRace.Human,
+                Flags = 0,
+                Name = $"Player {i + 1}",
+                StartPosition = new Vector2(sx, 0f),
+                AllyLowPriorityFlags = new Bitmask32(0),
+                AllyHighPriorityFlags = new Bitmask32(0),
+                EnemyLowPriorityFlags = new Bitmask32(0),
+                EnemyHighPriorityFlags = new Bitmask32(0),
+            });
+        }
+        info.Forces.Add(new ForceData { Flags = 0, Players = new Bitmask32(forceMask), Name = "Force 1" });
         EnsureSerializable(info);
 
         var env = BuildEnvironment(o.EnvironmentVersion, o.TileEdge, o.TilesetCode);
@@ -259,6 +273,27 @@ public static class BlankMap
         string name = JassString(o.MapName);
         string desc = JassString(o.MapDescription);
 
+        // Per-player lobby setup for the N user slots (see PlayerCount). One shared force (team 0).
+        int players = Math.Max(o.PlayerCount, 1);
+        var inv = CultureInfo.InvariantCulture;
+        var slotsSb = new StringBuilder();
+        var teamsSb = new StringBuilder();
+        var startsSb = new StringBuilder();
+        for (int i = 0; i < players; i++)
+        {
+            slotsSb.Append($"    call SetPlayerStartLocation( Player({i}), {i} )\n");
+            slotsSb.Append($"    call SetPlayerColor( Player({i}), ConvertPlayerColor({i}) )\n");
+            slotsSb.Append($"    call SetPlayerRacePreference( Player({i}), RACE_PREF_HUMAN )\n");
+            slotsSb.Append($"    call SetPlayerRaceSelectable( Player({i}), true )\n");
+            slotsSb.Append($"    call SetPlayerController( Player({i}), MAP_CONTROL_USER )\n");
+            teamsSb.Append($"    call SetPlayerTeam( Player({i}), 0 )\n");
+            float sx = (i - (players - 1) / 2f) * 256f;
+            startsSb.Append($"    call DefineStartLocation( {i}, {sx.ToString("0.0", inv)}, 0.0 )\n");
+        }
+        string slots = slotsSb.ToString().TrimEnd('\n');
+        string teams = teamsSb.ToString().TrimEnd('\n');
+        string starts = startsSb.ToString().TrimEnd('\n');
+
         return $$"""
             //===========================================================================
             //
@@ -289,17 +324,12 @@ public static class BlankMap
             //***************************************************************************
 
             function InitCustomPlayerSlots takes nothing returns nothing
-                // Player 0
-                call SetPlayerStartLocation( Player(0), 0 )
-                call SetPlayerColor( Player(0), ConvertPlayerColor(0) )
-                call SetPlayerRacePreference( Player(0), RACE_PREF_HUMAN )
-                call SetPlayerRaceSelectable( Player(0), true )
-                call SetPlayerController( Player(0), MAP_CONTROL_USER )
+            {{slots}}
             endfunction
 
             function InitCustomTeams takes nothing returns nothing
                 // Force: Force 1
-                call SetPlayerTeam( Player(0), 0 )
+            {{teams}}
             endfunction
 
             //***************************************************************************
@@ -331,11 +361,11 @@ public static class BlankMap
             function config takes nothing returns nothing
                 call SetMapName( "{{name}}" )
                 call SetMapDescription( "{{desc}}" )
-                call SetPlayers( 1 )
+                call SetPlayers( {{players}} )
                 call SetTeams( 1 )
                 call SetGamePlacement( MAP_PLACEMENT_USE_MAP_SETTINGS )
 
-                call DefineStartLocation( 0, 0.0, 0.0 )
+            {{starts}}
 
                 // Player setup
                 call InitCustomPlayerSlots(  )
