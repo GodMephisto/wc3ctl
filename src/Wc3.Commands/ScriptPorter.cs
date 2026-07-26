@@ -225,11 +225,18 @@ internal static class ScriptPorter
             var refs = DroppedRefs(StripComment(line), dropped);
             if (refs.Count == 0) { sb.Append(line).Append('\n'); continue; }
             var head = line.TrimStart();
-            bool safe = head.StartsWith("call ", StringComparison.Ordinal)
+            if (head.StartsWith("local ", StringComparison.Ordinal))
+            {
+                // Keep the variable DECLARED, drop only the initializer that called the dropped
+                // function. Commenting the whole line out would undeclare a variable the rest of the
+                // function still reads ("return ok", "call SaveReal(HH, id, ...)"), and an undefined
+                // variable is a compile error that kills the entire script (config never runs, so the
+                // host lobby cannot build slots). The variable keeps its type default instead.
+                sb.Append(TrimLocalInitializer(line)).Append('\n');
+            }
+            else if (head.StartsWith("call ", StringComparison.Ordinal)
                 || head.StartsWith("set ", StringComparison.Ordinal)
-                || head.StartsWith("local ", StringComparison.Ordinal)
-                || head.StartsWith("debug ", StringComparison.Ordinal);
-            if (safe)
+                || head.StartsWith("debug ", StringComparison.Ordinal))
             {
                 sb.Append(TrimMarker).Append(line).Append('\n');
             }
@@ -240,6 +247,18 @@ internal static class ScriptPorter
             }
         }
         return sb.ToString();
+    }
+
+    /// <summary>Keeps a local's declaration but drops its initializer, so a variable whose value came
+    /// from a dropped function stays declared (its later reads compile, defaulting to null/0/false).
+    /// "  local integer id= NewTimerRU(hId)" becomes "  local integer id". The first '=' is the
+    /// assignment (JASS identifiers and types carry no '='), so any '==' in the dropped expression
+    /// sits safely after it.</summary>
+    private static string TrimLocalInitializer(string line)
+    {
+        int eq = line.IndexOf('=');
+        if (eq < 0) return line; // no initializer (e.g. a bare or array declaration): nothing to drop
+        return line[..eq].TrimEnd() + " " + TrimMarker + "(initializer dropped)";
     }
 
     private static int CountTrimMarkers(string body)
