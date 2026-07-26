@@ -159,6 +159,64 @@ public class BundleScriptClosureTests
         Assert.DoesNotContain("NatsuSpell", names);  // only in the foreign branch, cut
     }
 
+    [Fact]
+    public void ExecuteFunc_named_function_is_pulled_into_the_closure()
+    {
+        // A seed function dispatches by name via ExecuteFunc("Storm_Actions"). The target sits in
+        // a string literal, not a normal call, but it must still be carried, else the spell's body
+        // never runs in the ported map.
+        const string jass =
+            "function Storm_Actions takes nothing returns nothing\n" +
+            "endfunction\n" +
+            "function Trig_Cast takes nothing returns nothing\n" +
+            "    if GetSpellAbilityId() == 'A000' then\n" +
+            "        call ExecuteFunc(\"Storm_Actions\")\n" +
+            "    endif\n" +
+            "endfunction\n";
+
+        var names = ResolveH000WithAbility(jass).Functions.Select(f => f.Name).ToHashSet();
+        Assert.Contains("Trig_Cast", names);      // seed (references 'A000')
+        Assert.Contains("Storm_Actions", names);  // reached only via ExecuteFunc
+    }
+
+    [Fact]
+    public void ExecuteFunc_naming_a_nonexistent_function_is_ignored()
+    {
+        const string jass =
+            "function Trig_Cast takes nothing returns nothing\n" +
+            "    if GetSpellAbilityId() == 'A000' then\n" +
+            "        call ExecuteFunc(\"NotAFunction\")\n" +
+            "    endif\n" +
+            "endfunction\n";
+
+        var names = ResolveH000WithAbility(jass).Functions.Select(f => f.Name).ToHashSet();
+        Assert.Contains("Trig_Cast", names);
+        Assert.DoesNotContain("NotAFunction", names); // unknown name adds nothing, no throw
+    }
+
+    [Fact]
+    public void ExecuteFunc_in_a_foreign_dispatch_branch_is_not_pulled_in()
+    {
+        // ExecuteFunc callees honor the same branch scoping as ordinary calls.
+        const string jass =
+            "function RaidenFx takes nothing returns nothing\n" +
+            "endfunction\n" +
+            "function NatsuFx takes nothing returns nothing\n" +
+            "endfunction\n" +
+            "function CastDispatch takes nothing returns nothing\n" +
+            "    if GetUnitTypeId(GetSpellAbilityUnit()) == 'H000' then\n" +
+            "        call ExecuteFunc(\"RaidenFx\")\n" +
+            "    endif\n" +
+            "    if GetUnitTypeId(GetSpellAbilityUnit()) == 'H001' then\n" +
+            "        call ExecuteFunc(\"NatsuFx\")\n" +
+            "    endif\n" +
+            "endfunction\n";
+
+        var names = ResolveWithTwoHeroes(jass).Functions.Select(f => f.Name).ToHashSet();
+        Assert.Contains("RaidenFx", names);       // our branch's ExecuteFunc target
+        Assert.DoesNotContain("NatsuFx", names);  // foreign branch's target, cut
+    }
+
     /// <summary>H000 (ported hero, uabi=A000) alongside a second custom hero H001 (foreign),
     /// plus A000 and the given script. Bundling H000 sees ported ids H000/A000, and H001 as a
     /// known foreign custom object, so a branch guarded by 'H001' is dropped.</summary>

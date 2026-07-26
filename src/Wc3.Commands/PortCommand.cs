@@ -364,7 +364,14 @@ public static class PortCommand
         if (MergedGroup(source, kind, id) is not { } src || MergedGroup(target, kind, id) is not { } tgt)
             return false;
         int inlined = 0; // normalization only — not part of the port's inline count
-        return GroupsEqual(RemapGroup(src, IdentityRemap, srcStrings, ref inlined), tgt);
+        // Inline BOTH sides' TRIGSTR references against their OWN string table before comparing.
+        // The target commonly stores a name/tooltip as a TRIGSTR into its own war3map.wts, so
+        // comparing the source's inlined literal against the target's raw TRIGSTR would never
+        // match, and a content-identical prior port (e.g. between two versions of a map) would be
+        // duplicated on every re-port instead of reused.
+        return GroupsEqual(
+            RemapGroup(src, IdentityRemap, srcStrings, ref inlined),
+            RemapGroup(tgt, IdentityRemap, MapStrings.From(target), ref inlined));
     }
 
     /// <summary>The document's merged (map ⊕ skin, skin wins per field) group for one
