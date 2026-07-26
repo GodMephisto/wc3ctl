@@ -33,6 +33,7 @@ public static class PreplacedUnitsScript
 
     private const string UnitsFunc = "CreateAllUnits";
     private const string ItemsFunc = "CreateAllItems";
+    private const string WireSpellsFunc = "wc3ctl_WirePlacedHeroSpells";
 
     public sealed record SyncResult(bool Ok, string Message, int Units, int Items);
 
@@ -146,11 +147,34 @@ public static class PreplacedUnitsScript
         string? heroArray = null, IReadOnlyList<string>? spellTriggersOrNull = null)
     {
         var spellTriggers = spellTriggersOrNull ?? Array.Empty<string>();
+        // Players that own a placed unit (a placed hero's owner is among them, neutral slots excluded).
+        // The arena's spell-dispatch triggers get their spell-effect event registered for these players
+        // so a placed hero's casts reach the handlers. This is deferred, not done in CreateAllUnits,
+        // because CreateAllUnits runs BEFORE InitCustomTriggers in main(), so the gg_trg_* dispatch
+        // triggers do not exist yet at unit-creation time (registering then would silently hit null).
+        var heroOwners = units.Select(u => u.OwnerId)
+            .Where(o => o >= 0 && o < PlayerColors.NeutralHostileId)
+            .Distinct().OrderBy(o => o).ToList();
+        bool wireSpells = spellTriggers.Count > 0 && heroOwners.Count > 0;
+
         var sb = new StringBuilder();
         sb.Append(BeginMarker).Append(nl);
 
         if (units.Count > 0)
         {
+            if (wireSpells)
+            {
+                // Fired by a 0-second timer from CreateAllUnits, so it runs once map init has finished
+                // and every gg_trg_* dispatch trigger has been created by InitCustomTriggers.
+                sb.Append("function ").Append(WireSpellsFunc).Append(" takes nothing returns nothing").Append(nl);
+                foreach (var trg in spellTriggers)
+                    foreach (var owner in heroOwners)
+                        sb.Append("    call TriggerRegisterPlayerUnitEvent(").Append(trg)
+                          .Append(", Player(").Append(owner).Append("), EVENT_PLAYER_UNIT_SPELL_EFFECT, null)").Append(nl);
+                sb.Append("    call DestroyTimer(GetExpiredTimer())").Append(nl);
+                sb.Append("endfunction").Append(nl);
+            }
+
             sb.Append("function ").Append(UnitsFunc).Append(" takes nothing returns nothing").Append(nl);
             sb.Append("    local unit u").Append(nl);
             foreach (var u in units)
@@ -184,24 +208,20 @@ public static class PreplacedUnitsScript
                 if (u.MP is >= 0 and <= 100)
                     sb.Append("    call SetUnitState(u, UNIT_STATE_MANA, GetUnitState(u, UNIT_STATE_MAX_MANA) * ")
                       .Append(Real(u.MP / 100f)).Append(')').Append(nl);
-                // Best-effort arena integration for a placed hero (see Sync): put it in the per-player
-                // hero array so handlers that test Hero[pid] see it, and register its player on the
-                // spell-effect dispatch triggers whose event the arena would otherwise only add during
-                // hero creation (which a placed hero skips). Without the latter, casts never reach the
-                // dispatcher and nothing happens.
-                if (heroArray is not null || spellTriggers.Count > 0)
-                {
-                    sb.Append("    if IsUnitType(u, UNIT_TYPE_HERO) then").Append(nl);
-                    if (heroArray is not null)
-                        sb.Append("        if ").Append(heroArray).Append("[GetPlayerId(GetOwningPlayer(u))] == null then").Append(nl)
-                          .Append("            set ").Append(heroArray).Append("[GetPlayerId(GetOwningPlayer(u))] = u").Append(nl)
-                          .Append("        endif").Append(nl);
-                    foreach (var trg in spellTriggers)
-                        sb.Append("        call TriggerRegisterPlayerUnitEvent(").Append(trg)
-                          .Append(", GetOwningPlayer(u), EVENT_PLAYER_UNIT_SPELL_EFFECT, null)").Append(nl);
-                    sb.Append("    endif").Append(nl);
-                }
+                // Best-effort arena integration for a placed hero (see Sync): register it into the
+                // per-player hero array so handlers that test Hero[pid] recognise it. Safe here because
+                // it is a plain global-array write (the array exists from map load), unlike the spell
+                // trigger registration, which must wait for the triggers and is done via the timer below.
+                if (heroArray is not null)
+                    sb.Append("    if IsUnitType(u, UNIT_TYPE_HERO) and ").Append(heroArray)
+                      .Append("[GetPlayerId(GetOwningPlayer(u))] == null then").Append(nl)
+                      .Append("        set ").Append(heroArray)
+                      .Append("[GetPlayerId(GetOwningPlayer(u))] = u").Append(nl)
+                      .Append("    endif").Append(nl);
             }
+            if (wireSpells)
+                sb.Append("    call TimerStart(CreateTimer(), 0., false, function ")
+                  .Append(WireSpellsFunc).Append(')').Append(nl);
             sb.Append("    set u = null").Append(nl);
             sb.Append("endfunction").Append(nl);
         }
