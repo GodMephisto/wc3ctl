@@ -68,6 +68,10 @@ public class CliMcpParityTests
         // Repair utility: regenerates the preplaced-widget creation script. Placement
         // already runs it automatically (CommitUnits), so MCP needs no separate tool.
         "place sync",
+        // Repair utility: restores declarations a port left commented out, so the script
+        // compiles again. Porting now gates on this automatically, so it is only ever needed
+        // for a map produced before the gate existed.
+        "script repair",
     };
 
     // The real MCP tool names, read straight from the [McpServerTool] attributes the

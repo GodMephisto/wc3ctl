@@ -518,6 +518,37 @@ public static class Program
         }), mapArg, jsonOption);
         script.AddCommand(scriptFunctions);
 
+        var repairOut = new Option<string?>(new[] { "-o", "--out" },
+            "Output map path. Default: '<map>.repaired.<ext>' next to the input - the original is never overwritten.");
+        var scriptRepair = new Command("repair",
+            "Repair a map whose script cannot compile (restores declarations whose initializer was dropped by a port). "
+            + "An un-compilable war3map.j is why a hosted map shows no player slots.")
+        { mapArg, repairOut };
+        scriptRepair.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            bool json = p.GetValueForOption(jsonOption);
+            var doc = MapDocument.Load(map);
+            var r = ScriptRepairCommand.Execute(doc);
+
+            // Nothing changed means nothing to write, so the original is left exactly as it is.
+            string? dest = null;
+            if (r.Repairs > 0)
+            {
+                dest = p.GetValueForOption(repairOut) ?? Path.Combine(
+                    Path.GetDirectoryName(map) ?? "",
+                    Path.GetFileNameWithoutExtension(map) + ".repaired" + Path.GetExtension(map));
+                doc.Save(dest);
+            }
+            if (!r.Ok) exitCode[0] = 2;
+            Emit(json, new { r.Ok, r.Message, r.Repairs, r.Remaining, SavedTo = dest }, () =>
+                r.Message
+                + (dest is null ? "" : $"\nsaved: {dest}")
+                + (r.Remaining.Count == 0 ? "" : "\n" + string.Join("\n", r.Remaining.Select(x => "  ! " + x))));
+        }));
+        script.AddCommand(scriptRepair);
+
         var internalPathArg = new Argument<string?>("internal-path", () => null, "Exact internal file path to extract.");
         var outOption = new Option<string?>(new[] { "-o", "--out" },
             "Output directory (or output file for a single named extraction). Default: current directory.");
@@ -667,15 +698,37 @@ public static class Program
         }));
         port.AddCommand(portUnit);
 
+        var deepOption = new Option<bool>("--deep",
+            "Also run pjass, the game's own JASS parser, over the map script (needs a Warcraft III install).");
         var validate = new Command("validate",
-            "Check a map for problems (missing/empty files, loader errors). Exits 2 if invalid.")
-            { mapArg };
-        validate.SetHandler((string map, bool json) => RunSafely(() =>
+            "Check a map for problems (missing/empty files, loader errors, a script that cannot compile). Exits 2 if invalid.")
+            { mapArg, deepOption };
+        validate.SetHandler(ctx => RunSafely(() =>
         {
-            var r = ValidateCommand.Execute(MapDocument.Load(map));
-            Emit(json, r, () => Render.Validate(r));
-            if (!r.Valid) exitCode[0] = 2;
-        }), mapArg, jsonOption);
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            bool json = p.GetValueForOption(jsonOption);
+            var doc = MapDocument.Load(map);
+            var r = ValidateCommand.Execute(doc);
+
+            PjassResult? deep = null;
+            if (p.GetValueForOption(deepOption))
+            {
+                var entry = doc.GetFile("war3map.j") ?? doc.GetFile("scripts\\war3map.j");
+                byte[]? bytes = entry?.OverrideBytes ?? entry?.RawBytes;
+                if (bytes is { Length: > 0 })
+                    deep = PjassGate.Check(System.Text.Encoding.Latin1.GetString(bytes),
+                        p.GetValueForOption(gameDirOption));
+            }
+
+            Emit(json, new { r.Valid, r.Errors, r.Warnings, r.Issues, Pjass = deep }, () =>
+                Render.Validate(r)
+                + (deep is null ? "" : $"\npjass: {deep.Note}"
+                    + (deep.Errors.Count == 0 ? "" : "\n" + string.Join("\n", deep.Errors.Select(e => "  ! " + e)))));
+
+            // pjass is authoritative when it actually ran, so a script it rejects fails the map.
+            if (!r.Valid || deep is { Ran: true, Passed: false }) exitCode[0] = 2;
+        }));
 
         // ---- terrain editing ----
         void FinishTerrain(bool json, string? outOpt, string map, MapDocument doc,

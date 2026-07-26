@@ -55,8 +55,11 @@ public sealed record ExtractResult(IReadOnlyList<ExtractedItem> Items);
 public sealed record RawcodeRemap(ObjectKind Kind, string From, string To);
 public sealed record PortedObject(ObjectKind Kind, string Rawcode, string? Name, bool ModifiesStandard);
 // Outcome of the best-effort JASS script closure append (null when no script was ported).
+// Written is false when the merged script failed the compile gate and was deliberately not
+// applied, so the target keeps its original working script (see ScriptPorter.PortScript).
 public sealed record ScriptPortInfo(
-    int Functions, int Globals, int Renamed, bool InitHooked, IReadOnlyList<string> Notes);
+    int Functions, int Globals, int Renamed, bool InitHooked, IReadOnlyList<string> Notes,
+    bool Written = true);
 public sealed record PortResult(
     string RootRawcode,
     string? RootPortedTo,          // the root's rawcode in the target (== RootRawcode if no collision)

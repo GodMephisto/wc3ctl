@@ -205,12 +205,42 @@ internal static class ScriptPorter
                       "init path, verify it runs in the target.");
         }
 
-        if (apply)
+        // The compile gate. Trimming a call to a function we did not carry can leave a variable
+        // undeclared, and in JASS that single error fails the whole war3map.j, so config() never runs
+        // and the hosted map shows no player slots. That used to save silently and only surface in a
+        // lobby, so the merged script is now verified here, repaired if it is mechanically fixable,
+        // and simply not written if it still would not compile.
+        var issues = JassScriptCheck.Check(merged);
+        if (!JassScriptCheck.IsCompilable(issues))
+        {
+            merged = JassScriptCheck.Repair(merged, out int repaired);
+            if (repaired > 0)
+                notes.Add($"repaired {repaired} declaration(s) whose initializer was dropped, so the "
+                    + "ported script compiles (those variables take their type default).");
+            issues = JassScriptCheck.Check(merged);
+        }
+
+        bool written = JassScriptCheck.IsCompilable(issues);
+        if (!written)
+        {
+            var errors = issues
+                .Where(i => i.Severity == DiagnosticSeverity.Error && JassScriptCheck.BlocksCompilation(i.Kind))
+                .Take(10)
+                .Select(i => i.Line > 0 ? $"line {i.Line}: {i.Message}" : i.Message);
+            notes.Add("REFUSED to write the ported script: it would not compile, which would leave the "
+                + "map unhostable (an empty lobby). The map keeps its original working script, so the "
+                + "object and asset port still applies. Errors: " + string.Join(" | ", errors));
+        }
+        else if (apply)
+        {
             target.AddOrReplaceRawFile(tgtEntry.FileName!, ByteText.GetBytes(merged));
-        return new ScriptPortInfo(srcFns.Count, carriedGlobals.Count, rename.Count, hooked, notes);
+        }
+        return new ScriptPortInfo(srcFns.Count, carriedGlobals.Count, rename.Count, hooked, notes, written);
     }
 
-    private const string TrimMarker = "//[wc3ctl trimmed] ";
+    /// <summary>Owned by <see cref="JassScriptCheck"/> so the writer of this marker and the checker
+    /// that detects (and repairs) its damage can never drift apart.</summary>
+    private const string TrimMarker = JassScriptCheck.TrimMarker;
 
     /// <summary>Comments out each safe statement (call/set/local/debug) that invokes or references a
     /// source function we are NOT carrying, so a carried body only ever calls carried functions or
@@ -384,33 +414,12 @@ internal static class ScriptPorter
         return sb.ToString();
     }
 
-    /// <summary>Global name → its full declaration line, plus declaration order.</summary>
+    /// <summary>Global name → its full declaration line, plus declaration order. Delegates to the
+    /// shared parser so the porter and <see cref="JassScriptCheck"/> agree on what a global is.</summary>
     private static (Dictionary<string, string>, List<string>) ParseGlobals(string[] lines)
     {
-        var map = new Dictionary<string, string>(StringComparer.Ordinal);
-        var order = new List<string>();
-        bool inBlock = false;
-        foreach (var raw in lines)
-        {
-            var t = raw.Trim();
-            if (!inBlock) { if (t == "globals") inBlock = true; continue; }
-            if (t == "endglobals") { inBlock = false; continue; }
-            if (t.Length == 0 || t.StartsWith("//", StringComparison.Ordinal)) continue;
-            var name = GlobalName(t);
-            if (name is not null && !map.ContainsKey(name)) { map[name] = t; order.Add(name); }
-        }
-        return (map, order);
-    }
-
-    private static string? GlobalName(string decl)
-    {
-        var toks = decl.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-        int i = 0;
-        if (i < toks.Length && toks[i] == "constant") i++;
-        i++; // type
-        if (i < toks.Length && toks[i] == "array") i++;
-        if (i >= toks.Length) return null;
-        return toks[i].Split('=')[0].Trim();
+        var (byName, order) = JassGlobals.Parse(lines);
+        return (byName, order);
     }
 
     private static string ApplyRenames(string code, IReadOnlyDictionary<string, string> rename, IEnumerable<string> _)
