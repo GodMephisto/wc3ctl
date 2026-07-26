@@ -309,6 +309,11 @@ public static class BlankMap
                 call SetDayNightModels( "Environment\\DNC\\DNCLordaeron\\DNCLordaeronTerrain\\DNCLordaeronTerrain.mdl", "Environment\\DNC\\DNCLordaeron\\DNCLordaeronUnit\\DNCLordaeronUnit.mdl" )
                 call NewSoundEnvironment( "Default" )
                 call InitBlizzard(  )
+                // A use-map-settings map starts fully fogged, and with no units giving vision the
+                // whole map sits under the black mask (the screen is all black). Reveal it so a
+                // freshly created blank map is visible in-game, the author re-enables fog if wanted.
+                call FogEnable( false )
+                call FogMaskEnable( false )
                 call InitCustomTriggers(  )
             endfunction
 
