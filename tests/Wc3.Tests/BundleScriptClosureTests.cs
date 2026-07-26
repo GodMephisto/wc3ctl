@@ -237,6 +237,59 @@ public class BundleScriptClosureTests
         Assert.DoesNotContain("NatsuFx", names);  // foreign branch's target, cut
     }
 
+    [Fact]
+    public void Script_added_sibling_ability_is_carried_but_a_foreign_heros_is_not()
+    {
+        // A hero's ability ids sit in globals named after the hero (MyHero_ID, MyHeroQ_ID,
+        // MyHeroQ2_ID). A000 (MyHeroQ_ID) is on the unit's ability list and seeds normally. A001
+        // (MyHeroQ2_ID) is a dash-back added at runtime by UnitAddAbility, on no ability list and
+        // reachable only through the script — it must be carried by the sibling-global rule. A foreign
+        // hero's sibling (NatsuQ2_ID -> A002) shares no stem with our hero and must NOT be carried.
+        const string jass =
+            "globals\n" +
+            "integer MyHero_ID= 'H000'\n" +
+            "integer MyHeroQ_ID= 'A000'\n" +
+            "integer MyHeroQ2_ID= 'A001'\n" +
+            "integer Natsu_ID= 'H001'\n" +
+            "integer NatsuQ2_ID= 'A002'\n" +
+            "endglobals\n" +
+            "function Cast takes nothing returns nothing\n" +
+            "    if GetUnitTypeId(GetSpellAbilityUnit()) == MyHero_ID then\n" +
+            "        call UnitAddAbility(GetSpellAbilityUnit(), MyHeroQ2_ID)\n" +
+            "    endif\n" +
+            "endfunction\n";
+
+        var rawcodes = ResolveWithSiblingAbilities(jass).Objects.Select(o => o.Rawcode).ToHashSet();
+        Assert.Contains("A000", rawcodes);      // on the hero's ability list (a normal seed)
+        Assert.Contains("A001", rawcodes);      // sibling id-global, script-added -> carried
+        Assert.DoesNotContain("A002", rawcodes); // a foreign hero's sibling -> not carried
+    }
+
+    /// <summary>H000 (hero, uabi=A000) with a script-only sibling ability A001 and a foreign hero
+    /// H001 whose sibling is A002. A000/A001/A002 all exist as custom abilities.</summary>
+    private static UnitBundle ResolveWithSiblingAbilities(string jass)
+    {
+        var w3u = new UnitObjectData(ObjectDataFormatVersion.v2);
+        var h000 = new SimpleObjectModification { OldId = "Hpal".FromRawcode(), NewId = "H000".FromRawcode() };
+        h000.Modifications.Add(new SimpleObjectDataModification
+        { Id = "uabi".FromRawcode(), Type = ObjectDataType.String, Value = "A000" });
+        w3u.NewUnits.Add(h000);
+        w3u.NewUnits.Add(new SimpleObjectModification { OldId = "Hpal".FromRawcode(), NewId = "H001".FromRawcode() });
+
+        var w3a = new AbilityObjectData(ObjectDataFormatVersion.v2);
+        foreach (var rc in new[] { "A000", "A001", "A002" })
+            w3a.NewAbilities.Add(new LevelObjectModification
+            { OldId = "AHbz".FromRawcode(), NewId = rc.FromRawcode() });
+
+        var doc = MapDocument.Load(SyntheticMap.Build(new Dictionary<string, byte[]>
+        {
+            ["war3map.w3u"] = Serialize(w => War3Net.Build.Extensions.BinaryWriterExtensions.Write(w, w3u)),
+            ["war3map.w3a"] = Serialize(w => War3Net.Build.Extensions.BinaryWriterExtensions.Write(w, w3a)),
+            ["war3map.j"] = Encoding.UTF8.GetBytes(jass),
+        }));
+        return BundleCommand.ResolveUnit(doc, "H000", ctx: null, preDiagnostics: Array.Empty<string>());
+    }
+
     /// <summary>H000 (ported hero, uabi=A000) alongside a second custom hero H001 (foreign),
     /// plus A000 and the given script. Bundling H000 sees ported ids H000/A000, and H001 as a
     /// known foreign custom object, so a branch guarded by 'H001' is dropped.</summary>

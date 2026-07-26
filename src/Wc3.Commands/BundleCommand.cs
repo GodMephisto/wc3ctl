@@ -208,13 +208,17 @@ public static class BundleCommand
         if (rootCustom) queue.Enqueue((rootRawcode, root));
         else diagnostics.Add($"root {kindWord} '{rootRawcode}' is a base-game {kindWord} — nothing custom to port");
 
-        while (queue.Count > 0)
+        void Drain()
         {
-            var (rawcode, merged) = queue.Dequeue();
-            var kind = nodes[rawcode].Kind; // enqueue always records the node first
-            foreach (var field in merged.Fields)
-                ScanField(kind, rawcode, field);
+            while (queue.Count > 0)
+            {
+                var (rawcode, merged) = queue.Dequeue();
+                var kind = nodes[rawcode].Kind; // enqueue always records the node first
+                foreach (var field in merged.Fields)
+                    ScanField(kind, rawcode, field);
+            }
         }
+        Drain();
 
         if (capped) diagnostics.Add($"node cap ({MaxNodes}) reached — dependency closure truncated");
 
@@ -230,7 +234,12 @@ public static class BundleCommand
         // dispatcher branch guarded by ANOTHER hero (a foreign custom object) from one guarded
         // by the object being ported, and refuse to follow the foreign branches.
         var allCustomIds = mapIds.Values.SelectMany(s => s).ToHashSet();
-        var functions = ResolveScriptClosure(doc, seedRawcodes, allCustomIds, diagnostics, AddFileRef);
+        var functions = ResolveScriptClosure(doc, seedRawcodes, allCustomIds, diagnostics, AddFileRef,
+            rc => AddObjectRef(rootRawcode, rc, "script closure"));
+        // The script pass may have carried objects referenced only in JASS (an ability added by
+        // UnitAddAbility, never on the hero). They are new nodes but not yet crawled for their own
+        // field references, so drain the queue once more to complete their closure.
+        Drain();
 
         return new UnitBundle(
             rootRawcode,
@@ -296,7 +305,7 @@ public static class BundleCommand
     /// </summary>
     private static IReadOnlyList<BundleFunction> ResolveScriptClosure(
         MapDocument doc, IReadOnlyList<string> seedRawcodes, HashSet<int> allCustomObjectIds,
-        List<string> diagnostics, Action<string, string, string> addFileRef)
+        List<string> diagnostics, Action<string, string, string> addFileRef, Action<string> carryObject)
     {
         var entry = doc.GetFile("war3map.j") ?? doc.GetFile("scripts\\war3map.j");
         if (entry is null)
@@ -382,6 +391,31 @@ public static class BundleCommand
         // (guardStack tracks the open if/elseif branches; a call is followed only when no active
         // branch is foreign). Alias mentions, which drive SEEDING, are collected regardless of
         // guard so the dispatcher itself is still recognised as referencing our hero.
+        // Carry a hero's script-added abilities (e.g. a Q dash-back added by UnitAddAbility, never on
+        // the unit's ability list) by the arena's naming convention: each ability id sits in a global
+        // named after the hero (DarkShiki_ID, DarkShikiQ_ID, DarkShikiQ2_ID, ...). From the root's own
+        // id-global take the hero stem, then carry every custom sibling id-global's object. Scoped to
+        // the hero's own naming group, so it never pulls another hero's abilities (a closure-wide
+        // rawcode scan does — shared dispatchers name every hero, and each carried unit cascades).
+        if (seedRawcodes.Count > 0)
+        {
+            int rootId = seedRawcodes[0].FromRawcode();
+            var rootGlobal = allAliases.FirstOrDefault(kv => kv.Value == rootId).Key;
+            if (rootGlobal is not null)
+            {
+                string stem = rootGlobal.EndsWith("_ID", StringComparison.OrdinalIgnoreCase)
+                    ? rootGlobal[..^3] : rootGlobal;
+                var seedIdSet = seedRawcodes.Where(rc => rc.Length == 4)
+                    .Select(rc => rc.FromRawcode()).ToHashSet();
+                if (stem.Length >= 4)
+                    foreach (var kv in allAliases)
+                        if (kv.Key.StartsWith(stem, StringComparison.Ordinal)
+                            && allCustomObjectIds.Contains(kv.Value)
+                            && !seedIdSet.Contains(kv.Value))
+                            carryObject(kv.Value.ToRawcode());
+            }
+        }
+
         var callees = new Dictionary<string, List<string>>(StringComparer.Ordinal);
         var aliasHits = new Dictionary<string, List<string>>(StringComparer.Ordinal);
         var assetRefs = new Dictionary<string, List<string>>(StringComparer.Ordinal);
