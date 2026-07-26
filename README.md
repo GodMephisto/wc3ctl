@@ -34,6 +34,66 @@ sub-files are re-serialized.
   summoned units, referenced files, and the JASS functions that implement its
   skills) and inject it into another map, auto-remapping rawcode collisions.
 
+## Usage
+
+### Command line
+
+Build once (or use the published `dist/wc3ctl.exe`), then run commands against a
+map. Wrap paths that contain spaces in quotes.
+
+```bash
+# Inspect a map
+wc3ctl info "MyMap.w3x"
+wc3ctl ls "MyMap.w3x"
+
+# List the map's custom units, then read one unit's merged fields
+wc3ctl object list "MyMap.w3x" --kind unit
+wc3ctl object get  "MyMap.w3x" H000 --kind unit
+
+# Change a field and write a copy (the source is never overwritten)
+wc3ctl object set "MyMap.w3x" H000 unam "Raiden Ei" --kind unit -o "MyMap.edited.w3x"
+
+# See everything a unit depends on before porting it
+wc3ctl bundle unit "Source.w3x" H000
+
+# Port a hero (its objects, assets, and skill triggers) into another map.
+# The target is never touched, a sibling Target.ported.w3x is written.
+wc3ctl port unit "Source.w3x" H000 "Target.w3x"
+
+# Create a fresh, World-Editor-openable blank map
+wc3ctl new "Blank.w3x" --name "My Arena"
+```
+
+Add `--json` to any command for machine-readable output. Base-game names and
+icons need an installed Warcraft III (auto-detected, or pass `--game-dir <path>`).
+
+### Studio (desktop editor)
+
+Launch `dist-studio\Wc3.Studio.exe` (or `dotnet run --project src/Wc3.Studio`).
+
+1. **File, then Settings** (once). Point it at your Warcraft III install folder
+   and a default map folder. Both are remembered across launches.
+2. **File, then Open Source Map**, and pick the map you want to inspect, edit, or
+   port from.
+3. Work through the tabs, terrain, objects, placement, map info, the triggers
+   viewer, and Dependencies. The **Dependencies** tab lists an object's real
+   dependencies (its model, textures, and icons), with the trigger-carried skill
+   effects tucked under a separate, collapsed **Port assets** group.
+4. **To port a hero**, open a Target map (File, then Open Target Map), select the
+   hero in the source pane, and press **Port**. A sibling `.ported.w3x` is written
+   and opened in the Target pane. Use **Preview** first to see the report without
+   writing anything.
+
+Test a ported map by loading the `.ported.w3x` **directly in Warcraft III**. Do
+not open and save it in the World Editor first, the editor regenerates the
+trigger script from its own tree and would delete the ported skill logic.
+
+### MCP server
+
+Publish it to `dist-mcp` and register it with an MCP-capable client. The
+registration snippet is in `src/Wc3.Mcp/README.md`. It exposes the same
+operations as the CLI over stdio, so an agent can inspect and edit maps directly.
+
 ## Projects
 
 - `src/Wc3.MapDocument`, the core model (load and save, per-file raw plus dirty
@@ -63,7 +123,7 @@ wc3ctl map-info get|set <map> ...
 wc3ctl player list|set-force <map> ...        force list|set-flags <map> ...
 wc3ctl camera list|add|set|remove <map> ...   pathing paint <map> ...
 wc3ctl sound list|add|set|remove <map> ...
-wc3ctl bundle unit <map> <rawcode>            port unit <map> <rawcode> --into <target>
+wc3ctl bundle unit <map> <rawcode>            port unit <source> <rawcode> <target> [-o out]
 wc3ctl new <out> [--name ...] [--tiles N]     Create a blank, WE-openable map
 wc3ctl render <map> -o out.png
 ```
