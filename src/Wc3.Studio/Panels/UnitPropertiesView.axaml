@@ -20,8 +20,6 @@
             <Grid ColumnDefinitions="Auto,*,Auto">
                 <TextBlock Grid.Column="0" Text="Owner" VerticalAlignment="Center"
                            Margin="0,0,8,0"/>
-                <!-- Players grouped under their team, neutrals last; the grouped list,
-                     swatches and header styling all live in OwnerTeamPicker. -->
                 <c:OwnerTeamPicker Grid.Column="1" Name="MultiOwnerPicker"
                                    PlaceholderText="(pick an owner)"/>
                 <Button Grid.Column="2" Name="MultiApplyOwnerButton" Content="Apply"
@@ -55,10 +53,97 @@
                     <TextBlock Name="PositionText" Foreground="#8FA3B8"
                                Margin="0,0,0,6" Text=""/>
 
+                    <c:LabeledField Label="Player">
+                        <c:LabeledField.FieldContent>
+                            <c:OwnerTeamPicker Name="OwnerPicker"/>
+                        </c:LabeledField.FieldContent>
+                    </c:LabeledField>
+
+                    <!-- Hero attributes, shown ONLY when the unit type is a hero (see code). -->
+                    <StackPanel Name="HeroSection" Spacing="2" IsVisible="False">
+                        <TextBlock Text="Hero" FontWeight="SemiBold" FontSize="11" Margin="0,4,0,0"/>
+                        <c:LabeledField Label="Level" Hint="1 or more">
+                            <c:LabeledField.FieldContent>
+                                <NumericUpDown Name="HeroLevelBox" Minimum="1" Maximum="1000"
+                                               Increment="1" FormatString="0"
+                                               HorizontalAlignment="Left" Width="130" MinHeight="0"/>
+                            </c:LabeledField.FieldContent>
+                        </c:LabeledField>
+                        <c:LabeledField Label="Strength">
+                            <c:LabeledField.FieldContent>
+                                <NumericUpDown Name="StrBox" Minimum="0" Maximum="10000"
+                                               Increment="1" FormatString="0"
+                                               HorizontalAlignment="Left" Width="130" MinHeight="0"/>
+                            </c:LabeledField.FieldContent>
+                        </c:LabeledField>
+                        <c:LabeledField Label="Agility">
+                            <c:LabeledField.FieldContent>
+                                <NumericUpDown Name="AgiBox" Minimum="0" Maximum="10000"
+                                               Increment="1" FormatString="0"
+                                               HorizontalAlignment="Left" Width="130" MinHeight="0"/>
+                            </c:LabeledField.FieldContent>
+                        </c:LabeledField>
+                        <c:LabeledField Label="Intelligence">
+                            <c:LabeledField.FieldContent>
+                                <NumericUpDown Name="IntBox" Minimum="0" Maximum="10000"
+                                               Increment="1" FormatString="0"
+                                               HorizontalAlignment="Left" Width="130" MinHeight="0"/>
+                            </c:LabeledField.FieldContent>
+                        </c:LabeledField>
+                    </StackPanel>
+
+                    <!-- Health / Mana / Target range: a Default checkbox plus a stepper. Checked =
+                         use the object's default (the -1 sentinel); uncheck to type a custom value. -->
+                    <c:LabeledField Label="Health">
+                        <c:LabeledField.FieldContent>
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <CheckBox Name="HpDefault" Content="Default" VerticalAlignment="Center"
+                                          IsCheckedChanged="OnHpDefaultChanged"/>
+                                <NumericUpDown Name="HpBox" Minimum="0" Maximum="100" Increment="5"
+                                               FormatString="0" Width="120" MinHeight="0"
+                                               VerticalAlignment="Center"/>
+                                <TextBlock Text="%" Foreground="#8FA3B8" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </c:LabeledField.FieldContent>
+                    </c:LabeledField>
+
+                    <c:LabeledField Label="Mana">
+                        <c:LabeledField.FieldContent>
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <CheckBox Name="ManaDefault" Content="Default" VerticalAlignment="Center"
+                                          IsCheckedChanged="OnManaDefaultChanged"/>
+                                <NumericUpDown Name="ManaBox" Minimum="0" Maximum="100" Increment="5"
+                                               FormatString="0" Width="120" MinHeight="0"
+                                               VerticalAlignment="Center"/>
+                                <TextBlock Text="%" Foreground="#8FA3B8" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </c:LabeledField.FieldContent>
+                    </c:LabeledField>
+
+                    <c:LabeledField Label="Target Range" Hint="acquisition range in world units">
+                        <c:LabeledField.FieldContent>
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <CheckBox Name="TargetDefault" Content="Default" VerticalAlignment="Center"
+                                          IsCheckedChanged="OnTargetDefaultChanged"/>
+                                <NumericUpDown Name="TargetBox" Minimum="0" Maximum="5000" Increment="25"
+                                               FormatString="0" Width="120" MinHeight="0"
+                                               VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </c:LabeledField.FieldContent>
+                    </c:LabeledField>
+
+                    <c:LabeledField Label="Gold" Hint="gold mines only">
+                        <c:LabeledField.FieldContent>
+                            <NumericUpDown Name="GoldBox" Minimum="0" Maximum="1000000"
+                                           Increment="500" FormatString="0"
+                                           HorizontalAlignment="Left" Width="130" MinHeight="0"/>
+                        </c:LabeledField.FieldContent>
+                    </c:LabeledField>
+
                     <!-- The unit type's abilities, resolved to names (UnitAbilitiesCommand). -->
                     <TextBlock Name="AbilitiesHeader" FontWeight="SemiBold" FontSize="11"
-                               Text="Abilities" Margin="0,2,0,0"/>
-                    <ItemsControl Name="AbilitiesList" Margin="0,0,0,6">
+                               Text="Abilities" Margin="0,6,0,0"/>
+                    <ItemsControl Name="AbilitiesList" Margin="0,0,0,4">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
                                 <TextBlock Text="{Binding}" FontSize="11" Foreground="#8FA3B8"
@@ -67,62 +152,31 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
 
-                    <c:LabeledField Label="Owner">
-                        <c:LabeledField.FieldContent>
-                            <c:OwnerTeamPicker Name="OwnerPicker"/>
-                        </c:LabeledField.FieldContent>
-                    </c:LabeledField>
-
-                    <c:LabeledField Label="Hero Level" Hint="1 or more (heroes only)">
-                        <c:LabeledField.FieldContent>
-                            <TextBox Name="HeroLevelBox" Width="80" HorizontalAlignment="Left"
-                                     MinHeight="0" Padding="4,3"/>
-                        </c:LabeledField.FieldContent>
-                    </c:LabeledField>
-
-                    <c:LabeledField Label="HP %" Hint="0..100, -1 = default">
-                        <c:LabeledField.FieldContent>
-                            <TextBox Name="HpBox" Width="80" HorizontalAlignment="Left"
-                                     MinHeight="0" Padding="4,3"/>
-                        </c:LabeledField.FieldContent>
-                    </c:LabeledField>
-
-                    <c:LabeledField Label="Mana %" Hint="0..100, -1 = default">
-                        <c:LabeledField.FieldContent>
-                            <TextBox Name="ManaBox" Width="80" HorizontalAlignment="Left"
-                                     MinHeight="0" Padding="4,3"/>
-                        </c:LabeledField.FieldContent>
-                    </c:LabeledField>
-
-                    <c:LabeledField Label="Gold" Hint="gold mines only">
-                        <c:LabeledField.FieldContent>
-                            <TextBox Name="GoldBox" Width="80" HorizontalAlignment="Left"
-                                     MinHeight="0" Padding="4,3"/>
-                        </c:LabeledField.FieldContent>
-                    </c:LabeledField>
-
-                    <c:LabeledField Label="Scale">
-                        <c:LabeledField.FieldContent>
-                            <!-- Compact X/Y/Z boxes so the row fits the dock; the
-                                 "1 = normal size" hint moved into the tooltip. -->
-                            <StackPanel Orientation="Horizontal" Spacing="4"
-                                        ToolTip.Tip="1 = normal size">
-                                <TextBlock Text="X" Foreground="#8FA3B8" VerticalAlignment="Center"/>
-                                <TextBox Name="ScaleXBox" Width="48" MinHeight="0" Padding="4,3"/>
-                                <TextBlock Text="Y" Foreground="#8FA3B8" VerticalAlignment="Center"/>
-                                <TextBox Name="ScaleYBox" Width="48" MinHeight="0" Padding="4,3"/>
-                                <TextBlock Text="Z" Foreground="#8FA3B8" VerticalAlignment="Center"/>
-                                <TextBox Name="ScaleZBox" Width="48" MinHeight="0" Padding="4,3"/>
-                            </StackPanel>
-                        </c:LabeledField.FieldContent>
-                    </c:LabeledField>
-
-                    <c:LabeledField Label="Facing" Hint="degrees">
-                        <c:LabeledField.FieldContent>
-                            <TextBox Name="FacingBox" Width="80" HorizontalAlignment="Left"
-                                     MinHeight="0" Padding="4,3"/>
-                        </c:LabeledField.FieldContent>
-                    </c:LabeledField>
+                    <!-- Transform lives in an Advanced fold: the World Editor does scale and facing by
+                         dragging in the viewport, not in the properties dialog, so they stay out of the way. -->
+                    <Expander Header="Advanced" Margin="0,4,0,0">
+                        <StackPanel Spacing="2">
+                            <c:LabeledField Label="Scale">
+                                <c:LabeledField.FieldContent>
+                                    <StackPanel Orientation="Horizontal" Spacing="4"
+                                                ToolTip.Tip="1 = normal size">
+                                        <TextBlock Text="X" Foreground="#8FA3B8" VerticalAlignment="Center"/>
+                                        <TextBox Name="ScaleXBox" Width="48" MinHeight="0" Padding="4,3"/>
+                                        <TextBlock Text="Y" Foreground="#8FA3B8" VerticalAlignment="Center"/>
+                                        <TextBox Name="ScaleYBox" Width="48" MinHeight="0" Padding="4,3"/>
+                                        <TextBlock Text="Z" Foreground="#8FA3B8" VerticalAlignment="Center"/>
+                                        <TextBox Name="ScaleZBox" Width="48" MinHeight="0" Padding="4,3"/>
+                                    </StackPanel>
+                                </c:LabeledField.FieldContent>
+                            </c:LabeledField>
+                            <c:LabeledField Label="Facing" Hint="degrees">
+                                <c:LabeledField.FieldContent>
+                                    <TextBox Name="FacingBox" Width="80" HorizontalAlignment="Left"
+                                             MinHeight="0" Padding="4,3"/>
+                                </c:LabeledField.FieldContent>
+                            </c:LabeledField>
+                        </StackPanel>
+                    </Expander>
                 </StackPanel>
             </ScrollViewer>
         </DockPanel>

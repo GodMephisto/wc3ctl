@@ -10,40 +10,35 @@ namespace Wc3.Studio.Panels;
 /// <summary>
 /// World-Editor-style properties editor for ONE placed unit (war3mapUnits.doo),
 /// opened by clicking a unit in the 3D viewport (the workspace routes the pick here).
-/// Thin shell over <see cref="UnitInstanceCommand"/>: read-only identity rows plus
-/// editable fields (LabeledField rows) and one Apply that writes only the fields that
-/// actually changed. The owner dropdowns are <see cref="OwnerTeamPicker"/>s, which
-/// group the map's players under their force (team), neutrals last.
+/// Thin shell over <see cref="UnitInstanceCommand"/>: read-only identity rows, then the
+/// fields the Reforged editor shows, Player, a hero block (Level/Str/Agi/Int) that appears
+/// only for heroes, Health/Mana/Target as a Default checkbox plus a stepper, Gold, and an
+/// Advanced fold for scale/facing. Apply writes only the fields that actually changed. The
+/// owner dropdowns are <see cref="OwnerTeamPicker"/>s, grouping the map's players by force.
 /// </summary>
 public partial class UnitPropertiesView : UserControl, IMapPanel
 {
     private MapSession? _session;
     private int? _creationNumber;
-    /// <summary>Type rawcode → display name, resolved once per map through the base game
-    /// data (units placed from the palette carry no map name delta, so the hermetic
-    /// UnitInstanceCommand read returns null — we resolve "Footman" etc. here). Cleared on
-    /// map change since map-local name deltas differ per map.</summary>
+    /// <summary>Type rawcode → display name, resolved once per map through the base game data.</summary>
     private readonly Dictionary<string, string?> _typeNameCache = new();
-    /// <summary>The values currently shown, as loaded - Apply diffs against these so
-    /// untouched fields never rewrite the file.</summary>
+    /// <summary>The values currently shown, as loaded. Apply diffs against these so untouched
+    /// fields never rewrite the file.</summary>
     private UnitInstanceInfo? _loaded;
-    /// <summary>The multi-select view's creation numbers (2+ when MultiRoot is
-    /// visible, empty otherwise). Bulk Apply/Remove act on this snapshot.</summary>
+    /// <summary>Whether the loaded unit's type is a hero (has hero abilities). Gates the hero block
+    /// and whether Apply writes hero level/attributes.</summary>
+    private bool _isHero;
+    /// <summary>The multi-select view's creation numbers (2+ when MultiRoot is visible).</summary>
     private IReadOnlyList<int> _multiSelection = Array.Empty<int>();
 
-    /// <summary>Raised after Apply wrote at least one edit to the in-memory map; the
-    /// argument is the unit's creation number. The workspace reacts by re-rendering
-    /// the viewport, restoring the highlight, and enabling Save.</summary>
+    /// <summary>Raised after Apply wrote at least one edit to the in-memory map; the argument is the
+    /// unit's creation number. The workspace re-renders the viewport and enables Save.</summary>
     public event Action<int>? UnitEdited;
 
-    /// <summary>Raised after a bulk edit (multi-select owner change) mutated the
-    /// in-memory map; the argument is the affected creation numbers. The workspace
-    /// re-renders the viewport, re-echoes the selection, and enables Save.</summary>
+    /// <summary>Raised after a bulk edit (multi-select owner change) mutated the in-memory map.</summary>
     public event Action<IReadOnlyList<int>>? UnitsEdited;
 
-    /// <summary>Raised after "Remove selected" deleted the units from the in-memory
-    /// map; the argument is the removed creation numbers. The workspace re-renders
-    /// the viewport, clears the selection, and enables Save.</summary>
+    /// <summary>Raised after "Remove selected" deleted the units from the in-memory map.</summary>
     public event Action<IReadOnlyList<int>>? UnitsRemoved;
 
     public UnitPropertiesView()
@@ -51,24 +46,22 @@ public partial class UnitPropertiesView : UserControl, IMapPanel
         InitializeComponent();
     }
 
-    /// <summary>IMapPanel entry: a (re)opened map invalidates creation numbers, so
-    /// reset to the "pick a unit" hint until the viewport routes a selection here.</summary>
+    /// <summary>IMapPanel entry: a (re)opened map invalidates creation numbers, so reset to the
+    /// "pick a unit" hint until the viewport routes a selection here.</summary>
     public void ShowMap(MapSession session)
     {
         _session = session;
         _creationNumber = null;
         _loaded = null;
         _multiSelection = Array.Empty<int>();
-        _typeNameCache.Clear(); // names (incl. map-local deltas) belong to the previous map
+        _typeNameCache.Clear();
         ShowHint(session.Current is null
             ? "No map open."
             : "Click a unit in the 3D view (Terrain tab) to edit its properties.");
     }
 
-    /// <summary>The unit type's display label "Name (rawcode)", resolving the proper name
-    /// even for base-game units (which carry no map name delta) via the shared
-    /// <see cref="ObjectGetCommand"/> merge, cached per type. Falls back to the bare
-    /// rawcode only when no name resolves (e.g. no game data available).</summary>
+    /// <summary>The unit type's display label "Name (rawcode)", resolving the proper name even for
+    /// base-game units via the shared <see cref="ObjectGetCommand"/> merge, cached per type.</summary>
     private string TypeLabel(MapDocument doc, string rawcode, string? mapDeltaName)
     {
         var name = mapDeltaName ?? ResolveTypeName(doc, rawcode);
@@ -91,8 +84,8 @@ public partial class UnitPropertiesView : UserControl, IMapPanel
         return name;
     }
 
-    /// <summary>Loads and shows the placed unit - a superset of <see cref="ShowMap"/>.
-    /// No-ops when that unit is already shown, so tab flips keep in-progress edits.</summary>
+    /// <summary>Loads and shows the placed unit. No-ops when that unit is already shown, so tab
+    /// flips keep in-progress edits.</summary>
     public void ShowUnit(MapSession session, int creationNumber)
     {
         bool sameDoc = ReferenceEquals(_session?.Current, session.Current);
@@ -101,8 +94,6 @@ public partial class UnitPropertiesView : UserControl, IMapPanel
         MultiRoot.IsVisible = false;
         if (sameDoc && _creationNumber == creationNumber && _loaded is not null)
         {
-            // Already showing this unit (keep in-progress edits) - just make sure the
-            // single editor is frontmost after a multi view.
             ContentRoot.IsVisible = true;
             PlaceholderText.IsVisible = false;
             return;
@@ -111,9 +102,8 @@ public partial class UnitPropertiesView : UserControl, IMapPanel
         Load();
     }
 
-    /// <summary>Routes a viewport selection here by size: 0 = the empty hint, 1 = the
-    /// full single-unit editor (<see cref="ShowUnit"/>), 2+ = the compact multi-select
-    /// view (bulk owner change + remove).</summary>
+    /// <summary>Routes a viewport selection here by size: 0 = the empty hint, 1 = the full
+    /// single-unit editor, 2+ = the compact multi-select view.</summary>
     public void ShowUnits(MapSession session, IReadOnlyList<int> creationNumbers)
     {
         if (creationNumbers.Count == 1)
@@ -125,9 +115,7 @@ public partial class UnitPropertiesView : UserControl, IMapPanel
         _session = session;
         _creationNumber = null;
         _loaded = null;
-        _multiSelection = creationNumbers.Count > 1
-            ? creationNumbers.ToArray()
-            : Array.Empty<int>();
+        _multiSelection = creationNumbers.Count > 1 ? creationNumbers.ToArray() : Array.Empty<int>();
 
         if (session.Current is not { } doc || creationNumbers.Count == 0)
         {
@@ -138,7 +126,6 @@ public partial class UnitPropertiesView : UserControl, IMapPanel
             return;
         }
 
-        // Header: count + the distinct type names in the selection (proper names, not ids).
         string typeSummary = "";
         try
         {
@@ -148,33 +135,23 @@ public partial class UnitPropertiesView : UserControl, IMapPanel
                 .Select(u => u.Name ?? ResolveTypeName(doc, u.TypeRawcode) ?? u.TypeRawcode)
                 .Distinct().OrderBy(n => n).ToList();
             if (names.Count > 0)
-                typeSummary = " · " + string.Join(", ",
-                    names.Take(4)) + (names.Count > 4 ? $", +{names.Count - 4} more" : "");
+                typeSummary = " · " + string.Join(", ", names.Take(4)) + (names.Count > 4 ? $", +{names.Count - 4} more" : "");
         }
         catch { /* unreadable placements: just show the count */ }
         MultiHeaderText.Text = $"{creationNumbers.Count} units selected{typeSummary}";
         MultiStatusText.Text = "";
 
-        // Owner dropdown: same grouped/colored builder as the single editor. When the
-        // whole selection already shares one owner, preselect it; otherwise leave the
-        // picker blank so a mixed selection is not misreported.
         int? common = null;
         try
         {
             var set = new HashSet<int>(creationNumbers);
             var owners = UnitInstanceCommand.List(doc)
                 .Where(u => set.Contains(u.CreationNumber))
-                .Select(u => u.OwnerId)
-                .Distinct()
-                .Take(2)
-                .ToList();
+                .Select(u => u.OwnerId).Distinct().Take(2).ToList();
             if (owners.Count == 1)
                 common = owners[0];
         }
-        catch
-        {
-            // unreadable placements: the picker simply starts blank
-        }
+        catch { /* unreadable placements: the picker simply starts blank */ }
         MultiOwnerPicker.Load(doc, common);
 
         PlaceholderText.IsVisible = false;
@@ -214,18 +191,30 @@ public partial class UnitPropertiesView : UserControl, IMapPanel
         TypeText.Text = TypeLabel(doc, info.TypeRawcode, info.Name);
         PositionText.Text = string.Format(inv, "Position: ({0:0.##}, {1:0.##})", info.X, info.Y);
         OwnerPicker.Load(doc, info.OwnerId);
-        HeroLevelBox.Text = info.HeroLevel.ToString(inv);
-        HpBox.Text = info.HpPercent.ToString(inv);
-        ManaBox.Text = info.ManaPercent.ToString(inv);
-        GoldBox.Text = info.GoldAmount.ToString(inv);
+
+        // Abilities, resolved to names, and hero detection (only heroes carry hero abilities).
+        var abilities = UnitAbilitiesCommand.ForUnitType(doc, info.TypeRawcode, _session?.GameDir);
+        _isHero = abilities.Any(a => a.IsHeroAbility);
+        HeroSection.IsVisible = _isHero;
+        if (_isHero)
+        {
+            HeroLevelBox.Value = info.HeroLevel;
+            StrBox.Value = info.HeroStrength;
+            AgiBox.Value = info.HeroAgility;
+            IntBox.Value = info.HeroIntelligence;
+        }
+
+        LoadDefaultable(HpDefault, HpBox, info.HpPercent);
+        LoadDefaultable(ManaDefault, ManaBox, info.ManaPercent);
+        LoadDefaultable(TargetDefault, TargetBox,
+            info.TargetAcquisition < 0f ? -1 : (int)Math.Round(info.TargetAcquisition));
+        GoldBox.Value = info.GoldAmount;
+
         ScaleXBox.Text = info.Scale.Sx.ToString("0.###", inv);
         ScaleYBox.Text = info.Scale.Sy.ToString("0.###", inv);
         ScaleZBox.Text = info.Scale.Sz.ToString("0.###", inv);
         FacingBox.Text = (info.Rotation * 180.0 / Math.PI).ToString("0.##", inv);
 
-        // The unit type's abilities, resolved from rawcodes to names so a character's
-        // spells are actually readable (game-data is already warm from TypeLabel above).
-        var abilities = UnitAbilitiesCommand.ForUnitType(doc, info.TypeRawcode, _session?.GameDir);
         var abilityLabels = abilities
             .Select(a => (a.Name ?? a.Rawcode) + (a.IsHeroAbility ? "  (hero)" : ""))
             .ToList();
@@ -237,30 +226,40 @@ public partial class UnitPropertiesView : UserControl, IMapPanel
         ContentRoot.IsVisible = true;
     }
 
-    /// <summary>"Team N: name" (or a bare "Team N" for a nameless force). The builder
-    /// moved into <see cref="OwnerTeamPicker"/> with the grouped owner dropdown; this
-    /// forwarder stays so existing callers keep working.</summary>
+    /// <summary>"Team N: name" forwarder (the builder lives in <see cref="OwnerTeamPicker"/>).</summary>
     internal static string ForceLabel(ForceInfo force) => OwnerTeamPicker.ForceLabel(force);
 
-    /// <summary>Validates every field first (nothing is written when any is bad), then
-    /// applies only the changed ones and reloads so the panel shows file truth.</summary>
+    // Default checkbox toggles just enable/disable the paired stepper (the value is read at Apply).
+    private void OnHpDefaultChanged(object? sender, RoutedEventArgs e) => HpBox.IsEnabled = HpDefault.IsChecked != true;
+    private void OnManaDefaultChanged(object? sender, RoutedEventArgs e) => ManaBox.IsEnabled = ManaDefault.IsChecked != true;
+    private void OnTargetDefaultChanged(object? sender, RoutedEventArgs e) => TargetBox.IsEnabled = TargetDefault.IsChecked != true;
+
+    /// <summary>Loads a Default-checkbox + stepper pair from a percent-or-range value where -1
+    /// (or any negative) means "use the object's default".</summary>
+    private static void LoadDefaultable(CheckBox check, NumericUpDown num, int value)
+    {
+        bool isDefault = value < 0;
+        check.IsChecked = isDefault;
+        num.IsEnabled = !isDefault;
+        num.Value = isDefault ? 0 : value;
+    }
+
+    /// <summary>Reads a Default-checkbox + stepper pair back to a value, -1 when Default is checked.</summary>
+    private static int ReadDefaultable(CheckBox check, NumericUpDown num) =>
+        check.IsChecked == true ? -1 : (int)(num.Value ?? 0m);
+
+    private static int Int(NumericUpDown num) => (int)(num.Value ?? 0m);
+
+    /// <summary>Validates the free-text Advanced fields (scale, facing), then applies only the
+    /// changed fields and reloads so the panel shows file truth.</summary>
     private void OnApplyClick(object? sender, RoutedEventArgs e)
     {
-        if (_session?.Current is not { } doc || _loaded is not { } before
-            || _creationNumber is not { } cn)
+        if (_session?.Current is not { } doc || _loaded is not { } before || _creationNumber is not { } cn)
         {
             StatusText.Text = "No unit loaded.";
             return;
         }
 
-        if (!TryInt(HeroLevelBox.Text, out int heroLevel))
-        { StatusText.Text = "Hero Level must be a whole number."; return; }
-        if (!TryInt(HpBox.Text, out int hp))
-        { StatusText.Text = "HP % must be a whole number: 0..100, or -1 for default."; return; }
-        if (!TryInt(ManaBox.Text, out int mana))
-        { StatusText.Text = "Mana % must be a whole number: 0..100, or -1 for default."; return; }
-        if (!TryInt(GoldBox.Text, out int gold))
-        { StatusText.Text = "Gold must be a whole number."; return; }
         if (!TryFloat(ScaleXBox.Text, out float sx) || !TryFloat(ScaleYBox.Text, out float sy)
             || !TryFloat(ScaleZBox.Text, out float sz))
         { StatusText.Text = "Scale values must be numbers (dot decimal, e.g. 1.25)."; return; }
@@ -278,16 +277,36 @@ public partial class UnitPropertiesView : UserControl, IMapPanel
 
         if (OwnerPicker.SelectedOwnerId is int newOwner && newOwner != before.OwnerId)
             Run(UnitInstanceCommand.SetOwner(doc, cn, newOwner));
-        if (heroLevel != before.HeroLevel)
-            Run(UnitInstanceCommand.SetHeroLevel(doc, cn, heroLevel));
+
+        // Hero fields only when the unit is actually a hero (the block is hidden otherwise).
+        if (_isHero)
+        {
+            if (Int(HeroLevelBox) != before.HeroLevel)
+                Run(UnitInstanceCommand.SetHeroLevel(doc, cn, Int(HeroLevelBox)));
+            if (Int(StrBox) != before.HeroStrength)
+                Run(UnitInstanceCommand.SetHeroStrength(doc, cn, Int(StrBox)));
+            if (Int(AgiBox) != before.HeroAgility)
+                Run(UnitInstanceCommand.SetHeroAgility(doc, cn, Int(AgiBox)));
+            if (Int(IntBox) != before.HeroIntelligence)
+                Run(UnitInstanceCommand.SetHeroIntelligence(doc, cn, Int(IntBox)));
+        }
+
+        int hp = ReadDefaultable(HpDefault, HpBox);
         if (hp != before.HpPercent)
             Run(UnitInstanceCommand.SetHpPercent(doc, cn, hp));
+        int mana = ReadDefaultable(ManaDefault, ManaBox);
         if (mana != before.ManaPercent)
             Run(UnitInstanceCommand.SetManaPercent(doc, cn, mana));
-        if (gold != before.GoldAmount)
-            Run(UnitInstanceCommand.SetGold(doc, cn, gold));
-        // Epsilons absorb the display rounding ("0.###" / "0.##"): an untouched field
-        // parses back within them, so it never registers as a change.
+
+        int targetVal = ReadDefaultable(TargetDefault, TargetBox);
+        float target = targetVal < 0 ? -1f : targetVal;
+        if (Differs(target, before.TargetAcquisition, 0.5f))
+            Run(UnitInstanceCommand.SetTargetAcquisition(doc, cn, target));
+
+        if (Int(GoldBox) != before.GoldAmount)
+            Run(UnitInstanceCommand.SetGold(doc, cn, Int(GoldBox)));
+
+        // Epsilons absorb the display rounding so an untouched field never registers as a change.
         if (Differs(sx, before.Scale.Sx, 0.001f) || Differs(sy, before.Scale.Sy, 0.001f)
             || Differs(sz, before.Scale.Sz, 0.001f))
             Run(UnitInstanceCommand.SetScale(doc, cn, sx, sy, sz));
@@ -301,16 +320,13 @@ public partial class UnitPropertiesView : UserControl, IMapPanel
             return;
         }
 
-        // Reload so the fields show what the file now carries (failed edits revert),
-        // THEN report - Load clears the status line.
         Load();
         StatusText.Text = (allOk ? "" : "Some edits failed. ") + string.Join("; ", messages);
         if (anyOk)
             UnitEdited?.Invoke(cn);
     }
 
-    /// <summary>Multi-select "Apply": sets the picked owner on every selected unit in
-    /// one command-layer write, reports the result, and notifies the workspace.</summary>
+    /// <summary>Multi-select "Apply": sets the picked owner on every selected unit in one write.</summary>
     private void OnMultiApplyOwnerClick(object? sender, RoutedEventArgs e)
     {
         if (_session?.Current is not { } doc || _multiSelection.Count == 0)
@@ -330,9 +346,7 @@ public partial class UnitPropertiesView : UserControl, IMapPanel
             UnitsEdited?.Invoke(_multiSelection);
     }
 
-    /// <summary>Multi-select "Remove selected": deletes every selected unit from the
-    /// in-memory map, reports the result, and notifies the workspace (which clears the
-    /// viewport selection and refreshes placements).</summary>
+    /// <summary>Multi-select "Remove selected": deletes every selected unit from the in-memory map.</summary>
     private void OnMultiRemoveClick(object? sender, RoutedEventArgs e)
     {
         if (_session?.Current is not { } doc || _multiSelection.Count == 0)
@@ -353,13 +367,8 @@ public partial class UnitPropertiesView : UserControl, IMapPanel
 
     private static bool Differs(float a, float b, float epsilon) => Math.Abs(a - b) > epsilon;
 
-    private static bool TryInt(string? text, out int value) =>
-        int.TryParse((text ?? "").Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture,
-            out value);
-
     private static bool TryFloat(string? text, out float value) =>
-        float.TryParse((text ?? "").Trim(), NumberStyles.Float, CultureInfo.InvariantCulture,
-            out value);
+        float.TryParse((text ?? "").Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out value);
 
     private void ShowHint(string text)
     {
