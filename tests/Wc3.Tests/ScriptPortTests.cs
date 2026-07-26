@@ -49,6 +49,50 @@ endfunction
 ";
 
     [Fact]
+    public void An_init_that_a_carried_aggregator_already_calls_is_not_hooked_twice()
+    {
+        // These scripts often have one InitTrig_* that calls many others. Carrying it AND hooking its
+        // callees would call each callee twice, building two triggers on the same event, so every
+        // affected spell fires twice (doubled damage and effects). The aggregator is hooked, its
+        // callees are not.
+        const string aggregated = @"globals
+    integer udg_RaidenQ_ID= 'A000'
+endglobals
+function Trig_RaidenQ_Actions takes nothing returns nothing
+    if GetSpellAbilityId() == udg_RaidenQ_ID then
+        call KillUnit(GetTriggerUnit())
+    endif
+endfunction
+function InitTrig_RaidenQ takes nothing returns nothing
+    call TriggerAddAction(CreateTrigger(), function Trig_RaidenQ_Actions)
+endfunction
+function InitTrig_AllSystems takes nothing returns nothing
+    call InitTrig_RaidenQ()
+endfunction
+";
+        var source = SourceMap(aggregated);
+        var target = TargetMap();
+        var bundle = BundleCommand.ResolveUnit(source, "H000", gameDirOverride: null);
+
+        PortCommand.PortUnit(source, bundle, target);
+
+        var reloaded = MapDocument.Load(target.SaveToBytes());
+        var j = Encoding.UTF8.GetString(reloaded.GetFile("war3map.j")!.RawBytes);
+
+        // The aggregator runs the inner init exactly once, so InitCustomTriggers must not call it again.
+        int inner = Count(j, "call InitTrig_RaidenQ()");
+        Assert.Equal(1, inner);
+        Assert.Contains("call InitTrig_AllSystems()", j);
+    }
+
+    private static int Count(string haystack, string needle)
+    {
+        int n = 0, i = 0;
+        while ((i = haystack.IndexOf(needle, i, StringComparison.Ordinal)) >= 0) { n++; i += needle.Length; }
+        return n;
+    }
+
+    [Fact]
     public void A_ported_script_always_compiles()
     {
         // The whole point of the compile gate: whatever the port splices, the target's script must
