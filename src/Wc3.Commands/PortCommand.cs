@@ -314,6 +314,13 @@ public static class PortCommand
             warnings.Add("target war3map.imp is present but could not be parsed — copied the asset "
                 + "files but left the import list untouched, so they may need registering manually.");
 
+        // 3b) Carry the source map's hero/unit level caps (war3mapMisc.txt). A ported hero whose
+        //     abilities unlock past level 10 clamps to the WC3 default cap otherwise. It is a
+        //     NonImportFile, so the imports copy skipped it, done explicitly here. Idempotent, so
+        //     running it once per bundle in a batch makes at most one real change.
+        if (apply && GameplayConstants.CarryLevelCaps(source, target) is { } capSummary)
+            diagnostics.Add($"gameplay constants: {capSummary}");
+
         // 4) Best-effort JASS script closure append (defensive — never breaks the port).
         ScriptPortInfo? scriptInfo = null;
         if (includeScript)
