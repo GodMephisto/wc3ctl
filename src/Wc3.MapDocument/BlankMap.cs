@@ -91,7 +91,12 @@ public static class BlankMap
             PlayableMapAreaHeight = o.TileEdge,
             CameraBounds = new Quadrilateral(-half, half, half, -half),
             CameraBoundsComplements = new RectangleMargins(0, 0, 0, 0),
-            MapFlags = MapFlags.MeleeMap,
+            // A custom (use-map-settings) map, NOT melee. The script sets game placement to
+            // USE_MAP_SETTINGS, so flagging the map melee is a contradiction that leaves the host
+            // lobby unable to build slots (a one-player melee map is degenerate). Use-custom-forces
+            // plus fixed player settings makes the lobby honour the map's own force/player layout,
+            // so the map hosts as the custom map its script actually is.
+            MapFlags = MapFlags.UseCustomForces | MapFlags.FixedPlayerSettingsForCustomForces,
             Tileset = (Tileset)(byte)o.TilesetCode,
         };
         // One playable slot (red, human, user) at the centre, in a single force. Matches what

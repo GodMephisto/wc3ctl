@@ -128,6 +128,63 @@ endfunction
         Assert.Contains("call InitTrig_RaidenQ()", initBody);
     }
 
+    // A hero whose real spell fires on a combo ability it only GRANTS at runtime: the learn
+    // handler adds 'A001', and a second trigger fires when 'A001' is cast. The data-driven closure
+    // reaches the learn handler (it tests the hero's own ability 'A000') but cannot reach the combo
+    // handler or its InitTrig, because nothing in the hero's data names 'A001'. The port must still
+    // carry the combo handler AND both InitTrig_* and wire them, or the spell is defined but dead —
+    // the exact break seen porting Nanaya Shiki (QShikiOne fires on 'A1BP', granted by the learn).
+    private const string ComboSource = @"globals
+    integer udg_Learn_ID= 'A000'
+    trigger gg_trg_Learn= null
+    trigger gg_trg_Combo= null
+endglobals
+function LearnCast takes nothing returns nothing
+    if GetSpellAbilityId() == udg_Learn_ID then
+        call UnitAddAbility(GetTriggerUnit(), 'A001')
+    endif
+endfunction
+function ComboCast takes nothing returns nothing
+    if GetSpellAbilityId() == 'A001' then
+        call KillUnit(GetTriggerUnit())
+    endif
+endfunction
+function InitTrig_Learn takes nothing returns nothing
+    set gg_trg_Learn= CreateTrigger()
+    call TriggerAddAction(gg_trg_Learn, function LearnCast)
+endfunction
+function InitTrig_Combo takes nothing returns nothing
+    set gg_trg_Combo= CreateTrigger()
+    call TriggerAddAction(gg_trg_Combo, function ComboCast)
+endfunction
+";
+
+    [Fact]
+    public void Carries_and_wires_the_initializer_of_a_runtime_granted_combo_spell()
+    {
+        var source = SourceMap(ComboSource);
+        var target = TargetMap();
+        var bundle = BundleCommand.ResolveUnit(source, "H000", gameDirOverride: null);
+
+        // The data-driven closure cannot reach the combo handler (fires on 'A001', which the hero
+        // only grants at runtime) nor its initializer.
+        Assert.DoesNotContain(bundle.Functions, f => f.Name == "ComboCast");
+        Assert.DoesNotContain(bundle.Functions, f => f.Name == "InitTrig_Combo");
+
+        var result = PortCommand.PortUnit(source, bundle, target);
+        var j = Encoding.UTF8.GetString(MapDocument.Load(target.SaveToBytes()).GetFile("war3map.j")!.RawBytes);
+
+        // The porter follows the runtime-granted rawcode: the combo handler and BOTH initializers
+        // come across, and both are wired into InitCustomTriggers so the spell actually turns on.
+        Assert.Contains("function ComboCast", j);
+        Assert.Contains("function InitTrig_Learn", j);
+        Assert.Contains("function InitTrig_Combo", j);
+        var initFn = JassFunctionIndex.Parse(j).Single(f => f.Name == "InitCustomTriggers");
+        var initBody = string.Join('\n', j.Replace("\r\n", "\n").Split('\n')[(initFn.StartLine - 1)..initFn.EndLine]);
+        Assert.Contains("call InitTrig_Learn()", initBody);
+        Assert.Contains("call InitTrig_Combo()", initBody);
+    }
+
     [Fact]
     public void Script_port_is_skipped_cleanly_when_target_has_no_script()
     {
