@@ -100,6 +100,38 @@ public class PortCommandTests
     }
 
     [Fact]
+    public void Ports_an_extensionless_icon_by_resolving_the_stored_blp()
+    {
+        // Source hero references its icon WITHOUT an extension; it is imported as ...BTN.blp.
+        // The port must resolve and copy the .blp, else the ported hero shows the missing-icon
+        // box. This is the "does not ruin the map" guarantee for extensionless icon refs.
+        var w3u = new UnitObjectData(ObjectDataFormatVersion.v2);
+        var hero = new SimpleObjectModification { OldId = "Hpal".FromRawcode(), NewId = "H000".FromRawcode() };
+        hero.Modifications.Add(Str("uico", @"ReplaceableTextures\CommandButtons\BTNRaiden"));
+        w3u.NewUnits.Add(hero);
+        var source = MapDocument.Load(SyntheticMap.Build(new Dictionary<string, byte[]>
+        {
+            ["war3map.w3u"] = Ser(w => w.Write(w3u)),
+            [@"ReplaceableTextures\CommandButtons\BTNRaiden.blp"] = new byte[] { 9, 9, 9, 9 },
+        }));
+        var target = MapDocument.Load(SyntheticMap.Build(new Dictionary<string, byte[]>
+        {
+            ["war3map.j"] = Encoding.UTF8.GetBytes("function main takes nothing returns nothing\nendfunction\n"),
+        }));
+
+        var bundle = BundleCommand.ResolveUnit(source, "H000", gameDirOverride: null);
+        Assert.Contains(bundle.Files,
+            f => f.Path.EndsWith("BTNRaiden", StringComparison.OrdinalIgnoreCase) && f.PresentInMap);
+
+        var result = PortCommand.PortUnit(source, bundle, target);
+
+        Assert.Contains(result.CopiedFiles, f => f.EndsWith("BTNRaiden.blp", StringComparison.OrdinalIgnoreCase));
+        var reloaded = MapDocument.Load(target.SaveToBytes());
+        Assert.True(reloaded.GetFile(@"ReplaceableTextures\CommandButtons\BTNRaiden.blp")!
+            .RawBytes.SequenceEqual(new byte[] { 9, 9, 9, 9 }));
+    }
+
+    [Fact]
     public void Remaps_an_in_bundle_reference_when_the_referenced_object_collides()
     {
         // Target already has A000 too → the ability must be remapped AND the unit's

@@ -307,6 +307,35 @@ public class BundleCommandTests
         Assert.Contains(bundle.Files, f => f.Path == @"war3mapImported\Tohno.blp");
     }
 
+    [Fact]
+    public void Extensionless_icon_reference_is_found_and_categorized_icon()
+    {
+        // A unit whose icon field stores the command-button path with NO extension (the game
+        // appends .blp at load); the file is imported as ...BTNRaiden.blp. The bundle must find
+        // it and mark it present, else the port drops the custom icon and the unit shows the
+        // black-and-green missing box.
+        var w3u = new UnitObjectData(ObjectDataFormatVersion.v2);
+        var unit = new SimpleObjectModification { OldId = "Hpal".FromRawcode(), NewId = "H000".FromRawcode() };
+        unit.Modifications.Add(new SimpleObjectDataModification
+        {
+            Id = "uico".FromRawcode(), Type = ObjectDataType.String,
+            Value = @"ReplaceableTextures\CommandButtons\BTNRaiden",
+        });
+        w3u.NewUnits.Add(unit);
+
+        var doc = MapDocument.Load(SyntheticMap.Build(new Dictionary<string, byte[]>
+        {
+            ["war3map.w3u"] = Serialize(w => w.Write(w3u)),
+            [@"ReplaceableTextures\CommandButtons\BTNRaiden.blp"] = new byte[] { 1, 2, 3, 4 },
+        }));
+
+        var bundle = BundleCommand.ResolveUnit(doc, "H000", ctx: null, preDiagnostics: Array.Empty<string>());
+
+        var icon = bundle.Files.Single(f => f.Path == @"ReplaceableTextures\CommandButtons\BTNRaiden");
+        Assert.True(icon.PresentInMap, "extensionless icon import must resolve to the stored .blp");
+        Assert.Equal("icon", icon.Category);
+    }
+
     private static byte[] Serialize(Action<BinaryWriter> write)
     {
         using var ms = new MemoryStream();

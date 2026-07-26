@@ -101,6 +101,89 @@ public class BundleScriptClosureTests
         Assert.Contains(bundle.Diagnostics, d => d.Contains("war3map.j"));
     }
 
+    [Fact]
+    public void Foreign_hero_dispatch_branch_is_not_followed()
+    {
+        // The shared spellcast dispatcher pattern: our hero H000's branch calls RaidenSpell,
+        // another custom hero H001's branch calls NatsuSpell. Seeding on H000 pulls in the
+        // dispatcher (it names 'H000') and RaidenSpell, but NOT NatsuSpell, which lives only
+        // inside a branch guarded by a foreign hero id.
+        const string jass =
+            "function RaidenSpell takes nothing returns nothing\n" +
+            "endfunction\n" +
+            "function NatsuSpell takes nothing returns nothing\n" +
+            "endfunction\n" +
+            "function CastDispatch takes nothing returns nothing\n" +
+            "    if GetUnitTypeId(GetSpellAbilityUnit()) == 'H000' then\n" +
+            "        call RaidenSpell()\n" +
+            "    endif\n" +
+            "    if GetUnitTypeId(GetSpellAbilityUnit()) == 'H001' then\n" +
+            "        call NatsuSpell()\n" +
+            "    endif\n" +
+            "endfunction\n";
+
+        var names = ResolveWithTwoHeroes(jass).Functions.Select(f => f.Name).ToHashSet();
+        Assert.Contains("CastDispatch", names);      // seed, references 'H000'
+        Assert.Contains("RaidenSpell", names);       // our branch, followed
+        Assert.DoesNotContain("NatsuSpell", names);  // foreign branch, cut
+    }
+
+    [Fact]
+    public void Foreign_dispatch_via_id_alias_and_elseif_is_not_followed()
+    {
+        // Same, but the guards use *_ID globals and an elseif chain (the real maps' form).
+        const string jass =
+            "globals\n" +
+            "integer Raiden_ID= 'H000'\n" +
+            "integer Natsu_ID= 'H001'\n" +
+            "endglobals\n" +
+            "function RaidenSpell takes nothing returns nothing\n" +
+            "endfunction\n" +
+            "function NatsuSpell takes nothing returns nothing\n" +
+            "endfunction\n" +
+            "function SharedFx takes nothing returns nothing\n" +
+            "endfunction\n" +
+            "function CastDispatch takes nothing returns nothing\n" +
+            "    if GetUnitTypeId(GetSpellAbilityUnit()) == Raiden_ID then\n" +
+            "        call RaidenSpell()\n" +
+            "        call SharedFx()\n" +
+            "    elseif GetUnitTypeId(GetSpellAbilityUnit()) == Natsu_ID then\n" +
+            "        call NatsuSpell()\n" +
+            "        call SharedFx()\n" +
+            "    endif\n" +
+            "endfunction\n";
+
+        var names = ResolveWithTwoHeroes(jass).Functions.Select(f => f.Name).ToHashSet();
+        Assert.Contains("RaidenSpell", names);       // our branch
+        Assert.Contains("SharedFx", names);          // also called in our branch, so kept
+        Assert.DoesNotContain("NatsuSpell", names);  // only in the foreign branch, cut
+    }
+
+    /// <summary>H000 (ported hero, uabi=A000) alongside a second custom hero H001 (foreign),
+    /// plus A000 and the given script. Bundling H000 sees ported ids H000/A000, and H001 as a
+    /// known foreign custom object, so a branch guarded by 'H001' is dropped.</summary>
+    private static UnitBundle ResolveWithTwoHeroes(string jass)
+    {
+        var w3u = new UnitObjectData(ObjectDataFormatVersion.v2);
+        var h000 = new SimpleObjectModification { OldId = "Hpal".FromRawcode(), NewId = "H000".FromRawcode() };
+        h000.Modifications.Add(new SimpleObjectDataModification
+        { Id = "uabi".FromRawcode(), Type = ObjectDataType.String, Value = "A000" });
+        w3u.NewUnits.Add(h000);
+        w3u.NewUnits.Add(new SimpleObjectModification { OldId = "Hpal".FromRawcode(), NewId = "H001".FromRawcode() });
+
+        var w3a = new AbilityObjectData(ObjectDataFormatVersion.v2);
+        w3a.NewAbilities.Add(new LevelObjectModification
+        { OldId = "AHbz".FromRawcode(), NewId = "A000".FromRawcode() });
+
+        var doc = MapDocument.Load(SyntheticMap.Build(new Dictionary<string, byte[]>
+        {
+            ["war3map.w3u"] = Serialize(w => War3Net.Build.Extensions.BinaryWriterExtensions.Write(w, w3u)),
+            ["war3map.w3a"] = Serialize(w => War3Net.Build.Extensions.BinaryWriterExtensions.Write(w, w3a)),
+            ["war3map.j"] = Encoding.UTF8.GetBytes(jass),
+        }));
+        return BundleCommand.ResolveUnit(doc, "H000", ctx: null, preDiagnostics: Array.Empty<string>());
+    }
+
     /// <summary>H000 (custom hero, uabi=A000) + A000 (custom ability) + the given script —
     /// the seed rawcodes the closure sees are therefore H000 and A000.</summary>
     private static UnitBundle ResolveH000WithAbility(string jass)

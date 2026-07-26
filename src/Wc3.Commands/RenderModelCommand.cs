@@ -253,6 +253,47 @@ public static class RenderModelCommand
         return null;
     }
 
+    private static readonly string[] TextureExtensions = { ".blp", ".tga", ".dds" };
+
+    /// <summary>
+    /// Resolves a texture/icon reference to the map entry that holds it, trying both slash
+    /// conventions and, when the reference carries no extension (an icon Art field stores
+    /// "...\BTNFoo" and the game appends .blp at load), the .blp/.tga/.dds it really lives
+    /// under, plus the sibling texture extensions when a wrong one is given. Returns null when
+    /// no in-map file backs the path (a base-game texture). Public so discovery and the port
+    /// resolve icons identically — do not reimplement this lookup.
+    /// </summary>
+    public static MapFileEntry? FindTextureEntry(MapDocument doc, string path)
+    {
+        foreach (var candidate in TexturePathCandidates(path))
+            if (doc.GetFile(candidate) is { } entry && entry.RawBytes.Length > 0)
+                return entry;
+        return null;
+    }
+
+    /// <summary>Both slash conventions x {as-given, then sibling .blp/.tga/.dds for a
+    /// wrong-extension ref, or all three appended for an extensionless ref}.</summary>
+    private static IEnumerable<string> TexturePathCandidates(string path)
+    {
+        foreach (var p in new[] { path, path.Replace('/', '\\'), path.Replace('\\', '/') }.Distinct())
+        {
+            yield return p;
+            var ext = Path.GetExtension(p);
+            bool hasTexExt = TextureExtensions.Any(e => ext.Equals(e, StringComparison.OrdinalIgnoreCase));
+            if (hasTexExt)
+            {
+                var stem = p[..^ext.Length];
+                foreach (var e in TextureExtensions)
+                    if (!ext.Equals(e, StringComparison.OrdinalIgnoreCase))
+                        yield return stem + e;
+            }
+            else
+            {
+                foreach (var e in TextureExtensions) yield return p + e;
+            }
+        }
+    }
+
     /// <summary>Both slash conventions x {as-given, sibling .mdx/.mdl, extensionless + either,
     /// variation-0 + either}. The variation-0 forms come last so they can never shadow an
     /// exact hit: classic doodads with variations store one model file per variation and no
