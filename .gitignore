@@ -14,3 +14,13 @@ dist-mcp/
 # OS / editor
 .DS_Store
 Thumbs.db
+
+# Claude Code and planning artifacts, keep the repo free of agent and dev ledgers
+.claude/
+.superpowers/
+docs/superpowers/
+CLAUDE.md
+
+# Working screenshots at the repo root
+/*.jpg
+/*.png
