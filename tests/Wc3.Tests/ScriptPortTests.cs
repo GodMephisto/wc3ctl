@@ -212,6 +212,84 @@ endfunction
         Assert.DoesNotContain("Trig_RaidenQ_Actions_p1_p1", j);          // no runaway re-rename
     }
 
+    [Fact]
+    public void Port_into_an_unrelated_map_trims_other_heroes_dispatcher_branches()
+    {
+        // Source, two custom heroes sharing one cast dispatcher. H000 is ours, H001 is another hero.
+        var w3u = new UnitObjectData(ObjectDataFormatVersion.v2);
+        var raiden = new SimpleObjectModification { OldId = "Hpal".FromRawcode(), NewId = "H000".FromRawcode() };
+        raiden.Modifications.Add(new SimpleObjectDataModification
+        { Id = "uhab".FromRawcode(), Type = ObjectDataType.String, Value = "A000" });
+        w3u.NewUnits.Add(raiden);
+        w3u.NewUnits.Add(new SimpleObjectModification { OldId = "Hpal".FromRawcode(), NewId = "H001".FromRawcode() });
+        var w3a = new AbilityObjectData(ObjectDataFormatVersion.v2);
+        w3a.NewAbilities.Add(new LevelObjectModification { OldId = "ANcl".FromRawcode(), NewId = "A000".FromRawcode() });
+
+        const string srcJass =
+            "function RaidenFn takes nothing returns nothing\n" +
+            "    call BJDebugMsg(\"raiden\")\n" +
+            "endfunction\n" +
+            "function NatsuFn takes nothing returns nothing\n" +
+            "    call BJDebugMsg(\"natsu\")\n" +
+            "endfunction\n" +
+            "function CastHero takes nothing returns nothing\n" +
+            "    if GetUnitTypeId(GetSpellAbilityUnit()) == 'H000' then\n" +
+            "        call RaidenFn()\n" +
+            "    endif\n" +
+            "    if GetUnitTypeId(GetSpellAbilityUnit()) == 'H001' then\n" +
+            "        call NatsuFn()\n" +
+            "    endif\n" +
+            "endfunction\n" +
+            "function InitTrig_Cast takes nothing returns nothing\n" +
+            "    local integer i= 'A000'\n" +
+            "    call TriggerAddAction(CreateTrigger(), function CastHero)\n" +
+            "endfunction\n";
+
+        var source = MapDocument.Load(SyntheticMap.Build(new Dictionary<string, byte[]>
+        {
+            ["war3map.w3u"] = Ser(w => w.Write(w3u)),
+            ["war3map.w3a"] = Ser(w => w.Write(w3a)),
+            ["war3map.j"] = Encoding.UTF8.GetBytes(srcJass),
+        }));
+
+        // Target, an unrelated map without this engine (no H000/H001/A000, no dispatcher).
+        var target = MapDocument.Load(SyntheticMap.Build(new Dictionary<string, byte[]>
+        {
+            ["war3map.w3u"] = Ser(w => w.Write(new UnitObjectData(ObjectDataFormatVersion.v2))),
+            ["war3map.j"] = Encoding.UTF8.GetBytes(
+                "function InitCustomTriggers takes nothing returns nothing\nendfunction\n" +
+                "function main takes nothing returns nothing\ncall InitCustomTriggers()\nendfunction\n"),
+        }));
+
+        var bundle = BundleCommand.ResolveUnit(source, "H000", gameDirOverride: null);
+        Assert.Contains(bundle.Functions, f => f.Name == "RaidenFn");     // our branch's handler
+        Assert.DoesNotContain(bundle.Functions, f => f.Name == "NatsuFn"); // foreign branch's handler
+
+        PortCommand.PortUnit(source, bundle, target);
+        var j = Encoding.Latin1.GetString(MapDocument.Load(target.SaveToBytes()).GetFile("war3map.j")!.RawBytes);
+
+        // Our branch's function is carried and its call stays live.
+        Assert.Contains("function RaidenFn", j);
+        Assert.True(HasActiveCall(j, "RaidenFn"), "our hero's handler call must remain live");
+        // The foreign handler is neither defined nor actively called (its call was commented out),
+        // so the ported script has no undefined-function reference and can compile in the target.
+        Assert.DoesNotContain("function NatsuFn", j);
+        Assert.False(HasActiveCall(j, "NatsuFn"), "the other hero's call must be commented out, not live");
+    }
+
+    /// <summary>True when some line has an uncommented call to <paramref name="fn"/>.</summary>
+    private static bool HasActiveCall(string jass, string fn)
+    {
+        foreach (var line in jass.Replace("\r\n", "\n").Split('\n'))
+        {
+            int c = line.IndexOf("//", StringComparison.Ordinal);
+            var code = c >= 0 ? line[..c] : line;
+            if (code.Contains(fn + "(", StringComparison.Ordinal) || code.Contains(fn + " (", StringComparison.Ordinal))
+                return true;
+        }
+        return false;
+    }
+
     private static bool ContainsSubsequence(byte[] haystack, byte[] needle)
     {
         for (int i = 0; i + needle.Length <= haystack.Length; i++)
