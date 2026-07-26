@@ -48,7 +48,7 @@ function main takes nothing returns nothing
 endfunction
 ";
 
-    private static MapDocument SourceMap()
+    private static MapDocument SourceMap(string script = SourceScript)
     {
         var w3u = new UnitObjectData(ObjectDataFormatVersion.v2);
         var hero = new SimpleObjectModification { OldId = "Hpal".FromRawcode(), NewId = "H000".FromRawcode() };
@@ -63,7 +63,7 @@ endfunction
         {
             ["war3map.w3u"] = Ser(w => w.Write(w3u)),
             ["war3map.w3a"] = Ser(w => w.Write(w3a)),
-            ["war3map.j"] = Encoding.UTF8.GetBytes(SourceScript),
+            ["war3map.j"] = Encoding.UTF8.GetBytes(script),
         }));
     }
 
@@ -275,6 +275,59 @@ endfunction
         // so the ported script has no undefined-function reference and can compile in the target.
         Assert.DoesNotContain("function NatsuFn", j);
         Assert.False(HasActiveCall(j, "NatsuFn"), "the other hero's call must be commented out, not live");
+    }
+
+    // Source whose spell handler reads only DPS. DPS's initializer reads TICK, so TICK must
+    // be carried too or the ported war3map.j references an undeclared name and fails to
+    // compile. udg_UnusedRate is referenced by nothing carried and must stay out.
+    private const string ChainedGlobalsScript = @"globals
+    integer udg_RaidenQ_ID= 'A000'
+    real TICK= 0.03
+    real DPS= 300. * TICK
+    real udg_UnusedRate= 1.5
+endglobals
+function Trig_RaidenQ_Actions takes nothing returns nothing
+    if GetSpellAbilityId() == udg_RaidenQ_ID then
+        call BJDebugMsg(R2S(DPS))
+    endif
+endfunction
+function InitTrig_RaidenQ takes nothing returns nothing
+    local integer i= udg_RaidenQ_ID
+    call TriggerAddAction(CreateTrigger(), function Trig_RaidenQ_Actions)
+endfunction
+";
+
+    [Fact]
+    public void Carried_global_initializers_pull_their_referenced_globals_transitively()
+    {
+        var source = SourceMap(ChainedGlobalsScript);
+        var target = TargetMap();
+        var bundle = BundleCommand.ResolveUnit(source, "H000", gameDirOverride: null);
+        var result = PortCommand.PortUnit(source, bundle, target);
+
+        Assert.NotNull(result.Script);
+        var j = Encoding.Latin1.GetString(MapDocument.Load(target.SaveToBytes()).GetFile("war3map.j")!.RawBytes);
+
+        // The carried function reads only DPS, whose initializer reads TICK. Both must land,
+        // and in source order (TICK declared before the DPS line that uses it).
+        Assert.Contains("real DPS= 300. * TICK", j);
+        Assert.Contains("real TICK= 0.03", j);
+        Assert.True(j.IndexOf("real TICK= 0.03", StringComparison.Ordinal)
+                  < j.IndexOf("real DPS= 300. * TICK", StringComparison.Ordinal),
+            "TICK must be declared before the DPS initializer that reads it");
+    }
+
+    [Fact]
+    public void Unreferenced_globals_stay_out_after_the_initializer_fixpoint()
+    {
+        var source = SourceMap(ChainedGlobalsScript);
+        var target = TargetMap();
+        var bundle = BundleCommand.ResolveUnit(source, "H000", gameDirOverride: null);
+        var result = PortCommand.PortUnit(source, bundle, target);
+
+        var j = Encoding.Latin1.GetString(MapDocument.Load(target.SaveToBytes()).GetFile("war3map.j")!.RawBytes);
+        Assert.DoesNotContain("udg_UnusedRate", j);
+        Assert.Equal(3, result.Script!.Globals); // udg_RaidenQ_ID, TICK, DPS and nothing else
     }
 
     /// <summary>True when some line has an uncommented call to <paramref name="fn"/>.</summary>
