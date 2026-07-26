@@ -294,6 +294,43 @@ public static class RenderModelCommand
         }
     }
 
+    private static readonly string[] SoundExtensions = { ".mp3", ".wav", ".flac" };
+
+    /// <summary>
+    /// Resolves a sound reference to the map entry that holds it. Trigger sound calls store the
+    /// path with no extension (MakeSound("...\Hero_Foo_Q") and the file lives under .mp3), so this
+    /// tries both slash conventions and appends .mp3/.wav/.flac. Returns null when no in-map file
+    /// backs the path. Shared so discovery and the port resolve sounds identically.
+    /// </summary>
+    public static MapFileEntry? FindSoundEntry(MapDocument doc, string path)
+    {
+        foreach (var p in new[] { path, path.Replace('/', '\\'), path.Replace('\\', '/') }.Distinct())
+        {
+            if (doc.GetFile(p) is { RawBytes.Length: > 0 } exact) return exact;
+            var ext = Path.GetExtension(p);
+            var stem = SoundExtensions.Any(e => ext.Equals(e, StringComparison.OrdinalIgnoreCase))
+                ? p[..^ext.Length] : p;
+            foreach (var e in SoundExtensions)
+                if (doc.GetFile(stem + e) is { RawBytes.Length: > 0 } hit) return hit;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// One universal asset resolver: resolves ANY asset reference (a model, texture, icon or
+    /// sound) to the map entry that stores it, regardless of how it is spelled. It tries a model
+    /// match (.mdx/.mdl swap and variation-0), then a texture match (.blp/.tga/.dds), then a
+    /// sound match (.mp3/.wav/.flac), each covering both slash conventions, the case-insensitive
+    /// table, an extensionless reference (the game appends the extension at load), and a wrong
+    /// sibling extension. Returns null only when no in-map file backs the path (a base-game
+    /// asset). Discovery and the port both resolve through here, so what a bundle marks present
+    /// is exactly what the port can copy.
+    /// </summary>
+    public static MapFileEntry? FindAssetEntry(MapDocument doc, string path) =>
+        FindModelEntry(doc, path)
+        ?? FindTextureEntry(doc, path)
+        ?? FindSoundEntry(doc, path);
+
     /// <summary>Both slash conventions x {as-given, sibling .mdx/.mdl, extensionless + either,
     /// variation-0 + either}. The variation-0 forms come last so they can never shadow an
     /// exact hit: classic doodads with variations store one model file per variation and no

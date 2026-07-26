@@ -67,6 +67,26 @@ public class ModelResolveTests
         Assert.Null(RenderModelCommand.FindTextureEntry(doc, "ReplaceableTextures\\CommandButtons\\BTNMissing"));
     }
 
+    [Theory]
+    // Trigger sound calls store the path with no extension; the game appends .mp3 at load.
+    [InlineData("war3mapImported\\Hero_Foo_Q.mp3", "war3mapImported\\Hero_Foo_Q")]
+    [InlineData("war3mapImported\\snd.wav", "war3mapImported\\snd")]
+    [InlineData("war3mapImported\\snd.mp3", "war3mapImported/snd")] // slash variant
+    public void FindSoundEntry_resolves_extensionless_sound_refs(string stored, string referenced)
+    {
+        var doc = MapWith(stored);
+        var entry = RenderModelCommand.FindSoundEntry(doc, referenced);
+        Assert.NotNull(entry);
+        Assert.Equal(stored, entry!.FileName);
+    }
+
+    [Fact]
+    public void FindSoundEntry_returns_null_for_a_sound_not_in_the_map()
+    {
+        var doc = MapWith("war3mapImported\\a.mp3");
+        Assert.Null(RenderModelCommand.FindSoundEntry(doc, "war3mapImported\\missing"));
+    }
+
     [Fact]
     public void An_exact_file_beats_the_variation0_fallback()
     {

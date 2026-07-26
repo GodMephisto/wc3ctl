@@ -602,14 +602,12 @@ public static class PortCommand
         return null;
     }
 
-    /// <summary>Resolve a bundle file to its stored entry. Model refs go through the
-    /// shared model-aware finder (handles the .mdl↔.mdx swap and extensionless refs);
-    /// everything else is a straight path lookup. Keeps port copy consistent with the
-    /// discovery step, which uses the same resolver to decide PresentInMap.</summary>
+    /// <summary>Resolve a bundle file to its stored entry through the one universal asset
+    /// resolver (model, texture, icon or sound, any spelling), so the port copies exactly what
+    /// discovery marked present. <paramref name="category"/> is no longer needed to choose a
+    /// resolver but is kept for call-site clarity.</summary>
     private static MapFileEntry? ResolveEntry(MapDocument doc, string path, string category) =>
-        category == "model"
-            ? RenderModelCommand.FindModelEntry(doc, path)
-            : RenderModelCommand.FindTextureEntry(doc, path) ?? FindFile(doc, path);
+        RenderModelCommand.FindAssetEntry(doc, path) ?? FindFile(doc, path);
 
     private static bool PathEq(string a, string b) =>
         string.Equals(a.Replace('/', '\\'), b.Replace('/', '\\'), StringComparison.OrdinalIgnoreCase);

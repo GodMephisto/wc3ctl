@@ -127,35 +127,16 @@ public static class BundleCommand
             var key = NormalizePath(path);
             if (!files.TryGetValue(key, out var file))
             {
-                var category = Categorize(path);
-                // Extensionless refs (the game appends .mdx/.mdl at load) categorize as
-                // "other". If a stored model file actually backs the ref, treat it as a
-                // model so the file itself AND its textures are captured, not dropped.
-                var modelEntry = category is "model" or "other"
-                    ? RenderModelCommand.FindModelEntry(doc, path)
-                    : null;
-                if (category == "other" && modelEntry is not null)
-                    category = "model";
-
-                bool present;
-                if (category == "model")
-                {
-                    present = modelEntry is not null;
-                }
-                else
-                {
-                    // Textures and icons are frequently referenced WITHOUT an extension (an icon
-                    // Art field stores "...\BTNFoo" and the game appends .blp at load), so resolve
-                    // the .blp/.tga/.dds the ref really lives under, not just the exact path.
-                    // Without this the import is flagged not-present and the port drops it, leaving
-                    // the ported object with the missing-texture box.
-                    var texEntry = RenderModelCommand.FindTextureEntry(doc, path) ?? FindFileEntry(doc, path);
-                    present = texEntry is not null;
-                    // An extensionless "other" ref that resolved to a real texture/icon file is
-                    // reclassified from its stored name, so the view and the port treat it right.
-                    if (category == "other" && texEntry?.FileName is { } stored)
-                        category = Categorize(stored);
-                }
+                // One universal resolver for every asset kind. It matches the file the map really
+                // stores whatever the reference spelling, a model, texture, icon or sound, with or
+                // without an extension, either slash, any case. The category comes from the RESOLVED
+                // file (so an extensionless "...\BTNFoo" that lands on ...BTNFoo.blp reads as an
+                // icon, and "...\Hero_Foo_Q" that lands on ....mp3 reads as a sound), and falls back
+                // to the reference spelling only when nothing in the map backs it (a base-game asset).
+                var entry = RenderModelCommand.FindAssetEntry(doc, path)
+                    ?? FindFileEntry(doc, path);
+                bool present = entry is not null;
+                var category = Categorize(entry?.FileName ?? path);
                 file = new BundleFile(path, category, present);
                 files[key] = file;
                 if (category == "model" && present) AddModelTextures(path);
@@ -403,10 +384,12 @@ public static class BundleCommand
         // guard so the dispatcher itself is still recognised as referencing our hero.
         var callees = new Dictionary<string, List<string>>(StringComparer.Ordinal);
         var aliasHits = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        var assetRefs = new Dictionary<string, List<string>>(StringComparer.Ordinal);
         foreach (var f in byName.Values)
         {
             var calls = new List<string>();
             var mentions = new List<string>();
+            var assetLits = new List<string>();  // asset paths named on our (non-foreign) lines
             var seen = new HashSet<string>(StringComparer.Ordinal);
             var guardStack = new List<bool>(); // one entry per open 'if', true = foreign branch
 
@@ -461,9 +444,21 @@ public static class BundleCommand
                         if (target != f.Name && byName.ContainsKey(target) && seen.Add(target))
                             calls.Add(target);
                     }
+
+                // Asset paths (AddSpecialEffect/MakeSound literals) are only ours when the line is
+                // not inside a foreign hero's dispatch branch. A shared death or effect dispatcher
+                // lists every hero's models/sounds in elseif branches, so without this scoping the
+                // bundle drags all of them in.
+                if (!foreign)
+                    foreach (Match sl in StringLiteral.Matches(line))
+                    {
+                        var path = sl.Groups[1].Value.Replace(@"\\", @"\");
+                        if (LooksLikeAssetPath(path) && seen.Add("$" + path)) assetLits.Add(path);
+                    }
             }
             callees[f.Name] = calls;
             aliasHits[f.Name] = mentions;
+            assetRefs[f.Name] = assetLits;
         }
 
         // Seeds: functions referencing any ported rawcode — as a literal or via an alias.
@@ -500,13 +495,8 @@ public static class BundleCommand
         // unit model swaps, ...), NOT in the ability object fields. Scan every closure function
         // body for asset-path literals so those models/textures/sounds port along with the skill.
         foreach (var name in reasons.Keys)
-            foreach (Match sl in StringLiteral.Matches(bodies[name]))
-            {
-                // Unescape JASS string escapes: a path in source is "war3mapImported\\x.mdx"
-                // (doubled backslashes) but the map stores it single-slashed, so match that.
-                var path = sl.Groups[1].Value.Replace(@"\\", @"\");
-                if (LooksLikeAssetPath(path)) addFileRef(name, path, "script");
-            }
+            foreach (var path in assetRefs[name])
+                addFileRef(name, path, "script");
 
         return reasons
             .Select(kv => new BundleFunction(kv.Key, byName[kv.Key].StartLine, byName[kv.Key].EndLine, kv.Value))
@@ -587,6 +577,13 @@ public static class BundleCommand
 
     private static string NormalizePath(string path) => path.Replace('/', '\\').ToLowerInvariant();
 
-    private static MapFileEntry? FindFileEntry(MapDocument doc, string path) =>
-        doc.GetFile(path) ?? doc.GetFile(path.Replace('/', '\\')) ?? doc.GetFile(path.Replace('\\', '/'));
+    // Requires non-empty bytes so discovery agrees with FindAssetEntry and with the port copy,
+    // which skips a zero-length source file. Otherwise a zero-byte import reads present here but
+    // is skipped at copy time, a false "present".
+    private static MapFileEntry? FindFileEntry(MapDocument doc, string path)
+    {
+        foreach (var p in new[] { path, path.Replace('/', '\\'), path.Replace('\\', '/') }.Distinct())
+            if (doc.GetFile(p) is { RawBytes.Length: > 0 } entry) return entry;
+        return null;
+    }
 }
