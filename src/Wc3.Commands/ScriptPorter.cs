@@ -302,7 +302,12 @@ internal static class ScriptPorter
                 f => ReferencedNames(BodyText(srcLines, f)).Where(allByName.ContainsKey).Distinct().ToList(),
                 StringComparer.Ordinal);
 
-        // Rawcodes in play: the ported objects, plus every rawcode a carried function names.
+        // Rawcodes tied to THIS hero: the ported objects, plus every rawcode the hero's own carried
+        // functions name (its abilities and the combo abilities its handlers grant at runtime, like
+        // 'A1BP'). Fixed on purpose, we do NOT fold in rawcodes from initializers pulled in below.
+        // Doing so cascades in a dense arena map (one hero's init shares a rawcode with another's, and
+        // the set snowballs to the whole map). Every combo ability the hero uses is granted by a base
+        // closure handler, so it is already here without the cascade.
         var live = new HashSet<string>(seedRawcodes, StringComparer.Ordinal);
         foreach (var n in carried.Where(allByName.ContainsKey))
             live.UnionWith(RawcodesOf(n));
@@ -313,13 +318,18 @@ internal static class ScriptPorter
             foreach (var (init, handlers) in initHandlers)
             {
                 if (carried.Contains(init)) continue;
+                // The hero's own init: it wires a handler we already carry, or wires a handler that
+                // fires on one of the hero's rawcodes. Unrelated heroes' inits fire on their own
+                // (different) ability ids, so they are not pulled in.
                 bool wanted = handlers.Any(carried.Contains)
                     || handlers.Any(h => RawcodesOf(h).Overlaps(live));
                 if (!wanted) continue;
                 carried.Add(init);
                 grew = true;
+                // Carry the handlers this init registers so the trigger is not left dangling. Their
+                // rawcodes are deliberately NOT added to the live set (see above).
                 foreach (var h in handlers)
-                    if (carried.Add(h)) { live.UnionWith(RawcodesOf(h)); grew = true; }
+                    if (carried.Add(h)) grew = true;
             }
         }
     }
