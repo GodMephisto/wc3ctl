@@ -71,21 +71,56 @@ internal static class ScriptPorter
             return new ScriptPortInfo(0, 0, 0, false, notes);
         }
 
-        // Closure function bodies, in source order.
-        var closureNames = functions.Select(f => f.Name).ToHashSet(StringComparer.Ordinal);
-        var srcFns = JassFunctionIndex.Parse(srcJ)
-            .Where(f => closureNames.Contains(f.Name))
-            .OrderBy(f => f.StartLine).ToList();
+        // Every function defined in the source, by name (first declaration wins).
+        var allByName = new Dictionary<string, JassFunction>(StringComparer.Ordinal);
+        foreach (var f in JassFunctionIndex.Parse(srcJ)) allByName.TryAdd(f.Name, f);
+        var allSourceFns = allByName.Keys.ToHashSet(StringComparer.Ordinal);
+
+        // Self-contain the carried script. A shared spellcast dispatcher that names our hero also
+        // names every OTHER hero, so its body calls their handlers, which the closure excluded.
+        // Carrying it verbatim would call functions that were never carried, and the target would
+        // fail to compile (map will not load). We comment out each SAFE statement (call/set/local)
+        // that invokes a non-carried function, leaving the hero's own branches intact. A non-carried
+        // function named in a STRUCTURAL line (an if/loop condition or a return) cannot be commented
+        // without breaking block nesting, so we carry it too, iterating to a fixpoint until the
+        // carried set is closed. The net effect, only other heroes' plain call statements are cut,
+        // and the ported script only ever calls carried functions or natives.
+        var carried = new HashSet<string>(functions.Select(f => f.Name), StringComparer.Ordinal);
+        var residual = new HashSet<string>(StringComparer.Ordinal);
+        Dictionary<string, string> bodies;
+        for (int guard = 0; ; guard++)
+        {
+            var dropped = new HashSet<string>(allSourceFns, StringComparer.Ordinal);
+            dropped.ExceptWith(carried);
+            residual.Clear();
+            bodies = carried.Where(allByName.ContainsKey).ToDictionary(
+                n => n, n => Trim(BodyText(srcLines, allByName[n]), dropped, residual), StringComparer.Ordinal);
+            var toAdd = residual.Where(r => !carried.Contains(r) && allByName.ContainsKey(r)).ToList();
+            if (toAdd.Count == 0 || guard > allSourceFns.Count) break; // converges, bounded by the function count
+            foreach (var r in toAdd) carried.Add(r);
+        }
+
+        var srcFns = carried.Where(allByName.ContainsKey)
+            .Select(n => allByName[n]).OrderBy(f => f.StartLine).ToList();
         if (srcFns.Count == 0) return new ScriptPortInfo(0, 0, 0, false, notes);
+
+        int trimmedCalls = bodies.Values.Sum(CountTrimMarkers);
+        if (trimmedCalls > 0)
+            notes.Add($"trimmed {trimmedCalls} call(s) to non-carried functions out of the carried bodies "
+                + "(other heroes' branches of a shared dispatcher), so the ported script is self-contained.");
+        int pulledForStructure = srcFns.Count - functions.Count;
+        if (pulledForStructure > 0)
+            notes.Add($"carried {pulledForStructure} extra helper function(s) that the closure referenced from a "
+                + "condition or return, so no call is left dangling.");
         if (srcFns.Count > 400)
             notes.Add($"{srcFns.Count} functions carried — the source script is highly coupled (likely a shared " +
                       "spell dispatcher), so a large fraction of it came along. Verify the ported map in-game.");
 
-        // Globals referenced by the carried functions.
+        // Globals referenced by the carried (trimmed) functions.
         var (srcGlobals, srcGlobalOrder) = ParseGlobals(srcLines);
         var used = new HashSet<string>(StringComparer.Ordinal);
         foreach (var f in srcFns)
-            foreach (Match m in Ident.Matches(BodyText(srcLines, f)))
+            foreach (Match m in Ident.Matches(bodies[f.Name]))
                 if (srcGlobals.ContainsKey(m.Value)) used.Add(m.Value);
         var carriedGlobals = srcGlobalOrder.Where(used.Contains).ToList();
 
@@ -117,7 +152,13 @@ internal static class ScriptPorter
 
         var portedFns = new StringBuilder();
         foreach (var f in srcFns)
-            portedFns.Append(Rewrite(BodyText(srcLines, f))).Append('\n');
+            portedFns.Append(Rewrite(bodies[f.Name])).Append('\n');
+
+        // A non-carried function named in a condition or return could not be safely commented out
+        // without breaking block structure, so it was left in place. Flag it (best-effort port).
+        if (residual.Count > 0)
+            notes.Add($"{residual.Count} reference(s) to non-carried function(s) remain in a condition or "
+                + $"return and were left in place, verify the ported map ({string.Join(", ", residual.Take(8))}).");
 
         // Splice into the target: globals into its globals block, functions after endglobals.
         string merged = Splice(tgtJ, portedGlobals.ToString(), portedFns.ToString(), marker, notes);
@@ -144,6 +185,72 @@ internal static class ScriptPorter
         if (apply)
             target.AddOrReplaceRawFile(tgtEntry.FileName!, ByteText.GetBytes(merged));
         return new ScriptPortInfo(srcFns.Count, carriedGlobals.Count, rename.Count, hooked, notes);
+    }
+
+    private const string TrimMarker = "//[wc3ctl trimmed] ";
+
+    /// <summary>Comments out each safe statement (call/set/local/debug) that invokes or references a
+    /// source function we are NOT carrying, so a carried body only ever calls carried functions or
+    /// natives. Structural lines (an if/loop condition or a return) that name a non-carried function
+    /// are left in place to preserve block nesting, and recorded in <paramref name="residual"/>.</summary>
+    private static string Trim(string body, IReadOnlySet<string> dropped, HashSet<string> residual)
+    {
+        if (dropped.Count == 0) return body;
+        var sb = new StringBuilder();
+        foreach (var line in body.Split('\n'))
+        {
+            var refs = DroppedRefs(StripComment(line), dropped);
+            if (refs.Count == 0) { sb.Append(line).Append('\n'); continue; }
+            var head = line.TrimStart();
+            bool safe = head.StartsWith("call ", StringComparison.Ordinal)
+                || head.StartsWith("set ", StringComparison.Ordinal)
+                || head.StartsWith("local ", StringComparison.Ordinal)
+                || head.StartsWith("debug ", StringComparison.Ordinal);
+            if (safe)
+            {
+                sb.Append(TrimMarker).Append(line).Append('\n');
+            }
+            else
+            {
+                foreach (var r in refs) residual.Add(r);
+                sb.Append(line).Append('\n');
+            }
+        }
+        return sb.ToString();
+    }
+
+    private static int CountTrimMarkers(string body)
+    {
+        int count = 0, i = 0;
+        while ((i = body.IndexOf(TrimMarker, i, StringComparison.Ordinal)) >= 0) { count++; i += TrimMarker.Length; }
+        return count;
+    }
+
+    /// <summary>Names of dropped functions this line invokes ("Foo(") or references ("function Foo").</summary>
+    private static List<string> DroppedRefs(string code, IReadOnlySet<string> dropped)
+    {
+        var found = new List<string>();
+        Match? prev = null;
+        foreach (Match m in Ident.Matches(code))
+        {
+            if (dropped.Contains(m.Value) && (FollowedByOpenParen(code, m) || prev is { Value: "function" }))
+                found.Add(m.Value);
+            prev = m;
+        }
+        return found;
+    }
+
+    private static string StripComment(string line)
+    {
+        int i = line.IndexOf("//", StringComparison.Ordinal);
+        return i >= 0 ? line[..i] : line;
+    }
+
+    private static bool FollowedByOpenParen(string s, Match m)
+    {
+        int i = m.Index + m.Length;
+        while (i < s.Length && (s[i] == ' ' || s[i] == '\t')) i++;
+        return i < s.Length && s[i] == '(';
     }
 
     private static MapFileEntry? ScriptEntry(MapDocument doc) =>
