@@ -86,6 +86,19 @@ internal static class ScriptPorter
         // carried set is closed. The net effect, only other heroes' plain call statements are cut,
         // and the ported script only ever calls carried functions or natives.
         var carried = new HashSet<string>(functions.Select(f => f.Name), StringComparer.Ordinal);
+
+        // Also carry each InitTrig_* that turns on one of the hero's spells, plus the handlers it wires.
+        // The closure only reaches functions the hero's DATA references; a spell's InitTrig (CreateTrigger
+        // + TriggerAddAction of the handler) is reached only from the source's InitCustomTriggers, never
+        // from the hero, so without this the spell comes across but is never registered — defined and dead
+        // in the target, exactly the "abilities do nothing" break. An init counts as the hero's when it
+        // wires a carried function, OR its handler tests a rawcode a carried function uses (an on-cast
+        // trigger for a combo ability the hero adds at runtime, e.g. QShikiOne firing on 'A1BP' which the
+        // carried learn handler grants). Spell ability ids are hero-unique, so this stays precise. Seeding
+        // them lets the existing globals step pull in each gg_trg_* and the init hook call InitTrig_* in
+        // the target. Fixpoint, bounded by the function count.
+        CarryRegisteringInits(carried, allByName, srcLines, codeRemap.Keys);
+
         var residual = new HashSet<string>(StringComparer.Ordinal);
         Dictionary<string, string> bodies;
         for (int guard = 0; ; guard++)
@@ -261,6 +274,74 @@ internal static class ScriptPorter
         int i = m.Index + m.Length;
         while (i < s.Length && (s[i] == ' ' || s[i] == '\t')) i++;
         return i < s.Length && s[i] == '(';
+    }
+
+    /// <summary>
+    /// Adds to <paramref name="carried"/> every <c>InitTrig_*</c> that turns on one of the hero's spells,
+    /// together with the handler functions it registers. An init qualifies when it wires a carried
+    /// function, or when a handler it wires tests a rawcode that a carried function references (the
+    /// on-cast trigger for a combo ability the hero grants at runtime, which the data-driven closure
+    /// cannot reach because nothing but the init names it). Handlers pulled in this way feed their own
+    /// rawcodes back into the live set, so a combo chain is followed to a fixpoint. Bounded by the
+    /// function count; spell ability ids are hero-unique, so unrelated heroes' inits are not pulled in.
+    /// </summary>
+    private static void CarryRegisteringInits(
+        HashSet<string> carried, IReadOnlyDictionary<string, JassFunction> allByName, string[] srcLines,
+        IEnumerable<string> seedRawcodes)
+    {
+        var rawcodesOf = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+        HashSet<string> RawcodesOf(string n) => rawcodesOf.TryGetValue(n, out var s)
+            ? s
+            : rawcodesOf[n] = RawcodeLiterals(BodyText(srcLines, allByName[n]));
+
+        // Each InitTrig_* -> the source functions it references (the handlers it registers).
+        var initHandlers = allByName.Values
+            .Where(f => f.Name.StartsWith("InitTrig_", StringComparison.Ordinal))
+            .ToDictionary(
+                f => f.Name,
+                f => ReferencedNames(BodyText(srcLines, f)).Where(allByName.ContainsKey).Distinct().ToList(),
+                StringComparer.Ordinal);
+
+        // Rawcodes in play: the ported objects, plus every rawcode a carried function names.
+        var live = new HashSet<string>(seedRawcodes, StringComparer.Ordinal);
+        foreach (var n in carried.Where(allByName.ContainsKey))
+            live.UnionWith(RawcodesOf(n));
+
+        for (bool grew = true; grew;)
+        {
+            grew = false;
+            foreach (var (init, handlers) in initHandlers)
+            {
+                if (carried.Contains(init)) continue;
+                bool wanted = handlers.Any(carried.Contains)
+                    || handlers.Any(h => RawcodesOf(h).Overlaps(live));
+                if (!wanted) continue;
+                carried.Add(init);
+                grew = true;
+                foreach (var h in handlers)
+                    if (carried.Add(h)) { live.UnionWith(RawcodesOf(h)); grew = true; }
+            }
+        }
+    }
+
+    /// <summary>The 4-character rawcode literals ('A1BP') a snippet names.</summary>
+    private static HashSet<string> RawcodeLiterals(string code)
+    {
+        var set = new HashSet<string>(StringComparer.Ordinal);
+        foreach (Match m in Rawcode.Matches(code))
+            if (m.Groups[1].Value.Length == 4) set.Add(m.Groups[1].Value);
+        return set;
+    }
+
+    /// <summary>Identifiers used as a function reference in a snippet ("Foo(" or "function Foo").</summary>
+    private static IEnumerable<string> ReferencedNames(string code)
+    {
+        Match? prev = null;
+        foreach (Match m in Ident.Matches(code))
+        {
+            if (FollowedByOpenParen(code, m) || prev is { Value: "function" }) yield return m.Value;
+            prev = m;
+        }
     }
 
     private static MapFileEntry? ScriptEntry(MapDocument doc) =>
