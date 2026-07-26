@@ -20,9 +20,13 @@ public sealed record UnitInstanceInfo(
     float Rotation,
     (float Sx, float Sy, float Sz) Scale,
     int HeroLevel,
+    int HeroStrength,
+    int HeroAgility,
+    int HeroIntelligence,
     int HpPercent,
     int ManaPercent,
-    int GoldAmount);
+    int GoldAmount,
+    float TargetAcquisition);
 
 public sealed record UnitEditResult(bool Ok, string Message);
 
@@ -69,6 +73,39 @@ public static class UnitInstanceCommand
         if (level < 1)
             return new(false, $"invalid hero level {level} — must be >= 1");
         return Mutate(doc, creationNumber, u => u.HeroLevel = level, $"hero level set to {level}");
+    }
+
+    /// <summary>Sets the hero's Strength bonus (heroes only, 0 or more, matches the World Editor).</summary>
+    public static UnitEditResult SetHeroStrength(MapDocument doc, int creationNumber, int value)
+    {
+        if (value < 0)
+            return new(false, $"invalid strength {value} — must be >= 0");
+        return Mutate(doc, creationNumber, u => u.HeroStrength = value, $"strength set to {value}");
+    }
+
+    /// <summary>Sets the hero's Agility bonus (heroes only, 0 or more).</summary>
+    public static UnitEditResult SetHeroAgility(MapDocument doc, int creationNumber, int value)
+    {
+        if (value < 0)
+            return new(false, $"invalid agility {value} — must be >= 0");
+        return Mutate(doc, creationNumber, u => u.HeroAgility = value, $"agility set to {value}");
+    }
+
+    /// <summary>Sets the hero's Intelligence bonus (heroes only, 0 or more).</summary>
+    public static UnitEditResult SetHeroIntelligence(MapDocument doc, int creationNumber, int value)
+    {
+        if (value < 0)
+            return new(false, $"invalid intelligence {value} — must be >= 0");
+        return Mutate(doc, creationNumber, u => u.HeroIntelligence = value, $"intelligence set to {value}");
+    }
+
+    /// <summary>Sets the target acquisition range in world units, or -1 for the object's default.</summary>
+    public static UnitEditResult SetTargetAcquisition(MapDocument doc, int creationNumber, float range)
+    {
+        if (range < 0f && range != -1f)
+            return new(false, $"invalid target acquisition {range} — must be >= 0 (or -1 for default)");
+        return Mutate(doc, creationNumber, u => u.TargetAcquisition = range,
+            $"target acquisition set to {(range == -1f ? "default" : range.ToString("0.##"))}");
     }
 
     /// <summary>Sets the HP percent override (0..100, or -1 = the object's default).</summary>
@@ -178,9 +215,13 @@ public static class UnitInstanceCommand
         Rotation: u.Rotation,
         Scale: (u.Scale.X, u.Scale.Y, u.Scale.Z),
         HeroLevel: u.HeroLevel,
+        HeroStrength: u.HeroStrength,
+        HeroAgility: u.HeroAgility,
+        HeroIntelligence: u.HeroIntelligence,
         HpPercent: u.HP,
         ManaPercent: u.MP,
-        GoldAmount: u.GoldAmount);
+        GoldAmount: u.GoldAmount,
+        TargetAcquisition: u.TargetAcquisition);
 
     /// <summary>TypeId → display name from the map's unit object-data name deltas
     /// (TRIGSTR_ refs resolved against war3map.wts), plus the sloc pseudo-type.</summary>
