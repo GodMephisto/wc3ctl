@@ -187,9 +187,29 @@ internal static class ScriptPorter
         string merged = Splice(tgtJ, portedGlobals.ToString(), portedFns.ToString(), marker, notes);
 
         // Best-effort init hook: call carried InitTrig_* functions from InitCustomTriggers.
+        //
+        // An init that a carried aggregator ALREADY calls must not be hooked a second time. Calling
+        // InitTrig_X twice builds two triggers on the same event with the same action, so every spell
+        // it registers fires twice (doubled damage, doubled effects, doubled dummies). These scripts
+        // commonly have one InitTrig_* that calls dozens of others, and it gets carried too, so
+        // hooking every carried init blindly double-registers most of them.
+        //
+        // Only calls made from another carried InitTrig_* count, because those are exactly the
+        // functions this hook will run. A call from some other carried function is no guarantee that
+        // it executes at init, so those inits are still hooked here.
+        var hookedByAggregator = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var f in srcFns.Where(f => f.Name.StartsWith("InitTrig_", StringComparison.Ordinal)))
+            foreach (Match m in Regex.Matches(bodies[f.Name], @"\bcall\s+(InitTrig_[A-Za-z0-9_]+)"))
+                if (m.Groups[1].Value != f.Name) hookedByAggregator.Add(m.Groups[1].Value);
+
         var initFns = srcFns.Select(f => f.Name)
             .Where(nm => nm.StartsWith("InitTrig_", StringComparison.Ordinal))
+            .Where(nm => !hookedByAggregator.Contains(nm))
             .Select(nm => rename.GetValueOrDefault(nm, nm)).ToList();
+        if (hookedByAggregator.Count > 0)
+            notes.Add($"skipped hooking {hookedByAggregator.Count} InitTrig_* function(s) that a carried "
+                + "init already calls, so their triggers register once instead of twice (a double "
+                + "registration makes every affected spell fire twice).");
         bool hooked = false;
         if (initFns.Count > 0)
         {
