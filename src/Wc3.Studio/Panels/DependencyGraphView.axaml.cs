@@ -475,9 +475,13 @@ public partial class DependencyGraphView : UserControl, IMapPanel
     private void RenderBundle(UnitBundle bundle)
     {
         int custom = bundle.Objects.Count(o => o.CustomToMap);
+        int deps = CleanReachableFiles(bundle).Count;
+        int portAssets = bundle.Files.Count - deps;
         SummaryText.Text =
             $"{bundle.Objects.Count} objects ({custom} custom / {bundle.Objects.Count - custom} base)"
-            + $", {bundle.Files.Count} files, {bundle.Strings.Count} strings";
+            + $", {deps} files"
+            + (portAssets > 0 ? $" (+{portAssets} port assets)" : "")
+            + $", {bundle.Strings.Count} strings";
         StatusText.Text = bundle.Diagnostics.Count > 0 ? string.Join("; ", bundle.Diagnostics) : "";
         BuildTree(bundle);
         BuildFilesList(bundle);
@@ -540,24 +544,72 @@ public partial class DependencyGraphView : UserControl, IMapPanel
     private void BuildFilesList(UnitBundle bundle)
     {
         FilesList.Children.Clear();
-        FilesExpander.Header = $"Files ({bundle.Files.Count})";
-        FilesExpander.IsExpanded = bundle.Files.Count > 0;
-        foreach (var file in bundle.Files)
+        PortAssetsList.Children.Clear();
+
+        // Split the bundle's files. A file is a real object dependency when it is reachable from
+        // the root WITHOUT crossing a trigger-script edge (object fields, their models, and those
+        // models' textures). Files reachable only through "script" edges are the hero's
+        // trigger-driven skill effects, they belong to a PORT but are noise when browsing, so they
+        // go under a separate, collapsed "Port assets" group instead of burying the real list.
+        var objectDeps = CleanReachableFiles(bundle);
+        var deps = bundle.Files.Where(f => objectDeps.Contains(f.Path)).ToList();
+        var portAssets = bundle.Files.Where(f => !objectDeps.Contains(f.Path)).ToList();
+
+        FilesExpander.Header = $"Files ({deps.Count})";
+        FilesExpander.IsExpanded = deps.Count > 0;
+        foreach (var file in deps) FilesList.Children.Add(FileRow(file));
+
+        PortAssetsExpander.Header = $"Port assets ({portAssets.Count})";
+        PortAssetsExpander.IsExpanded = false;
+        PortAssetsExpander.IsVisible = portAssets.Count > 0;
+        foreach (var file in portAssets) PortAssetsList.Children.Add(FileRow(file));
+    }
+
+    private Control FileRow(BundleFile file)
+    {
+        var row = new TextBlock
         {
-            var row = new TextBlock
-            {
-                Text = $"{CategoryPrefix(file.Category)} {file.Path}"
-                    + $" - [{(file.PresentInMap ? "in map" : "not in map")}]",
-                FontSize = 11,
-                Foreground = file.PresentInMap ? NormalText : MissingText,
-                TextTrimming = TextTrimming.CharacterEllipsis,
-            };
-            ToolTip.SetTip(row, $"{file.Path}\n{file.Category} - "
-                + (file.PresentInMap
-                    ? "imported in this map (ports with the bundle)"
-                    : "not in this map - base-game asset or a missing import"));
-            FilesList.Children.Add(row);
+            Text = $"{CategoryPrefix(file.Category)} {file.Path}"
+                + $" - [{(file.PresentInMap ? "in map" : "not in map")}]",
+            FontSize = 11,
+            Foreground = file.PresentInMap ? NormalText : MissingText,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+        ToolTip.SetTip(row, $"{file.Path}\n{file.Category} - "
+            + (file.PresentInMap
+                ? "imported in this map (ports with the bundle)"
+                : "not in this map - base-game asset or a missing import"));
+        return row;
+    }
+
+    /// <summary>Files reachable from the root without crossing a trigger-script edge, the object's
+    /// real field dependencies (models, textures, icons) as opposed to its trigger-carried assets.</summary>
+    private static HashSet<string> CleanReachableFiles(UnitBundle bundle)
+    {
+        var filePaths = bundle.Files.Select(f => f.Path).ToHashSet(StringComparer.Ordinal);
+        var adjacency = new Dictionary<string, List<(string To, string Via)>>(StringComparer.Ordinal);
+        foreach (var e in bundle.Edges)
+        {
+            if (!adjacency.TryGetValue(e.From, out var list)) adjacency[e.From] = list = new();
+            list.Add((e.To, e.Via));
         }
+
+        var clean = new HashSet<string>(StringComparer.Ordinal);
+        var seen = new HashSet<string>(StringComparer.Ordinal) { bundle.RootRawcode };
+        var stack = new Stack<string>();
+        stack.Push(bundle.RootRawcode);
+        while (stack.Count > 0)
+        {
+            var node = stack.Pop();
+            if (!adjacency.TryGetValue(node, out var outs)) continue;
+            foreach (var (to, via) in outs)
+            {
+                if (via == "script") continue; // trigger-carried assets are not field dependencies
+                if (seen.Add(to)) stack.Push(to);
+                if (filePaths.Contains(to)) clean.Add(to);
+            }
+        }
+        return clean;
     }
 
     private void BuildStringsList(UnitBundle bundle)

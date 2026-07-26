@@ -77,6 +77,9 @@
                         <Expander Name="FilesExpander" Header="Files (0)">
                             <StackPanel Name="FilesList" Spacing="2" Margin="4"/>
                         </Expander>
+                        <Expander Name="PortAssetsExpander" Header="Port assets (0)" IsExpanded="False">
+                            <StackPanel Name="PortAssetsList" Spacing="2" Margin="4"/>
+                        </Expander>
                         <Expander Name="StringsExpander" Header="Strings (0)">
                             <StackPanel Name="StringsList" Spacing="2" Margin="4"/>
                         </Expander>
