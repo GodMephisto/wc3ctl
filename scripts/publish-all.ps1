@@ -52,5 +52,7 @@ foreach ($root in $roots) {
 
 Write-Host ''
 Write-Host 'Published binaries:' -ForegroundColor Green
-$results | Format-Table -AutoSize
+# Emitted as plain strings, not table objects. Format-Table output cannot be piped onward
+# (Select-Object over it throws inside the formatter), and callers do pipe this.
+foreach ($r in $results) { Write-Host ("  {0,-6} {1,-19} {2}" -f $r.Target, $r.Stamp, $r.Path) }
 if ($results.Stamp -contains 'FAILED') { exit 1 }
