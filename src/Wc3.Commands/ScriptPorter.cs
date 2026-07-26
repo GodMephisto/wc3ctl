@@ -122,6 +122,16 @@ internal static class ScriptPorter
         foreach (var f in srcFns)
             foreach (Match m in Ident.Matches(bodies[f.Name]))
                 if (srcGlobals.ContainsKey(m.Value)) used.Add(m.Value);
+        // A used global's initializer can itself reference another global (constant chains),
+        // so expand to a fixpoint over the used declarations. The set only grows and is
+        // bounded by the global count, so the loop terminates.
+        for (bool grew = true; grew;)
+        {
+            grew = false;
+            foreach (var g in used.ToList())
+                foreach (Match m in Ident.Matches(srcGlobals[g]))
+                    if (srcGlobals.ContainsKey(m.Value) && used.Add(m.Value)) grew = true;
+        }
         var carriedGlobals = srcGlobalOrder.Where(used.Contains).ToList();
 
         // Symbols the target already defines (functions + its own globals).
