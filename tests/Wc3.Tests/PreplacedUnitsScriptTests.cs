@@ -106,6 +106,43 @@ public class PreplacedUnitsScriptTests
     }
 
     [Fact]
+    public void SpellDispatchRegistration_IsDeferredUntilAfterTriggersExist()
+    {
+        // An arena registers its spell-dispatch trigger per player. A placed hero needs its player
+        // registered too, but CreateAllUnits runs BEFORE InitCustomTriggers in main(), so the trigger
+        // does not exist yet at unit-creation time. The registration must therefore be deferred to a
+        // 0-second timer, never emitted inline in CreateAllUnits (that would register on a null trigger).
+        var doc = BlankMap.Create();
+        var entry = doc.GetFile(PreplacedUnitsScript.ScriptFile)!;
+        string orig = Encoding.Latin1.GetString(entry.RawBytes);
+        string withDispatcher = orig.Replace(
+            "function main takes nothing returns nothing",
+            "function ArenaCast takes nothing returns nothing\n"
+            + "    call TriggerRegisterPlayerUnitEvent(gg_trg_GearCastCheck, GetOwningPlayer(GetTriggerUnit()), EVENT_PLAYER_UNIT_SPELL_EFFECT, null)\n"
+            + "endfunction\n"
+            + "function main takes nothing returns nothing");
+        doc.AddOrReplaceRawFile(PreplacedUnitsScript.ScriptFile, Encoding.Latin1.GetBytes(withDispatcher));
+
+        PlacementCommand.PlaceUnit(doc, "hfoo", ownerId: 0, x: 0f, y: 0f);
+
+        string j = ScriptOf(doc);
+
+        // Registered in a deferred function, for the placed unit's player.
+        Assert.Contains("function wc3ctl_WirePlacedHeroSpells takes nothing returns nothing", j);
+        Assert.Contains(
+            "TriggerRegisterPlayerUnitEvent(gg_trg_GearCastCheck, Player(0), EVENT_PLAYER_UNIT_SPELL_EFFECT",
+            j);
+        // Fired by a 0-second timer from CreateAllUnits.
+        Assert.Contains("call TimerStart(CreateTimer(), 0., false, function wc3ctl_WirePlacedHeroSpells)", j);
+
+        // The ordering guard: CreateAllUnits' own body must not register any spell event inline.
+        int cau = j.IndexOf("function CreateAllUnits takes nothing", StringComparison.Ordinal);
+        int cauEnd = j.IndexOf("endfunction", cau, StringComparison.Ordinal);
+        string cauBody = j.Substring(cau, cauEnd - cau);
+        Assert.DoesNotContain("TriggerRegisterPlayerUnitEvent", cauBody);
+    }
+
+    [Fact]
     public void SyncWithNoPlacements_LeavesTheScriptUnchanged()
     {
         // A map with no preplaced widgets has nothing to wire, so the script stays byte-identical.
