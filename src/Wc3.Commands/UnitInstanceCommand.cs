@@ -167,7 +167,7 @@ public static class UnitInstanceCommand
         int removed = units.Units.RemoveAll(u => set.Contains(u.CreationNumber));
         if (removed == 0)
             return new(false, "none of the selected units were found");
-        doc.AddOrReplaceModelFile(PlacementCommand.UnitsFile, units);
+        PlacementCommand.CommitUnits(doc, units);
         return new(true, removed == 1 ? "removed 1 unit" : $"removed {removed} units");
     }
 
@@ -185,7 +185,7 @@ public static class UnitInstanceCommand
             if (set.Contains(u.CreationNumber)) { u.OwnerId = ownerId; changed++; }
         if (changed == 0)
             return new(false, "none of the selected units were found");
-        doc.AddOrReplaceModelFile(PlacementCommand.UnitsFile, units);
+        PlacementCommand.CommitUnits(doc, units);
         return new(true, $"set {changed} unit(s) to {PlayerColors.DisplayName(ownerId)}");
     }
 
@@ -201,7 +201,10 @@ public static class UnitInstanceCommand
             return new(false, $"no placed unit with creation number {creationNumber}");
 
         edit(unit);
-        doc.AddOrReplaceModelFile(PlacementCommand.UnitsFile, units);
+        // CommitUnits (not a plain model write) so the runtime creation script re-applies the change,
+        // a scripted map spawns from CreateAllUnits, not from the .doo, so an edit that only touched
+        // the .doo would never show up in game.
+        PlacementCommand.CommitUnits(doc, units);
         return new(true, $"unit #{creationNumber}: {appliedMessage}");
     }
 

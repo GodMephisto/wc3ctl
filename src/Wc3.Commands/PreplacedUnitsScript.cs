@@ -114,9 +114,30 @@ public static class PreplacedUnitsScript
                   .Append(Rawcode(u.TypeId)).Append("', ")
                   .Append(Real(u.Position.X)).Append(", ").Append(Real(u.Position.Y)).Append(", ")
                   .Append(Real(faceDeg)).Append(')').Append(nl);
-                // Heroes keep their placed level so they arrive as the editor showed them.
+                // Editor-set overrides, applied so a placed unit arrives exactly as the panel showed it
+                // (a scripted map spawns from here, not from war3mapUnits.doo, so these must be re-applied).
+                if (u.Scale.X is > 0f and not 1f)
+                    sb.Append("    call SetUnitScale(u, ").Append(Real(u.Scale.X)).Append(", ")
+                      .Append(Real(u.Scale.Y)).Append(", ").Append(Real(u.Scale.Z)).Append(')').Append(nl);
                 if (u.HeroLevel > 1)
                     sb.Append("    call SetHeroLevel(u, ").Append(u.HeroLevel).Append(", false)").Append(nl);
+                if (u.HeroStrength > 0)
+                    sb.Append("    call SetHeroStr(u, ").Append(u.HeroStrength).Append(", true)").Append(nl);
+                if (u.HeroAgility > 0)
+                    sb.Append("    call SetHeroAgi(u, ").Append(u.HeroAgility).Append(", true)").Append(nl);
+                if (u.HeroIntelligence > 0)
+                    sb.Append("    call SetHeroInt(u, ").Append(u.HeroIntelligence).Append(", true)").Append(nl);
+                if (u.GoldAmount > 0)
+                    sb.Append("    call SetResourceAmount(u, ").Append(u.GoldAmount).Append(')').Append(nl);
+                if (u.TargetAcquisition >= 0f)
+                    sb.Append("    call SetUnitAcquireRange(u, ").Append(Real(u.TargetAcquisition)).Append(')').Append(nl);
+                // Current life / mana as a percent of the now-correct (leveled) maximum.
+                if (u.HP is >= 0 and <= 100)
+                    sb.Append("    call SetUnitState(u, UNIT_STATE_LIFE, GetUnitState(u, UNIT_STATE_MAX_LIFE) * ")
+                      .Append(Real(u.HP / 100f)).Append(')').Append(nl);
+                if (u.MP is >= 0 and <= 100)
+                    sb.Append("    call SetUnitState(u, UNIT_STATE_MANA, GetUnitState(u, UNIT_STATE_MAX_MANA) * ")
+                      .Append(Real(u.MP / 100f)).Append(')').Append(nl);
             }
             sb.Append("    set u = null").Append(nl);
             sb.Append("endfunction").Append(nl);
