@@ -1,0 +1,224 @@
+// src/Wc3.Commands/PreplacedUnitsScript.cs
+using System.Globalization;
+using System.Text;
+using War3Net.Build.Widget;      // MapUnits, UnitData
+using War3Net.Common.Extensions; // ToRawcode
+using Wc3.Model;
+
+namespace Wc3.Commands;
+
+/// <summary>
+/// Generates the JASS that actually spawns a map's preplaced units and items at runtime.
+///
+/// <para>Warcraft III does NOT read war3mapUnits.doo directly for a map that ships a custom
+/// war3map.j. For such a map the World Editor bakes a <c>CreateAllUnits</c> function (and a
+/// <c>CreateAllItems</c> one) into the script and calls them from <c>main</c>; that generated
+/// code is what brings preplaced widgets to life. A map whose .doo holds units but whose script
+/// has no such function shows nothing in game, even though the editor still draws the widgets
+/// from the .doo. wc3ctl and the Studio only wrote the .doo, so this closes the gap: after any
+/// placement the creation script is regenerated and wired into <c>main</c>.</para>
+///
+/// <para>The generated code lives between two marker comments so a later sync can replace exactly
+/// its own block and never touch a map's hand-written script. If a map already carries its own
+/// (foreign) <c>CreateAllUnits</c> that we did not generate, the sync leaves the script untouched,
+/// so we never double-create or clobber a real World-Editor map.</para>
+/// </summary>
+public static class PreplacedUnitsScript
+{
+    public const string ScriptFile = "war3map.j";
+
+    private const string BeginMarker = "//=== wc3ctl preplaced widgets (generated, do not edit) ===";
+    private const string EndMarker = "//=== end wc3ctl preplaced widgets ===";
+
+    private const string UnitsFunc = "CreateAllUnits";
+    private const string ItemsFunc = "CreateAllItems";
+
+    public sealed record SyncResult(bool Ok, string Message, int Units, int Items);
+
+    /// <summary>
+    /// Regenerates the preplaced-widget creation script for <paramref name="doc"/> from its
+    /// current war3mapUnits.doo and wires the calls into <c>main</c>. Idempotent, running it
+    /// twice with the same placements yields the same script. Never throws for an ordinary map,
+    /// a missing or foreign script is reported through <see cref="SyncResult"/> instead.
+    /// </summary>
+    public static SyncResult Sync(MapDocument doc)
+    {
+        var scriptEntry = doc.GetFile(ScriptFile);
+        // The effective script is any pending raw override, else the original bytes. Reading
+        // RawBytes alone would miss what an earlier sync in this same session already wrote,
+        // which would leave a stale block behind when placements change (e.g. a phantom unit
+        // after the last one is removed).
+        byte[]? effective = scriptEntry?.OverrideBytes ?? scriptEntry?.RawBytes;
+        if (scriptEntry is null || effective is null || effective.Length == 0)
+            return new(false, "no war3map.j to wire (a scriptless melee map spawns preplaced widgets from the .doo directly)", 0, 0);
+
+        var units = doc.GetFile(PlacementCommand.UnitsFile)?.Model as MapUnits;
+        var spawnable = units?.Units.Where(IsSpawnableUnit).ToList() ?? new List<UnitData>();
+        var items = units?.Units.Where(IsItem).ToList() ?? new List<UnitData>();
+
+        // Latin1 is one byte per char, so the script round-trips byte-for-byte.
+        var enc = Encoding.Latin1;
+        string jass = enc.GetString(effective);
+        string nl = jass.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
+
+        bool hasOurBlock = jass.Contains(BeginMarker, StringComparison.Ordinal);
+
+        // A real World-Editor map owns its own unit creation. Do not touch it.
+        if (!hasOurBlock && MentionsForeignFunction(jass, UnitsFunc))
+            return new(false, "map already creates its preplaced units through its own script, left untouched", 0, 0);
+
+        // Nothing to create and nothing of ours to clean up: leave the file byte-identical.
+        if (spawnable.Count == 0 && items.Count == 0 && !hasOurBlock)
+            return new(true, "no preplaced widgets to wire", 0, 0);
+
+        // Rebuild from a clean slate: drop our old block, then splice a fresh one (if any) in
+        // just before main so every function it defines exists before main calls it.
+        jass = RemoveBlock(jass, nl);
+        if (spawnable.Count > 0 || items.Count > 0)
+        {
+            string block = BuildBlock(spawnable, items, nl);
+            jass = InsertBefore(jass, "function main takes nothing returns nothing", block + nl, nl);
+        }
+
+        // Wire (or unwire) the calls in main to match what the block now defines.
+        jass = EnsureMainCall(jass, UnitsFunc, wanted: spawnable.Count > 0, nl);
+        jass = EnsureMainCall(jass, ItemsFunc, wanted: items.Count > 0, nl);
+
+        doc.AddOrReplaceRawFile(ScriptFile, enc.GetBytes(jass));
+        return new(true, $"wired {spawnable.Count} unit(s) and {items.Count} item(s) into main()", spawnable.Count, items.Count);
+    }
+
+    /// <summary>A spawnable unit is a real unit (not an item slot) and not a start location
+    /// (those become <c>DefineStartLocation</c> in config, never a created unit).</summary>
+    private static bool IsSpawnableUnit(UnitData u) =>
+        u.OwnerId != PlacementCommand.ItemOwnerId && u.TypeId != StartLocationTypeId;
+
+    private static bool IsItem(UnitData u) => u.OwnerId == PlacementCommand.ItemOwnerId;
+
+    private static readonly int StartLocationTypeId = PlacementCommand.StartLocationRawcode.FromRawcode();
+
+    /// <summary>Builds the marker-wrapped block of creation functions.</summary>
+    private static string BuildBlock(List<UnitData> units, List<UnitData> items, string nl)
+    {
+        var sb = new StringBuilder();
+        sb.Append(BeginMarker).Append(nl);
+
+        if (units.Count > 0)
+        {
+            sb.Append("function ").Append(UnitsFunc).Append(" takes nothing returns nothing").Append(nl);
+            sb.Append("    local unit u").Append(nl);
+            foreach (var u in units)
+            {
+                float faceDeg = u.Rotation * 180f / MathF.PI;
+                sb.Append("    set u = CreateUnit(Player(").Append(u.OwnerId).Append("), '")
+                  .Append(Rawcode(u.TypeId)).Append("', ")
+                  .Append(Real(u.Position.X)).Append(", ").Append(Real(u.Position.Y)).Append(", ")
+                  .Append(Real(faceDeg)).Append(')').Append(nl);
+                // Heroes keep their placed level so they arrive as the editor showed them.
+                if (u.HeroLevel > 1)
+                    sb.Append("    call SetHeroLevel(u, ").Append(u.HeroLevel).Append(", false)").Append(nl);
+            }
+            sb.Append("    set u = null").Append(nl);
+            sb.Append("endfunction").Append(nl);
+        }
+
+        if (items.Count > 0)
+        {
+            sb.Append("function ").Append(ItemsFunc).Append(" takes nothing returns nothing").Append(nl);
+            foreach (var it in items)
+                sb.Append("    call CreateItem('").Append(Rawcode(it.TypeId)).Append("', ")
+                  .Append(Real(it.Position.X)).Append(", ").Append(Real(it.Position.Y)).Append(')').Append(nl);
+            sb.Append("endfunction").Append(nl);
+        }
+
+        sb.Append(EndMarker);
+        return sb.ToString();
+    }
+
+    /// <summary>Removes a previously generated block (markers included) plus the one trailing
+    /// newline we inserted with it, leaving unrelated script untouched.</summary>
+    private static string RemoveBlock(string jass, string nl)
+    {
+        int start = jass.IndexOf(BeginMarker, StringComparison.Ordinal);
+        if (start < 0) return jass;
+        int end = jass.IndexOf(EndMarker, start, StringComparison.Ordinal);
+        if (end < 0) return jass;
+        end += EndMarker.Length;
+        if (jass.AsSpan(end).StartsWith(nl)) end += nl.Length;
+        return jass.Remove(start, end - start);
+    }
+
+    /// <summary>Inserts <paramref name="text"/> immediately before the first line that begins
+    /// with <paramref name="anchor"/>. Falls back to appending if the anchor is absent.</summary>
+    private static string InsertBefore(string jass, string anchor, string text, string nl)
+    {
+        int at = jass.IndexOf(anchor, StringComparison.Ordinal);
+        if (at < 0) return jass.EndsWith(nl, StringComparison.Ordinal) ? jass + text : jass + nl + text;
+        // Back up to the start of the anchor's line so we do not split it.
+        int lineStart = jass.LastIndexOf('\n', at) + 1;
+        return jass.Insert(lineStart, text);
+    }
+
+    /// <summary>Adds or removes a <c>call Func(  )</c> statement inside main so the calls always
+    /// match the functions the block defines. Inserts right before InitCustomTriggers (World
+    /// Editor order, widgets before triggers), falling back to after InitBlizzard, then to the
+    /// end of main.</summary>
+    private static string EnsureMainCall(string jass, string func, bool wanted, string nl)
+    {
+        int mainAt = jass.IndexOf("function main takes nothing returns nothing", StringComparison.Ordinal);
+        if (mainAt < 0) return jass;
+        int mainEnd = jass.IndexOf(nl + "endfunction", mainAt, StringComparison.Ordinal);
+        if (mainEnd < 0) mainEnd = jass.Length;
+
+        string callToken = "call " + func + "(";
+        int existing = jass.IndexOf(callToken, mainAt, StringComparison.Ordinal);
+        bool present = existing >= 0 && existing < mainEnd;
+
+        if (wanted && !present)
+        {
+            int anchor = jass.IndexOf("call InitCustomTriggers", mainAt, StringComparison.Ordinal);
+            if (anchor < 0 || anchor > mainEnd)
+            {
+                anchor = jass.IndexOf("call InitBlizzard", mainAt, StringComparison.Ordinal);
+                // After InitBlizzard's line rather than before it.
+                if (anchor >= 0 && anchor < mainEnd)
+                    anchor = jass.IndexOf('\n', anchor) + 1;
+            }
+            if (anchor < 0 || anchor > mainEnd) anchor = mainEnd; // last resort: end of main
+            int lineStart = jass.LastIndexOf('\n', Math.Min(anchor, jass.Length - 1)) + 1;
+            string indent = LeadingWhitespace(jass, lineStart);
+            string stmt = indent + "call " + func + "(  )" + nl;
+            return jass.Insert(lineStart, stmt);
+        }
+        if (!wanted && present)
+        {
+            int lineStart = jass.LastIndexOf('\n', existing) + 1;
+            int lineEnd = jass.IndexOf('\n', existing);
+            if (lineEnd < 0) lineEnd = jass.Length; else lineEnd += 1;
+            return jass.Remove(lineStart, lineEnd - lineStart);
+        }
+        return jass;
+    }
+
+    /// <summary>True if the script defines <paramref name="func"/> outside any block of ours.</summary>
+    private static bool MentionsForeignFunction(string jass, string func) =>
+        jass.Contains("function " + func + " ", StringComparison.Ordinal) ||
+        jass.Contains("function " + func + "\t", StringComparison.Ordinal);
+
+    private static string LeadingWhitespace(string s, int lineStart)
+    {
+        int i = lineStart;
+        while (i < s.Length && (s[i] == ' ' || s[i] == '\t')) i++;
+        return s.Substring(lineStart, i - lineStart);
+    }
+
+    private static string Rawcode(int id) => id.ToRawcode();
+
+    /// <summary>A JASS real literal, invariant, always with a decimal point (JASS does not
+    /// promote an integer literal to a real argument).</summary>
+    private static string Real(float v)
+    {
+        string s = v.ToString("0.0###", CultureInfo.InvariantCulture);
+        return s;
+    }
+}

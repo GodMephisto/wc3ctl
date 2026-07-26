@@ -65,6 +65,9 @@ public class CliMcpParityTests
     {
         "roundtrip", "search", "diff", "render", "bundle object",
         "script functions", "extract", "convert", "validate",
+        // Repair utility: regenerates the preplaced-widget creation script. Placement
+        // already runs it automatically (CommitUnits), so MCP needs no separate tool.
+        "place sync",
     };
 
     // The real MCP tool names, read straight from the [McpServerTool] attributes the

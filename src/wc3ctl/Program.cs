@@ -394,6 +394,34 @@ public static class Program
         }));
         place.AddCommand(placeItem);
 
+        var placeSync = new Command("sync",
+            "Regenerate the runtime creation script (CreateAllUnits/CreateAllItems in war3map.j) "
+            + "from war3mapUnits.doo so preplaced widgets actually spawn in game. Repairs maps whose "
+            + "units were placed without the spawning script. Placing through wc3ctl does this "
+            + "automatically; this repairs a map that predates it.")
+        { mapArg, setOut };
+        placeSync.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = PreplacedUnitsScript.Sync(doc);
+            if (!r.Ok)
+            {
+                Emit(p.GetValueForOption(jsonOption), r, () => r.Message);
+                exitCode[0] = 1;
+                return;
+            }
+            var dest = p.GetValueForOption(setOut) ?? Path.Combine(
+                Path.GetDirectoryName(map) ?? "",
+                Path.GetFileNameWithoutExtension(map) + ".edited" + Path.GetExtension(map));
+            doc.Save(dest);
+            Emit(p.GetValueForOption(jsonOption),
+                new { r.Ok, r.Message, r.Units, r.Items, SavedTo = dest },
+                () => $"{r.Message}\nsaved: {dest}");
+        }));
+        place.AddCommand(placeSync);
+
         // ---- palette: the doodad types placeable on a map (base catalog ⊕ map object-data) ----
         var palette = new Command("palette",
             "List the doodad types placeable on a map (base-game catalog + the map's own object-data).")
