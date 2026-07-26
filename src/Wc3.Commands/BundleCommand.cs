@@ -279,6 +279,12 @@ public static class BundleCommand
     /// hero/ability id a dispatcher branch is guarded by ("if GetUnitTypeId(c) == 'H001'").</summary>
     private static readonly Regex RawcodeLiteral = new("'([^']{4})'", RegexOptions.Compiled);
 
+    /// <summary>An ExecuteFunc("Name") native call, which runs the function named by the string.
+    /// The name sits inside a string literal, so it is never a normal call token and would be
+    /// missed by the call detector, dropping the function from the closure.</summary>
+    private static readonly Regex ExecuteFuncCall =
+        new("ExecuteFunc\\s*\\(\\s*\"([^\"]+)\"", RegexOptions.Compiled);
+
     /// <summary>A global declaration with an initializer: "[constant] type Name = ...".</summary>
     private static readonly Regex GlobalInitializer =
         new(@"^\s*(?:constant\s+)?[A-Za-z_][A-Za-z0-9_]*\s+([A-Za-z_][A-Za-z0-9_]*)\s*=", RegexOptions.Compiled);
@@ -444,6 +450,17 @@ public static class BundleCommand
                     }
                     prev = m;
                 }
+
+                // ExecuteFunc("Name") dispatches to a function by name, so the target sits in a
+                // string literal and is not a normal call token. Feed it into the same call set,
+                // under the same branch-guard scoping (a foreign branch's dispatch is not ours).
+                if (!foreign)
+                    foreach (Match ef in ExecuteFuncCall.Matches(line))
+                    {
+                        var target = ef.Groups[1].Value;
+                        if (target != f.Name && byName.ContainsKey(target) && seen.Add(target))
+                            calls.Add(target);
+                    }
             }
             callees[f.Name] = calls;
             aliasHits[f.Name] = mentions;
