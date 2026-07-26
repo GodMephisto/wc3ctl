@@ -160,6 +160,26 @@ public class BundleScriptClosureTests
     }
 
     [Fact]
+    public void Asset_literals_in_a_foreign_dispatch_branch_are_not_bundled()
+    {
+        // A shared effect dispatcher names our hero's model in its branch and another hero's in
+        // the foreign branch. Only ours may be bundled, the foreign asset never loads for us.
+        const string jass =
+            "function CastFx takes nothing returns nothing\n" +
+            "    if GetUnitTypeId(GetSpellAbilityUnit()) == 'H000' then\n" +
+            "        call AddSpecialEffect(\"war3mapImported\\\\ours.mdx\", 0., 0.)\n" +
+            "    endif\n" +
+            "    if GetUnitTypeId(GetSpellAbilityUnit()) == 'H001' then\n" +
+            "        call AddSpecialEffect(\"war3mapImported\\\\theirs.mdx\", 0., 0.)\n" +
+            "    endif\n" +
+            "endfunction\n";
+
+        var files = ResolveWithTwoHeroes(jass).Files.Select(f => f.Path).ToList();
+        Assert.Contains(files, p => p.EndsWith("ours.mdx", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(files, p => p.EndsWith("theirs.mdx", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void ExecuteFunc_named_function_is_pulled_into_the_closure()
     {
         // A seed function dispatches by name via ExecuteFunc("Storm_Actions"). The target sits in

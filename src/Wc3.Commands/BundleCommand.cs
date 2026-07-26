@@ -403,10 +403,12 @@ public static class BundleCommand
         // guard so the dispatcher itself is still recognised as referencing our hero.
         var callees = new Dictionary<string, List<string>>(StringComparer.Ordinal);
         var aliasHits = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        var assetRefs = new Dictionary<string, List<string>>(StringComparer.Ordinal);
         foreach (var f in byName.Values)
         {
             var calls = new List<string>();
             var mentions = new List<string>();
+            var assetLits = new List<string>();  // asset paths named on our (non-foreign) lines
             var seen = new HashSet<string>(StringComparer.Ordinal);
             var guardStack = new List<bool>(); // one entry per open 'if', true = foreign branch
 
@@ -461,9 +463,21 @@ public static class BundleCommand
                         if (target != f.Name && byName.ContainsKey(target) && seen.Add(target))
                             calls.Add(target);
                     }
+
+                // Asset paths (AddSpecialEffect/MakeSound literals) are only ours when the line is
+                // not inside a foreign hero's dispatch branch. A shared death or effect dispatcher
+                // lists every hero's models/sounds in elseif branches, so without this scoping the
+                // bundle drags all of them in.
+                if (!foreign)
+                    foreach (Match sl in StringLiteral.Matches(line))
+                    {
+                        var path = sl.Groups[1].Value.Replace(@"\\", @"\");
+                        if (LooksLikeAssetPath(path) && seen.Add("$" + path)) assetLits.Add(path);
+                    }
             }
             callees[f.Name] = calls;
             aliasHits[f.Name] = mentions;
+            assetRefs[f.Name] = assetLits;
         }
 
         // Seeds: functions referencing any ported rawcode — as a literal or via an alias.
@@ -500,13 +514,8 @@ public static class BundleCommand
         // unit model swaps, ...), NOT in the ability object fields. Scan every closure function
         // body for asset-path literals so those models/textures/sounds port along with the skill.
         foreach (var name in reasons.Keys)
-            foreach (Match sl in StringLiteral.Matches(bodies[name]))
-            {
-                // Unescape JASS string escapes: a path in source is "war3mapImported\\x.mdx"
-                // (doubled backslashes) but the map stores it single-slashed, so match that.
-                var path = sl.Groups[1].Value.Replace(@"\\", @"\");
-                if (LooksLikeAssetPath(path)) addFileRef(name, path, "script");
-            }
+            foreach (var path in assetRefs[name])
+                addFileRef(name, path, "script");
 
         return reasons
             .Select(kv => new BundleFunction(kv.Key, byName[kv.Key].StartLine, byName[kv.Key].EndLine, kv.Value))
