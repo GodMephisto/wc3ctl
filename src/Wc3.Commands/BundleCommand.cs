@@ -136,9 +136,26 @@ public static class BundleCommand
                     : null;
                 if (category == "other" && modelEntry is not null)
                     category = "model";
-                bool present = category == "model"
-                    ? modelEntry is not null
-                    : FindFileEntry(doc, path) is not null;
+
+                bool present;
+                if (category == "model")
+                {
+                    present = modelEntry is not null;
+                }
+                else
+                {
+                    // Textures and icons are frequently referenced WITHOUT an extension (an icon
+                    // Art field stores "...\BTNFoo" and the game appends .blp at load), so resolve
+                    // the .blp/.tga/.dds the ref really lives under, not just the exact path.
+                    // Without this the import is flagged not-present and the port drops it, leaving
+                    // the ported object with the missing-texture box.
+                    var texEntry = RenderModelCommand.FindTextureEntry(doc, path) ?? FindFileEntry(doc, path);
+                    present = texEntry is not null;
+                    // An extensionless "other" ref that resolved to a real texture/icon file is
+                    // reclassified from its stored name, so the view and the port treat it right.
+                    if (category == "other" && texEntry?.FileName is { } stored)
+                        category = Categorize(stored);
+                }
                 file = new BundleFile(path, category, present);
                 files[key] = file;
                 if (category == "model" && present) AddModelTextures(path);
@@ -228,7 +245,11 @@ public static class BundleCommand
             .OrderBy(rc => rc, StringComparer.Ordinal)
             .Prepend(rootRawcode)
             .ToList();
-        var functions = ResolveScriptClosure(doc, seedRawcodes, diagnostics, AddFileRef);
+        // Every custom object id in the map (any kind), so the script closure can tell a
+        // dispatcher branch guarded by ANOTHER hero (a foreign custom object) from one guarded
+        // by the object being ported, and refuse to follow the foreign branches.
+        var allCustomIds = mapIds.Values.SelectMany(s => s).ToHashSet();
+        var functions = ResolveScriptClosure(doc, seedRawcodes, allCustomIds, diagnostics, AddFileRef);
 
         return new UnitBundle(
             rootRawcode,
@@ -254,6 +275,10 @@ public static class BundleCommand
     /// like - so trigger-driven skill models get carried by the port.</summary>
     private static readonly Regex StringLiteral = new("\"([^\"]*)\"", RegexOptions.Compiled);
 
+    /// <summary>A single-quoted four-character rawcode literal, e.g. 'H001'. Used to read the
+    /// hero/ability id a dispatcher branch is guarded by ("if GetUnitTypeId(c) == 'H001'").</summary>
+    private static readonly Regex RawcodeLiteral = new("'([^']{4})'", RegexOptions.Compiled);
+
     /// <summary>A global declaration with an initializer: "[constant] type Name = ...".</summary>
     private static readonly Regex GlobalInitializer =
         new(@"^\s*(?:constant\s+)?[A-Za-z_][A-Za-z0-9_]*\s+([A-Za-z_][A-Za-z0-9_]*)\s*=", RegexOptions.Compiled);
@@ -273,10 +298,18 @@ public static class BundleCommand
     /// comments and string literals are not understood, so a rawcode or function name
     /// inside either still matches (over-inclusion, never under-inclusion). Lua maps
     /// are not analyzed.
+    ///
+    /// Dispatch scoping: these maps route every hero's spellcast through one shared function
+    /// shaped as "if GetUnitTypeId(c) == Raiden_ID then ...Raiden calls... endif; if ... ==
+    /// Natsu_ID then ...Natsu calls... endif; ...". A call that appears ONLY inside a branch
+    /// guarded by another object's rawcode (<paramref name="allCustomObjectIds"/> minus the
+    /// ported set) is that other hero's, not ours, so it is not followed. Branches guarded by
+    /// our own rawcodes, and unguarded calls, are followed normally. Without this, one shared
+    /// dispatcher pulls every hero's spell code (and assets) into every hero's bundle.
     /// </summary>
     private static IReadOnlyList<BundleFunction> ResolveScriptClosure(
-        MapDocument doc, IReadOnlyList<string> seedRawcodes, List<string> diagnostics,
-        Action<string, string, string> addFileRef)
+        MapDocument doc, IReadOnlyList<string> seedRawcodes, HashSet<int> allCustomObjectIds,
+        List<string> diagnostics, Action<string, string, string> addFileRef)
     {
         var entry = doc.GetFile("war3map.j") ?? doc.GetFile("scripts\\war3map.j");
         if (entry is null)
@@ -308,17 +341,41 @@ public static class BundleCommand
             for (int i = f.StartLine - 1; i < f.EndLine && i < lines.Length; i++)
                 inFunction[i] = true;
 
-        var aliases = new Dictionary<string, string>(StringComparer.Ordinal); // name → 'XXXX'
+        // ourIds = the rawcodes being ported (root + custom closure objects). A dispatch
+        // branch guarded by one of these is ours to follow; one guarded by any OTHER custom
+        // object (allCustomObjectIds minus these) belongs to a different hero.
+        var ourIds = seedRawcodes.Where(rc => rc.Length == 4)
+            .Select(rc => rc.FromRawcode()).ToHashSet();
+
+        var aliases = new Dictionary<string, string>(StringComparer.Ordinal);  // name → 'XXXX' (seed only)
+        var allAliases = new Dictionary<string, int>(StringComparer.Ordinal);  // name → rawcode id (every id global)
         for (int i = 0; i < lines.Length; i++)
         {
             if (inFunction[i]) continue;
             var line = StripLineComment(lines[i]);
+            var g = GlobalInitializer.Match(line);
+            if (g.Success && RawcodeLiteral.Match(line) is { Success: true } rl)
+                allAliases.TryAdd(g.Groups[1].Value, rl.Groups[1].Value.FromRawcode());
             foreach (var lit in literals)
             {
                 if (!line.Contains(lit, StringComparison.Ordinal)) continue;
                 var m = GlobalInitializer.Match(line);
                 if (m.Success) aliases.TryAdd(m.Groups[1].Value, lit);
             }
+        }
+
+        // True when an if/elseif condition dispatches on a foreign hero: it names a custom
+        // object rawcode (literal or *_ID alias) that is NOT one of ours. A condition that
+        // also names one of ours, or names no object at all, is not foreign.
+        bool IsForeignGuard(string condition)
+        {
+            var refs = new List<int>();
+            foreach (Match m in RawcodeLiteral.Matches(condition))
+                refs.Add(m.Groups[1].Value.FromRawcode());
+            foreach (Match m in Identifier.Matches(condition))
+                if (allAliases.TryGetValue(m.Value, out var rc)) refs.Add(rc);
+            if (refs.Count == 0 || refs.Any(ourIds.Contains)) return false;
+            return refs.Any(allCustomObjectIds.Contains);
         }
 
         // Body text (signature line included) with // line comments stripped.
@@ -331,30 +388,65 @@ public static class BundleCommand
             bodies[f.Name] = sb.ToString();
         }
 
-        // One token pass per body fills both the call graph and the alias mentions.
-        // Callees in body order: an identifier counts as a call when it names another
-        // indexed function and is either invoked ("Foo(") or passed by reference
-        // ("function Foo" — TriggerAddAction/TimerStart/Condition and friends).
+        // One line-by-line pass per function fills both the call graph and the alias mentions.
+        // A call counts when the identifier names another indexed function and is either invoked
+        // ("Foo(") or passed by reference ("function Foo" — TriggerAddAction/TimerStart/Condition
+        // and friends). Calls that appear ONLY inside a foreign-hero dispatch branch are dropped
+        // (guardStack tracks the open if/elseif branches; a call is followed only when no active
+        // branch is foreign). Alias mentions, which drive SEEDING, are collected regardless of
+        // guard so the dispatcher itself is still recognised as referencing our hero.
         var callees = new Dictionary<string, List<string>>(StringComparer.Ordinal);
         var aliasHits = new Dictionary<string, List<string>>(StringComparer.Ordinal);
-        foreach (var (name, body) in bodies)
+        foreach (var f in byName.Values)
         {
             var calls = new List<string>();
             var mentions = new List<string>();
             var seen = new HashSet<string>(StringComparer.Ordinal);
-            Match? prev = null;
-            foreach (Match m in Identifier.Matches(body))
+            var guardStack = new List<bool>(); // one entry per open 'if', true = foreign branch
+
+            for (int i = f.StartLine - 1; i < f.EndLine && i < lines.Length; i++)
             {
-                if (m.Value != name && byName.ContainsKey(m.Value)
-                    && (FollowedByOpenParen(body, m) || IsFunctionReference(body, prev, m))
-                    && seen.Add(m.Value))
-                    calls.Add(m.Value);
-                else if (aliases.ContainsKey(m.Value) && seen.Add("'" + m.Value))
-                    mentions.Add(m.Value);
-                prev = m;
+                var line = StripLineComment(lines[i]);
+                var head = line.TrimStart();
+
+                // Adjust the branch-guard stack from the leading control keyword BEFORE scanning
+                // this line's calls (so an inline "then call Foo()" is judged under its guard).
+                if (StartsWithWord(head, "elseif"))
+                {
+                    if (guardStack.Count > 0) guardStack[^1] = IsForeignGuard(line);
+                }
+                else if (StartsWithWord(head, "else"))
+                {
+                    if (guardStack.Count > 0) guardStack[^1] = false; // else branch is not a foreign hero
+                }
+                else if (StartsWithWord(head, "endif"))
+                {
+                    if (guardStack.Count > 0) guardStack.RemoveAt(guardStack.Count - 1);
+                }
+                else if (StartsWithWord(head, "if"))
+                {
+                    guardStack.Add(IsForeignGuard(line));
+                }
+
+                bool foreign = guardStack.Contains(true);
+
+                Match? prev = null;
+                foreach (Match m in Identifier.Matches(line))
+                {
+                    if (m.Value != f.Name && byName.ContainsKey(m.Value)
+                        && (FollowedByOpenParen(line, m) || IsFunctionReference(line, prev, m)))
+                    {
+                        if (!foreign && seen.Add(m.Value)) calls.Add(m.Value);
+                    }
+                    else if (aliases.ContainsKey(m.Value) && seen.Add("'" + m.Value))
+                    {
+                        mentions.Add(m.Value);
+                    }
+                    prev = m;
+                }
             }
-            callees[name] = calls;
-            aliasHits[name] = mentions;
+            callees[f.Name] = calls;
+            aliasHits[f.Name] = mentions;
         }
 
         // Seeds: functions referencing any ported rawcode — as a literal or via an alias.
@@ -403,6 +495,17 @@ public static class BundleCommand
             .Select(kv => new BundleFunction(kv.Key, byName[kv.Key].StartLine, byName[kv.Key].EndLine, kv.Value))
             .OrderBy(f => f.StartLine)
             .ToList();
+    }
+
+    /// <summary>True when <paramref name="s"/> begins with the JASS keyword <paramref name="word"/>
+    /// as a whole word (the next character is not part of an identifier), so "if" matches "if (x)"
+    /// but not "iffy" and "else" does not swallow "elseif".</summary>
+    private static bool StartsWithWord(string s, string word)
+    {
+        if (!s.StartsWith(word, StringComparison.Ordinal)) return false;
+        if (s.Length == word.Length) return true;
+        char c = s[word.Length];
+        return !(char.IsLetterOrDigit(c) || c == '_');
     }
 
     private static bool FollowedByOpenParen(string body, Match m)

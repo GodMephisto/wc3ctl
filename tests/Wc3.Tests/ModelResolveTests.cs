@@ -45,6 +45,28 @@ public class ModelResolveTests
         Assert.Null(RenderModelCommand.FindModelEntry(doc, "war3mapImported\\missing.mdl"));
     }
 
+    [Theory]
+    // Icon Art fields store the path with no extension; the game appends .blp at load.
+    [InlineData("ReplaceableTextures\\CommandButtons\\BTNFoo.blp", "ReplaceableTextures\\CommandButtons\\BTNFoo")]
+    [InlineData("war3mapImported\\fx.blp", "war3mapImported\\fx")]                 // extensionless import
+    [InlineData("war3mapImported\\fx.blp", "war3mapImported/fx")]                  // slash variant
+    [InlineData("war3mapImported\\fx.tga", "war3mapImported\\fx.blp")]             // wrong extension, sibling
+    [InlineData("war3mapImported\\fx.blp", "war3mapImported\\fx.tga")]             // wrong extension, sibling
+    public void FindTextureEntry_resolves_extensionless_and_sibling_texture_refs(string stored, string referenced)
+    {
+        var doc = MapWith(stored);
+        var entry = RenderModelCommand.FindTextureEntry(doc, referenced);
+        Assert.NotNull(entry);
+        Assert.Equal(stored, entry!.FileName);
+    }
+
+    [Fact]
+    public void FindTextureEntry_returns_null_for_a_texture_not_in_the_map()
+    {
+        var doc = MapWith("war3mapImported\\fx.blp");
+        Assert.Null(RenderModelCommand.FindTextureEntry(doc, "ReplaceableTextures\\CommandButtons\\BTNMissing"));
+    }
+
     [Fact]
     public void An_exact_file_beats_the_variation0_fallback()
     {

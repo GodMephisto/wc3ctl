@@ -564,7 +564,9 @@ public static class PortCommand
     /// everything else is a straight path lookup. Keeps port copy consistent with the
     /// discovery step, which uses the same resolver to decide PresentInMap.</summary>
     private static MapFileEntry? ResolveEntry(MapDocument doc, string path, string category) =>
-        category == "model" ? RenderModelCommand.FindModelEntry(doc, path) : FindFile(doc, path);
+        category == "model"
+            ? RenderModelCommand.FindModelEntry(doc, path)
+            : RenderModelCommand.FindTextureEntry(doc, path) ?? FindFile(doc, path);
 
     private static bool PathEq(string a, string b) =>
         string.Equals(a.Replace('/', '\\'), b.Replace('/', '\\'), StringComparison.OrdinalIgnoreCase);
