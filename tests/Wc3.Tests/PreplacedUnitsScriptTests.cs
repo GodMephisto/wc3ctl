@@ -142,6 +142,109 @@ public class PreplacedUnitsScriptTests
         Assert.DoesNotContain("TriggerRegisterPlayerUnitEvent", cauBody);
     }
 
+    /// <summary>Only the generated block, so assertions cannot be satisfied (or broken) by the
+    /// fixture's own script text that happens to mention the same array.</summary>
+    private static string GeneratedBlock(string jass)
+    {
+        int start = jass.IndexOf("//=== wc3ctl preplaced widgets", StringComparison.Ordinal);
+        int end = jass.IndexOf("//=== end wc3ctl preplaced widgets", StringComparison.Ordinal);
+        Assert.True(start >= 0 && end > start, "no generated block in the script");
+        return jass[start..end];
+    }
+
+    /// <summary>Replaces the blank map's script, then places a hero-capable unit so the generated
+    /// block has something to register.</summary>
+    private static MapDocument MapWithScript(string extraJass)
+    {
+        var doc = BlankMap.Create();
+        var entry = doc.GetFile(PreplacedUnitsScript.ScriptFile)!;
+        string orig = Encoding.Latin1.GetString(entry.RawBytes);
+        doc.AddOrReplaceRawFile(PreplacedUnitsScript.ScriptFile, Encoding.Latin1.GetBytes(
+            orig.Replace("function main takes nothing returns nothing",
+                extraJass + "function main takes nothing returns nothing")));
+        PlacementCommand.PlaceUnit(doc, "Hpal", ownerId: 0, x: 0f, y: 0f);
+        return doc;
+    }
+
+    [Fact]
+    public void Every_real_per_player_hero_array_is_registered_including_one_based_ones()
+    {
+        // A map that received ports from several arenas has several hero arrays, with different index
+        // conventions. Registering only one (or only 0-based ones) leaves the other source's heroes
+        // unable to cast, which is exactly what happened to a merged map in practice.
+        string j = ScriptOf(MapWithScript(
+            "globals\n" +
+            "    unit array Hero\n" +
+            "    unit array udg_Player\n" +
+            "endglobals\n" +
+            "function CastA takes nothing returns boolean\n" +
+            "    return GetSpellAbilityUnit() == Hero[GetPlayerId(GetTriggerPlayer())]\n" +
+            "endfunction\n" +
+            "function CastB takes nothing returns boolean\n" +
+            "    return GetTriggerUnit() == udg_Player[( 1 + GetPlayerId(GetTriggerPlayer()) )]\n" +
+            "endfunction\n"));
+
+        Assert.Contains("set Hero[GetPlayerId(GetOwningPlayer(u))] = u", j);
+        Assert.Contains("set udg_Player[1 + GetPlayerId(GetOwningPlayer(u))] = u", j);
+    }
+
+    [Fact]
+    public void A_per_player_helper_array_is_never_written_to()
+    {
+        // udg_Dummy and udg_RevengeUnit are per-player but hold spawned helpers, not the player's
+        // hero. Writing a real hero into one makes that system think it owns our hero, so it may
+        // kill or recycle it. Only identity-carrying arrays may be touched.
+        string j = GeneratedBlock(ScriptOf(MapWithScript(
+            "globals\n" +
+            "    unit array Hero\n" +
+            "    unit array udg_Dummy\n" +
+            "    unit array udg_RevengeUnit\n" +
+            "endglobals\n" +
+            "function Spawn takes nothing returns nothing\n" +
+            "    set udg_Dummy[GetPlayerId(GetTriggerPlayer())]=bj_lastCreatedUnit\n" +
+            "    set udg_RevengeUnit[( 1 + GetPlayerId(GetTriggerPlayer()) )]=bj_lastCreatedUnit\n" +
+            "    call BJDebugMsg(I2S(GetPlayerId(GetTriggerPlayer())))\n" +
+            "endfunction\n" +
+            "function Cast takes nothing returns boolean\n" +
+            "    return GetSpellAbilityUnit() == Hero[GetPlayerId(GetTriggerPlayer())]\n" +
+            "endfunction\n")));
+
+        Assert.Contains("set Hero[GetPlayerId(GetOwningPlayer(u))] = u", j);
+        Assert.DoesNotContain("set udg_Dummy[", j);
+        Assert.DoesNotContain("set udg_RevengeUnit[", j);
+    }
+
+    [Fact]
+    public void The_generated_block_carries_its_generator_version()
+    {
+        var doc = BlankMap.Create();
+        PlacementCommand.PlaceUnit(doc, "hfoo", 0, 0f, 0f);
+
+        Assert.Contains($"[gen v{PreplacedUnitsScript.GeneratorVersion}]", ScriptOf(doc));
+    }
+
+    [Fact]
+    public void A_block_from_a_newer_generator_is_left_alone_instead_of_downgraded()
+    {
+        // The regression that cost real debugging time: an older build regenerated a newer block and
+        // silently stripped its spell wiring, leaving a map that compiles and hosts but whose heroes
+        // are mute. A newer block must survive an older generator untouched.
+        var doc = BlankMap.Create();
+        PlacementCommand.PlaceUnit(doc, "hfoo", 0, 0f, 0f);
+        var entry = doc.GetFile(PreplacedUnitsScript.ScriptFile)!;
+        string bumped = Encoding.Latin1.GetString(entry.OverrideBytes ?? entry.RawBytes)
+            .Replace($"[gen v{PreplacedUnitsScript.GeneratorVersion}]",
+                     $"[gen v{PreplacedUnitsScript.GeneratorVersion + 1}]");
+        doc.AddOrReplaceRawFile(PreplacedUnitsScript.ScriptFile, Encoding.Latin1.GetBytes(bumped));
+
+        var res = PreplacedUnitsScript.Sync(doc);
+
+        Assert.False(res.Ok);
+        Assert.Contains("newer", res.Message);
+        // Untouched, so the newer behaviour it carried is still there.
+        Assert.Contains($"[gen v{PreplacedUnitsScript.GeneratorVersion + 1}]", ScriptOf(doc));
+    }
+
     [Fact]
     public void SyncWithNoPlacements_LeavesTheScriptUnchanged()
     {

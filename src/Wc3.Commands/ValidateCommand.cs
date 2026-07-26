@@ -87,9 +87,36 @@ public static class ValidateCommand
         //    port can introduce silently, so it is checked here rather than discovered in a lobby.
         issues.AddRange(ScriptIssues(doc));
 
+        // 7. The generated spawn block must still carry the behaviour this build knows about. A block
+        //    left behind by an older wc3ctl still compiles and still hosts, so nothing above can see
+        //    it, yet its placed heroes cannot cast a single dispatched spell.
+        issues.AddRange(GeneratedBlockIssues(doc));
+
         int errors = issues.Count(i => i.Severity == DiagnosticSeverity.Error);
         int warnings = issues.Count(i => i.Severity == DiagnosticSeverity.Warning);
         return new ValidateResult(errors == 0, errors, warnings, issues);
+    }
+
+    /// <summary>Reports a generated spawn block that an older wc3ctl downgraded. The missing
+    /// spell wiring is an Error because its effect is total (no placed hero can cast) while the map
+    /// looks perfectly healthy otherwise. A merely older block that does not need the wiring is a
+    /// Warning, since it still behaves correctly.</summary>
+    private static IEnumerable<ValidationIssue> GeneratedBlockIssues(MapDocument doc)
+    {
+        var audit = PreplacedUnitsScript.Audit(doc);
+        if (!audit.HasBlock) yield break;
+
+        if (audit.IsMissingSpellWiring)
+            yield return new ValidationIssue(DiagnosticSeverity.Error, "generated-block",
+                PreplacedUnitsScript.ScriptFile,
+                "the generated spawn block does not register this map's spell-dispatch triggers, so "
+                + "placed heroes cannot cast. It was written by an older wc3ctl "
+                + $"(gen v{audit.BlockVersion} vs v{audit.CurrentVersion}). Run 'wc3ctl place sync' to regenerate it.");
+        else if (audit.IsStale)
+            yield return new ValidationIssue(DiagnosticSeverity.Warning, "generated-block",
+                PreplacedUnitsScript.ScriptFile,
+                $"the generated spawn block is from an older wc3ctl (gen v{audit.BlockVersion} vs "
+                + $"v{audit.CurrentVersion}). Run 'wc3ctl place sync' to bring it up to date.");
     }
 
     /// <summary>Runs <see cref="JassScriptCheck"/> over the map's JASS, mapped onto the shared

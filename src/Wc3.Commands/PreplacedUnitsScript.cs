@@ -28,14 +28,92 @@ public static class PreplacedUnitsScript
 {
     public const string ScriptFile = "war3map.j";
 
-    private const string BeginMarker = "//=== wc3ctl preplaced widgets (generated, do not edit) ===";
+    /// <summary>
+    /// What this generator is capable of emitting. Bump it whenever the generated block gains
+    /// behaviour a map would lose by being regenerated with an older build.
+    ///
+    /// Its purpose is to stop a silent downgrade. An older binary regenerating a newer block used to
+    /// quietly strip capabilities (hero registration and spell-dispatch wiring), leaving a map that
+    /// still compiles and hosts but whose heroes cannot cast, which is far harder to spot than a
+    /// crash. Version 1 was the original create-only block, 2 added the per-instance unit properties
+    /// and hero-array registration, 3 added the deferred spell-dispatch wiring, 4 registers EVERY per-player hero array
+    /// (both 0-based and 1-based) rather than only the most-used one.
+    /// </summary>
+    public const int GeneratorVersion = 4;
+
+    // The begin marker carries the generator version. Detection keys off the PREFIX so blocks
+    // written before versioning existed (no "[gen vN]") are still recognised, and read as version 0.
+    private const string BeginMarkerPrefix = "//=== wc3ctl preplaced widgets (generated, do not edit)";
+    private static string BeginMarker => $"{BeginMarkerPrefix} [gen v{GeneratorVersion}] ===";
     private const string EndMarker = "//=== end wc3ctl preplaced widgets ===";
+
+    private static readonly Regex BlockVersionPattern = new(
+        @"^//=== wc3ctl preplaced widgets \(generated, do not edit\)(?: \[gen v(\d+)\])? ===",
+        RegexOptions.Compiled | RegexOptions.Multiline);
 
     private const string UnitsFunc = "CreateAllUnits";
     private const string ItemsFunc = "CreateAllItems";
     private const string WireSpellsFunc = "wc3ctl_WirePlacedHeroSpells";
 
     public sealed record SyncResult(bool Ok, string Message, int Units, int Items);
+
+    /// <summary>
+    /// State of the generated block in a map. <paramref name="NeedsSpellWiring"/> is true when the
+    /// map has placed player-owned units AND the script dispatches spells through per-player
+    /// triggers (the arena pattern), which is exactly when the block must register those triggers or
+    /// the placed heroes silently cannot cast.
+    /// </summary>
+    public sealed record BlockAudit(
+        bool HasBlock,
+        int BlockVersion,
+        int CurrentVersion,
+        bool NeedsSpellWiring,
+        bool HasSpellWiring)
+    {
+        public bool IsStale => HasBlock && BlockVersion < CurrentVersion;
+        /// <summary>The consequential failure: the wiring is required but absent, so casts go nowhere.</summary>
+        public bool IsMissingSpellWiring => HasBlock && NeedsSpellWiring && !HasSpellWiring;
+    }
+
+    /// <summary>
+    /// Inspects the generated block without changing anything, so a degraded map can be reported.
+    /// This exists because a stale block still compiles and still hosts, so neither the loader nor
+    /// the JASS checker can see the problem, yet every placed hero is mute.
+    /// </summary>
+    public static BlockAudit Audit(MapDocument doc)
+    {
+        var entry = doc.GetFile(ScriptFile);
+        byte[]? bytes = entry?.OverrideBytes ?? entry?.RawBytes;
+        if (bytes is null || bytes.Length == 0)
+            return new(false, 0, GeneratorVersion, false, false);
+
+        string jass = Encoding.Latin1.GetString(bytes);
+        if (!jass.Contains(BeginMarkerPrefix, StringComparison.Ordinal))
+            return new(false, 0, GeneratorVersion, false, false);
+
+        // Mirror the generator's own condition for emitting the wiring, so the audit and the
+        // generator can never disagree about whether a block ought to have it.
+        var units = doc.GetFile(PlacementCommand.UnitsFile)?.Model as MapUnits;
+        bool anyOwnedUnit = units?.Units.Any(u =>
+            IsSpawnableUnit(u) && u.OwnerId >= 0 && u.OwnerId < PlayerColors.NeutralHostileId) ?? false;
+        bool dispatchesSpells = DetectPerPlayerSpellTriggers(jass).Count > 0;
+
+        return new(
+            HasBlock: true,
+            BlockVersion: BlockVersionOf(jass),
+            CurrentVersion: GeneratorVersion,
+            NeedsSpellWiring: anyOwnedUnit && dispatchesSpells,
+            HasSpellWiring: jass.Contains("function " + WireSpellsFunc, StringComparison.Ordinal));
+    }
+
+    /// <summary>The generator version recorded in the block's begin marker, 0 when it predates
+    /// versioning, -1 when there is no block at all.</summary>
+    private static int BlockVersionOf(string jass)
+    {
+        var m = BlockVersionPattern.Match(jass);
+        if (!m.Success) return -1;
+        return m.Groups[1].Success ? int.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture) : 0;
+    }
 
     /// <summary>
     /// Regenerates the preplaced-widget creation script for <paramref name="doc"/> from its
@@ -63,7 +141,17 @@ public static class PreplacedUnitsScript
         string jass = enc.GetString(effective);
         string nl = jass.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
 
-        bool hasOurBlock = jass.Contains(BeginMarker, StringComparison.Ordinal);
+        bool hasOurBlock = jass.Contains(BeginMarkerPrefix, StringComparison.Ordinal);
+
+        // Never downgrade. If the block was written by a NEWER generator, this build would silently
+        // strip capabilities it does not know about (that is exactly how a map's heroes ended up
+        // unable to cast: an older binary regenerated a newer block and dropped its spell wiring).
+        // Leaving it alone keeps the better block, and the message names the fix.
+        int existingVersion = BlockVersionOf(jass);
+        if (hasOurBlock && existingVersion > GeneratorVersion)
+            return new(false,
+                $"generated block is from a newer wc3ctl (gen v{existingVersion} > v{GeneratorVersion}), "
+                + "left untouched so its newer behaviour is not stripped, update wc3ctl and re-run", 0, 0);
 
         // A real World-Editor map owns its own unit creation. Do not touch it.
         if (!hasOurBlock && MentionsForeignFunction(jass, UnitsFunc))
@@ -79,13 +167,13 @@ public static class PreplacedUnitsScript
         // its spell handlers only act on a unit that is in that array. A placed hero never runs the
         // arena's selection flow, so it is absent and its spells do nothing. Detecting that array lets
         // CreateAllUnits register the placed hero into it, a best-effort so a ported arena hero can cast.
-        string? heroArray = DetectHeroArray(jass);
+        var heroArrays = DetectHeroArrays(jass);
         var spellTriggers = DetectPerPlayerSpellTriggers(jass);
 
         jass = RemoveBlock(jass, nl);
         if (spawnable.Count > 0 || items.Count > 0)
         {
-            string block = BuildBlock(spawnable, items, nl, heroArray, spellTriggers);
+            string block = BuildBlock(spawnable, items, nl, heroArrays, spellTriggers);
             jass = InsertBefore(jass, "function main takes nothing returns nothing", block + nl, nl);
         }
 
@@ -111,17 +199,61 @@ public static class PreplacedUnitsScript
     /// <c>[GetPlayerId(...)]</c> (spell handlers test it to decide a cast belongs to that player's hero).
     /// Returns the array indexed that way most often, or null when the map has none.
     /// </summary>
-    private static string? DetectHeroArray(string jass)
+    /// <summary>A per-player hero array and the index base the map uses for it.</summary>
+    private sealed record HeroArray(string Name, bool OneBased)
     {
-        string? best = null;
-        int bestCount = 0;
+        /// <summary>The index expression for the unit in hand, matching the map's own convention.</summary>
+        public string Index => OneBased
+            ? "1 + GetPlayerId(GetOwningPlayer(u))"
+            : "GetPlayerId(GetOwningPlayer(u))";
+    }
+
+    /// <summary>
+    /// Every per-player hero array in the script, strongest first. A spell handler decides a cast is
+    /// "this player's hero" by testing one of these, so a placed hero absent from them cannot cast.
+    ///
+    /// All of them are returned, not just the most-used one, because a map that received ports from
+    /// several sources has several such arrays (one arena's <c>Hero[GetPlayerId(p)]</c> alongside
+    /// another's <c>udg_Player[1 + GetPlayerId(p)]</c>), and registering only one leaves the other
+    /// source's heroes mute. Both index conventions are recognised for the same reason, a 1-based
+    /// array is invisible to a 0-based-only search.
+    /// </summary>
+    private static List<HeroArray> DetectHeroArrays(string jass)
+    {
+        var found = new List<(HeroArray Array, int Count)>();
         foreach (Match decl in Regex.Matches(jass, @"\bunit\s+array\s+([A-Za-z_][A-Za-z0-9_]*)"))
         {
             string name = decl.Groups[1].Value;
-            int c = Regex.Matches(jass, Regex.Escape(name) + @"\s*\[\s*GetPlayerId\s*\(").Count;
-            if (c > bestCount) { bestCount = c; best = name; }
+            string esc = Regex.Escape(name);
+            int zeroBased = Regex.Matches(jass, esc + @"\s*\[\s*GetPlayerId\s*\(").Count;
+            int oneBased = Regex.Matches(jass, esc + @"\s*\[\s*\(?\s*1\s*\+\s*GetPlayerId\s*\(").Count;
+            if (zeroBased == 0 && oneBased == 0) continue;
+
+            // Being indexed per player is not enough, plenty of arrays are. The test is whether the
+            // array carries the player's IDENTITY, which is exactly what a handler asks when it
+            // compares it against the casting unit, and exactly what a placed hero must satisfy to
+            // cast. A hero-named array counts too, since an arena often passes it straight into its
+            // spell functions rather than comparing it.
+            //
+            // Deliberately NOT enough: merely being assigned a freshly created unit. That admits
+            // arrays holding spawned helpers (a revenge unit, a dummy caster), and writing a real
+            // hero into one of those makes that system believe it owns our hero, so it may kill,
+            // recycle, or refuse to spawn. Missing an obscure array only mutes one hero, whereas
+            // impersonating a helper actively breaks the map, so this errs toward precision.
+            bool comparedToCaster = Regex.IsMatch(jass,
+                @"(GetTriggerUnit\(\)|GetSpellAbilityUnit\(\)|GetAttacker\(\))\s*==\s*" + esc + @"\s*\["
+                + "|" + esc + @"\s*\[[^\]]*\]\s*==\s*(GetTriggerUnit\(\)|GetSpellAbilityUnit\(\)|GetAttacker\(\))");
+            bool heroNamed = name.Contains("hero", StringComparison.OrdinalIgnoreCase);
+            if (!comparedToCaster && !heroNamed) continue;
+
+            // Belt and braces on the same risk: never impersonate a dummy unit slot.
+            if (name.Contains("dummy", StringComparison.OrdinalIgnoreCase)) continue;
+
+            found.Add((new HeroArray(name, oneBased > zeroBased), Math.Max(zeroBased, oneBased)));
         }
-        return bestCount > 0 ? best : null;
+        // Capped, so a very large merged script cannot inflate the generated block without bound.
+        return found.OrderByDescending(f => f.Count).ThenBy(f => f.Array.Name, StringComparer.Ordinal)
+            .Take(4).Select(f => f.Array).ToList();
     }
 
     /// <summary>
@@ -144,8 +276,9 @@ public static class PreplacedUnitsScript
     /// is the arena's per-player hero array, each placed hero registers itself into it (first hero per
     /// player wins) so the ported spell handlers recognise it.</summary>
     private static string BuildBlock(List<UnitData> units, List<UnitData> items, string nl,
-        string? heroArray = null, IReadOnlyList<string>? spellTriggersOrNull = null)
+        IReadOnlyList<HeroArray>? heroArraysOrNull = null, IReadOnlyList<string>? spellTriggersOrNull = null)
     {
+        var heroArrays = heroArraysOrNull ?? Array.Empty<HeroArray>();
         var spellTriggers = spellTriggersOrNull ?? Array.Empty<string>();
         // Players that own a placed unit (a placed hero's owner is among them, neutral slots excluded).
         // The arena's spell-dispatch triggers get their spell-effect event registered for these players
@@ -212,11 +345,11 @@ public static class PreplacedUnitsScript
                 // per-player hero array so handlers that test Hero[pid] recognise it. Safe here because
                 // it is a plain global-array write (the array exists from map load), unlike the spell
                 // trigger registration, which must wait for the triggers and is done via the timer below.
-                if (heroArray is not null)
-                    sb.Append("    if IsUnitType(u, UNIT_TYPE_HERO) and ").Append(heroArray)
-                      .Append("[GetPlayerId(GetOwningPlayer(u))] == null then").Append(nl)
-                      .Append("        set ").Append(heroArray)
-                      .Append("[GetPlayerId(GetOwningPlayer(u))] = u").Append(nl)
+                foreach (var arr in heroArrays)
+                    sb.Append("    if IsUnitType(u, UNIT_TYPE_HERO) and ").Append(arr.Name)
+                      .Append('[').Append(arr.Index).Append("] == null then").Append(nl)
+                      .Append("        set ").Append(arr.Name)
+                      .Append('[').Append(arr.Index).Append("] = u").Append(nl)
                       .Append("    endif").Append(nl);
             }
             if (wireSpells)
@@ -243,7 +376,8 @@ public static class PreplacedUnitsScript
     /// newline we inserted with it, leaving unrelated script untouched.</summary>
     private static string RemoveBlock(string jass, string nl)
     {
-        int start = jass.IndexOf(BeginMarker, StringComparison.Ordinal);
+        // Prefix match, so a block written before the version stamp existed is still replaced.
+        int start = jass.IndexOf(BeginMarkerPrefix, StringComparison.Ordinal);
         if (start < 0) return jass;
         int end = jass.IndexOf(EndMarker, start, StringComparison.Ordinal);
         if (end < 0) return jass;
