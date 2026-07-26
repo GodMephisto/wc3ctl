@@ -577,6 +577,13 @@ public static class BundleCommand
 
     private static string NormalizePath(string path) => path.Replace('/', '\\').ToLowerInvariant();
 
-    private static MapFileEntry? FindFileEntry(MapDocument doc, string path) =>
-        doc.GetFile(path) ?? doc.GetFile(path.Replace('/', '\\')) ?? doc.GetFile(path.Replace('\\', '/'));
+    // Requires non-empty bytes so discovery agrees with FindAssetEntry and with the port copy,
+    // which skips a zero-length source file. Otherwise a zero-byte import reads present here but
+    // is skipped at copy time, a false "present".
+    private static MapFileEntry? FindFileEntry(MapDocument doc, string path)
+    {
+        foreach (var p in new[] { path, path.Replace('/', '\\'), path.Replace('\\', '/') }.Distinct())
+            if (doc.GetFile(p) is { RawBytes.Length: > 0 } entry) return entry;
+        return null;
+    }
 }
