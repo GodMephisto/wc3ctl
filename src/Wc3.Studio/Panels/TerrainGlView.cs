@@ -9,6 +9,8 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.OpenGL;
 using Avalonia.OpenGL.Controls;
+using Avalonia.Threading;
+using System.Threading.Tasks;
 using Silk.NET.Core.Contexts;
 using Silk.NET.OpenGL;
 using Wc3.Render;
@@ -111,49 +113,70 @@ public sealed class TerrainGlView : OpenGlControlBase
     /// <summary>Loads a map's terrain + placements into the viewport (safe to call off the
     /// GL thread). <paramref name="modelResolver"/> supplies real render models per placement
     /// type ((rawcode, isUnit) → model, null = kind-colored box); it should cache per type.</summary>
+    // Bumped on every SetMap so a build that finishes after a newer map was opened is discarded.
+    private int _buildGen;
+    // Model resolution reads the shared game-data (CASC), which is not thread-safe, so at most one
+    // terrain build runs at a time across the app.
+    private static readonly object BuildLock = new();
+
+    /// <summary>
+    /// Points the viewport at a map. The terrain mesh, tile textures, and the placement scene
+    /// (which parses an MDX model and its textures for every placed unit and doodad) are pure CPU
+    /// work, the GL upload happens later through the dirty flags, so all of it runs OFF the UI
+    /// thread and is applied back on it when ready. Opening a big, heavily placed map no longer
+    /// freezes the app, the viewport clears immediately and repopulates a moment later.
+    /// <paramref name="onReady"/> runs on the UI thread after the build applies (used to frame the
+    /// camera, which needs the built mesh's center and radius).
+    /// </summary>
     public void SetMap(
         Wc3.Model.MapDocument? doc,
-        Func<string, bool, PlacementModel?>? modelResolver = null)
+        Func<string, bool, PlacementModel?>? modelResolver = null,
+        Action? onReady = null)
     {
-        try
+        _doc = doc;
+        _modelResolver = modelResolver;
+        int gen = ++_buildGen;
+
+        // Clear the current scene at once so the old map does not linger while the new one builds.
+        _verts = null; _indices = null; _indexCount = 0;
+        _waterVerts = null; _waterIndices = null; _waterIndexCount = 0;
+        _heights = null; _scene = null;
+        _meshDirty = _waterDirty = _texDirty = _sceneDirty = true;
+        RequestNextFrameRendering();
+        if (doc is null) return;
+
+        Task.Run(() =>
         {
-            _doc = doc;
-            _modelResolver = modelResolver;
-            if (doc is null)
+            lock (BuildLock)
             {
-                _verts = null; _indices = null; _indexCount = 0;
-                _waterVerts = null; _waterIndices = null; _waterIndexCount = 0;
-                _heights = null; _scene = null; _sceneDirty = true;
-                return;
+                if (gen != _buildGen) return; // a newer map superseded this one while it was queued
+                try
+                {
+                    var mesh = TerrainMeshBuilder.Build(doc);
+                    var water = WaterMeshBuilder.Build(doc);
+                    var layerData = TerrainArtCatalog.BuildLayersForMap(doc, out var layerCount, out var layerCell);
+                    var heights = TerrainHeightField.TryCreate(doc);
+                    var scene = PlacementScene.Build(doc, modelResolver);
+
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        if (gen != _buildGen) return; // superseded between build end and apply
+                        _verts = mesh.Vertices; _indices = mesh.Indices;
+                        _center = mesh.Center; _radius = mesh.Radius; _meshDirty = true;
+                        _waterVerts = water.Vertices; _waterIndices = water.Indices; _waterDirty = true;
+                        _layerData = layerData; _layerCount = layerCount; _layerCell = layerCell; _texDirty = true;
+                        _heights = heights;
+                        _scene = scene; _sceneDirty = true;
+                        RequestNextFrameRendering();
+                        onReady?.Invoke();
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Dispatcher.UIThread.Post(() => { if (gen == _buildGen) Log($"SetMap failed: {ex.Message}"); });
+                }
             }
-            var mesh = TerrainMeshBuilder.Build(doc);
-            _verts = mesh.Vertices;
-            _indices = mesh.Indices;
-            _center = mesh.Center;
-            _radius = mesh.Radius;
-            _meshDirty = true;
-
-            var water = WaterMeshBuilder.Build(doc);
-            _waterVerts = water.Vertices;
-            _waterIndices = water.Indices;
-            _waterDirty = true;
-
-            _layerData = TerrainArtCatalog.BuildLayersForMap(doc, out _layerCount, out _layerCell);
-            _texDirty = true;
-
-            _heights = TerrainHeightField.TryCreate(doc);
-            _scene = PlacementScene.Build(doc, _modelResolver);
-            _sceneDirty = true;
-
-            RequestNextFrameRendering();
-        }
-        catch (Exception ex)
-        {
-            Log($"SetMap failed: {ex.Message}");
-            _verts = null; _indices = null; _indexCount = 0;
-            _waterVerts = null; _waterIndices = null; _waterIndexCount = 0;
-            _scene = null; _sceneDirty = true;
-        }
+        });
     }
 
     /// <summary>
