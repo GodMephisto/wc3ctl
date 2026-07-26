@@ -22,6 +22,10 @@ internal static class ScriptPorter
     private static readonly Regex Ident = new(@"[A-Za-z_][A-Za-z0-9_]*", RegexOptions.Compiled);
     private static readonly Regex Rawcode = new(@"'(\\?.|[^'\\]{1,4})'", RegexOptions.Compiled);
 
+    /// <summary>Byte-faithful codec (Latin1 is a bijection on all 256 byte values), so decoding
+    /// then re-encoding war3map.j preserves a legacy-codepage target's bytes exactly.</summary>
+    private static readonly Encoding ByteText = Encoding.Latin1;
+
     /// <summary>
     /// Splices the function closure into <paramref name="target"/> (mutated via
     /// AddOrReplaceRawFile) — or, with <paramref name="apply"/> false, computes the exact
@@ -45,9 +49,27 @@ internal static class ScriptPorter
         if (srcEntry is null) { notes.Add("source has no war3map.j — script not ported."); return new ScriptPortInfo(0, 0, 0, false, notes); }
         if (tgtEntry is null) { notes.Add("target has no war3map.j — script not ported."); return new ScriptPortInfo(0, 0, 0, false, notes); }
 
-        string srcJ = Encoding.UTF8.GetString(srcEntry.RawBytes);
-        string tgtJ = Encoding.UTF8.GetString(tgtEntry.RawBytes);
+        // Byte-faithful codec: war3map.j is often authored in a legacy codepage (GBK/Big5 on
+        // Chinese maps, exactly this corpus). UTF8 with its replacement fallback would turn every
+        // non-ASCII byte in the UNTOUCHED target script into U+FFFD on re-encode, corrupting names
+        // and messages the port never meant to touch. Latin1 maps all 256 byte values one-to-one,
+        // so decode then re-encode round-trips the original bytes exactly, and our inserted ASCII
+        // is identical either way.
+        string srcJ = ByteText.GetString(srcEntry.RawBytes);
+        string tgtJ = ByteText.GetString(tgtEntry.RawBytes);
         var srcLines = srcJ.Replace("\r\n", "\n").Split('\n');
+
+        // Idempotency: the object layer reuses an identical prior port rather than duplicating it,
+        // and the MCP tool advertises port_unit as idempotent. The script layer must match. Splicing
+        // again would append a second copy of every carried function under _p1 names and wire a
+        // second call into InitCustomTriggers, so each ported spell would fire twice. If the target
+        // already carries this exact port (its BEGIN marker is present), leave the script untouched.
+        string marker = $"wc3ctl ported: {markerLabel}";
+        if (tgtJ.Contains($"BEGIN {marker} ====", StringComparison.Ordinal))
+        {
+            notes.Add("target already carries this port (marker present) — script left unchanged to stay idempotent.");
+            return new ScriptPortInfo(0, 0, 0, false, notes);
+        }
 
         // Closure function bodies, in source order.
         var closureNames = functions.Select(f => f.Name).ToHashSet(StringComparer.Ordinal);
@@ -98,7 +120,6 @@ internal static class ScriptPorter
             portedFns.Append(Rewrite(BodyText(srcLines, f))).Append('\n');
 
         // Splice into the target: globals into its globals block, functions after endglobals.
-        string marker = $"wc3ctl ported: {markerLabel}";
         string merged = Splice(tgtJ, portedGlobals.ToString(), portedFns.ToString(), marker, notes);
 
         // Best-effort init hook: call carried InitTrig_* functions from InitCustomTriggers.
@@ -121,7 +142,7 @@ internal static class ScriptPorter
         }
 
         if (apply)
-            target.AddOrReplaceRawFile(tgtEntry.FileName!, Encoding.UTF8.GetBytes(merged));
+            target.AddOrReplaceRawFile(tgtEntry.FileName!, ByteText.GetBytes(merged));
         return new ScriptPortInfo(srcFns.Count, carriedGlobals.Count, rename.Count, hooked, notes);
     }
 
