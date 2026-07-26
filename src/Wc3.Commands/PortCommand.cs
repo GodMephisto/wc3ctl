@@ -609,7 +609,9 @@ public static class PortCommand
     private static MapFileEntry? ResolveEntry(MapDocument doc, string path, string category) =>
         category == "model"
             ? RenderModelCommand.FindModelEntry(doc, path)
-            : RenderModelCommand.FindTextureEntry(doc, path) ?? FindFile(doc, path);
+            : RenderModelCommand.FindTextureEntry(doc, path)
+                ?? RenderModelCommand.FindSoundEntry(doc, path)
+                ?? FindFile(doc, path);
 
     private static bool PathEq(string a, string b) =>
         string.Equals(a.Replace('/', '\\'), b.Replace('/', '\\'), StringComparison.OrdinalIgnoreCase);

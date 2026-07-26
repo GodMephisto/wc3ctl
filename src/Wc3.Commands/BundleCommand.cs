@@ -144,16 +144,18 @@ public static class BundleCommand
                 }
                 else
                 {
-                    // Textures and icons are frequently referenced WITHOUT an extension (an icon
-                    // Art field stores "...\BTNFoo" and the game appends .blp at load), so resolve
-                    // the .blp/.tga/.dds the ref really lives under, not just the exact path.
-                    // Without this the import is flagged not-present and the port drops it, leaving
-                    // the ported object with the missing-texture box.
-                    var texEntry = RenderModelCommand.FindTextureEntry(doc, path) ?? FindFileEntry(doc, path);
-                    present = texEntry is not null;
-                    // An extensionless "other" ref that resolved to a real texture/icon file is
-                    // reclassified from its stored name, so the view and the port treat it right.
-                    if (category == "other" && texEntry?.FileName is { } stored)
+                    // Textures, icons and sounds are frequently referenced WITHOUT an extension (an
+                    // icon Art field stores "...\BTNFoo" and MakeSound stores "...\Hero_Foo_Q", the
+                    // game appends .blp / .mp3 at load), so resolve the .blp/.tga/.dds or .mp3/.wav
+                    // the ref really lives under, not just the exact path. Without this the import
+                    // is flagged not-present and the port drops it (missing icon box, silent skill).
+                    var assetEntry = RenderModelCommand.FindTextureEntry(doc, path)
+                        ?? RenderModelCommand.FindSoundEntry(doc, path)
+                        ?? FindFileEntry(doc, path);
+                    present = assetEntry is not null;
+                    // An extensionless "other" ref that resolved to a real file is reclassified from
+                    // its stored name, so the view and the port treat it right.
+                    if (category == "other" && assetEntry?.FileName is { } stored)
                         category = Categorize(stored);
                 }
                 file = new BundleFile(path, category, present);
