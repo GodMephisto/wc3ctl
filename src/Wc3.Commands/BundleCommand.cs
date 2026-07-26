@@ -127,37 +127,16 @@ public static class BundleCommand
             var key = NormalizePath(path);
             if (!files.TryGetValue(key, out var file))
             {
-                var category = Categorize(path);
-                // Extensionless refs (the game appends .mdx/.mdl at load) categorize as
-                // "other". If a stored model file actually backs the ref, treat it as a
-                // model so the file itself AND its textures are captured, not dropped.
-                var modelEntry = category is "model" or "other"
-                    ? RenderModelCommand.FindModelEntry(doc, path)
-                    : null;
-                if (category == "other" && modelEntry is not null)
-                    category = "model";
-
-                bool present;
-                if (category == "model")
-                {
-                    present = modelEntry is not null;
-                }
-                else
-                {
-                    // Textures, icons and sounds are frequently referenced WITHOUT an extension (an
-                    // icon Art field stores "...\BTNFoo" and MakeSound stores "...\Hero_Foo_Q", the
-                    // game appends .blp / .mp3 at load), so resolve the .blp/.tga/.dds or .mp3/.wav
-                    // the ref really lives under, not just the exact path. Without this the import
-                    // is flagged not-present and the port drops it (missing icon box, silent skill).
-                    var assetEntry = RenderModelCommand.FindTextureEntry(doc, path)
-                        ?? RenderModelCommand.FindSoundEntry(doc, path)
-                        ?? FindFileEntry(doc, path);
-                    present = assetEntry is not null;
-                    // An extensionless "other" ref that resolved to a real file is reclassified from
-                    // its stored name, so the view and the port treat it right.
-                    if (category == "other" && assetEntry?.FileName is { } stored)
-                        category = Categorize(stored);
-                }
+                // One universal resolver for every asset kind. It matches the file the map really
+                // stores whatever the reference spelling, a model, texture, icon or sound, with or
+                // without an extension, either slash, any case. The category comes from the RESOLVED
+                // file (so an extensionless "...\BTNFoo" that lands on ...BTNFoo.blp reads as an
+                // icon, and "...\Hero_Foo_Q" that lands on ....mp3 reads as a sound), and falls back
+                // to the reference spelling only when nothing in the map backs it (a base-game asset).
+                var entry = RenderModelCommand.FindAssetEntry(doc, path)
+                    ?? FindFileEntry(doc, path);
+                bool present = entry is not null;
+                var category = Categorize(entry?.FileName ?? path);
                 file = new BundleFile(path, category, present);
                 files[key] = file;
                 if (category == "model" && present) AddModelTextures(path);
