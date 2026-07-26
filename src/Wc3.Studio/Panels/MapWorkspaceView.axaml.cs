@@ -527,7 +527,8 @@ public partial class MapWorkspaceView : UserControl
     {
         try
         {
-            var doc = BlankMap.Create();
+            // Start-location markers so a new map opens a real host lobby (see BlankMap.IncludeStartLocations).
+            var doc = BlankMap.Create(new BlankMapOptions { IncludeStartLocations = true });
             Session.Current = doc;
             Session.MapPath = null; // no file on disk yet — Save will prompt for one
             SaveButton.IsEnabled = true;

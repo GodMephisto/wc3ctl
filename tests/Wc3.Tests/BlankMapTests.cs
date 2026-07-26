@@ -194,6 +194,21 @@ public class BlankMapTests
     }
 
     [Fact]
+    public void Create_WithStartLocations_WritesOneSlocMarkerPerPlayer()
+    {
+        var doc = BlankMap.Create(new BlankMapOptions { PlayerCount = 3, IncludeStartLocations = true });
+
+        var units = (War3Net.Build.Widget.MapUnits)doc.GetFile("war3mapUnits.doo")!.Model!;
+        int slocId = "sloc".FromRawcode();
+        var slocs = units.Units.Where(u => u.TypeId == slocId).ToList();
+        Assert.Equal(3, slocs.Count);                                   // one marker per player
+        Assert.Equal(new[] { 0, 1, 2 }, slocs.Select(u => u.OwnerId).OrderBy(x => x));
+
+        // Off by default the map carries no placement file, so the raw primitive stays empty.
+        Assert.Null(BlankMap.Create().GetFile("war3mapUnits.doo"));
+    }
+
+    [Fact]
     public void Create_ScriptSurvivesRoundTrip_WithNameIntact()
     {
         var doc = BlankMap.Create(new BlankMapOptions { MapName = "Scripted Arena" });

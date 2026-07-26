@@ -1121,7 +1121,9 @@ public static class Program
         newMap.SetHandler(ctx => RunSafely(() =>
         {
             var p = ctx.ParseResult;
-            var opts = new BlankMapOptions();
+            // Real start-location markers so the map opens a proper host lobby (a marker-less map shows
+            // an empty "0/N" slot list on Battle.net).
+            var opts = new BlankMapOptions { IncludeStartLocations = true };
             if (p.GetValueForOption(newNameOpt) is { } n && n.Length > 0) opts = opts with { MapName = n };
             if (p.GetValueForOption(newTilesOpt) is { } t) opts = opts with { TileEdge = t };
             byte[] bytes = BlankMap.CreateArchiveBytes(opts);

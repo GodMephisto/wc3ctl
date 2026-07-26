@@ -8,6 +8,7 @@ using War3Net.Build.Common;
 using War3Net.Build.Environment;
 using War3Net.Build.Extensions;
 using War3Net.Build.Info;
+using War3Net.Build.Widget;
 using War3Net.Common.Extensions;
 using War3Net.IO.Mpq;
 
@@ -31,6 +32,14 @@ public sealed record BlankMapOptions
     /// as a real custom game.
     /// </summary>
     public int PlayerCount { get; init; } = 2;
+
+    /// <summary>
+    /// Write a 'sloc' start-location marker per player into war3mapUnits.doo. Warcraft III builds the
+    /// host lobby's slots from these markers, without them the lobby shows an empty "0/N" slot list.
+    /// Off by default so the raw synthesis primitive stays an empty map, the user-facing entry points
+    /// (wc3ctl new, the Studio's New Map) turn it on so the maps people actually make are hostable.
+    /// </summary>
+    public bool IncludeStartLocations { get; init; } = false;
 
     /// <summary>Playable area is TileEdge x TileEdge tiles (TileEdge+1 vertices per side).</summary>
     public int TileEdge { get; init; } = 32;
@@ -148,6 +157,13 @@ public static class BlankMap
             map.GetScriptFile(enc)!,
             MpqFile.New(new MemoryStream(BuildMinimapTga()), MinimapFileName),
         };
+        // Start-location markers make the map hostable (see IncludeStartLocations). Opt-in so the raw
+        // primitive stays empty for callers that build placements themselves.
+        if (o.IncludeStartLocations)
+        {
+            map.Units = BuildStartLocations(players);
+            files.Add(map.GetUnitsFile(enc)!);
+        }
 
         // Generate/overwrite the (listfile) so the named entries (war3map.w3i / .w3e)
         // are discoverable when the archive is re-opened by MapDocument.Load.
@@ -225,6 +241,50 @@ public static class BlankMap
     }
 
     private const string MinimapFileName = "war3mapMap.tga";
+
+    /// <summary>
+    /// Start-location markers ('sloc' units), one per player, written to war3mapUnits.doo.
+    /// Warcraft III builds the host lobby's player slots from these markers, a map that defines
+    /// start locations only in the script (DefineStartLocation) but carries no markers shows an
+    /// empty "0/N" slot list with nothing to join. Positions mirror each player's start position.
+    /// </summary>
+    private static MapUnits BuildStartLocations(int players)
+    {
+        var units = new MapUnits(MapWidgetsFormatVersion.v8, MapWidgetsSubVersion.v11, useNewFormat: true);
+        int slocId = "sloc".FromRawcode();
+        for (int i = 0; i < players; i++)
+        {
+            float sx = (i - (players - 1) / 2f) * 256f;
+            units.Units.Add(new UnitData
+            {
+                TypeId = slocId,
+                OwnerId = i,
+                Flags = 2,
+                Position = new Vector3(sx, 0f, 0f),
+                Rotation = 0f,
+                Scale = new Vector3(1f, 1f, 1f),
+                HP = -1,
+                MP = -1,
+                GoldAmount = 0,
+                TargetAcquisition = -1f,
+                HeroLevel = 1,
+                HeroStrength = 0,
+                HeroAgility = 0,
+                HeroIntelligence = 0,
+                CustomPlayerColorId = -1,
+                WaygateDestinationRegionId = -1,
+                SkinId = slocId,
+                Variation = 0,
+                MapItemTableId = -1,
+                CreationNumber = i,
+                // War3Net's widget writer dereferences these lists unconditionally.
+                InventoryData = new List<InventoryItemData>(),
+                AbilityData = new List<ModifiedAbilityData>(),
+                ItemTableSets = new List<RandomItemSet>(),
+            });
+        }
+        return units;
+    }
 
     /// <summary>
     /// Builds a small valid war3mapMap.tga minimap: an 18-byte uncompressed truecolor
