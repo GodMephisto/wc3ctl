@@ -1,6 +1,7 @@
 // src/Wc3.Commands/PreplacedUnitsScript.cs
 using System.Globalization;
 using System.Text;
+using System.Text.RegularExpressions;
 using War3Net.Build.Widget;      // MapUnits, UnitData
 using War3Net.Common.Extensions; // ToRawcode
 using Wc3.Model;
@@ -73,10 +74,16 @@ public static class PreplacedUnitsScript
 
         // Rebuild from a clean slate: drop our old block, then splice a fresh one (if any) in
         // just before main so every function it defines exists before main calls it.
+        // An arena registers each player's hero in a global unit array (Hero[GetPlayerId(p)]=u), and
+        // its spell handlers only act on a unit that is in that array. A placed hero never runs the
+        // arena's selection flow, so it is absent and its spells do nothing. Detecting that array lets
+        // CreateAllUnits register the placed hero into it, a best-effort so a ported arena hero can cast.
+        string? heroArray = DetectHeroArray(jass);
+
         jass = RemoveBlock(jass, nl);
         if (spawnable.Count > 0 || items.Count > 0)
         {
-            string block = BuildBlock(spawnable, items, nl);
+            string block = BuildBlock(spawnable, items, nl, heroArray);
             jass = InsertBefore(jass, "function main takes nothing returns nothing", block + nl, nl);
         }
 
@@ -97,8 +104,28 @@ public static class PreplacedUnitsScript
 
     private static readonly int StartLocationTypeId = PlacementCommand.StartLocationRawcode.FromRawcode();
 
-    /// <summary>Builds the marker-wrapped block of creation functions.</summary>
-    private static string BuildBlock(List<UnitData> units, List<UnitData> items, string nl)
+    /// <summary>
+    /// Finds the arena's per-player hero array, a global <c>unit array</c> that the script indexes by
+    /// <c>[GetPlayerId(...)]</c> (spell handlers test it to decide a cast belongs to that player's hero).
+    /// Returns the array indexed that way most often, or null when the map has none.
+    /// </summary>
+    private static string? DetectHeroArray(string jass)
+    {
+        string? best = null;
+        int bestCount = 0;
+        foreach (Match decl in Regex.Matches(jass, @"\bunit\s+array\s+([A-Za-z_][A-Za-z0-9_]*)"))
+        {
+            string name = decl.Groups[1].Value;
+            int c = Regex.Matches(jass, Regex.Escape(name) + @"\s*\[\s*GetPlayerId\s*\(").Count;
+            if (c > bestCount) { bestCount = c; best = name; }
+        }
+        return bestCount > 0 ? best : null;
+    }
+
+    /// <summary>Builds the marker-wrapped block of creation functions. When <paramref name="heroArray"/>
+    /// is the arena's per-player hero array, each placed hero registers itself into it (first hero per
+    /// player wins) so the ported spell handlers recognise it.</summary>
+    private static string BuildBlock(List<UnitData> units, List<UnitData> items, string nl, string? heroArray = null)
     {
         var sb = new StringBuilder();
         sb.Append(BeginMarker).Append(nl);
@@ -138,6 +165,14 @@ public static class PreplacedUnitsScript
                 if (u.MP is >= 0 and <= 100)
                     sb.Append("    call SetUnitState(u, UNIT_STATE_MANA, GetUnitState(u, UNIT_STATE_MAX_MANA) * ")
                       .Append(Real(u.MP / 100f)).Append(')').Append(nl);
+                // Register a placed hero into the arena's hero array (first hero per player) so the
+                // ported spell handlers, which test that array, recognise it. Best-effort, see Sync.
+                if (heroArray is not null)
+                    sb.Append("    if IsUnitType(u, UNIT_TYPE_HERO) and ").Append(heroArray)
+                      .Append("[GetPlayerId(GetOwningPlayer(u))] == null then").Append(nl)
+                      .Append("        set ").Append(heroArray)
+                      .Append("[GetPlayerId(GetOwningPlayer(u))] = u").Append(nl)
+                      .Append("    endif").Append(nl);
             }
             sb.Append("    set u = null").Append(nl);
             sb.Append("endfunction").Append(nl);
