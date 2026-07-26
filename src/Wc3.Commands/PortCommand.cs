@@ -27,8 +27,9 @@ public static class PortCommand
         "If you open and SAVE this map in the World Editor, it will regenerate war3map.j and DELETE the ported logic. " +
         "Keep edits in this tool, or port the trigger tree manually, until wtg/wct porting exists.";
 
-    /// <summary>Neutral form of one object-data modification (Level = 0 for non-leveled).</summary>
-    private sealed record PortMod(int Level, int Id, ObjectDataType Type, object? Value);
+    /// <summary>Neutral form of one object-data modification (Level and Pointer are 0 for
+    /// non-leveled kinds, Pointer is the data column of a leveled or variation field).</summary>
+    private sealed record PortMod(int Level, int Id, ObjectDataType Type, object? Value, int Pointer);
 
     /// <summary>Neutral form of one object entry across the three War3Net shapes.</summary>
     private sealed class PortGroup
@@ -421,21 +422,21 @@ public static class PortCommand
             gs.Where(g => wantIds.Contains(g.NewId != 0 ? g.NewId : g.OldId)).Select(g =>
             {
                 var pg = new PortGroup { OldId = g.OldId, NewId = g.NewId };
-                foreach (var m in g.Modifications) pg.Mods.Add(new PortMod(0, m.Id, m.Type, m.Value));
+                foreach (var m in g.Modifications) pg.Mods.Add(new PortMod(0, m.Id, m.Type, m.Value, 0));
                 return pg;
             });
         IEnumerable<PortGroup> FromLevel(IEnumerable<LevelObjectModification> gs) =>
             gs.Where(g => wantIds.Contains(g.NewId != 0 ? g.NewId : g.OldId)).Select(g =>
             {
                 var pg = new PortGroup { OldId = g.OldId, NewId = g.NewId };
-                foreach (var m in g.Modifications) pg.Mods.Add(new PortMod(m.Level, m.Id, m.Type, m.Value));
+                foreach (var m in g.Modifications) pg.Mods.Add(new PortMod(m.Level, m.Id, m.Type, m.Value, m.Pointer));
                 return pg;
             });
         IEnumerable<PortGroup> FromVar(IEnumerable<VariationObjectModification> gs) =>
             gs.Where(g => wantIds.Contains(g.NewId != 0 ? g.NewId : g.OldId)).Select(g =>
             {
                 var pg = new PortGroup { OldId = g.OldId, NewId = g.NewId };
-                foreach (var m in g.Modifications) pg.Mods.Add(new PortMod(m.Variation, m.Id, m.Type, m.Value));
+                foreach (var m in g.Modifications) pg.Mods.Add(new PortMod(m.Variation, m.Id, m.Type, m.Value, m.Pointer));
                 return pg;
             });
 
@@ -520,7 +521,7 @@ public static class PortCommand
             {
                 var mod = new LevelObjectModification { OldId = g.OldId, NewId = g.NewId };
                 foreach (var m in g.Mods)
-                    mod.Modifications.Add(new LevelObjectDataModification { Level = m.Level, Pointer = 0, Id = m.Id, Type = m.Type, Value = m.Value! });
+                    mod.Modifications.Add(new LevelObjectDataModification { Level = m.Level, Pointer = m.Pointer, Id = m.Id, Type = m.Type, Value = m.Value! });
                 AddLevel(target, kind, info.MapFile, version, mod, g.NewId != 0);
                 break;
             }
@@ -528,7 +529,7 @@ public static class PortCommand
             {
                 var mod = new VariationObjectModification { OldId = g.OldId, NewId = g.NewId };
                 foreach (var m in g.Mods)
-                    mod.Modifications.Add(new VariationObjectDataModification { Variation = m.Level, Pointer = 0, Id = m.Id, Type = m.Type, Value = m.Value! });
+                    mod.Modifications.Add(new VariationObjectDataModification { Variation = m.Level, Pointer = m.Pointer, Id = m.Id, Type = m.Type, Value = m.Value! });
                 var model = (DoodadObjectData?)target.GetFile(info.MapFile)?.Model ?? new DoodadObjectData(version);
                 (g.NewId != 0 ? model.NewDoodads : model.BaseDoodads).Add(mod);
                 target.AddOrReplaceModelFile(info.MapFile, model);

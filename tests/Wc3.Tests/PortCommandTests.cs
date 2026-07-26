@@ -314,6 +314,48 @@ public class PortCommandTests
         Assert.Equal(garbage, reloaded.GetFile("war3map.w3u")!.RawBytes); // original bytes preserved, not wiped
     }
 
+    /// <summary>
+    /// Regression, the Pointer of a leveled modification (the data column, the A/B/C slot
+    /// of a leveled ability field) was dropped on port and every injected leveled field
+    /// came back with Pointer 0, so the injected bytes diverged from what the World Editor
+    /// writes. The pointer must survive the port unchanged.
+    /// </summary>
+    [Fact]
+    public void Preserves_the_data_pointer_of_leveled_modifications()
+    {
+        var w3u = new UnitObjectData(ObjectDataFormatVersion.v2);
+        var hero = new SimpleObjectModification { OldId = "Hpal".FromRawcode(), NewId = "H000".FromRawcode() };
+        hero.Modifications.Add(Str("uhab", "A000"));
+        w3u.NewUnits.Add(hero);
+
+        var w3a = new AbilityObjectData(ObjectDataFormatVersion.v2);
+        var abil = new LevelObjectModification { OldId = "ANcl".FromRawcode(), NewId = "A000".FromRawcode() };
+        abil.Modifications.Add(new LevelObjectDataModification
+        { Level = 2, Pointer = 3, Id = "Ncl1".FromRawcode(), Type = ObjectDataType.Real, Value = 1.5f });
+        w3a.NewAbilities.Add(abil);
+
+        var source = MapDocument.Load(SyntheticMap.Build(new Dictionary<string, byte[]>
+        {
+            ["war3map.w3u"] = Ser(w => w.Write(w3u)),
+            ["war3map.w3a"] = Ser(w => w.Write(w3a)),
+        }));
+        var target = MapDocument.Load(SyntheticMap.Build(new Dictionary<string, byte[]>
+        {
+            ["war3map.j"] = Encoding.UTF8.GetBytes("function main takes nothing returns nothing\nendfunction\n"),
+        }));
+
+        var bundle = BundleCommand.ResolveUnit(source, "H000", gameDirOverride: null);
+        PortCommand.PortUnit(source, bundle, target, includeScript: false);
+
+        var reloaded = MapDocument.Load(target.SaveToBytes());
+        var tw3a = (AbilityObjectData)reloaded.GetFile("war3map.w3a")!.Model!;
+        var ported = tw3a.NewAbilities.Single(a => a.NewId == "A000".FromRawcode());
+        var mod = ported.Modifications.Single(m => m.Id == "Ncl1".FromRawcode());
+        Assert.Equal(2, mod.Level);
+        Assert.Equal(3, mod.Pointer); // was reset to 0 before the fix
+        Assert.Equal(1.5f, mod.Value);
+    }
+
     private static SimpleObjectDataModification Str(string code, string value) =>
         new() { Id = code.FromRawcode(), Type = ObjectDataType.String, Value = value };
 
