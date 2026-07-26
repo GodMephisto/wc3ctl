@@ -164,6 +164,23 @@ public static class PortCommand
                 diagnostics.Add($"{o.Kind} {o.Rawcode} already ported by an earlier unit in this batch — reusing {prior.ToRawcode()}.");
                 continue;
             }
+            // A modification of a standard object (NewId==0) addresses a fixed base id and can
+            // never be relocated. Remapping it would inject a Base* entry keyed to a nonexistent
+            // standard object AND rewrite every in-bundle reference to a unit type that does not
+            // exist. Keep its id. If the target already modifies the same base, skip it rather
+            // than stack a second, conflicting Base* entry.
+            if (MergedGroup(source, o.Kind, id) is { NewId: 0 })
+            {
+                remap[id] = id;
+                if (used.Contains(id))
+                {
+                    sharedIds.Add(id);
+                    warnings.Add($"{o.Kind} {o.Rawcode} modifies standard object {o.Rawcode}, which the "
+                        + "target already modifies — kept the target's version, the source's changes were not applied.");
+                }
+                continue;
+            }
+
             if (used.Contains(id))
             {
                 // Idempotency: a colliding target object that is content-identical to
@@ -202,6 +219,17 @@ public static class PortCommand
             var kind = byKind.Key;
             var wantIds = byKind.Select(o => o.Rawcode.FromRawcode()).ToHashSet();
 
+            // Data-loss guard: if the target's object file for this kind is present but failed to
+            // parse (Model null), injecting would build a fresh empty store and Save would drop
+            // every object the target already had. Refuse and warn rather than wipe it.
+            var kindFile = ObjectKinds.Info(kind).MapFile;
+            if (target.GetFile(kindFile) is { Model: null })
+            {
+                warnings.Add($"target {kindFile} is present but could not be parsed — skipped injecting "
+                    + $"{kind} objects so its existing objects are not overwritten.");
+                continue;
+            }
+
             // Merge the map layer with the Reforged skin layer (skin wins per field).
             var groups = new Dictionary<int, PortGroup>();
             foreach (var file in new[] { ObjectKinds.Info(kind).MapFile, ObjectKinds.Info(kind).SkinFile })
@@ -227,7 +255,11 @@ public static class PortCommand
         var copied = new List<string>();
         var skipped = new List<string>();
         var srcImports = (source.GetFile("war3map.imp")?.Model as ImportedFiles);
-        var tgtImports = (target.GetFile("war3map.imp")?.Model as ImportedFiles)
+        // If the target's import registry is present but unparsed, do NOT rebuild it from scratch
+        // (that would drop every existing import). Copy the asset bytes, but leave imp untouched.
+        var impEntry = target.GetFile("war3map.imp");
+        bool impUnparsed = impEntry is not null && impEntry.Model is not ImportedFiles;
+        var tgtImports = (impEntry?.Model as ImportedFiles)
                          ?? new ImportedFiles(ImportedFilesFormatVersion.v1);
         bool importsChanged = false;
 
@@ -275,8 +307,11 @@ public static class PortCommand
             }
             copied.Add(storedName);
         }
-        if (apply && importsChanged)
+        if (apply && importsChanged && !impUnparsed)
             target.AddOrReplaceModelFile("war3map.imp", tgtImports);
+        else if (importsChanged && impUnparsed)
+            warnings.Add("target war3map.imp is present but could not be parsed — copied the asset "
+                + "files but left the import list untouched, so they may need registering manually.");
 
         // 4) Best-effort JASS script closure append (defensive — never breaks the port).
         ScriptPortInfo? scriptInfo = null;

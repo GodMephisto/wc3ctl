@@ -155,6 +155,82 @@ endfunction
         Assert.DoesNotContain(PortCommand.ScriptDurabilityWarning, result.Warnings);
     }
 
+    [Fact]
+    public void Port_preserves_non_utf8_bytes_in_the_target_script()
+    {
+        var source = SourceMap();
+
+        // Target war3map.j authored in a legacy codepage: a comment holds GBK bytes for a
+        // Chinese string that are not valid UTF8. A UTF8 decode/re-encode would replace them
+        // with U+FFFD, corrupting the target's own untouched script.
+        byte[] gbk = { 0xC4, 0xE3, 0xBA, 0xC3 }; // "你好" in GBK, invalid as UTF8
+        var head = Encoding.ASCII.GetBytes(
+            "globals\ninteger udg_Foo= 1\nendglobals\n" +
+            "function InitCustomTriggers takes nothing returns nothing\n// name: ");
+        var tail = Encoding.ASCII.GetBytes(
+            "\nendfunction\nfunction main takes nothing returns nothing\n" +
+            "call InitCustomTriggers()\nendfunction\n");
+        var targetJ = head.Concat(gbk).Concat(tail).ToArray();
+
+        var target = MapDocument.Load(SyntheticMap.Build(new Dictionary<string, byte[]>
+        {
+            ["war3map.w3u"] = Ser(w => w.Write(new UnitObjectData(ObjectDataFormatVersion.v2))),
+            ["war3map.j"] = targetJ,
+        }));
+
+        var bundle = BundleCommand.ResolveUnit(source, "H000", gameDirOverride: null);
+        PortCommand.PortUnit(source, bundle, target);
+
+        var outBytes = MapDocument.Load(target.SaveToBytes()).GetFile("war3map.j")!.RawBytes;
+        Assert.True(ContainsSubsequence(outBytes, gbk),
+            "the target's original non-UTF8 bytes must survive the port unchanged");
+    }
+
+    [Fact]
+    public void Re_porting_the_same_unit_does_not_double_splice_the_script()
+    {
+        var source = SourceMap();
+        var target = TargetMap();
+        var bundle = BundleCommand.ResolveUnit(source, "H000", gameDirOverride: null);
+
+        // First port, then persist to disk. The real re-port path reloads the saved map, which
+        // is where the prior port's marker becomes visible (AddOrReplaceRawFile keeps a pending
+        // override, so RawBytes only reflects it after a save/reload).
+        PortCommand.PortUnit(source, bundle, target);
+        target = MapDocument.Load(target.SaveToBytes());
+        var afterFirst = target.GetFile("war3map.j")!.RawBytes;
+        Assert.Equal(1, CountOccurrences(Encoding.Latin1.GetString(afterFirst), "BEGIN wc3ctl ported"));
+
+        // Re-port the same bundle into the already-ported target.
+        var second = PortCommand.PortUnit(source, bundle, target);
+        var afterSecond = MapDocument.Load(target.SaveToBytes()).GetFile("war3map.j")!.RawBytes;
+
+        Assert.Equal(0, second.Script!.Functions);                       // nothing re-spliced
+        var j = Encoding.Latin1.GetString(afterSecond);
+        Assert.Equal(1, CountOccurrences(j, "BEGIN wc3ctl ported"));      // still one block, not two
+        Assert.Equal(1, CountOccurrences(j, "call InitTrig_RaidenQ()"));  // still one init hook
+        Assert.DoesNotContain("Trig_RaidenQ_Actions_p1_p1", j);          // no runaway re-rename
+    }
+
+    private static bool ContainsSubsequence(byte[] haystack, byte[] needle)
+    {
+        for (int i = 0; i + needle.Length <= haystack.Length; i++)
+        {
+            bool ok = true;
+            for (int k = 0; k < needle.Length; k++)
+                if (haystack[i + k] != needle[k]) { ok = false; break; }
+            if (ok) return true;
+        }
+        return false;
+    }
+
+    private static int CountOccurrences(string haystack, string needle)
+    {
+        int count = 0, i = 0;
+        while ((i = haystack.IndexOf(needle, i, StringComparison.Ordinal)) >= 0) { count++; i += needle.Length; }
+        return count;
+    }
+
     private static byte[] Ser(Action<BinaryWriter> write)
     {
         using var ms = new MemoryStream();

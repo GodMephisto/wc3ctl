@@ -249,6 +249,71 @@ public class PortCommandTests
         Assert.True(copied!.RawBytes.SequenceEqual(modelBytes));
     }
 
+    [Fact]
+    public void Modified_standard_object_is_not_remapped_on_collision()
+    {
+        // Source hero H000 references a MODIFIED STANDARD unit hfoo (the source tweaks the stock
+        // Footman via a Base* entry). The target ALSO modifies hfoo differently. A standard-object
+        // modification addresses a fixed base id and must never be remapped, else it and every
+        // reference to it point at a unit type that does not exist.
+        var sw3u = new UnitObjectData(ObjectDataFormatVersion.v2);
+        var hero = new SimpleObjectModification { OldId = "Hpal".FromRawcode(), NewId = "H000".FromRawcode() };
+        hero.Modifications.Add(Str("uabi", "hfoo"));
+        sw3u.NewUnits.Add(hero);
+        var srcFootman = new SimpleObjectModification { OldId = "hfoo".FromRawcode(), NewId = 0 };
+        srcFootman.Modifications.Add(Str("unam", "Source Footman"));
+        sw3u.BaseUnits.Add(srcFootman);
+        var source = MapDocument.Load(SyntheticMap.Build(new Dictionary<string, byte[]>
+        {
+            ["war3map.w3u"] = Ser(w => w.Write(sw3u)),
+        }));
+
+        var tw3u = new UnitObjectData(ObjectDataFormatVersion.v2);
+        var tgtFootman = new SimpleObjectModification { OldId = "hfoo".FromRawcode(), NewId = 0 };
+        tgtFootman.Modifications.Add(Str("unam", "Target Footman")); // different content, a real collision
+        tw3u.BaseUnits.Add(tgtFootman);
+        var target = MapDocument.Load(SyntheticMap.Build(new Dictionary<string, byte[]>
+        {
+            ["war3map.w3u"] = Ser(w => w.Write(tw3u)),
+        }));
+
+        var bundle = BundleCommand.ResolveUnit(source, "H000", gameDirOverride: null);
+        Assert.Contains(bundle.Objects, o => o.Rawcode == "hfoo"); // the modified standard unit is a dependency
+
+        var result = PortCommand.PortUnit(source, bundle, target, includeScript: false);
+
+        Assert.DoesNotContain(result.Remaps, r => r.From == "hfoo");                       // never relocated
+        Assert.Contains(result.Warnings, w => w.Contains("hfoo") && w.Contains("standard")); // conflict reported
+
+        var reloaded = MapDocument.Load(target.SaveToBytes());
+        var tu = (UnitObjectData)reloaded.GetFile("war3map.w3u")!.Model!;
+        var portedHero = tu.NewUnits.Single(u => u.NewId == result.RootPortedTo!.FromRawcode());
+        Assert.Equal("hfoo", (string)portedHero.Modifications.Single(m => m.Id == "uabi".FromRawcode()).Value!);
+    }
+
+    [Fact]
+    public void Unparsed_target_object_file_is_not_overwritten()
+    {
+        var source = SourceMap(); // H000 + A000
+        // A war3map.w3u that is present but cannot be parsed (version 2 header claiming a
+        // 2-billion-entry table): MapDocument keeps the raw bytes and leaves Model null.
+        byte[] garbage = { 0x02, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0x7F };
+        var target = MapDocument.Load(SyntheticMap.Build(new Dictionary<string, byte[]>
+        {
+            ["war3map.w3u"] = garbage,
+            ["war3map.j"] = Encoding.UTF8.GetBytes("function main takes nothing returns nothing\nendfunction\n"),
+        }));
+        Assert.NotNull(target.GetFile("war3map.w3u"));
+        Assert.Null(target.GetFile("war3map.w3u")!.Model); // present but failed to parse
+
+        var bundle = BundleCommand.ResolveUnit(source, "H000", gameDirOverride: null);
+        var result = PortCommand.PortUnit(source, bundle, target, includeScript: false);
+
+        Assert.Contains(result.Warnings, w => w.Contains("war3map.w3u") && w.Contains("could not be parsed"));
+        var reloaded = MapDocument.Load(target.SaveToBytes());
+        Assert.Equal(garbage, reloaded.GetFile("war3map.w3u")!.RawBytes); // original bytes preserved, not wiped
+    }
+
     private static SimpleObjectDataModification Str(string code, string value) =>
         new() { Id = code.FromRawcode(), Type = ObjectDataType.String, Value = value };
 
