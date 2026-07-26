@@ -48,6 +48,65 @@ function main takes nothing returns nothing
 endfunction
 ";
 
+    [Fact]
+    public void A_ported_script_always_compiles()
+    {
+        // The whole point of the compile gate: whatever the port splices, the target's script must
+        // still compile. One undeclared variable fails the entire war3map.j, so config() never runs
+        // and the hosted map shows no player slots.
+        var source = SourceMap();
+        var target = TargetMap();
+        var bundle = BundleCommand.ResolveUnit(source, "H000", gameDirOverride: null);
+
+        var result = PortCommand.PortUnit(source, bundle, target);
+
+        Assert.NotNull(result.Script);
+        Assert.True(result.Script!.Written, "the ported script was refused: "
+            + string.Join(" | ", result.Script.Notes));
+
+        var reloaded = MapDocument.Load(target.SaveToBytes());
+        var j = Encoding.UTF8.GetString(reloaded.GetFile("war3map.j")!.RawBytes);
+        var issues = JassScriptCheck.Check(j);
+        Assert.True(JassScriptCheck.IsCompilable(issues),
+            "ported script would not compile: " + string.Join(" | ", issues.Select(i => i.Message)));
+    }
+
+    [Fact]
+    public void A_dropped_declaration_in_the_carried_source_is_repaired_not_shipped_broken()
+    {
+        // Re-porting out of a map that was itself produced by an older port: its script already
+        // carries a fully commented-out local declaration. Carrying that verbatim would ship an
+        // undeclared variable, so the gate must repair it and still write the script.
+        const string alreadyTrimmed = @"globals
+    integer udg_RaidenQ_ID= 'A000'
+endglobals
+function Trig_RaidenQ_Actions takes nothing returns nothing
+//[wc3ctl trimmed]     local real angle=AbA(1.0)
+    if GetSpellAbilityId() == udg_RaidenQ_ID then
+        call BJDebugMsg(R2S(angle))
+    endif
+endfunction
+function InitTrig_RaidenQ takes nothing returns nothing
+    call TriggerAddAction(CreateTrigger(), function Trig_RaidenQ_Actions)
+endfunction
+";
+        var source = SourceMap(alreadyTrimmed);
+        var target = TargetMap();
+        var bundle = BundleCommand.ResolveUnit(source, "H000", gameDirOverride: null);
+
+        var result = PortCommand.PortUnit(source, bundle, target);
+
+        Assert.NotNull(result.Script);
+        Assert.True(result.Script!.Written, "the script should be repaired and written, not refused");
+        Assert.Contains(result.Script.Notes, n => n.Contains("repaired", StringComparison.OrdinalIgnoreCase));
+
+        var reloaded = MapDocument.Load(target.SaveToBytes());
+        var j = Encoding.UTF8.GetString(reloaded.GetFile("war3map.j")!.RawBytes);
+        Assert.True(JassScriptCheck.IsCompilable(JassScriptCheck.Check(j)));
+        // The declaration is back, so the later read of 'angle' compiles.
+        Assert.Contains("local real angle", j);
+    }
+
     private static MapDocument SourceMap(string script = SourceScript)
     {
         var w3u = new UnitObjectData(ObjectDataFormatVersion.v2);

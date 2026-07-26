@@ -82,8 +82,28 @@ public static class ValidateCommand
                     $"non-positive playable area ({info.PlayableMapAreaWidth}x{info.PlayableMapAreaHeight})"));
         }
 
+        // 6. The script must still compile. A single undeclared variable fails the whole war3map.j,
+        //    so config() never runs and a hosted map shows no player slots. That is the failure a
+        //    port can introduce silently, so it is checked here rather than discovered in a lobby.
+        issues.AddRange(ScriptIssues(doc));
+
         int errors = issues.Count(i => i.Severity == DiagnosticSeverity.Error);
         int warnings = issues.Count(i => i.Severity == DiagnosticSeverity.Warning);
         return new ValidateResult(errors == 0, errors, warnings, issues);
+    }
+
+    /// <summary>Runs <see cref="JassScriptCheck"/> over the map's JASS, mapped onto the shared
+    /// validation shape. Lua maps are not analyzed (no Lua checker yet), which reads as no issues.</summary>
+    private static IEnumerable<ValidationIssue> ScriptIssues(MapDocument doc)
+    {
+        var entry = doc.GetFile("war3map.j") ?? doc.GetFile("scripts\\war3map.j");
+        byte[]? bytes = entry?.OverrideBytes ?? entry?.RawBytes;
+        if (entry?.FileName is null || bytes is null || bytes.Length == 0) yield break;
+
+        // Latin1 round-trips every byte, matching how ScriptPorter reads and writes the script.
+        string jass = System.Text.Encoding.Latin1.GetString(bytes);
+        foreach (var i in JassScriptCheck.Check(jass))
+            yield return new ValidationIssue(i.Severity, "script", entry.FileName,
+                i.Line > 0 ? $"line {i.Line}: {i.Message}" : i.Message);
     }
 }
