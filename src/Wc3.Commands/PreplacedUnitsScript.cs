@@ -79,11 +79,12 @@ public static class PreplacedUnitsScript
         // arena's selection flow, so it is absent and its spells do nothing. Detecting that array lets
         // CreateAllUnits register the placed hero into it, a best-effort so a ported arena hero can cast.
         string? heroArray = DetectHeroArray(jass);
+        var spellTriggers = DetectPerPlayerSpellTriggers(jass);
 
         jass = RemoveBlock(jass, nl);
         if (spawnable.Count > 0 || items.Count > 0)
         {
-            string block = BuildBlock(spawnable, items, nl, heroArray);
+            string block = BuildBlock(spawnable, items, nl, heroArray, spellTriggers);
             jass = InsertBefore(jass, "function main takes nothing returns nothing", block + nl, nl);
         }
 
@@ -122,11 +123,29 @@ public static class PreplacedUnitsScript
         return bestCount > 0 ? best : null;
     }
 
+    /// <summary>
+    /// Global dispatch triggers (<c>gg_trg_*</c>) whose spell-effect event the arena registers per
+    /// player (<c>TriggerRegisterPlayerUnitEvent(trg, somePlayer, EVENT_PLAYER_UNIT_SPELL_EFFECT, ...)</c>),
+    /// normally during hero creation. A placed hero never triggers that registration, so its casts do
+    /// not reach the dispatcher, CreateAllUnits registers the placed hero's player on each instead.
+    /// Registering an unrelated dispatcher is harmless, its condition just filters the cast out.
+    /// </summary>
+    private static List<string> DetectPerPlayerSpellTriggers(string jass)
+    {
+        var set = new HashSet<string>(StringComparer.Ordinal);
+        foreach (Match m in Regex.Matches(jass,
+            @"TriggerRegisterPlayerUnitEvent\s*\(\s*(gg_trg_[A-Za-z0-9_]+)\s*,[^,]+,\s*EVENT_PLAYER_UNIT_SPELL_EFFECT"))
+            set.Add(m.Groups[1].Value);
+        return set.ToList();
+    }
+
     /// <summary>Builds the marker-wrapped block of creation functions. When <paramref name="heroArray"/>
     /// is the arena's per-player hero array, each placed hero registers itself into it (first hero per
     /// player wins) so the ported spell handlers recognise it.</summary>
-    private static string BuildBlock(List<UnitData> units, List<UnitData> items, string nl, string? heroArray = null)
+    private static string BuildBlock(List<UnitData> units, List<UnitData> items, string nl,
+        string? heroArray = null, IReadOnlyList<string>? spellTriggersOrNull = null)
     {
+        var spellTriggers = spellTriggersOrNull ?? Array.Empty<string>();
         var sb = new StringBuilder();
         sb.Append(BeginMarker).Append(nl);
 
@@ -165,14 +184,23 @@ public static class PreplacedUnitsScript
                 if (u.MP is >= 0 and <= 100)
                     sb.Append("    call SetUnitState(u, UNIT_STATE_MANA, GetUnitState(u, UNIT_STATE_MAX_MANA) * ")
                       .Append(Real(u.MP / 100f)).Append(')').Append(nl);
-                // Register a placed hero into the arena's hero array (first hero per player) so the
-                // ported spell handlers, which test that array, recognise it. Best-effort, see Sync.
-                if (heroArray is not null)
-                    sb.Append("    if IsUnitType(u, UNIT_TYPE_HERO) and ").Append(heroArray)
-                      .Append("[GetPlayerId(GetOwningPlayer(u))] == null then").Append(nl)
-                      .Append("        set ").Append(heroArray)
-                      .Append("[GetPlayerId(GetOwningPlayer(u))] = u").Append(nl)
-                      .Append("    endif").Append(nl);
+                // Best-effort arena integration for a placed hero (see Sync): put it in the per-player
+                // hero array so handlers that test Hero[pid] see it, and register its player on the
+                // spell-effect dispatch triggers whose event the arena would otherwise only add during
+                // hero creation (which a placed hero skips). Without the latter, casts never reach the
+                // dispatcher and nothing happens.
+                if (heroArray is not null || spellTriggers.Count > 0)
+                {
+                    sb.Append("    if IsUnitType(u, UNIT_TYPE_HERO) then").Append(nl);
+                    if (heroArray is not null)
+                        sb.Append("        if ").Append(heroArray).Append("[GetPlayerId(GetOwningPlayer(u))] == null then").Append(nl)
+                          .Append("            set ").Append(heroArray).Append("[GetPlayerId(GetOwningPlayer(u))] = u").Append(nl)
+                          .Append("        endif").Append(nl);
+                    foreach (var trg in spellTriggers)
+                        sb.Append("        call TriggerRegisterPlayerUnitEvent(").Append(trg)
+                          .Append(", GetOwningPlayer(u), EVENT_PLAYER_UNIT_SPELL_EFFECT, null)").Append(nl);
+                    sb.Append("    endif").Append(nl);
+                }
             }
             sb.Append("    set u = null").Append(nl);
             sb.Append("endfunction").Append(nl);
