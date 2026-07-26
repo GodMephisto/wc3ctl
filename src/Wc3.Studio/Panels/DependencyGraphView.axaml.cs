@@ -751,20 +751,25 @@ public partial class DependencyGraphView : UserControl, IMapPanel
 
         // --- files band: wrapped rows under the object area (case-insensitive
         //     keys - WC3 paths compare case-insensitively) ---
+        // Only the object's real dependencies appear as file nodes. The trigger-carried
+        // "port assets" are listed separately in the panel and would just swamp the graph.
+        var objectDeps = CleanReachableFiles(bundle);
+        var depFiles = bundle.Files.Where(f => objectDeps.Contains(f.Path)).ToList();
+
         var fileRects = new Dictionary<string, Rect>(StringComparer.OrdinalIgnoreCase);
         double objAreaWidth = columns.Count * (ObjW + ColGap) - ColGap;
         double bandTop = Pad + maxColHeight + BandGap;
         int perRow = Math.Max(3, (int)((objAreaWidth + FileGapX) / (FileW + FileGapX)));
-        for (int i = 0; i < bundle.Files.Count; i++)
+        for (int i = 0; i < depFiles.Count; i++)
         {
-            fileRects[bundle.Files[i].Path] = new Rect(
+            fileRects[depFiles[i].Path] = new Rect(
                 Pad + i % perRow * (FileW + FileGapX),
                 bandTop + i / perRow * (FileH + FileGapY),
                 FileW, FileH);
         }
-        if (bundle.Files.Count > 0)
+        if (depFiles.Count > 0)
         {
-            int usedPerRow = Math.Min(perRow, bundle.Files.Count);
+            int usedPerRow = Math.Min(perRow, depFiles.Count);
             var separator = new Border
             {
                 Width = usedPerRow * (FileW + FileGapX) - FileGapX,
@@ -799,7 +804,7 @@ public partial class DependencyGraphView : UserControl, IMapPanel
             objVisuals[node.Rawcode] = visual;
         }
         var fileVisuals = new Dictionary<string, Border>(StringComparer.OrdinalIgnoreCase);
-        foreach (var file in bundle.Files)
+        foreach (var file in depFiles)
         {
             var rect = fileRects[file.Path];
             var visual = MakeFileNode(file);
@@ -836,7 +841,7 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         // --- nodes on top of the wiring ---
         foreach (var node in bundle.Objects)
             GraphCanvas.Children.Add(objVisuals[node.Rawcode]);
-        foreach (var file in bundle.Files)
+        foreach (var file in depFiles)
             GraphCanvas.Children.Add(fileVisuals[file.Path]);
 
         // Explicit size = the graph's extent, which Fit scales into the viewport;
