@@ -1,0 +1,8 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="using:Wc3.Studio.Controls"
+             x:Class="Wc3.Studio.Panels.HeroWiringView">
+    <c:CatalogEditorView Name="Catalog"
+                         Title="Hero wiring audit"
+                         Subtitle="For every placed hero, checks that each ability is actually wired end to end (object present, dispatch carried, trigger attached, event covers the player, handler not empty, identity array registered, init called exactly once)."/>
+</UserControl>
