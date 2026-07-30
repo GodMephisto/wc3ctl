@@ -92,6 +92,13 @@ public static class ValidateCommand
         //    it, yet its placed heroes cannot cast a single dispatched spell.
         issues.AddRange(GeneratedBlockIssues(doc));
 
+        // 8. A placed hero can wire every ability end to end and still do nothing worth playing if
+        //    the values its handlers read were never initialized, InitGlobals or
+        //    RunInitializationTriggers dropped by a port, or a single global carried across without
+        //    the assignment that used to set it. Nothing above reads VALUES, only structure, so this
+        //    is the only check that would have caught a real map that shipped exactly this broken.
+        issues.AddRange(ReadinessIssues(doc));
+
         int errors = issues.Count(i => i.Severity == DiagnosticSeverity.Error);
         int warnings = issues.Count(i => i.Severity == DiagnosticSeverity.Warning);
         return new ValidateResult(errors == 0, errors, warnings, issues);
@@ -117,6 +124,27 @@ public static class ValidateCommand
                 PreplacedUnitsScript.ScriptFile,
                 $"the generated spawn block is from an older wc3ctl (gen v{audit.BlockVersion} vs "
                 + $"v{audit.CurrentVersion}). Run 'wc3ctl place sync' to bring it up to date.");
+    }
+
+    /// <summary>Runs <see cref="RuntimeReadinessCommand"/> over every placed hero, mapped onto the
+    /// shared validation shape. The two script-wide findings (InitGlobals, RunInitializationTriggers)
+    /// are the same fact for every hero on the map, so each is only reported once here rather than
+    /// once per hero, the per-hero findings (an unassigned global) are reported per hero since a
+    /// dropped value can differ hero to hero.</summary>
+    private static IEnumerable<ValidationIssue> ReadinessIssues(MapDocument doc)
+    {
+        var entry = doc.GetFile("war3map.j") ?? doc.GetFile("scripts\\war3map.j");
+        string fileName = entry?.FileName ?? "war3map.j";
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var r in RuntimeReadinessCommand.CheckPlacedHeroes(doc))
+            foreach (var f in r.Findings)
+            {
+                string dedupeKey = f.Global is null ? $"{f.Issue}" : $"{f.Issue}|{r.Hero}|{f.Global}";
+                if (!seen.Add(dedupeKey)) continue;
+                yield return new ValidationIssue(f.Severity, "runtime-readiness", fileName,
+                    f.Global is null ? f.Detail : $"{r.Hero} \"{r.Name}\", {f.Detail}");
+            }
     }
 
     /// <summary>Runs <see cref="JassScriptCheck"/> over the map's JASS, mapped onto the shared

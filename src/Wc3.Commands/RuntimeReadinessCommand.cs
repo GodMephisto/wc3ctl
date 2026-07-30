@@ -1,0 +1,205 @@
+// src/Wc3.Commands/RuntimeReadinessCommand.cs
+using System.Globalization;
+using System.Text;
+using System.Text.RegularExpressions;
+using War3Net.Common.Extensions;
+using Wc3.Model;
+
+namespace Wc3.Commands;
+
+/// <summary>Which readiness check found the problem.</summary>
+public enum ReadinessIssue
+{
+    /// <summary>The script carries GUI globals and GUI trigger handlers, but InitGlobals is
+    /// missing, or defined and never called, so every custom starting value it would have set
+    /// (a damage coefficient, a range, a duration, a dummy id) silently reads as its type
+    /// default instead.</summary>
+    GlobalInitMissing,
+    /// <summary>A udg_ global this hero's own carried code reads is assigned nowhere in the
+    /// whole script, so it can only ever hold its type default. The general form of
+    /// GlobalInitMissing, it also catches a loss narrower than the whole InitGlobals function,
+    /// for instance a single value a port dropped while carrying the rest.</summary>
+    GlobalNeverAssigned,
+    /// <summary>The script carries GUI trigger handlers, but RunInitializationTriggers is
+    /// missing, or defined and never called, so a trigger whose only event is Map Initialization
+    /// (it registers no event of its own) never runs.</summary>
+    RunInitializationTriggersMissing,
+}
+
+/// <summary>One readiness problem. <see cref="Global"/> names the specific variable for
+/// <see cref="ReadinessIssue.GlobalNeverAssigned"/>, null for the two script-wide findings.</summary>
+public sealed record ReadinessFinding(ReadinessIssue Issue, DiagnosticSeverity Severity, string? Global, string Detail);
+
+public sealed record RuntimeReadinessResult(
+    string Hero, string? Name, int OwnerId,
+    IReadOnlyList<ReadinessFinding> Findings, IReadOnlyList<string> Diagnostics)
+{
+    public int Errors => Findings.Count(f => f.Severity == DiagnosticSeverity.Error);
+    public bool Ready => Errors == 0;
+}
+
+/// <summary>
+/// Checks whether a placed hero's script would actually RUN correctly, as opposed to merely being
+/// wired up. <see cref="HeroWiringAudit"/> proves a cast reaches a handler, it says nothing about
+/// what that handler computes once it runs. A hero can audit at zero wiring problems and still be
+/// useless in game if the values its handlers read (damage, range, duration, a dummy id) were
+/// never initialized because InitGlobals was not carried by a port. This exists because exactly
+/// that happened on a real map and nothing caught it, the hero audited eight of eight abilities
+/// wired and still did nothing worth playing.
+///
+/// Two of the three checks are whole-script facts. InitGlobals and RunInitializationTriggers are
+/// generated exactly once per map, under those exact names, the same fixed World Editor
+/// convention <see cref="JassScriptCheck"/> already relies on for config and main. The third is
+/// scoped to the hero's own dependency closure, the same one <see cref="BundleCommand"/> computes
+/// for porting, so an unrelated hero's own dead variable on a large multi-hero map is never
+/// mistaken for this hero's problem. A prototype that skipped this scoping found problems on a
+/// map the user plays without issue, purely from other heroes' own unrelated leftovers, so the
+/// scoping is load-bearing, not decorative.
+/// </summary>
+public static class RuntimeReadinessCommand
+{
+    /// <summary>Checks every distinct hero type placed on the map, reusing exactly the placement
+    /// enumeration <see cref="HeroWiringAudit"/> uses, so the two audits can never disagree about
+    /// what counts as a placed hero.</summary>
+    public static IReadOnlyList<RuntimeReadinessResult> CheckPlacedHeroes(MapDocument doc) =>
+        HeroWiringAudit.AuditPlacedHeroes(doc)
+            .Select(h => Check(doc, h.Hero, h.OwnerId))
+            .ToList();
+
+    /// <summary>Checks one hero type as owned by <paramref name="ownerId"/>.</summary>
+    public static RuntimeReadinessResult Check(MapDocument doc, string heroRawcode, int ownerId)
+    {
+        var diagnostics = new List<string>();
+        var findings = new List<ReadinessFinding>();
+        string? heroName = ObjectName(doc, ObjectKind.Unit, heroRawcode);
+
+        var entry = doc.GetFile("war3map.j") ?? doc.GetFile("scripts\\war3map.j");
+        byte[]? bytes = entry?.OverrideBytes ?? entry?.RawBytes;
+        if (entry?.FileName is null || bytes is null || bytes.Length == 0)
+        {
+            diagnostics.Add(doc.GetFile("war3map.lua") is not null
+                ? "map ships war3map.lua, not war3map.j, this check only understands JASS"
+                : "map has no war3map.j to check");
+            return new(heroRawcode, heroName, ownerId, findings, diagnostics);
+        }
+
+        // Latin1 round-trips every byte, matching how ScriptPorter reads and writes the script.
+        string jass = Encoding.Latin1.GetString(bytes);
+        var lines = jass.Replace("\r\n", "\n").Split('\n');
+        var code = JassComments.Strip(lines);
+        string codeText = string.Join("\n", code);
+        var functions = JassFunctionIndex.Parse(jass);
+        var (globalsByName, _) = JassGlobals.Parse(lines);
+        var udgGlobals = globalsByName.Keys
+            .Where(n => n.StartsWith("udg_", StringComparison.Ordinal)).ToList();
+        bool hasGuiHandlers = functions.Any(f => f.Name.StartsWith("InitTrig_", StringComparison.Ordinal));
+
+        // 1. InitGlobals, the fixed name World Editor gives "set every custom starting value".
+        //    Only meaningful when the script actually has GUI globals and GUI handlers to init, a
+        //    hand-written or vanilla script with neither has nothing for InitGlobals to do, so
+        //    a freshly created blank map (which calls neither) never reads as broken.
+        if (udgGlobals.Count > 0 && hasGuiHandlers)
+        {
+            bool defined = functions.Any(f => f.Name == "InitGlobals");
+            bool called = Regex.IsMatch(codeText, @"\bcall\s+InitGlobals\s*\(");
+            if (!defined || !called)
+                findings.Add(new(ReadinessIssue.GlobalInitMissing, DiagnosticSeverity.Error, null,
+                    defined
+                        ? "InitGlobals is defined but nothing ever calls it, so its custom starting "
+                          + $"values never run ({udgGlobals.Count} udg_ global(s) declared)"
+                        : $"no InitGlobals function at all, though {udgGlobals.Count} udg_ global(s) "
+                          + "and carried GUI trigger handlers are present, so every custom starting "
+                          + "value (a damage coefficient, a range, a duration, a dummy id) silently "
+                          + "reads as its type default"));
+        }
+
+        // 2. RunInitializationTriggers, the other fixed name, the one that actually executes any
+        //    GUI trigger whose only event is Map Initialization (such a trigger registers no event
+        //    of its own, so nothing else would ever run it).
+        if (hasGuiHandlers)
+        {
+            bool defined = functions.Any(f => f.Name == "RunInitializationTriggers");
+            bool called = Regex.IsMatch(codeText, @"\bcall\s+RunInitializationTriggers\s*\(");
+            if (!defined || !called)
+                findings.Add(new(ReadinessIssue.RunInitializationTriggersMissing, DiagnosticSeverity.Error, null,
+                    defined
+                        ? "RunInitializationTriggers is defined but nothing ever calls it, so a Map "
+                          + "Initialization trigger, which registers no event of its own, never runs"
+                        : "no RunInitializationTriggers function at all, so a Map Initialization "
+                          + "trigger, which registers no event of its own, never runs"));
+        }
+
+        // 3. A udg_ global this hero's own carried code reads, assigned nowhere in the whole
+        //    script. Scoped to the hero's OWN dependency closure so another hero's own dead
+        //    variable on a shared, tightly-coupled map is never mistaken for this hero's problem.
+        //    "Assigned" still looks at the WHOLE script, because the natural home for the
+        //    assignment, InitGlobals, is never itself part of a hero's own closure.
+        var assigned = new HashSet<string>(StringComparer.Ordinal);
+        foreach (Match m in Regex.Matches(codeText, @"\bset\s+(udg_[A-Za-z0-9_]+)\b"))
+            assigned.Add(m.Groups[1].Value);
+
+        // A handle-typed global (hashtable, timer, group, ...) is routinely constructed right in
+        // its own declaration ("hashtable udg_X=InitHashtable()"), not through a later "set" at
+        // all, and that is just as real an initialization. World Editor itself still writes every
+        // SCALAR default (0, 0.0, false, null) inline too, so only a NON-default initializer counts
+        // here, otherwise every trivially-defaulted global would read as "assigned" and this whole
+        // check would never fire.
+        foreach (var g in udgGlobals)
+            if (globalsByName.TryGetValue(g, out var decl) && HasRealInitializer(decl))
+                assigned.Add(g);
+
+        IReadOnlyList<BundleFunction> closure;
+        try
+        {
+            closure = BundleCommand.ResolveObject(doc, ObjectKind.Unit, heroRawcode,
+                ctx: null, preDiagnostics: Array.Empty<string>()).Functions;
+        }
+        catch (Exception ex)
+        {
+            diagnostics.Add($"could not resolve '{heroRawcode}' script closure ({ex.Message}), "
+                + "the global-assignment check is skipped");
+            closure = Array.Empty<BundleFunction>();
+        }
+
+        if (closure.Count > 0)
+        {
+            var usedByHero = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var f in closure)
+                for (int i = f.StartLine - 1; i < f.EndLine && i < code.Length; i++)
+                    foreach (Match m in Regex.Matches(code[i], @"\budg_[A-Za-z0-9_]+\b"))
+                        usedByHero.Add(m.Value);
+
+            foreach (var g in usedByHero.Where(g => !assigned.Contains(g)).OrderBy(g => g, StringComparer.Ordinal))
+                findings.Add(new(ReadinessIssue.GlobalNeverAssigned, DiagnosticSeverity.Error, g,
+                    $"'{g}' is read by this hero's own carried code but assigned nowhere in the "
+                    + "script, so it can only ever hold its type default (0, false or null)"));
+        }
+
+        return new(heroRawcode, heroName, ownerId, findings, diagnostics);
+    }
+
+    private static string? ObjectName(MapDocument doc, ObjectKind kind, string rawcode)
+    {
+        var info = ObjectKinds.Info(kind);
+        var strings = MapStrings.From(doc);
+        int id = rawcode.FromRawcode();
+        foreach (var e in ObjectKinds.MergedEntries(doc, info))
+            if (e.Id == id && ObjectKinds.DeltaName(ObjectKinds.ModsToDict(e.Mods), info, strings) is { } n)
+                return n;
+        return null;
+    }
+
+    /// <summary>True when a "[constant] type [array] name = rhs" declaration's rhs is something
+    /// other than the type's own zero value. A bare array declaration or one with no "=" at all
+    /// has no rhs and returns false, exactly like a trivial default, since nothing here was
+    /// actually initialized either way.</summary>
+    private static bool HasRealInitializer(string declLine)
+    {
+        int eq = declLine.IndexOf('=');
+        if (eq < 0) return false;
+        string rhs = declLine[(eq + 1)..].Trim();
+        if (rhs is "false" or "null" or "") return false;
+        return !double.TryParse(rhs.TrimEnd('.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var d)
+            || d != 0;
+    }
+}

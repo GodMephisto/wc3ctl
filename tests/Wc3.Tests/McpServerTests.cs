@@ -16,7 +16,7 @@ public class McpServerTests
     // Underscore (0x5F) sorts before lowercase letters, so families group naturally.
     private static readonly string[] ExpectedTools =
     {
-        "audit_fidelity", "audit_hero",
+        "audit_fidelity", "audit_hero", "audit_readiness",
         "bundle_unit", "camera_add", "camera_list", "camera_remove",
         "camera_set", "force_list", "force_set_flags", "list_files",
         "map_info", "map_info_get", "map_info_set", "new_map",

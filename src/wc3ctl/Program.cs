@@ -791,6 +791,43 @@ public static class Program
         }));
         audit.AddCommand(auditFidelity);
 
+        var auditReadinessArg = new Argument<string?>("hero", () => null,
+            "Hero rawcode to check. Omit to check every hero placed on the map.");
+        var auditReadiness = new Command("readiness",
+            "Check whether a placed hero's script would actually run, not just fire. Verifies InitGlobals "
+            + "and RunInitializationTriggers are both carried and called, and that every udg_ global the "
+            + "hero's own carried code reads is assigned somewhere in the script. A hero can audit clean on "
+            + "'audit hero' and still do nothing in game if its damage, range or duration values were never "
+            + "initialized. Exits 2 if any problem is found.")
+        { mapArg, auditReadinessArg };
+        auditReadiness.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var doc = MapDocument.Load(p.GetValueForArgument(mapArg));
+            string? hero = p.GetValueForArgument(auditReadinessArg);
+
+            var results = hero is null
+                ? RuntimeReadinessCommand.CheckPlacedHeroes(doc)
+                : new[] { RuntimeReadinessCommand.Check(doc, hero, ownerId: 0) };
+
+            Emit(p.GetValueForOption(jsonOption), results, () =>
+            {
+                var sb = new System.Text.StringBuilder();
+                foreach (var r in results)
+                {
+                    sb.AppendLine($"{r.Hero}  \"{r.Name}\"  (player {r.OwnerId})  "
+                        + (r.Ready ? "ready" : $"{r.Errors} problem(s)"));
+                    foreach (var f in r.Findings)
+                        sb.AppendLine($"  {(f.Global is null ? "" : f.Global + "  ")}{f.Issue}  {f.Detail}");
+                    foreach (var d in r.Diagnostics) sb.AppendLine("  note, " + d);
+                }
+                if (results.Count == 0) sb.AppendLine("no placed heroes found");
+                return sb.ToString().TrimEnd();
+            });
+            if (results.Any(r => !r.Ready)) exitCode[0] = 2;
+        }));
+        audit.AddCommand(auditReadiness);
+
         var deepOption = new Option<bool>("--deep",
             "Also run pjass, the game's own JASS parser, over the map script (needs a Warcraft III install).");
         var validate = new Command("validate",

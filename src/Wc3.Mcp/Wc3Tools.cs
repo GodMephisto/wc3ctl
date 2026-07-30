@@ -184,6 +184,19 @@ public static class Wc3Tools
         [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Sharpens the dependency closure crawl. Without it the crawl is still complete, only more permissive.")] string? game_dir = null)
         => Run(() => ObjectFidelityCommand.Compare(LoadMap(source_map), LoadMap(target_map), rawcode, ResolveGameDir(game_dir)));
 
+    [McpServerTool(Name = "audit_readiness", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Tells you whether a placed hero's script would actually RUN correctly, not just fire, the gap audit_hero cannot see since it only proves a cast reaches a handler, never what that handler computes. Checks that InitGlobals and RunInitializationTriggers, the two World Editor entry points that set every custom starting value (damage, range, duration, a dummy id) and run any Map Initialization trigger, are both carried and actually called, and that every udg_ global this hero's own carried code reads is assigned somewhere in the script rather than stuck at its type default. A hero can audit clean on audit_hero and still do nothing worth playing if these were dropped by a port. Omit hero to check every hero placed on the map.")]
+    public static IReadOnlyList<RuntimeReadinessResult> AuditReadiness(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Hero rawcode to check, e.g. 'H001'. Omit to check every hero placed on the map.")] string? hero = null)
+        => Run(() =>
+        {
+            var doc = LoadMap(map);
+            return hero is null
+                ? RuntimeReadinessCommand.CheckPlacedHeroes(doc)
+                : new[] { RuntimeReadinessCommand.Check(doc, hero, ownerId: 0) };
+        });
+
     [McpServerTool(Name = "palette_doodad", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("List the doodad types placeable on a map - the palette to consult before place_doodad. Unions the base-game doodad catalog (installed GameData) with the map's own object-data: custom New* doodads and modified Base* doodads. Each entry carries its four-char rawcode, a resolved display name (null when unresolvable), its source (base|map-custom|map-modified) and the base it derives from. Without a WC3 install the palette is map-only. The map is never modified.")]
     public static DoodadPaletteResult PaletteDoodad(
