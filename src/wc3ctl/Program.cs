@@ -722,10 +722,22 @@ public static class Program
                 foreach (var r in results)
                 {
                     sb.AppendLine($"{r.Hero}  \"{r.Name}\"  (player {r.OwnerId})  "
-                        + $"{r.Wired}/{r.Abilities.Count} abilities fully wired");
+                        + $"{r.Wired}/{r.Abilities.Count - r.NotCastable} castable abilities wired"
+                        + (r.NotCastable > 0 ? $", {r.NotCastable} passive/aura" : "")
+                        + (r.Problems.Count > 0 ? $", {r.Problems.Count} problem(s)" : ""));
                     foreach (var a in r.Abilities)
-                        sb.AppendLine($"  {(a.Status == WiringStatus.Ok ? "ok  " : "FAIL")} {a.Ability}"
-                            + $"  \"{a.Name}\"  {(a.Status == WiringStatus.Ok ? "" : a.Status + ": ")}{a.Detail}");
+                    {
+                        // Three states, not two. A passive is neither wired nor broken, and printing
+                        // FAIL beside one was the exact false alarm the reclassification removed.
+                        string mark = a.Status switch
+                        {
+                            WiringStatus.Ok => "ok  ",
+                            WiringStatus.NotCastDispatched => "info",
+                            _ => "FAIL",
+                        };
+                        sb.AppendLine($"  {mark} {a.Ability}  \"{a.Name}\"  "
+                            + (a.Status == WiringStatus.Ok ? "" : a.Status + ": ") + a.Detail);
+                    }
                 }
                 if (results.Count == 0) sb.AppendLine("no placed heroes found");
                 return sb.ToString().TrimEnd();
