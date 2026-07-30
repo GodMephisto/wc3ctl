@@ -1,4 +1,5 @@
 // src/Wc3.Commands/HeroWiringAudit.cs
+using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 using War3Net.Build.Widget;
@@ -14,8 +15,10 @@ public enum WiringStatus
     Ok,
     /// <summary>The ability object itself is not in the map, so the hero can never hold it.</summary>
     AbilityObjectMissing,
-    /// <summary>No code compares GetSpellAbilityId() against this ability, and nothing references it
-    /// at all, so it is inert.</summary>
+    /// <summary>Nothing in the script references this ability, yet its own object fields still look
+    /// like a castable active (a real target or a cast cost), so it is a spell the map defines but
+    /// never wires up. An unreferenced passive or aura is reported as <see cref="NotCastDispatched"/>
+    /// instead, because those work from object data with no script presence at all.</summary>
     NoDispatch,
     /// <summary>The map uses this ability but never dispatches a cast on it. That is what a passive,
     /// an aura, an inventory or a spellbook looks like, so it is reported for information rather than
@@ -120,20 +123,34 @@ public static class HeroWiringAudit
         // 2. Something must dispatch on it, by literal or through an id global.
         var dispatch = ctx.FindDispatch(ability);
         if (dispatch is null)
-            // Distinguish "the map uses this but never as a cast" (a passive, aura, inventory or
-            // spellbook, which is how the source map designed it) from "nothing mentions it at all"
-            // (genuinely inert). Only the latter is a fault worth acting on.
-            return ctx.IsReferenced(ability)
-                ? Fail(WiringStatus.NotCastDispatched,
-                    "used by the map but never cast-dispatched, so it is a passive, aura or spellbook")
-                : Fail(WiringStatus.NoDispatch,
-                    "nothing in the script references this ability at all, it is inert");
+        {
+            // A referenced-but-never-cast ability is a passive, aura, inventory or spellbook, exactly
+            // how the source map designed it, so it is reported for information rather than as a fault.
+            if (ctx.IsReferenced(ability))
+                return Fail(WiringStatus.NotCastDispatched,
+                    "used by the map but never cast-dispatched, so it is a passive, aura or spellbook");
 
-        // 3. The dispatch function must hang off a trigger.
-        var trigger = ctx.TriggerFor(dispatch);
+            // No script presence at all. That alone is not a fault, because an aura or a base-game
+            // passive is pure object data and works with zero script, and flagging those as inert was
+            // the false positive being fixed. Only call it inert when the ability's own fields make it
+            // look like a castable active (a real target or a cast cost, which a passive never carries).
+            // With no game data here we see only the map's deltas, so the absence of those traits reads
+            // as passive, the conservative side of the passive-versus-inert call.
+            return ctx.LooksCastable(ability)
+                ? Fail(WiringStatus.NoDispatch,
+                    "a castable ability that nothing in the script ever dispatches, it is inert")
+                : Fail(WiringStatus.NotCastDispatched,
+                    "no script presence, an aura or passive the engine drives from object data alone");
+        }
+
+        // 3. The dispatch must hang off a trigger, either directly or through a short chain of callers.
+        //    An inline condition helper carries the id check but is not itself attached, its trigger's
+        //    action or condition function is the one that calls it, so credit the nearest attached
+        //    caller and name the function that actually carries the trigger.
+        var (trigger, carrier) = ctx.ResolveTrigger(dispatch);
         if (trigger is null)
             return Fail(WiringStatus.NotAttachedToTrigger,
-                $"handler '{dispatch}' is never attached to a trigger");
+                $"neither handler '{dispatch}' nor anything that calls it is attached to a trigger");
 
         // 4. That trigger needs a spell event that covers this hero's player.
         var (hasEvent, coversPlayer, eventDetail) = ctx.EventCoverage(trigger);
@@ -163,7 +180,8 @@ public static class HeroWiringAudit
             return Fail(WiringStatus.InitCalledTwice,
                 $"the init for trigger '{trigger}' is called {calls} times, so this ability fires {calls} times");
 
-        return new(ability, name, WiringStatus.Ok, $"dispatched by '{dispatch}' on '{trigger}'");
+        string via = string.Equals(carrier, dispatch, StringComparison.Ordinal) ? "" : $" via '{carrier}'";
+        return new(ability, name, WiringStatus.Ok, $"dispatched by '{dispatch}'{via} on '{trigger}'");
     }
 
     // ---- the hero's ability set ---------------------------------------------
@@ -255,10 +273,12 @@ public static class HeroWiringAudit
         private readonly IReadOnlyList<JassFunction> _functions;
         private readonly Dictionary<string, string> _bodies;    // function -> comment-stripped body
         private readonly Dictionary<string, HashSet<string>> _abilityRefs; // ability -> dispatch fns
+        private readonly MapDocument _doc;                      // for on-demand object-field lookups
 
         public ScriptContext(string jass, int ownerId, MapDocument doc)
         {
             OwnerId = ownerId;
+            _doc = doc;
             _functions = JassFunctionIndex.Parse(jass);
             Aliases = JassRawcodeAliases.Parse(jass);
 
@@ -326,6 +346,43 @@ public static class HeroWiringAudit
         public string? FindDispatch(string ability) =>
             _abilityRefs.TryGetValue(ability, out var fns) ? fns.OrderBy(x => x, StringComparer.Ordinal).First() : null;
 
+        /// <summary>True when the ability's own map fields carry an active-cast trait no passive has,
+        /// a real Targets Allowed or a positive cast cost/cooldown/range. Auras, inventories and
+        /// base-game passives carry none of these. Only the map's deltas are visible here (no game
+        /// data), so an ability with no such trait is read as passive, which is the conservative side
+        /// of the passive-versus-inert call.</summary>
+        public bool LooksCastable(string ability)
+        {
+            var fields = Fields(_doc, ObjectKind.Ability, ability);
+            // A Targets Allowed list naming anything the caster aims at (beyond itself) is the surest
+            // active tell. Then any positive cast cost, cooldown, range, or channel target-type (Ncl2
+            // > 0 means the spell targets a unit or a point). Auras and self-buffs carry none of these.
+            return HasCastTarget(fields, "atar")
+                || Positive(fields, "acdn") || Positive(fields, "amcs")
+                || Positive(fields, "aran") || Positive(fields, "Ncl2");
+        }
+
+        // Ability fields are per-level, keyed by the bare code or "code:N", so match either shape.
+        private static IEnumerable<string> ValuesOf(IReadOnlyDictionary<string, string> fields, string code) =>
+            fields.Where(kv => string.Equals(kv.Key, code, StringComparison.OrdinalIgnoreCase)
+                            || kv.Key.StartsWith(code + ":", StringComparison.OrdinalIgnoreCase))
+                  .Select(kv => kv.Value);
+
+        /// <summary>True when a Targets Allowed list names a target the caster aims at, that is any
+        /// token beyond "self" and the no-target markers. A pure "self" list is an aura or self-buff,
+        /// which is exactly the passive that must not read as a castable active.</summary>
+        private static bool HasCastTarget(IReadOnlyDictionary<string, string> fields, string code) =>
+            ValuesOf(fields, code)
+                .SelectMany(v => v.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                .Any(t => t.Length > 0
+                    && !t.Equals("self", StringComparison.OrdinalIgnoreCase)
+                    && !t.Equals("none", StringComparison.OrdinalIgnoreCase)
+                    && t is not "_" and not "-");
+
+        private static bool Positive(IReadOnlyDictionary<string, string> fields, string code) =>
+            ValuesOf(fields, code).Any(v =>
+                double.TryParse(v, NumberStyles.Any, CultureInfo.InvariantCulture, out var d) && d > 0);
+
         /// <summary>The gg_trg_* the function is attached to, as a condition or an action.</summary>
         public string? TriggerFor(string function)
         {
@@ -333,6 +390,43 @@ public static class HeroWiringAudit
                 @"TriggerAdd(?:Condition|Action)\s*\(\s*(gg_trg_[A-Za-z0-9_]+)\s*,[^)]*\b"
                 + Regex.Escape(function) + @"\b");
             return m.Success ? m.Groups[1].Value : null;
+        }
+
+        /// <summary>The trigger a dispatch is wired to, directly or through a bounded chain of callers,
+        /// plus the function that actually carries it. A dispatch found inside an inline condition
+        /// helper is not attached itself, some caller (the trigger's action or condition function) is,
+        /// so walk callers outward a few levels and take the nearest attached one. Returns
+        /// (null, dispatch) only when nothing in that chain is attached.</summary>
+        public (string? Trigger, string Carrier) ResolveTrigger(string dispatch)
+        {
+            var seen = new HashSet<string>(StringComparer.Ordinal) { dispatch };
+            var frontier = new List<string> { dispatch };
+            // Depth 3 is ample, these helper chains are one or two hops (helper, then actions, then trigger).
+            for (int depth = 0; depth <= 3 && frontier.Count > 0; depth++)
+            {
+                // Deterministic within a level so the reported carrier is stable across runs.
+                foreach (var fn in frontier.OrderBy(x => x, StringComparer.Ordinal))
+                    if (TriggerFor(fn) is { } trg) return (trg, fn);
+
+                var next = new List<string>();
+                foreach (var fn in frontier)
+                    foreach (var caller in CallersOf(fn))
+                        if (seen.Add(caller)) next.Add(caller);
+                frontier = next;
+            }
+            return (null, dispatch);
+        }
+
+        /// <summary>Functions whose body invokes <paramref name="callee"/>, whether as "call callee("
+        /// or bare "callee(" (JASS condition helpers are called without the "call" keyword).</summary>
+        private IEnumerable<string> CallersOf(string callee)
+        {
+            var invoked = new Regex(@"\b" + Regex.Escape(callee) + @"\s*\(");
+            foreach (var f in _functions)
+                if (!string.Equals(f.Name, callee, StringComparison.Ordinal)
+                    && _bodies.TryGetValue(f.Name, out var body)
+                    && invoked.IsMatch(body))
+                    yield return f.Name;
         }
 
         /// <summary>Whether the trigger has a spell event, and whether it reaches this hero's player.
