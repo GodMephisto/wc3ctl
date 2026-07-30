@@ -356,8 +356,33 @@ public static class HeroWiringAudit
         private Dictionary<string, HashSet<string>> BuildAbilityRefs()
         {
             var map = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+
+            void AddAbilityRef(string? ability, string functionName)
+            {
+                if (ability is null) return;
+                if (!map.TryGetValue(ability, out var set))
+                    map[ability] = set = new HashSet<string>(StringComparer.Ordinal);
+                set.Add(functionName);
+            }
+
+            string? ResolveAbilityToken(string token, HashSet<string> localNames)
+            {
+                if (token.Length == 6 && token[0] == '\'' && token[^1] == '\'')
+                    return token[1..^1];
+                return localNames.Contains(token) ? null : Aliases.GetValueOrDefault(token);
+            }
+
             var spellId = new Regex(
                 @"GetSpellAbilityId\s*\(\s*\)\s*==\s*(?:'([^']{4})'|([A-Za-z_][A-Za-z0-9_]*))");
+            var localDeclaration = new Regex(
+                @"^\s*local\s+[A-Za-z_][A-Za-z0-9_]*\s+(?:array\s+)?([A-Za-z_][A-Za-z0-9_]*)\b");
+            var integerDeclaration = new Regex(
+                @"^\s*local\s+integer\s+(?:array\s+)?([A-Za-z_][A-Za-z0-9_]*)\b(?:\s*=\s*(.+?)\s*)?$");
+            var setAssignment = new Regex(
+                @"^\s*set\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.+?)\s*$");
+            var spellIdValue = new Regex(@"^\s*GetSpellAbilityId\s*\(\s*\)\s*$");
+            var equality = new Regex(
+                @"('(?:[^']{4})'|[A-Za-z_][A-Za-z0-9_]*)\s*==\s*('(?:[^']{4})'|[A-Za-z_][A-Za-z0-9_]*)");
             foreach (var f in _functions)
             {
                 if (!_bodies.TryGetValue(f.Name, out var body)) continue;
@@ -365,10 +390,49 @@ public static class HeroWiringAudit
                 {
                     string? id = m.Groups[1].Success ? m.Groups[1].Value
                         : Aliases.GetValueOrDefault(m.Groups[2].Value);
-                    if (id is null) continue;
-                    if (!map.TryGetValue(id, out var set))
-                        map[id] = set = new HashSet<string>(StringComparer.Ordinal);
-                    set.Add(f.Name);
+                    AddAbilityRef(id, f.Name);
+                }
+
+                var localNames = new HashSet<string>(StringComparer.Ordinal);
+                var integerLocals = new HashSet<string>(StringComparer.Ordinal);
+                var spellIdLocals = new HashSet<string>(StringComparer.Ordinal);
+
+                foreach (var line in body.Split('\n'))
+                {
+                    if (localDeclaration.Match(line) is { Success: true } local)
+                        localNames.Add(local.Groups[1].Value);
+
+                    if (integerDeclaration.Match(line) is { Success: true } declaration)
+                    {
+                        string name = declaration.Groups[1].Value;
+                        integerLocals.Add(name);
+                        if (declaration.Groups[2].Success && spellIdValue.IsMatch(declaration.Groups[2].Value))
+                            spellIdLocals.Add(name);
+                        else
+                            spellIdLocals.Remove(name);
+                    }
+                    else if (setAssignment.Match(line) is { Success: true } set)
+                    {
+                        string name = set.Groups[1].Value;
+                        if (integerLocals.Contains(name))
+                        {
+                            if (spellIdValue.IsMatch(set.Groups[2].Value))
+                                spellIdLocals.Add(name);
+                            else
+                                spellIdLocals.Remove(name);
+                        }
+                    }
+
+                    foreach (Match m in equality.Matches(line))
+                    {
+                        string left = m.Groups[1].Value;
+                        string right = m.Groups[2].Value;
+
+                        if (spellIdLocals.Contains(left))
+                            AddAbilityRef(ResolveAbilityToken(right, localNames), f.Name);
+                        else if (spellIdLocals.Contains(right))
+                            AddAbilityRef(ResolveAbilityToken(left, localNames), f.Name);
+                    }
                 }
             }
             return map;

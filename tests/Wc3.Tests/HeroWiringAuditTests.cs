@@ -234,6 +234,132 @@ endfunction
         Assert.Contains(result.Problems, p => p.Ability == "A000");
     }
 
+    [Fact]
+    public void Assign_then_compare_with_a_spell_id_local_reads_as_wired()
+    {
+        const string jass = @"globals
+    trigger gg_trg_CastingCheck= null
+    integer SomeSpell_ID= 'A010'
+endglobals
+function Trig_CastingCheck_Actions takes nothing returns nothing
+    local integer id = GetSpellAbilityId()
+    if id == SomeSpell_ID then
+        call KillUnit(GetTriggerUnit())
+    endif
+endfunction
+function InitTrig_CastingCheck takes nothing returns nothing
+    set gg_trg_CastingCheck= CreateTrigger()
+    call TriggerRegisterAnyUnitEventBJ( gg_trg_CastingCheck, EVENT_PLAYER_UNIT_SPELL_EFFECT )
+    call TriggerAddAction( gg_trg_CastingCheck, function Trig_CastingCheck_Actions )
+endfunction
+function main takes nothing returns nothing
+    call InitTrig_CastingCheck()
+endfunction
+";
+        var doc = BuildMap("A010", jass, new AbilitySpec("A010", "ANcl"));
+
+        var result = HeroWiringAudit.Audit(doc, "H000", ownerId: 0);
+        var a010 = result.Abilities.Single(a => a.Ability == "A010");
+
+        Assert.Equal(WiringStatus.Ok, a010.Status);
+        Assert.Empty(result.Problems);
+    }
+
+    [Fact]
+    public void Placeholder_then_real_spell_id_assignment_is_tracked_across_all_assignments()
+    {
+        const string jass = @"globals
+    trigger gg_trg_CastingCheck= null
+    integer LaterSpell_ID= 'A011'
+endglobals
+function Trig_CastingCheck_Actions takes nothing returns nothing
+    local integer id = 0
+    set id = GetSpellAbilityId()
+    if LaterSpell_ID == id then
+        call KillUnit(GetTriggerUnit())
+    endif
+endfunction
+function InitTrig_CastingCheck takes nothing returns nothing
+    set gg_trg_CastingCheck= CreateTrigger()
+    call TriggerRegisterAnyUnitEventBJ( gg_trg_CastingCheck, EVENT_PLAYER_UNIT_SPELL_EFFECT )
+    call TriggerAddAction( gg_trg_CastingCheck, function Trig_CastingCheck_Actions )
+endfunction
+function main takes nothing returns nothing
+    call InitTrig_CastingCheck()
+endfunction
+";
+        var doc = BuildMap("A011", jass, new AbilitySpec("A011", "ANcl"));
+
+        var result = HeroWiringAudit.Audit(doc, "H000", ownerId: 0);
+        var a011 = result.Abilities.Single(a => a.Ability == "A011");
+
+        Assert.Equal(WiringStatus.Ok, a011.Status);
+        Assert.Empty(result.Problems);
+    }
+
+    [Fact]
+    public void Direct_GetSpellAbilityId_literal_dispatch_still_reads_as_wired()
+    {
+        const string jass = @"globals
+    trigger gg_trg_Literal= null
+endglobals
+function Trig_Literal_Actions takes nothing returns nothing
+    if GetSpellAbilityId() == 'A012' then
+        call KillUnit(GetTriggerUnit())
+    endif
+endfunction
+function InitTrig_Literal takes nothing returns nothing
+    set gg_trg_Literal= CreateTrigger()
+    call TriggerRegisterAnyUnitEventBJ( gg_trg_Literal, EVENT_PLAYER_UNIT_SPELL_EFFECT )
+    call TriggerAddAction( gg_trg_Literal, function Trig_Literal_Actions )
+endfunction
+function main takes nothing returns nothing
+    call InitTrig_Literal()
+endfunction
+";
+        var doc = BuildMap("A012", jass, new AbilitySpec("A012", "ANcl"));
+
+        var result = HeroWiringAudit.Audit(doc, "H000", ownerId: 0);
+        var a012 = result.Abilities.Single(a => a.Ability == "A012");
+
+        Assert.Equal(WiringStatus.Ok, a012.Status);
+        Assert.Empty(result.Problems);
+    }
+
+    [Fact]
+    public void Unrelated_integer_local_does_not_count_as_a_dispatch()
+    {
+        const string jass = @"globals
+    trigger gg_trg_Unrelated= null
+    integer UnrelatedSpell_ID= 'A013'
+endglobals
+function Trig_Unrelated_Actions takes nothing returns nothing
+    local integer id = GetUnitTypeId(GetTriggerUnit())
+    if id == UnrelatedSpell_ID then
+        call KillUnit(GetTriggerUnit())
+    endif
+endfunction
+function InitTrig_Unrelated takes nothing returns nothing
+    set gg_trg_Unrelated= CreateTrigger()
+    call TriggerRegisterAnyUnitEventBJ( gg_trg_Unrelated, EVENT_PLAYER_UNIT_SPELL_EFFECT )
+    call TriggerAddAction( gg_trg_Unrelated, function Trig_Unrelated_Actions )
+endfunction
+function main takes nothing returns nothing
+    call InitTrig_Unrelated()
+endfunction
+";
+        var spell = new AbilitySpec("A013", "ANcl",
+            new FieldMod("atar", 1, "enemies,ground"),
+            new FieldMod("acdn", 1, "8"));
+        var doc = BuildMap("A013", jass, spell);
+
+        var result = HeroWiringAudit.Audit(doc, "H000", ownerId: 0);
+        var a013 = result.Abilities.Single(a => a.Ability == "A013");
+
+        Assert.Equal(WiringStatus.NoDispatch, a013.Status);
+        Assert.Contains(result.Problems, p => p.Ability == "A013");
+    }
+
     // ---- synthetic map construction ------------------------------------------
 
     private sealed record FieldMod(string Field, int Level, string Value);
