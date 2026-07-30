@@ -1084,6 +1084,45 @@ public static class Program
         force.AddCommand(forceList);
         force.AddCommand(forceSetFlags);
 
+        // ---- repair: reusable fixups for generated/byproduct maps ----
+        var repair = new Command("repair", "Repair generated/byproduct map issues and save the edited copy.");
+        var repairGeneratedHeroes = new Command("generated-heroes",
+            "Repair the generated preplaced-hero helper block so finalized heroes use distinct owner slots and owner-aware spell wiring.")
+        { mapArg, setOut };
+        repairGeneratedHeroes.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = GeneratedMapRepairCommand.RepairGeneratedHeroes(doc);
+            if (!r.Ok)
+            {
+                Emit(p.GetValueForOption(jsonOption), r, () => Render.GeneratedHeroRepair(r));
+                exitCode[0] = 1;
+                return;
+            }
+
+            var dest = p.GetValueForOption(setOut) ?? Path.Combine(
+                Path.GetDirectoryName(map) ?? "",
+                Path.GetFileNameWithoutExtension(map) + ".edited" + Path.GetExtension(map));
+            doc.Save(dest);
+            Emit(p.GetValueForOption(jsonOption),
+                new
+                {
+                    r.Ok,
+                    r.Message,
+                    r.PlayerSlotsBefore,
+                    r.PlayerSlotsAfter,
+                    r.ScriptUpdated,
+                    r.MapInfoUpdated,
+                    r.HeaderUpdated,
+                    r.Heroes,
+                    SavedTo = dest,
+                },
+                () => Render.GeneratedHeroRepair(r) + $"\nsaved: {dest}");
+        }));
+        repair.AddCommand(repairGeneratedHeroes);
+
         // ---- new: create a blank, World-Editor-openable map ----
         var newOut = new Argument<string>("out", "Path to write the new .w3x/.w3m map.");
         var newNameOpt = new Option<string?>("--name", "Map name (default: Blank Map).");
@@ -1180,6 +1219,7 @@ public static class Program
         root.AddCommand(place); root.AddCommand(palette); root.AddCommand(terrain);
         root.AddCommand(sound); root.AddCommand(camera); root.AddCommand(pathing);
         root.AddCommand(mapInfo); root.AddCommand(player); root.AddCommand(force);
+        root.AddCommand(repair);
         root.AddCommand(newMap); root.AddCommand(trigger);
 
         return root;

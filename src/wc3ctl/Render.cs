@@ -226,6 +226,19 @@ public static class Render
         $"{r.Functions.Count} functions in {r.ScriptFile}"
         + string.Concat(r.Functions.Select(f => $"\nline {f.StartLine}-{f.EndLine}  {f.Name}"));
 
+    public static string GeneratedHeroRepair(GeneratedHeroRepairResult r)
+    {
+        if (!r.Ok)
+            return r.Message;
+
+        var sb = new StringBuilder();
+        sb.AppendLine(r.Message);
+        sb.AppendLine($"player slots: {r.PlayerSlotsBefore} -> {r.PlayerSlotsAfter}");
+        foreach (var hero in r.Heroes)
+            sb.AppendLine($"  {hero.Rawcode}: owner {hero.OriginalOwnerId} -> {hero.OwnerId}  start=({hero.X}, {hero.Y})");
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
     public static string Extract(ExtractManifest m, string dest) =>
         $"Extracted {m.Count} file(s) ({m.TotalBytes:N0} bytes) to {dest}";
 }
