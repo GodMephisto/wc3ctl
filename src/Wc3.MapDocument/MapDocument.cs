@@ -1,4 +1,7 @@
 // src/Wc3.MapDocument/MapDocument.cs
+using System.Globalization;
+using System.Text;
+using System.Text.RegularExpressions;
 using War3Net.Build.Audio;
 using War3Net.Build.Environment;
 using War3Net.Build.Extensions;
@@ -91,21 +94,130 @@ public sealed class MapDocument
     private void ParseKnownFiles()
     {
         foreach (var entry in _files)
+            if (entry.IsKnown) TryParse(entry); // unreadable/placeholder entries have empty bytes
+    }
+
+    // Shared with HarvestAssetNames, which calls this for an entry that only became known
+    // (in the essentially-never case a harvested asset name collides with a structural one)
+    // after Load already ran its own pass.
+    private void TryParse(MapFileEntry entry)
+    {
+        if (entry.FileName is null || !MapFormatRegistry.TryGetParser(entry.FileName, out var parse))
+            return;
+        try
         {
-            if (!entry.IsKnown) continue; // unreadable/placeholder entries have empty bytes
-            if (entry.FileName is null || !MapFormatRegistry.TryGetParser(entry.FileName, out var parse))
-                continue;
-            try
-            {
-                entry.Model = parse(entry.RawBytes);
-            }
-            catch (Exception ex)
-            {
-                _diagnostics.Add(new Diagnostic(DiagnosticSeverity.Warning, entry.FileName,
-                    $"Parse failed, preserved as raw: {ex.Message}"));
-            }
+            entry.Model = parse(entry.RawBytes);
+        }
+        catch (Exception ex)
+        {
+            _diagnostics.Add(new Diagnostic(DiagnosticSeverity.Warning, entry.FileName,
+                $"Parse failed, preserved as raw: {ex.Message}"));
         }
     }
+
+    /// <summary>
+    /// Second-pass name recovery for imported assets. <see cref="Load"/> unconditionally probes
+    /// <see cref="StandardMapFileNames"/>, there are only a few dozen of those and a healthy
+    /// map's already-fully-named archive makes the probe a no-op either way. Assets are
+    /// different, an import folder can carry thousands of author-chosen names a fixed list
+    /// could never guess. So instead this harvests CANDIDATE names from content the map itself
+    /// already makes readable, every asset-shaped string literal in the script, and every
+    /// asset-shaped field value in the map's own object data, expands each into the spellings
+    /// Warcraft actually loads (<see cref="AssetPathCandidates"/>), and probes the archive for
+    /// those the same way Load probes for standard names.
+    ///
+    /// This can only find something once the script and/or object data are themselves already
+    /// named, nothing to scan otherwise, so it is a deliberate second pass a caller opts into,
+    /// not part of Load. Scanning a multi-megabyte script and a map's full object data is real
+    /// work, worth paying only when a caller actually wants this map's assets (a port, an
+    /// extract, a Studio asset browse), so a plain ls/info/object query never pays for it, and
+    /// neither does a map whose script and object data are still unreadable.
+    /// </summary>
+    /// <returns>How many previously unnamed entries this call named.</returns>
+    public int HarvestAssetNames()
+    {
+        var candidates = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        void Harvest(string? raw)
+        {
+            if (string.IsNullOrEmpty(raw) || !AssetPathCandidates.LooksLikeAssetPath(raw)) return;
+            foreach (var c in AssetPathCandidates.Expand(raw)) candidates.Add(c);
+        }
+
+        // Source 1: string literals in the script. Whichever of the two script languages, and
+        // whichever spelling the archive stores it under (see StandardMapFileNames), only the
+        // text matters here — deliberately unscoped (every literal, not one hero's reachable
+        // code, the way Wc3.Commands.BundleCommand's closure-scoped scan must be to avoid
+        // mis-attributing an asset to the wrong hero). Over-collecting a candidate here costs
+        // nothing worse than a failed hash lookup below.
+        var script = GetFile("war3map.j") ?? GetFile("scripts\\war3map.j")
+            ?? GetFile("war3map.lua") ?? GetFile("scripts\\war3map.lua");
+        if (script is { RawBytes.Length: > 0 })
+        {
+            var text = Encoding.UTF8.GetString(script.RawBytes);
+            foreach (Match m in AssetStringLiteral.Matches(text))
+                Harvest(m.Groups[1].Value.Replace("\\\\", "\\"));
+        }
+
+        // Source 2: path-like field values inside the map's own object data (all seven kinds,
+        // Reforged skin twins included, they parse into the same models). No game-data
+        // metadata is available at this layer, unlike the porter's field scan this only needs
+        // a coarse "might be a path" shape test, never attribution to a specific field or hero.
+        foreach (var entry in _files)
+            if (entry.Model is not null)
+                foreach (var value in ObjectDataFieldValues(entry.Model))
+                    Harvest(value);
+
+        if (candidates.Count == 0) return 0;
+
+        using var stream = new MemoryStream(_originalBytes);
+        using var archive = MpqArchive.Open(stream, loadListFile: true);
+        archive.AddFileNames(StandardMapFileNames.All); // keep this archive's naming in step with Load's
+        archive.AddFileNames(candidates);
+
+        // Fold newly resolved names back by BlockIndex (not position — a caller may have added
+        // entries beyond the archive's own since Load, those carry no BlockIndex this archive
+        // enumerates and are correctly left alone).
+        var byBlock = _files.Where(f => f.BlockIndex < archive.Count).ToDictionary(f => f.BlockIndex);
+        int named = 0, i = 0;
+        foreach (var entry in archive)
+        {
+            if (entry.FileName is not null && byBlock.TryGetValue(i, out var mine) && mine.FileName is null)
+            {
+                mine.FileName = entry.FileName;
+                mine.IsKnown = MapFormatRegistry.IsKnown(entry.FileName);
+                if (mine.IsKnown) TryParse(mine);
+                named++;
+            }
+            i++;
+        }
+        return named;
+    }
+
+    /// <summary>A double-quoted JASS/Lua string literal (captures the inner text), used by
+    /// <see cref="HarvestAssetNames"/> to pull candidate asset paths out of the whole script.</summary>
+    private static readonly Regex AssetStringLiteral = new("\"([^\"]*)\"", RegexOptions.Compiled);
+
+    // War3Net shape confirmed against the same three modification kinds Wc3.Commands.ObjectKinds
+    // normalizes (Simple: w3u/w3t/w3b/w3h, Level: w3a/w3q, Variation: w3d); read directly here
+    // rather than through that layer, Wc3.MapDocument must not depend on Wc3.Commands.
+    private static IEnumerable<string> ObjectDataFieldValues(object model) => model switch
+    {
+        UnitObjectData m => m.BaseUnits.Concat(m.NewUnits).SelectMany(x => x.Modifications)
+            .Select(x => Convert.ToString(x.Value, CultureInfo.InvariantCulture) ?? ""),
+        ItemObjectData m => m.BaseItems.Concat(m.NewItems).SelectMany(x => x.Modifications)
+            .Select(x => Convert.ToString(x.Value, CultureInfo.InvariantCulture) ?? ""),
+        AbilityObjectData m => m.BaseAbilities.Concat(m.NewAbilities).SelectMany(x => x.Modifications)
+            .Select(x => Convert.ToString(x.Value, CultureInfo.InvariantCulture) ?? ""),
+        DestructableObjectData m => m.BaseDestructables.Concat(m.NewDestructables).SelectMany(x => x.Modifications)
+            .Select(x => Convert.ToString(x.Value, CultureInfo.InvariantCulture) ?? ""),
+        DoodadObjectData m => m.BaseDoodads.Concat(m.NewDoodads).SelectMany(x => x.Modifications)
+            .Select(x => Convert.ToString(x.Value, CultureInfo.InvariantCulture) ?? ""),
+        BuffObjectData m => m.BaseBuffs.Concat(m.NewBuffs).SelectMany(x => x.Modifications)
+            .Select(x => Convert.ToString(x.Value, CultureInfo.InvariantCulture) ?? ""),
+        UpgradeObjectData m => m.BaseUpgrades.Concat(m.NewUpgrades).SelectMany(x => x.Modifications)
+            .Select(x => Convert.ToString(x.Value, CultureInfo.InvariantCulture) ?? ""),
+        _ => Enumerable.Empty<string>(),
+    };
 
     public MapFileEntry? GetFile(string fileName) =>
         _files.FirstOrDefault(f => string.Equals(f.FileName, fileName, StringComparison.OrdinalIgnoreCase));
