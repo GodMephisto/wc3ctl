@@ -133,6 +133,107 @@ endfunction
         Assert.Contains(result.Problems, p => p.Ability == "A200");
     }
 
+    // ---- Bug 3: an ability keyed to several triggers, one an inert stub -------
+
+    [Fact]
+    public void Ability_wired_by_one_of_two_triggers_reads_as_wired_not_faulted_by_the_stub()
+    {
+        // Two triggers share the same id condition. gg_trg_Stub has that condition and an empty action
+        // but no event registered, an inert duplicate. gg_trg_Real has the same condition, a live
+        // action, and a spell event. Keying the ability to a single arbitrary candidate could land on
+        // the stub and report NoEventRegistered, the A0K1-on-Tohno false positive. The ability works
+        // through gg_trg_Real, so it must read as wired.
+        const string jass = @"globals
+    trigger gg_trg_Stub= null
+    trigger gg_trg_Real= null
+endglobals
+function Trig_Stub_Conditions takes nothing returns boolean
+    return ( GetSpellAbilityId() == 'A000' )
+endfunction
+function Trig_Stub_Actions takes nothing returns nothing
+endfunction
+function Trig_Real_Conditions takes nothing returns boolean
+    return ( GetSpellAbilityId() == 'A000' )
+endfunction
+function Trig_Real_Actions takes nothing returns nothing
+    call KillUnit(GetTriggerUnit())
+endfunction
+function InitTrig_Stub takes nothing returns nothing
+    set gg_trg_Stub= CreateTrigger()
+    call TriggerAddCondition( gg_trg_Stub, Condition( function Trig_Stub_Conditions ) )
+    call TriggerAddAction( gg_trg_Stub, function Trig_Stub_Actions )
+endfunction
+function InitTrig_Real takes nothing returns nothing
+    set gg_trg_Real= CreateTrigger()
+    call TriggerRegisterAnyUnitEventBJ( gg_trg_Real, EVENT_PLAYER_UNIT_SPELL_EFFECT )
+    call TriggerAddCondition( gg_trg_Real, Condition( function Trig_Real_Conditions ) )
+    call TriggerAddAction( gg_trg_Real, function Trig_Real_Actions )
+endfunction
+function main takes nothing returns nothing
+    call InitTrig_Stub()
+    call InitTrig_Real()
+endfunction
+";
+        var doc = BuildMap("A000", jass, new AbilitySpec("A000", "ANcl"));
+
+        var result = HeroWiringAudit.Audit(doc, "H000", ownerId: 0);
+        var a000 = result.Abilities.Single(a => a.Ability == "A000");
+
+        Assert.Equal(WiringStatus.Ok, a000.Status);
+        Assert.Contains("gg_trg_Real", a000.Detail);   // credited to the working trigger, not the stub
+        Assert.Empty(result.Problems);
+    }
+
+    [Fact]
+    public void A_doubled_candidate_is_reported_even_when_another_candidate_is_clean()
+    {
+        // gg_trg_Once completes the chain and builds once. gg_trg_Twice also completes but its init is
+        // called twice, so the ability fires twice, a genuine double-fire. A healthy candidate must not
+        // mask that, so InitCalledTwice takes precedence over the clean Ok on the other candidate.
+        const string jass = @"globals
+    trigger gg_trg_Once= null
+    trigger gg_trg_Twice= null
+endglobals
+function Trig_Once_Conditions takes nothing returns boolean
+    return ( GetSpellAbilityId() == 'A000' )
+endfunction
+function Trig_Once_Actions takes nothing returns nothing
+    call KillUnit(GetTriggerUnit())
+endfunction
+function Trig_Twice_Conditions takes nothing returns boolean
+    return ( GetSpellAbilityId() == 'A000' )
+endfunction
+function Trig_Twice_Actions takes nothing returns nothing
+    call KillUnit(GetTriggerUnit())
+endfunction
+function InitTrig_Once takes nothing returns nothing
+    set gg_trg_Once= CreateTrigger()
+    call TriggerRegisterAnyUnitEventBJ( gg_trg_Once, EVENT_PLAYER_UNIT_SPELL_EFFECT )
+    call TriggerAddCondition( gg_trg_Once, Condition( function Trig_Once_Conditions ) )
+    call TriggerAddAction( gg_trg_Once, function Trig_Once_Actions )
+endfunction
+function InitTrig_Twice takes nothing returns nothing
+    set gg_trg_Twice= CreateTrigger()
+    call TriggerRegisterAnyUnitEventBJ( gg_trg_Twice, EVENT_PLAYER_UNIT_SPELL_EFFECT )
+    call TriggerAddCondition( gg_trg_Twice, Condition( function Trig_Twice_Conditions ) )
+    call TriggerAddAction( gg_trg_Twice, function Trig_Twice_Actions )
+endfunction
+function main takes nothing returns nothing
+    call InitTrig_Once()
+    call InitTrig_Twice()
+    call InitTrig_Twice()
+endfunction
+";
+        var doc = BuildMap("A000", jass, new AbilitySpec("A000", "ANcl"));
+
+        var result = HeroWiringAudit.Audit(doc, "H000", ownerId: 0);
+        var a000 = result.Abilities.Single(a => a.Ability == "A000");
+
+        Assert.Equal(WiringStatus.InitCalledTwice, a000.Status);
+        Assert.Contains("gg_trg_Twice", a000.Detail);
+        Assert.Contains(result.Problems, p => p.Ability == "A000");
+    }
+
     // ---- synthetic map construction ------------------------------------------
 
     private sealed record FieldMod(string Field, int Level, string Value);

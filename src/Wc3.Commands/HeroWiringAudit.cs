@@ -121,8 +121,8 @@ public static class HeroWiringAudit
                 "the ability object is not in this map, port it from the source");
 
         // 2. Something must dispatch on it, by literal or through an id global.
-        var dispatch = ctx.FindDispatch(ability);
-        if (dispatch is null)
+        var dispatches = ctx.FindDispatches(ability);
+        if (dispatches.Count == 0)
         {
             // A referenced-but-never-cast ability is a passive, aura, inventory or spellbook, exactly
             // how the source map designed it, so it is reported for information rather than as a fault.
@@ -142,6 +142,31 @@ public static class HeroWiringAudit
                 : Fail(WiringStatus.NotCastDispatched,
                     "no script presence, an aura or passive the engine drives from object data alone");
         }
+
+        // 3-7. A map often keys more than one trigger to the same ability, and one can be an inert
+        //       duplicate stub (empty body, no event) beside the real handler. Judging by a single
+        //       arbitrarily chosen dispatch then blamed the ability for the stub, so run the whole
+        //       chain for every candidate and let the ability read as wired if ANY of them completes.
+        var evaluated = dispatches.Select(d => EvaluateDispatch(ability, name, d, ctx)).ToList();
+
+        // A candidate that completes everything but builds its trigger twice is a genuine double-fire,
+        // so it outranks even a clean Ok elsewhere, a second healthy trigger must not hide it.
+        if (evaluated.FirstOrDefault(e => e.Status == WiringStatus.InitCalledTwice) is { } doubled)
+            return doubled;
+        if (evaluated.FirstOrDefault(e => e.Status == WiringStatus.Ok) is { } wired)
+            return wired;
+
+        // Nothing completed. Report the candidate that got furthest along the chain, the most
+        // informative failure, rather than an arbitrary one.
+        return evaluated.OrderByDescending(e => ChainProgress(e.Status)).First();
+    }
+
+    /// <summary>Runs the attach-through-init chain for one dispatch candidate. Broken out so an
+    /// ability keyed to several triggers can be judged by whichever candidate fares best, rather than
+    /// by a single arbitrary pick.</summary>
+    private static AbilityWiring EvaluateDispatch(string ability, string? name, string dispatch, ScriptContext ctx)
+    {
+        AbilityWiring Fail(WiringStatus s, string detail) => new(ability, name, s, detail);
 
         // 3. The dispatch must hang off a trigger, either directly or through a short chain of callers.
         //    An inline condition helper carries the id check but is not itself attached, its trigger's
@@ -183,6 +208,20 @@ public static class HeroWiringAudit
         string via = string.Equals(carrier, dispatch, StringComparison.Ordinal) ? "" : $" via '{carrier}'";
         return new(ability, name, WiringStatus.Ok, $"dispatched by '{dispatch}'{via} on '{trigger}'");
     }
+
+    /// <summary>How far along the wiring chain a status reached. A higher value means the candidate
+    /// came closer to working, so among failing candidates the highest is the most informative to
+    /// report. Ok and InitCalledTwice are handled before this is consulted.</summary>
+    private static int ChainProgress(WiringStatus status) => status switch
+    {
+        WiringStatus.NotAttachedToTrigger => 1,
+        WiringStatus.NoEventRegistered => 2,
+        WiringStatus.PlayerNotRegistered => 3,
+        WiringStatus.EmptyOrTrimmedHandler => 4,
+        WiringStatus.IdentityArrayNotRegistered => 5,
+        WiringStatus.InitNeverCalled => 6,
+        _ => 0,
+    };
 
     // ---- the hero's ability set ---------------------------------------------
 
@@ -343,8 +382,12 @@ public static class HeroWiringAudit
             return refs > (aliased ? 1 : 0);
         }
 
-        public string? FindDispatch(string ability) =>
-            _abilityRefs.TryGetValue(ability, out var fns) ? fns.OrderBy(x => x, StringComparer.Ordinal).First() : null;
+        /// <summary>Every function that dispatches on the ability, sorted for deterministic reporting.
+        /// A map can key several triggers to one ability, so all of them are candidates, not just one.</summary>
+        public IReadOnlyList<string> FindDispatches(string ability) =>
+            _abilityRefs.TryGetValue(ability, out var fns)
+                ? fns.OrderBy(x => x, StringComparer.Ordinal).ToList()
+                : Array.Empty<string>();
 
         /// <summary>True when the ability's own map fields carry an active-cast trait no passive has,
         /// a real Targets Allowed or a positive cast cost/cooldown/range. Auras, inventories and
