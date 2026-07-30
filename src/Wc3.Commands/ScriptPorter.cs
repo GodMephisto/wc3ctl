@@ -180,9 +180,13 @@ internal static class ScriptPorter
         var globalInitBodies = CarryGlobalInitializers(allByName, srcLines, srcGlobals, used, carried, residualGlobalRefs);
         int carriedInitializers = globalInitBodies.Values.Sum(CountKeptAssignments);
         if (globalInitBodies.Count > 0)
-            notes.Add($"carried {carriedInitializers} global-initializer assignment(s) from "
-                + $"{string.Join(", ", globalInitBodies.Keys)}, so the ported spells' timers, unit "
-                + "groups, and other non-default globals are set up before they run.");
+            notes.Add(carriedInitializers > 0
+                ? $"carried {carriedInitializers} global-initializer assignment(s) from "
+                    + $"{string.Join(", ", globalInitBodies.Keys)}, so the ported spells' timers, unit "
+                    + "groups, and other non-default globals are set up before they run."
+                : $"wired {string.Join(", ", globalInitBodies.Keys)} but it carried 0 assignments for "
+                    + "any global the closure needs (nothing there sets one up, or it was already "
+                    + "carried whole by the ordinary closure) — verify the ported map in-game.");
         if (residualGlobalRefs.Count > 0)
             notes.Add($"{residualGlobalRefs.Count} reference(s) to a non-carried global remain in a "
                 + "condition or return inside the map's own global initializer and were left in "
