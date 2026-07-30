@@ -20,9 +20,12 @@ public class PortTriageCorpusTests
 {
     private const string MapDir = @"C:\Users\GodMephisto\Documents\Warcraft III\Maps\Download";
 
-    /// <summary>Heroes to port per map. A few is enough to surface a map's patterns, and the
-    /// library is several gigabytes, so this trades exhaustiveness for a run that finishes.</summary>
-    private const int HeroesPerMap = 4;
+    /// <summary>Heroes to port per map. Some of the user's maps are hero-arena games with
+    /// hundreds of playable heroes (Anime Choice Arena alone has 296), so this can never be
+    /// exhaustive, it trades that off against a run that finishes in a few minutes. Raised from
+    /// 4, which under-sampled every map that actually has more than a handful of heroes and so
+    /// under-reported this sweep's whole reason for existing.</summary>
+    private const int HeroesPerMap = 8;
 
     private readonly ITestOutputHelper _out;
     public PortTriageCorpusTests(ITestOutputHelper output) => _out = output;
@@ -36,30 +39,36 @@ public class PortTriageCorpusTests
         var maps = UniqueCustomMaps(MapDir);
         if (maps.Count == 0) return;
 
-        var report = new StringBuilder();
         var failures = new List<(string Kind, string Map, string Hero, string Detail)>();
+        // One block of report text per map, plus a severity score so the worst offenders can be
+        // printed first. A map is only actionable in proportion to how broken it is, and the old
+        // report ordered maps by file size, so the single most useful map to look at could be
+        // buried on page three. A dead compile (refused/broken/threw) outweighs any number of
+        // wiring problems, a hero that does not even build is strictly worse than one that
+        // builds with a dead spell, so it is weighted far higher.
+        var mapBlocks = new List<(int Severity, int CleanHeroes, int ProblemHeroes, string Text)>();
         int attempted = 0, compiled = 0, refused = 0, repaired = 0, mapErrors = 0;
         var sw = Stopwatch.StartNew();
-
-        report.AppendLine($"# Port triage over {maps.Count} unique custom maps");
-        report.AppendLine();
 
         foreach (var map in maps)
         {
             string name = Path.GetFileName(map);
+            var block = new StringBuilder();
             MapDocument source;
             try { source = MapDocument.Load(map); }
             catch (Exception ex)
             {
                 mapErrors++;
                 failures.Add(("map-load-failed", name, "", Trunc(ex.Message)));
-                report.AppendLine($"## {name}\n  MAP LOAD FAILED: {Trunc(ex.Message)}\n");
+                block.AppendLine($"## {name}\n  MAP LOAD FAILED: {Trunc(ex.Message)}\n");
+                mapBlocks.Add((100, 0, 0, block.ToString()));
                 continue;
             }
 
-            var heroes = Heroes(source).Take(HeroesPerMap).ToList();
-            report.AppendLine($"## {name}  ({heroes.Count} hero(es) sampled)");
-            if (heroes.Count == 0) report.AppendLine("  no custom heroes found");
+            var allHeroes = Heroes(source).ToList();
+            var heroes = allHeroes.Take(HeroesPerMap).ToList();
+            int cleanHeroes = 0, problemHeroes = 0, severity = 0;
+            var heroLines = new StringBuilder();
 
             foreach (var (rawcode, heroName) in heroes)
             {
@@ -74,10 +83,10 @@ public class PortTriageCorpusTests
                     var script = result.Script;
                     if (script is { Written: false })
                     {
-                        refused++;
+                        refused++; problemHeroes++; severity += 50;
                         var why = script.Notes.FirstOrDefault(n => n.Contains("REFUSED", StringComparison.Ordinal)) ?? "";
                         failures.Add(("port-refused-uncompilable", name, rawcode, Trunc(why)));
-                        report.AppendLine($"  {rawcode} {heroName}: REFUSED (would not compile)");
+                        heroLines.AppendLine($"  {rawcode} {heroName}: REFUSED (would not compile)");
                         continue;
                     }
                     if (script?.Notes.Any(n => n.Contains("repaired", StringComparison.OrdinalIgnoreCase)) == true)
@@ -90,8 +99,9 @@ public class PortTriageCorpusTests
                     {
                         var worst = issues.First(i =>
                             i.Severity == DiagnosticSeverity.Error && JassScriptCheck.BlocksCompilation(i.Kind));
+                        problemHeroes++; severity += 50;
                         failures.Add((worst.Kind.ToString(), name, rawcode, Trunc(worst.Message)));
-                        report.AppendLine($"  {rawcode} {heroName}: BROKEN {worst.Kind} - {Trunc(worst.Message)}");
+                        heroLines.AppendLine($"  {rawcode} {heroName}: BROKEN {worst.Kind} - {Trunc(worst.Message)}");
                         continue;
                     }
 
@@ -107,23 +117,53 @@ public class PortTriageCorpusTests
                         failures.Add(($"wiring:{g.Key}", name, rawcode,
                             Trunc(string.Join(", ", g.Select(x => x.Ability)))));
 
-                    report.AppendLine($"  {rawcode} {heroName}: ok"
-                        + (script is null ? " (no script carried)" : $" ({script.Functions} fn)")
-                        // Score against CASTABLE abilities, not the total. Counting passives in the
-                        // denominator meant a hero with zero problems still read as partial, which is
-                        // the same overstating this sweep exists to avoid.
-                        + $"  wiring {wiring.Wired}/{wiring.Abilities.Count - wiring.NotCastable}"
-                        + (wiring.NotCastable > 0 ? $" +{wiring.NotCastable}passive" : "")
-                        + (wiring.Problems.Count > 0 ? $"  {wiring.Problems.Count} problem(s)" : ""));
+                    // Score against CASTABLE abilities, not the total. Counting passives in the
+                    // denominator meant a hero with zero problems still read as partial, which is
+                    // the same overstating this sweep exists to avoid.
+                    string fnNote = script is null ? "no script carried" : $"{script.Functions} fn";
+                    string wiringNote = $"wiring {wiring.Wired}/{wiring.Abilities.Count - wiring.NotCastable}"
+                        + (wiring.NotCastable > 0 ? $" +{wiring.NotCastable}passive" : "");
+
+                    if (wiring.Problems.Count == 0)
+                    {
+                        cleanHeroes++;
+                        heroLines.AppendLine($"  {rawcode} {heroName}: CLEAN  ({wiringNote}, {fnNote})");
+                    }
+                    else
+                    {
+                        problemHeroes++; severity += wiring.Problems.Count;
+                        // Named right on the hero's own line, grouped by status, so the offending
+                        // abilities are visible without cross-referencing the ranked section below.
+                        string byStatus = string.Join("  ", wiring.Problems.GroupBy(p => p.Status)
+                            .OrderByDescending(g => g.Count())
+                            .Select(g => $"{g.Key}[{string.Join(",", g.Select(p => p.Ability))}]"));
+                        heroLines.AppendLine($"  {rawcode} {heroName}: {wiring.Problems.Count} PROBLEM(S)  "
+                            + $"({wiringNote}, {fnNote})\n      {byStatus}");
+                    }
                 }
                 catch (Exception ex)
                 {
+                    problemHeroes++; severity += 50;
                     failures.Add((ex.GetType().Name, name, rawcode, Trunc(ex.Message)));
-                    report.AppendLine($"  {rawcode} {heroName}: THREW {ex.GetType().Name} - {Trunc(ex.Message)}");
+                    heroLines.AppendLine($"  {rawcode} {heroName}: THREW {ex.GetType().Name} - {Trunc(ex.Message)}");
                 }
             }
-            report.AppendLine();
+
+            string verdict = heroes.Count == 0 ? "no custom heroes found"
+                : problemHeroes == 0 ? $"all {cleanHeroes} clean"
+                : $"{problemHeroes} of {heroes.Count} with problems";
+            block.AppendLine($"## {name}  ({heroes.Count} of {allHeroes.Count} custom hero(es) sampled, {verdict})");
+            if (heroes.Count == 0) block.AppendLine("  no custom heroes found");
+            else block.Append(heroLines);
+            block.AppendLine();
+            mapBlocks.Add((severity, cleanHeroes, problemHeroes, block.ToString()));
         }
+
+        var report = new StringBuilder();
+        report.AppendLine($"# Port triage over {maps.Count} unique custom maps, worst offenders first");
+        report.AppendLine();
+        foreach (var (_, _, _, text) in mapBlocks.OrderByDescending(b => b.Severity))
+            report.Append(text);
 
         report.AppendLine("# Ranked failure classes");
         foreach (var g in failures.GroupBy(f => f.Kind).OrderByDescending(g => g.Count()))
@@ -133,9 +173,12 @@ public class PortTriageCorpusTests
                 report.AppendLine($"  - {f.Map} {f.Hero}: {f.Detail}");
         }
 
+        int cleanTotal = mapBlocks.Sum(b => b.CleanHeroes);
+        int problemTotal = mapBlocks.Sum(b => b.ProblemHeroes);
         string summary = $"maps={maps.Count} heroes attempted={attempted} compiled={compiled} "
             + $"auto-repaired={repaired} refused={refused} broken={failures.Count} "
-            + $"map-load-failed={mapErrors} elapsed={sw.Elapsed:hh\\:mm\\:ss}";
+            + $"map-load-failed={mapErrors} clean-heroes={cleanTotal} problem-heroes={problemTotal} "
+            + $"elapsed={sw.Elapsed:hh\\:mm\\:ss}";
         report.Insert(0, summary + "\n\n");
 
         string outPath = Path.Combine(Path.GetTempPath(), "wc3ctl-port-triage.md");
