@@ -222,14 +222,56 @@ public static class BundleCommand
 
         if (capped) diagnostics.Add($"node cap ({MaxNodes}) reached — dependency closure truncated");
 
-        // Script closure: the war3map.j functions that implement the bundle's custom
-        // skills. Seeded by every rawcode being ported (root + custom objects) — those
-        // appear in JASS as 'XXXX' literals in spell-handler conditions and the like.
-        var seedRawcodes = nodes.Values.Where(n => n.CustomToMap).Select(n => n.Rawcode)
-            .Where(rc => rc != rootRawcode)
-            .OrderBy(rc => rc, StringComparer.Ordinal)
-            .Prepend(rootRawcode)
-            .ToList();
+        // Script closure: the war3map.j functions that implement the bundle's custom skills,
+        // seeded by the rawcodes a spell handler dispatches on (they show up in JASS as 'XXXX'
+        // literals in the handler's conditions). Seed from the hero's OWN identity only, the root
+        // plus the abilities its object data grants (uabi normal, uhab hero) and one level of
+        // spellbook contents (spb1), not the whole transitive object closure. A hero's handlers
+        // dispatch on its own ability ids, so those ids are the honest seed. The buffs, effects,
+        // shared upgrades and dummies its abilities merely reference are not identity, and seeding
+        // on a shared object pulls in every function that mentions it, which on a tightly-coupled
+        // arena is every other hero's kit. Narrowing here roughly halves the carried function set
+        // with no false cut. (Field codes mirror the hero wiring audit's own identity model.)
+        List<string> seedRawcodes;
+        if (rootKind == ObjectKind.Unit)
+        {
+            var identity = new List<string> { rootRawcode };
+            var identitySeen = new HashSet<string>(StringComparer.Ordinal) { rootRawcode };
+            void AddIdentityAbilities(string? csv)
+            {
+                foreach (var raw in (csv ?? "").Split(','))
+                {
+                    var t = raw.Trim();
+                    if (t.Length == 4 && IsCustom(ObjectKind.Ability, t) && identitySeen.Add(t))
+                        identity.Add(t);
+                }
+            }
+            foreach (var f in root.Fields)
+                if (f.Code.StartsWith("uabi", StringComparison.OrdinalIgnoreCase)
+                    || f.Code.StartsWith("uhab", StringComparison.OrdinalIgnoreCase))
+                    AddIdentityAbilities(f.Value);
+            // One level of spellbook contents, that is how these maps hang a kit off a granted book.
+            foreach (var ability in identity.Skip(1).ToList())
+                foreach (var f in ObjectGetCommand.Execute(doc, ObjectKind.Ability, ability, ctx,
+                             Array.Empty<string>()).Fields)
+                    if (f.Code.StartsWith("spb1", StringComparison.OrdinalIgnoreCase))
+                        AddIdentityAbilities(f.Value);
+
+            seedRawcodes = identity.Skip(1)
+                .OrderBy(rc => rc, StringComparer.Ordinal)
+                .Prepend(rootRawcode)
+                .ToList();
+        }
+        else
+        {
+            // Non-unit roots (an ability, item or upgrade bundle) have no uabi/uhab identity, so
+            // keep the historical full-closure seed for those. The narrowing above is a hero fix.
+            seedRawcodes = nodes.Values.Where(n => n.CustomToMap).Select(n => n.Rawcode)
+                .Where(rc => rc != rootRawcode)
+                .OrderBy(rc => rc, StringComparer.Ordinal)
+                .Prepend(rootRawcode)
+                .ToList();
+        }
         // Every custom object id in the map (any kind), so the script closure can tell a
         // dispatcher branch guarded by ANOTHER hero (a foreign custom object) from one guarded
         // by the object being ported, and refuse to follow the foreign branches.
@@ -405,31 +447,6 @@ public static class BundleCommand
         // (guardStack tracks the open if/elseif branches; a call is followed only when no active
         // branch is foreign). Alias mentions, which drive SEEDING, are collected regardless of
         // guard so the dispatcher itself is still recognised as referencing our hero.
-        // Carry a hero's script-added abilities (e.g. a Q dash-back added by UnitAddAbility, never on
-        // the unit's ability list) by the arena's naming convention: each ability id sits in a global
-        // named after the hero (DarkShiki_ID, DarkShikiQ_ID, DarkShikiQ2_ID, ...). From the root's own
-        // id-global take the hero stem, then carry every custom sibling id-global's object. Scoped to
-        // the hero's own naming group, so it never pulls another hero's abilities (a closure-wide
-        // rawcode scan does — shared dispatchers name every hero, and each carried unit cascades).
-        if (seedRawcodes.Count > 0)
-        {
-            int rootId = seedRawcodes[0].FromRawcode();
-            var rootGlobal = allAliases.FirstOrDefault(kv => kv.Value == rootId).Key;
-            if (rootGlobal is not null)
-            {
-                string stem = rootGlobal.EndsWith("_ID", StringComparison.OrdinalIgnoreCase)
-                    ? rootGlobal[..^3] : rootGlobal;
-                var seedIdSet = seedRawcodes.Where(rc => rc.Length == 4)
-                    .Select(rc => rc.FromRawcode()).ToHashSet();
-                if (stem.Length >= 4)
-                    foreach (var kv in allAliases)
-                        if (kv.Key.StartsWith(stem, StringComparison.Ordinal)
-                            && allCustomObjectIds.Contains(kv.Value)
-                            && !seedIdSet.Contains(kv.Value))
-                            carryObject(kv.Value.ToRawcode());
-            }
-        }
-
         var callees = new Dictionary<string, List<string>>(StringComparer.Ordinal);
         var aliasHits = new Dictionary<string, List<string>>(StringComparer.Ordinal);
         var assetRefs = new Dictionary<string, List<string>>(StringComparer.Ordinal);

@@ -42,7 +42,7 @@ public static class PreplacedUnitsScript
     /// routine (the one that populates a per-player unit array from a CreateUnit, e.g. the stun and
     /// damage-source dummies a hero's spells route through) under a null guard so it runs once.
     /// </summary>
-    public const int GeneratorVersion = 6;
+    public const int GeneratorVersion = 7;
 
     // The begin marker carries the generator version. Detection keys off the PREFIX so blocks
     // written before versioning existed (no "[gen vN]") are still recognised, and read as version 0.
@@ -409,12 +409,49 @@ public static class PreplacedUnitsScript
                 string arr = a.Groups[1].Value;
                 string idx = a.Groups[2].Value;
                 if (!unitArrays.Contains(arr)) continue;
-                if (!Regex.IsMatch(idx, @"\b" + Regex.Escape(playerParam) + @"\b")) continue; // slot from the player
-                found.Add(new DoerDummyAssigner(f.Name, takesCode, arr, idx.Trim(), playerParam));
+
+                // The index must derive from the player parameter, else this is not a per-player
+                // routine. It usually does so INDIRECTLY, through a local computed once and reused,
+                // "set slot = 1 + GetPlayerId(p)" then "set udg_X[slot] = ...". Requiring the index
+                // to name the parameter itself matched only the direct form, so on every real map
+                // this found nothing and the caller reported that no routine existed. Resolve a
+                // single-identifier index back through its own assignment before giving up.
+                string? resolved = ResolveIndexToPlayer(idx, body, playerParam);
+                if (resolved is null) continue;
+                found.Add(new DoerDummyAssigner(f.Name, takesCode, arr, resolved, playerParam));
                 break;
             }
         }
         return found.Count == 1 ? (found[0], 1) : (null, found.Count);
+    }
+
+    /// <summary>
+    /// The index expression rewritten so it derives visibly from <paramref name="playerParam"/>, or null
+    /// when it does not derive from the player at all. An index that already names the parameter is
+    /// returned as-is. A bare identifier is looked up as a local assigned once from the parameter
+    /// ("set slot = 1 + GetPlayerId(p)"), and that initializer is returned in its place, so the caller
+    /// can rebuild the same index for a different player by substituting the parameter.
+    /// </summary>
+    private static string? ResolveIndexToPlayer(string idx, string body, string playerParam)
+    {
+        string trimmed = idx.Trim();
+        var namesPlayer = new Regex(@"\b" + Regex.Escape(playerParam) + @"\b");
+        if (namesPlayer.IsMatch(trimmed)) return trimmed;
+
+        // Only a bare local can be resolved. Anything more complex that still fails to name the
+        // player is not a per-player index, and guessing at it would wire the wrong slot.
+        if (!Regex.IsMatch(trimmed, @"^[A-Za-z_][A-Za-z0-9_]*$")) return null;
+
+        // Every assignment to the local, not just the first. These routines declare the slot with a
+        // placeholder and compute it later ("local integer slot= 0" then "set slot=1 + GetPlayerId(p)"),
+        // so taking the first match reads the placeholder and concludes the index is not player-derived.
+        foreach (Match assign in Regex.Matches(body,
+            @"(?m)^\s*(?:local\s+integer\s+|set\s+)" + Regex.Escape(trimmed) + @"\s*=\s*([^\r\n]+)"))
+        {
+            string init = assign.Groups[1].Value.Trim();
+            if (namesPlayer.IsMatch(init)) return init;
+        }
+        return null;
     }
 
     /// <summary>Names declared as a <c>unit array</c> global in the script.</summary>
