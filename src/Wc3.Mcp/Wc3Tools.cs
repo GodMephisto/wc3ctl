@@ -160,6 +160,30 @@ public static class Wc3Tools
             return new PortUnitToolResult(outPath, report);
         });
 
+    // ---- audits (diagnostics over data already in the map) ---------------
+
+    [McpServerTool(Name = "audit_hero", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Tells you whether a placed hero's abilities are actually wired up in the map's script, not merely present as object data. For every ability it verifies the whole chain end to end, the ability object exists, something dispatches a cast on its id, that handler is attached to a trigger, the trigger's event reaches the hero's player, the handler body still has live statements (not commented out by porting), any per-player identity array it gates on lists this hero, and the init that builds the trigger runs exactly once. When a link is missing the result names exactly which one, so a broken port can be fixed rather than only detected. Omit hero to audit every hero type placed on the map.")]
+    public static IReadOnlyList<HeroWiringResult> AuditHero(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Hero rawcode to audit, e.g. 'H001'. Omit to audit every hero placed on the map.")] string? hero = null)
+        => Run(() =>
+        {
+            var doc = LoadMap(map);
+            return hero is null
+                ? HeroWiringAudit.AuditPlacedHeroes(doc)
+                : new[] { HeroWiringAudit.Audit(doc, hero, ownerId: 0) };
+        });
+
+    [McpServerTool(Name = "audit_fidelity", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Tells you whether a ported object's data came across faithfully, by comparing it and its whole custom-object dependency closure between the SOURCE map it was ported from and the TARGET map it was ported into. Reports fields the source set that the target dropped, per-level or per-variation values missing, whole levels lost, and objects present in the source closure but absent from the target, each labeled a real loss or merely informational. A rawcode remapped on a porting collision and a trigger string inlined to literal text are recognized as legitimate port transformations, not faults.")]
+    public static ObjectFidelityResult AuditFidelity(
+        [Description("Path to the SOURCE map the object was ported FROM.")] string source_map,
+        [Description("Path to the TARGET map the object was ported INTO.")] string target_map,
+        [Description("Root object rawcode to compare, the same rawcode in both maps.")] string rawcode,
+        [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Sharpens the dependency closure crawl. Without it the crawl is still complete, only more permissive.")] string? game_dir = null)
+        => Run(() => ObjectFidelityCommand.Compare(LoadMap(source_map), LoadMap(target_map), rawcode, ResolveGameDir(game_dir)));
+
     [McpServerTool(Name = "palette_doodad", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("List the doodad types placeable on a map - the palette to consult before place_doodad. Unions the base-game doodad catalog (installed GameData) with the map's own object-data: custom New* doodads and modified Base* doodads. Each entry carries its four-char rawcode, a resolved display name (null when unresolvable), its source (base|map-custom|map-modified) and the base it derives from. Without a WC3 install the palette is map-only. The map is never modified.")]
     public static DoodadPaletteResult PaletteDoodad(

@@ -22,6 +22,8 @@ public class CliMcpParityTests
         ["object_list"] = "object list",
         ["object_set"] = "object set",
         ["object_new"] = "object new",
+        ["audit_hero"] = "audit hero",
+        ["audit_fidelity"] = "audit fidelity",
         ["bundle_unit"] = "bundle unit",
         ["render_model"] = "render-model",
         ["port_unit"] = "port unit",
@@ -72,13 +74,6 @@ public class CliMcpParityTests
         // compiles again. Porting now gates on this automatically, so it is only ever needed
         // for a map produced before the gate existed.
         "script repair",
-        // Diagnostic: reports, per ability of a placed hero, which link of the wiring chain is
-        // missing. A local troubleshooting aid rather than something an agent drives remotely.
-        "audit hero",
-        // Diagnostic: compares an object and its closure between a source and target map to find
-        // fields, levels and objects a port failed to carry. A local troubleshooting aid, same as
-        // audit hero, so MCP needs no separate tool.
-        "audit fidelity",
     };
 
     // The real MCP tool names, read straight from the [McpServerTool] attributes the
