@@ -490,6 +490,127 @@ endfunction
         Assert.Equal(3, result.Script!.Globals); // udg_RaidenQ_ID, TICK, DPS and nothing else
     }
 
+    // A GUI map whose InitGlobals allocates a per-player TIMER the spell handler starts. The bare
+    // declaration ("timer udg_RaidenQ_Timer= null") carries no non-default value, so without carrying
+    // InitGlobals's own assignment the handler's TimerStart runs on a still-null timer and silently
+    // does nothing, exactly the break measured on GGGA's Tohno Shiki (its own per-player timers and
+    // groups are allocated in InitGlobals-equivalent code, not simple literals). A second, unrelated
+    // global is also assigned there and must NOT be carried.
+    private const string InitGlobalsScript = @"globals
+    integer udg_RaidenQ_ID= 'A000'
+    timer udg_RaidenQ_Timer= null
+    timer udg_Unrelated_Timer= null
+endglobals
+function InitGlobals takes nothing returns nothing
+    set udg_RaidenQ_Timer= CreateTimer()
+    set udg_Unrelated_Timer= CreateTimer()
+endfunction
+function Trig_RaidenQ_Actions takes nothing returns nothing
+    if GetSpellAbilityId() == udg_RaidenQ_ID then
+        call TimerStart(udg_RaidenQ_Timer, 1.0, false, function Trig_RaidenQ_Actions)
+    endif
+endfunction
+function InitTrig_RaidenQ takes nothing returns nothing
+    call TriggerAddAction(CreateTrigger(), function Trig_RaidenQ_Actions)
+endfunction
+";
+
+    [Fact]
+    public void InitGlobals_initializer_for_a_carried_global_is_carried_live_and_the_non_carried_one_is_not()
+    {
+        var source = SourceMap(InitGlobalsScript);
+        var target = TargetMap();
+        var bundle = BundleCommand.ResolveUnit(source, "H000", gameDirOverride: null);
+        var result = PortCommand.PortUnit(source, bundle, target);
+
+        Assert.NotNull(result.Script);
+        var j = Encoding.Latin1.GetString(MapDocument.Load(target.SaveToBytes()).GetFile("war3map.j")!.RawBytes);
+
+        Assert.Contains("function InitGlobals", j);
+        Assert.Contains("set udg_RaidenQ_Timer= CreateTimer()", j);
+
+        // The unrelated global's initializer is trimmed (commented out), same discipline as a
+        // dropped function reference, so the target never carries state no carried spell reads.
+        // (The name still appears INSIDE the trim-marker comment, so check liveness, not absence.)
+        Assert.False(LiveLineContains(j, "udg_Unrelated_Timer"),
+            "the unrelated global's initializer must be commented out, not live");
+
+        Assert.Contains(result.Script!.Notes, n => n.Contains("global-initializer", StringComparison.Ordinal));
+        Assert.True(JassScriptCheck.IsCompilable(JassScriptCheck.Check(j)));
+    }
+
+    [Fact]
+    public void InitGlobals_call_is_spliced_into_main_before_InitCustomTriggers()
+    {
+        var source = SourceMap(InitGlobalsScript);
+        var target = TargetMap();
+        var bundle = BundleCommand.ResolveUnit(source, "H000", gameDirOverride: null);
+        PortCommand.PortUnit(source, bundle, target);
+
+        var j = Encoding.Latin1.GetString(MapDocument.Load(target.SaveToBytes()).GetFile("war3map.j")!.RawBytes);
+        var mainFn = JassFunctionIndex.Parse(j).Single(f => f.Name == "main");
+        var mainBody = string.Join('\n', j.Replace("\r\n", "\n").Split('\n')[(mainFn.StartLine - 1)..mainFn.EndLine]);
+
+        Assert.Contains("call InitGlobals()", mainBody);
+        Assert.True(mainBody.IndexOf("call InitGlobals()", StringComparison.Ordinal)
+                  < mainBody.IndexOf("call InitCustomTriggers()", StringComparison.Ordinal),
+            "InitGlobals must run before InitCustomTriggers, the JASS convention the source itself follows");
+    }
+
+    // A map whose per-player state is NOT allocated in a function literally named InitGlobals, but in
+    // a differently named helper InitCustomTriggers calls before it wires any trigger (GGGA's actual
+    // shape, InitGlobals there is empty and WS_Init_WorkingSourceGeneratedMapState plays this role).
+    // The helper must be carried, filtered the same way, and called at the FRONT of the target's
+    // InitCustomTriggers, before the InitTrig_* wiring, matching the source's own order.
+    private const string MapStateHelperScript = @"globals
+    integer udg_RaidenQ_ID= 'A000'
+    group udg_RaidenQ_Group= null
+    group udg_Unrelated_Group= null
+endglobals
+function MapStateInit takes nothing returns nothing
+    set udg_RaidenQ_Group= CreateGroup()
+    set udg_Unrelated_Group= CreateGroup()
+endfunction
+function Trig_RaidenQ_Actions takes nothing returns nothing
+    if GetSpellAbilityId() == udg_RaidenQ_ID then
+        call GroupAddUnit(udg_RaidenQ_Group, GetTriggerUnit())
+    endif
+endfunction
+function InitTrig_RaidenQ takes nothing returns nothing
+    call TriggerAddAction(CreateTrigger(), function Trig_RaidenQ_Actions)
+endfunction
+function InitCustomTriggers takes nothing returns nothing
+    call MapStateInit()
+    call InitTrig_RaidenQ()
+endfunction
+";
+
+    [Fact]
+    public void A_differently_named_map_state_helper_is_carried_and_wired_before_the_trigger_init()
+    {
+        var source = SourceMap(MapStateHelperScript);
+        var target = TargetMap();
+        var bundle = BundleCommand.ResolveUnit(source, "H000", gameDirOverride: null);
+        var result = PortCommand.PortUnit(source, bundle, target);
+
+        Assert.NotNull(result.Script);
+        var j = Encoding.Latin1.GetString(MapDocument.Load(target.SaveToBytes()).GetFile("war3map.j")!.RawBytes);
+
+        Assert.Contains("function MapStateInit", j);
+        Assert.Contains("set udg_RaidenQ_Group= CreateGroup()", j);
+        Assert.False(LiveLineContains(j, "udg_Unrelated_Group"),
+            "not read by anything carried, must be trimmed rather than live");
+
+        var initFn = JassFunctionIndex.Parse(j).Single(f => f.Name == "InitCustomTriggers");
+        var initBody = string.Join('\n', j.Replace("\r\n", "\n").Split('\n')[(initFn.StartLine - 1)..initFn.EndLine]);
+        Assert.Contains("call MapStateInit()", initBody);
+        Assert.Contains("call InitTrig_RaidenQ()", initBody);
+        Assert.True(initBody.IndexOf("call MapStateInit()", StringComparison.Ordinal)
+                  < initBody.IndexOf("call InitTrig_RaidenQ()", StringComparison.Ordinal),
+            "the map-state helper must run before the spell's own trigger gets wired");
+        Assert.True(JassScriptCheck.IsCompilable(JassScriptCheck.Check(j)));
+    }
+
     // A spell that applies area damage does it inside a ForGroup callback, a GUI child of the same
     // trigger (Trig_RaidenQ_Func005A is a child of Trig_RaidenQ). The callback is named only as a
     // "function Foo" argument, so the data-driven closure never reaches it. Before fix (c) the whole
@@ -656,6 +777,20 @@ endfunction
             var code = c >= 0 ? line[..c] : line;
             if (code.Contains(fn + "(", StringComparison.Ordinal) || code.Contains(fn + " (", StringComparison.Ordinal))
                 return true;
+        }
+        return false;
+    }
+
+    /// <summary>True when some uncommented line contains <paramref name="needle"/>. Trimmed lines
+    /// keep the original text visible inside a trailing comment marker, so a plain
+    /// <c>Assert.DoesNotContain</c> would false-fail on a correctly-trimmed name.</summary>
+    private static bool LiveLineContains(string jass, string needle)
+    {
+        foreach (var line in jass.Replace("\r\n", "\n").Split('\n'))
+        {
+            int c = line.IndexOf("//", StringComparison.Ordinal);
+            var code = c >= 0 ? line[..c] : line;
+            if (code.Contains(needle, StringComparison.Ordinal)) return true;
         }
         return false;
     }

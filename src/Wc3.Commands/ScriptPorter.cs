@@ -165,6 +165,29 @@ internal static class ScriptPorter
         }
         var carriedGlobals = srcGlobalOrder.Where(used.Contains).ToList();
 
+        // Carry the map's own global-state initializer(s) too: the conventional InitGlobals (the
+        // JASS entry point a GUI map's Variable Editor values are normally assigned through), plus
+        // any differently named helper InitCustomTriggers calls before it wires a single trigger.
+        // The second case is not a hypothetical, on a real corpus map InitGlobals is EMPTY and every
+        // hero's timers and unit groups are instead allocated once inside one such helper, called as
+        // the first statement of InitCustomTriggers. Without carrying it, a global a carried spell
+        // reads (a per-player timer or group the map allocates once, not a plain literal) stays at
+        // its JASS type default in the target, so the spell's trigger fires but every
+        // TimerStart/GroupAddUnit on that still-null handle silently does nothing. Filtered to only
+        // the assignments that touch a global the closure above actually needs, so a map with
+        // thousands of OTHER heroes' state does not bloat the port.
+        var residualGlobalRefs = new HashSet<string>(StringComparer.Ordinal);
+        var globalInitBodies = CarryGlobalInitializers(allByName, srcLines, srcGlobals, used, carried, residualGlobalRefs);
+        int carriedInitializers = globalInitBodies.Values.Sum(CountKeptAssignments);
+        if (globalInitBodies.Count > 0)
+            notes.Add($"carried {carriedInitializers} global-initializer assignment(s) from "
+                + $"{string.Join(", ", globalInitBodies.Keys)}, so the ported spells' timers, unit "
+                + "groups, and other non-default globals are set up before they run.");
+        if (residualGlobalRefs.Count > 0)
+            notes.Add($"{residualGlobalRefs.Count} reference(s) to a non-carried global remain in a "
+                + "condition or return inside the map's own global initializer and were left in "
+                + $"place, verify the ported map ({string.Join(", ", residualGlobalRefs.Take(8))}).");
+
         // Symbols the target already defines (functions + its own globals).
         var targetSymbols = JassFunctionIndex.Parse(tgtJ).Select(f => f.Name).ToHashSet(StringComparer.Ordinal);
         foreach (var g in ParseGlobals(tgtJ.Replace("\r\n", "\n").Split('\n')).Item1.Keys) targetSymbols.Add(g);
@@ -172,7 +195,8 @@ internal static class ScriptPorter
         // Rename any carried symbol that collides with the target (or with common.j-ish
         // reserved names we can't see); rewrite references within the ported block only.
         var rename = new Dictionary<string, string>(StringComparer.Ordinal);
-        var carriedSymbols = srcFns.Select(f => f.Name).Concat(carriedGlobals).ToList();
+        var carriedSymbols = srcFns.Select(f => f.Name).Concat(carriedGlobals)
+            .Concat(globalInitBodies.Keys).ToList();
         var taken = new HashSet<string>(targetSymbols, StringComparer.Ordinal);
         foreach (var name in carriedSymbols)
         {
@@ -194,6 +218,8 @@ internal static class ScriptPorter
         var portedFns = new StringBuilder();
         foreach (var f in srcFns)
             portedFns.Append(Rewrite(bodies[f.Name])).Append('\n');
+        foreach (var name in globalInitBodies.Keys)
+            portedFns.Append(Rewrite(globalInitBodies[name])).Append('\n');
 
         // A non-carried function named in a condition or return could not be safely commented out
         // without breaking block structure, so it was left in place. Flag it (best-effort port).
@@ -243,6 +269,32 @@ internal static class ScriptPorter
                       "init path, verify it runs in the target.");
         }
 
+        // Call the carried global initializer(s), in the same relative order the source used: the
+        // literal InitGlobals from the target's main (before InitCustomTriggers, the JASS convention
+        // the source itself follows, globals before triggers), any other helper from the FRONT of the
+        // target's InitCustomTriggers (before the InitTrig_* calls just hooked above), matching how
+        // the source calls it as the first statement there, ahead of any trigger wiring.
+        if (globalInitBodies.ContainsKey("InitGlobals"))
+        {
+            string fn = rename.GetValueOrDefault("InitGlobals", "InitGlobals");
+            merged = HookMain(merged, fn, marker, out bool hookedMain);
+            notes.Add(hookedMain
+                ? $"wired {fn}() into the target's main, before InitCustomTriggers."
+                : "carried InitGlobals but could not find the target's main — call it manually.");
+        }
+        var otherInitHelpers = globalInitBodies.Keys
+            .Where(nm => nm != "InitGlobals")
+            .Select(nm => rename.GetValueOrDefault(nm, nm)).ToList();
+        if (otherInitHelpers.Count > 0)
+        {
+            merged = HookInit(merged, otherInitHelpers, marker, out bool hookedHelpers, atFront: true);
+            notes.Add(hookedHelpers
+                ? $"wired {otherInitHelpers.Count} global-initializer helper(s) into the front of the "
+                  + "target's InitCustomTriggers, ahead of the trigger wiring above."
+                : "carried a global-initializer helper but could not find InitCustomTriggers in the " +
+                  "target — call it manually, before any trigger registration.");
+        }
+
         // The compile gate. Trimming a call to a function we did not carry can leave a variable
         // undeclared, and in JASS that single error fails the whole war3map.j, so config() never runs
         // and the hosted map shows no player slots. That used to save silently and only surface in a
@@ -287,19 +339,42 @@ internal static class ScriptPorter
     private static string Trim(string body, IReadOnlySet<string> dropped, HashSet<string> residual)
     {
         if (dropped.Count == 0) return body;
+        return TrimLines(body, code => DroppedRefs(code, dropped), residual);
+    }
+
+    /// <summary>Comments out each safe statement that reads or writes a global NOT in
+    /// <paramref name="keep"/>, the line-by-line trim discipline of <see cref="Trim"/> but keyed on
+    /// global references instead of function calls. Narrows a map-wide initializer (InitGlobals, or a
+    /// differently named helper playing the same role) down to only the assignments the ported
+    /// closure actually needs. See <see cref="CarryGlobalInitializers"/>.</summary>
+    private static string TrimToGlobals(
+        string body, IReadOnlyDictionary<string, string> allGlobals, IReadOnlySet<string> keep,
+        HashSet<string> residual) =>
+        TrimLines(body, code => DroppedGlobalRefs(code, allGlobals, keep), residual);
+
+    /// <summary>Shared line classifier behind <see cref="Trim"/> and <see cref="TrimToGlobals"/>:
+    /// for each line, <paramref name="badRefsInLine"/> decides whether it names something we are not
+    /// carrying (a dropped function, or a dropped global). A clean line passes through unchanged. A
+    /// bad local initializer is stripped but the declaration kept (an undeclared variable is a
+    /// compile error that fails the whole script). A bad call/set/debug statement is commented out. A
+    /// bad structural line (an if/loop condition or a return) cannot be commented without breaking
+    /// block nesting, so it is left in place and its names recorded in <paramref name="residual"/>.
+    /// </summary>
+    private static string TrimLines(string body, Func<string, List<string>> badRefsInLine, HashSet<string> residual)
+    {
         var sb = new StringBuilder();
         foreach (var line in body.Split('\n'))
         {
-            var refs = DroppedRefs(StripComment(line), dropped);
+            var refs = badRefsInLine(StripComment(line));
             if (refs.Count == 0) { sb.Append(line).Append('\n'); continue; }
             var head = line.TrimStart();
             if (head.StartsWith("local ", StringComparison.Ordinal))
             {
-                // Keep the variable DECLARED, drop only the initializer that called the dropped
-                // function. Commenting the whole line out would undeclare a variable the rest of the
-                // function still reads ("return ok", "call SaveReal(HH, id, ...)"), and an undefined
-                // variable is a compile error that kills the entire script (config never runs, so the
-                // host lobby cannot build slots). The variable keeps its type default instead.
+                // Keep the variable DECLARED, drop only the initializer. Commenting the whole line
+                // out would undeclare a variable the rest of the function still reads ("return ok",
+                // "call SaveReal(HH, id, ...)"), and an undefined variable is a compile error that
+                // kills the entire script (config never runs, so the host lobby cannot build slots).
+                // The variable keeps its type default instead.
                 sb.Append(TrimLocalInitializer(line)).Append('\n');
             }
             else if (head.StartsWith("call ", StringComparison.Ordinal)
@@ -336,6 +411,13 @@ internal static class ScriptPorter
         return count;
     }
 
+    /// <summary>Live (not commented out) "set" statements a <see cref="TrimToGlobals"/>-filtered
+    /// global-initializer body still contains, reported so a port that ends up carrying zero
+    /// assignments is visible rather than silently looking the same as one that carried plenty.
+    /// </summary>
+    private static int CountKeptAssignments(string body) =>
+        body.Split('\n').Count(l => l.TrimStart().StartsWith("set ", StringComparison.Ordinal));
+
     /// <summary>Names of dropped functions this line invokes ("Foo(") or references ("function Foo").</summary>
     private static List<string> DroppedRefs(string code, IReadOnlySet<string> dropped)
     {
@@ -347,6 +429,20 @@ internal static class ScriptPorter
                 found.Add(m.Value);
             prev = m;
         }
+        return found;
+    }
+
+    /// <summary>Names of declared globals this line mentions that are NOT in <paramref name="keep"/>,
+    /// whether read or written. Unlike <see cref="DroppedRefs"/> there is no "followed by paren" or
+    /// "function" gate, a bare read ("set X= udg_Y") counts exactly as much as an argument
+    /// ("call SetSoundDuration(gg_snd_Y, 100)") or the assignment target itself.</summary>
+    private static List<string> DroppedGlobalRefs(
+        string code, IReadOnlyDictionary<string, string> allGlobals, IReadOnlySet<string> keep)
+    {
+        var found = new List<string>();
+        foreach (Match m in Ident.Matches(code))
+            if (allGlobals.ContainsKey(m.Value) && !keep.Contains(m.Value))
+                found.Add(m.Value);
         return found;
     }
 
@@ -448,6 +544,45 @@ internal static class ScriptPorter
             if (toAdd.Count == 0) break;
             foreach (var r in toAdd) carried.Add(r);
         }
+    }
+
+    /// <summary>
+    /// The map's global-state initializer function(s): the conventional <c>InitGlobals</c> (the JASS
+    /// entry point a GUI map's Variable Editor values are normally assigned through) and any function
+    /// <c>InitCustomTriggers</c> calls before it starts wiring individual triggers that is NOT itself
+    /// an <c>InitTrig_*</c> constructor. The second shape is not hypothetical, on a real corpus map
+    /// InitGlobals is EMPTY and every hero's per-player timers and unit groups are instead allocated
+    /// once inside a differently named helper called as the very first statement of
+    /// InitCustomTriggers, before any trigger gets wired. Both are carried the same way: each body is
+    /// run through <see cref="TrimToGlobals"/> so only the assignments <paramref name="keepGlobals"/>
+    /// actually needs survive, keyed by function name so <see cref="PortScript"/> can call the
+    /// conventional one from the target's main and any other one from the front of the target's
+    /// InitCustomTriggers (see the call site there for why the two need different call sites).
+    /// </summary>
+    private static Dictionary<string, string> CarryGlobalInitializers(
+        IReadOnlyDictionary<string, JassFunction> allByName, string[] srcLines,
+        IReadOnlyDictionary<string, string> allGlobals, IReadOnlySet<string> keepGlobals,
+        IReadOnlySet<string> alreadyCarried, HashSet<string> residual)
+    {
+        // Already carried (verbatim, by the ordinary closure) means it will already be emitted once
+        // from srcFns; adding it here too would define the same function twice and fail to compile.
+        var names = new List<string>();
+        if (allByName.ContainsKey("InitGlobals") && !alreadyCarried.Contains("InitGlobals"))
+            names.Add("InitGlobals");
+        if (allByName.TryGetValue("InitCustomTriggers", out var ict))
+            // BodyText includes the "function InitCustomTriggers takes..." signature line itself,
+            // which ReferencedNames always "finds" (a function's own signature has the identical
+            // token shape as a "function Foo" callback reference), so the anchor's own name is
+            // explicitly excluded rather than relying on ReferencedNames to know better.
+            foreach (var name in ReferencedNames(BodyText(srcLines, ict)).Distinct())
+                if (name != ict.Name && !name.StartsWith("InitTrig_", StringComparison.Ordinal)
+                    && allByName.ContainsKey(name) && !alreadyCarried.Contains(name) && !names.Contains(name))
+                    names.Add(name);
+
+        var bodies = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var name in names)
+            bodies[name] = TrimToGlobals(BodyText(srcLines, allByName[name]), allGlobals, keepGlobals, residual);
+        return bodies;
     }
 
     /// <summary>The GUI-trigger stem of a function name, the shared Trig_&lt;TriggerName&gt; prefix the
@@ -562,7 +697,14 @@ internal static class ScriptPorter
         return text.Replace("\n", nl);
     }
 
-    private static string HookInit(string mergedJ, IReadOnlyList<string> initFns, string marker, out bool hooked)
+    /// <summary>Splices a <c>call Fn()</c> for each of <paramref name="initFns"/> into the target's
+    /// <c>InitCustomTriggers</c>. By default they land right before <c>endfunction</c> (registration
+    /// order among sibling InitTrig_* calls does not matter). <paramref name="atFront"/> instead
+    /// inserts them right after the function's own opening line, for a global-state helper that must
+    /// run BEFORE any trigger gets wired (see the call site in <see cref="PortScript"/>), matching
+    /// where the source itself calls it.</summary>
+    private static string HookInit(
+        string mergedJ, IReadOnlyList<string> initFns, string marker, out bool hooked, bool atFront = false)
     {
         hooked = false;
         string nl = mergedJ.Contains("\r\n") ? "\r\n" : "\n";
@@ -573,7 +715,32 @@ internal static class ScriptPorter
 
         var lines = text.Split('\n').ToList();
         var calls = initFns.Select(fn => $"    call {fn}() // {marker}").ToList();
-        lines.InsertRange(idx.EndLine - 1, calls); // before the "endfunction" line
+        int at = atFront ? idx.StartLine : idx.EndLine - 1; // after "function ..." / before "endfunction"
+        lines.InsertRange(at, calls);
+        hooked = true;
+        return string.Join('\n', lines).Replace("\n", nl);
+    }
+
+    /// <summary>Splices a <c>call Fn()</c> into the target's <c>main</c>, right before its call to
+    /// InitCustomTriggers (the JASS convention the source itself follows, globals initialized before
+    /// any trigger wiring), falling back to the end of main when InitCustomTriggers is not called
+    /// there. Used to wire a carried InitGlobals, see the call site in <see cref="PortScript"/>.
+    /// </summary>
+    private static string HookMain(string mergedJ, string functionName, string marker, out bool hooked)
+    {
+        hooked = false;
+        string nl = mergedJ.Contains("\r\n") ? "\r\n" : "\n";
+        var text = mergedJ.Replace("\r\n", "\n");
+        var main = JassFunctionIndex.Parse(text).FirstOrDefault(f => f.Name == "main");
+        if (main is null) return mergedJ;
+
+        var lines = text.Split('\n').ToList();
+        int at = -1;
+        for (int i = main.StartLine; i < main.EndLine - 1 && i < lines.Count; i++)
+            if (Regex.IsMatch(lines[i], @"\bcall\s+InitCustomTriggers\s*\(")) { at = i; break; }
+        if (at < 0) at = main.EndLine - 1; // no InitCustomTriggers call found: just before endfunction
+
+        lines.Insert(at, $"    call {functionName}() // {marker}");
         hooked = true;
         return string.Join('\n', lines).Replace("\n", nl);
     }
