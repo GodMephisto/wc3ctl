@@ -722,7 +722,9 @@ public static class Program
                 foreach (var r in results)
                 {
                     sb.AppendLine($"{r.Hero}  \"{r.Name}\"  (player {r.OwnerId})  "
-                        + $"{r.Wired}/{r.Abilities.Count} abilities fully wired");
+                        + $"{r.Wired}/{r.Abilities.Count - r.NotCastable} castable abilities wired"
+                        + (r.NotCastable > 0 ? $", {r.NotCastable} passive/aura" : "")
+                        + (r.Problems.Count > 0 ? $", {r.Problems.Count} problem(s)" : ""));
                     foreach (var a in r.Abilities)
                         sb.AppendLine($"  {(a.Status == WiringStatus.Ok ? "ok  " : "FAIL")} {a.Ability}"
                             + $"  \"{a.Name}\"  {(a.Status == WiringStatus.Ok ? "" : a.Status + ": ")}{a.Detail}");

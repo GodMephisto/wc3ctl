@@ -96,8 +96,20 @@ public class PortTriageCorpusTests
                     }
 
                     compiled++;
+
+                    // The script compiles, but does the hero actually work? Place it, wire the map up
+                    // the way a real test map would, then audit every ability. This is what turns the
+                    // sweep from "did it port" into "would it play", so the next broken pattern is
+                    // found here rather than by someone launching the game.
+                    PlacementCommand.PlaceUnit(target, rawcode, ownerId: 0, x: 0f, y: 0f);
+                    var wiring = HeroWiringAudit.Audit(target, rawcode, ownerId: 0);
+                    foreach (var g in wiring.Problems.GroupBy(x => x.Status))
+                        failures.Add(($"wiring:{g.Key}", name, rawcode,
+                            Trunc(string.Join(", ", g.Select(x => x.Ability)))));
+
                     report.AppendLine($"  {rawcode} {heroName}: ok"
-                        + (script is null ? " (no script carried)" : $" ({script.Functions} fn)"));
+                        + (script is null ? " (no script carried)" : $" ({script.Functions} fn)")
+                        + $"  wiring {wiring.Wired}/{wiring.Abilities.Count}");
                 }
                 catch (Exception ex)
                 {
@@ -128,7 +140,8 @@ public class PortTriageCorpusTests
 
         // Reporting is the deliverable, so a broken hero does not fail the run. Only the guarantee
         // this work exists to enforce is asserted: a port never writes a script that cannot compile.
-        var shipped = failures.Where(f => !f.Kind.StartsWith("port-refused", StringComparison.Ordinal)
+        var shipped = failures.Where(f => !f.Kind.StartsWith("wiring:", StringComparison.Ordinal)
+                                       && !f.Kind.StartsWith("port-refused", StringComparison.Ordinal)
                                        && !f.Kind.Contains("map-load", StringComparison.Ordinal)).ToList();
         Assert.True(shipped.Count == 0,
             $"{shipped.Count} port(s) wrote a script that cannot compile, see {outPath}:\n"

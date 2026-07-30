@@ -14,8 +14,14 @@ public enum WiringStatus
     Ok,
     /// <summary>The ability object itself is not in the map, so the hero can never hold it.</summary>
     AbilityObjectMissing,
-    /// <summary>No code compares GetSpellAbilityId() against this ability, so a cast reaches nothing.</summary>
+    /// <summary>No code compares GetSpellAbilityId() against this ability, and nothing references it
+    /// at all, so it is inert.</summary>
     NoDispatch,
+    /// <summary>The map uses this ability but never dispatches a cast on it. That is what a passive,
+    /// an aura, an inventory or a spellbook looks like, so it is reported for information rather than
+    /// counted as broken. Verified against real maps, abilities in this state have no cast dispatch in
+    /// the SOURCE map either, so treating them as failures blamed the port for the map's own design.</summary>
+    NotCastDispatched,
     /// <summary>The handler exists but is not attached to any trigger.</summary>
     NotAttachedToTrigger,
     /// <summary>The trigger has no spell event at all, so it never fires.</summary>
@@ -37,9 +43,13 @@ public sealed record AbilityWiring(string Ability, string? Name, WiringStatus St
 public sealed record HeroWiringResult(
     string Hero, string? Name, int OwnerId, IReadOnlyList<AbilityWiring> Abilities)
 {
+    /// <summary>Abilities that are cast-wired end to end.</summary>
     public int Wired => Abilities.Count(a => a.Status == WiringStatus.Ok);
+    /// <summary>Passives and the like, neither wired nor broken.</summary>
+    public int NotCastable => Abilities.Count(a => a.Status == WiringStatus.NotCastDispatched);
+    /// <summary>Only the genuinely actionable faults, so a passive never reads as a failure.</summary>
     public IReadOnlyList<AbilityWiring> Problems =>
-        Abilities.Where(a => a.Status != WiringStatus.Ok).ToList();
+        Abilities.Where(a => a.Status is not (WiringStatus.Ok or WiringStatus.NotCastDispatched)).ToList();
 }
 
 /// <summary>
@@ -110,8 +120,14 @@ public static class HeroWiringAudit
         // 2. Something must dispatch on it, by literal or through an id global.
         var dispatch = ctx.FindDispatch(ability);
         if (dispatch is null)
-            return Fail(WiringStatus.NoDispatch,
-                "no code compares GetSpellAbilityId() against this ability, its handler was not carried");
+            // Distinguish "the map uses this but never as a cast" (a passive, aura, inventory or
+            // spellbook, which is how the source map designed it) from "nothing mentions it at all"
+            // (genuinely inert). Only the latter is a fault worth acting on.
+            return ctx.IsReferenced(ability)
+                ? Fail(WiringStatus.NotCastDispatched,
+                    "used by the map but never cast-dispatched, so it is a passive, aura or spellbook")
+                : Fail(WiringStatus.NoDispatch,
+                    "nothing in the script references this ability at all, it is inert");
 
         // 3. The dispatch function must hang off a trigger.
         var trigger = ctx.TriggerFor(dispatch);
@@ -297,6 +313,14 @@ public static class HeroWiringAudit
                 }
             }
             return map;
+        }
+
+        /// <summary>The script mentions the ability somewhere other than an id-global declaration.</summary>
+        public bool IsReferenced(string ability)
+        {
+            int refs = Regex.Matches(CodeText, "'" + Regex.Escape(ability) + "'").Count;
+            bool aliased = Aliases.Values.Any(v => string.Equals(v, ability, StringComparison.Ordinal));
+            return refs > (aliased ? 1 : 0);
         }
 
         public string? FindDispatch(string ability) =>
