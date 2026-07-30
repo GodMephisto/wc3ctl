@@ -746,6 +746,51 @@ public static class Program
         }));
         audit.AddCommand(auditHero);
 
+        var fidSource = new Argument<string>("source-map", "Path to the SOURCE map the object was ported FROM.");
+        var fidTarget = new Argument<string>("target-map", "Path to the TARGET map the object was ported INTO.");
+        var fidRawcode = new Argument<string>("rawcode", "Root object rawcode to compare (the same rawcode in both maps).");
+        var auditFidelity = new Command("fidelity",
+            "Compare an object and its whole custom closure between a source and target map, reporting fields, "
+            + "per-level values, levels, and objects the port failed to carry. Rawcode remaps and inlined trigger "
+            + "strings are accounted for and not counted as faults. Exits 2 if any real data loss is found.")
+        { fidSource, fidTarget, fidRawcode };
+        auditFidelity.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var source = MapDocument.Load(p.GetValueForArgument(fidSource));
+            var target = MapDocument.Load(p.GetValueForArgument(fidTarget));
+            var rawcode = p.GetValueForArgument(fidRawcode);
+            var r = ObjectFidelityCommand.Compare(source, target, rawcode, p.GetValueForOption(gameDirOption));
+
+            Emit(p.GetValueForOption(jsonOption), r, () =>
+            {
+                var sb = new System.Text.StringBuilder();
+                sb.AppendLine($"{r.Root}  \"{r.Name}\"  ({r.RootKind})  source vs target");
+                foreach (var g in r.Findings.GroupBy(f => f.SourceRawcode)
+                                            .OrderBy(g => g.Key, StringComparer.Ordinal))
+                {
+                    var head = g.First();
+                    sb.AppendLine($"  {g.Key}  \"{head.Name}\"  ({head.Kind})");
+                    foreach (var f in g.OrderBy(f => f.Severity).ThenBy(f => f.Field, StringComparer.Ordinal))
+                    {
+                        string tag = f.Severity == FidelitySeverity.Error ? "LOSS" : "info";
+                        string field = f.Field.Length > 0 ? " " + f.Field : "";
+                        string vals = f.SourceValue is not null || f.TargetValue is not null
+                            ? $"  (source={f.SourceValue ?? "<none>"}  target={f.TargetValue ?? "<none>"})" : "";
+                        sb.AppendLine($"    {tag} {f.Issue}{field}  {f.Detail}{vals}");
+                    }
+                }
+                sb.AppendLine();
+                sb.AppendLine(r.Faithful
+                    ? $"faithful, {r.ObjectsCompared} object(s) compared, no real loss found ({r.Infos} informational)"
+                    : $"{r.Errors} real loss(es) across {r.ObjectsWithLosses} of {r.ObjectsCompared} object(s), {r.Infos} informational");
+                foreach (var d in r.Diagnostics) sb.AppendLine("  note, " + d);
+                return sb.ToString().TrimEnd();
+            });
+            if (!r.Faithful) exitCode[0] = 2;
+        }));
+        audit.AddCommand(auditFidelity);
+
         var deepOption = new Option<bool>("--deep",
             "Also run pjass, the game's own JASS parser, over the map script (needs a Warcraft III install).");
         var validate = new Command("validate",
