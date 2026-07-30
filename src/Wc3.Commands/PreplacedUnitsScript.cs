@@ -37,9 +37,10 @@ public static class PreplacedUnitsScript
     /// still compiles and hosts but whose heroes cannot cast, which is far harder to spot than a
     /// crash. Version 1 was the original create-only block, 2 added the per-instance unit properties
     /// and hero-array registration, 3 added the deferred spell-dispatch wiring, 4 registers EVERY per-player hero array
-    /// (both 0-based and 1-based) rather than only the most-used one.
+    /// (both 0-based and 1-based) rather than only the most-used one, 5 calls the map own
+    /// per-hero setup routine when it has one.
     /// </summary>
-    public const int GeneratorVersion = 4;
+    public const int GeneratorVersion = 5;
 
     // The begin marker carries the generator version. Detection keys off the PREFIX so blocks
     // written before versioning existed (no "[gen vN]") are still recognised, and read as version 0.
@@ -169,11 +170,18 @@ public static class PreplacedUnitsScript
         // CreateAllUnits register the placed hero into it, a best-effort so a ported arena hero can cast.
         var heroArrays = DetectHeroArrays(jass);
         var spellTriggers = DetectPerPlayerSpellTriggers(jass);
+        // Placed hero types per owner (uppercase first char is the World Editor hero convention).
+        var placedHeroes = spawnable
+            .Where(u => u.OwnerId >= 0 && u.OwnerId < PlayerColors.NeutralHostileId)
+            .Select(u => (Rawcode: u.TypeId.ToRawcode(), u.OwnerId))
+            .Where(x => x.Rawcode.Length == 4 && char.IsUpper(x.Rawcode[0]))
+            .Distinct().ToList();
+        var heroSetup = DetectHeroSetup(jass, placedHeroes.Select(h => h.Rawcode).Distinct().ToList());
 
         jass = RemoveBlock(jass, nl);
         if (spawnable.Count > 0 || items.Count > 0)
         {
-            string block = BuildBlock(spawnable, items, nl, heroArrays, spellTriggers);
+            string block = BuildBlock(spawnable, items, nl, heroArrays, spellTriggers, heroSetup, placedHeroes);
             jass = InsertBefore(jass, "function main takes nothing returns nothing", block + nl, nl);
         }
 
@@ -272,13 +280,65 @@ public static class PreplacedUnitsScript
         return set.ToList();
     }
 
+    /// <summary>
+    /// The map's own per-hero setup routine, if it has one. These scripts often carry a single
+    /// function shaped <c>takes player p, unit u, integer heroCode</c> that dispatches on the code
+    /// (<c>if heroCode == 'H000' then ... elseif ...</c>) and wires that hero up completely, binding
+    /// its caster globals and registering its triggers with per-UNIT events
+    /// (<c>TriggerRegisterUnitEvent(trg, udg_X_Caster, EVENT_UNIT_SPELL_EFFECT)</c>).
+    ///
+    /// This is what the arena runs when a player picks a hero, so calling it for a placed hero
+    /// satisfies every prerequisite at once instead of us reverse-engineering them one at a time.
+    /// The port carries the function but never its caller, so it sits dead until we call it.
+    ///
+    /// Only returned when the body actually dispatches on one of <paramref name="heroRawcodes"/>, so
+    /// an unrelated three-parameter helper is never called by mistake.
+    /// </summary>
+    /// <summary>The map's hero setup routine and whether it returns a value, which decides whether
+    /// it must be invoked with a set-assignment rather than call (JASS forbids call on a
+    /// value-returning function, and the wrong form would fail the whole script).</summary>
+    private sealed record HeroSetup(string Function, bool ReturnsValue);
+
+    private static HeroSetup? DetectHeroSetup(string jass, IReadOnlyCollection<string> heroRawcodes)
+    {
+        if (heroRawcodes.Count == 0) return null;
+        var lines = jass.Replace("\r\n", "\n").Split('\n');
+        var signature = new Regex(
+            @"^\s*function\s+([A-Za-z_][A-Za-z0-9_]*)\s+takes\s+player\s+[A-Za-z_][A-Za-z0-9_]*\s*,\s*"
+            + @"unit\s+[A-Za-z_][A-Za-z0-9_]*\s*,\s*integer\s+([A-Za-z_][A-Za-z0-9_]*)\s*returns\s+([A-Za-z_][A-Za-z0-9_]*)");
+
+        foreach (var f in JassFunctionIndex.Parse(jass))
+        {
+            var m = signature.Match(f.Signature);
+            if (!m.Success) continue;
+
+            var sb = new StringBuilder();
+            for (int i = f.StartLine - 1; i < f.EndLine && i < lines.Length; i++)
+                sb.Append(lines[i]).Append('\n');
+            string body = sb.ToString();
+
+            // It must register events (that is what makes a hero castable) and must recognise a hero
+            // we actually placed, keyed off its own integer parameter.
+            if (!body.Contains("TriggerRegisterUnitEvent", StringComparison.Ordinal)
+                && !body.Contains("TriggerRegisterPlayerUnitEvent", StringComparison.Ordinal)) continue;
+
+            string codeParam = Regex.Escape(m.Groups[2].Value);
+            if (heroRawcodes.Any(rc => Regex.IsMatch(body, codeParam + @"\s*==\s*'" + Regex.Escape(rc) + "'")))
+                return new HeroSetup(m.Groups[1].Value,
+                    !string.Equals(m.Groups[3].Value, "nothing", StringComparison.Ordinal));
+        }
+        return null;
+    }
+
     /// <summary>Builds the marker-wrapped block of creation functions. When <paramref name="heroArray"/>
     /// is the arena's per-player hero array, each placed hero registers itself into it (first hero per
     /// player wins) so the ported spell handlers recognise it.</summary>
     private static string BuildBlock(List<UnitData> units, List<UnitData> items, string nl,
-        IReadOnlyList<HeroArray>? heroArraysOrNull = null, IReadOnlyList<string>? spellTriggersOrNull = null)
+        IReadOnlyList<HeroArray>? heroArraysOrNull = null, IReadOnlyList<string>? spellTriggersOrNull = null,
+        HeroSetup? heroSetup = null, IReadOnlyList<(string Rawcode, int OwnerId)>? placedHeroes = null)
     {
         var heroArrays = heroArraysOrNull ?? Array.Empty<HeroArray>();
+        var heroes = placedHeroes ?? Array.Empty<(string Rawcode, int OwnerId)>();
         var spellTriggers = spellTriggersOrNull ?? Array.Empty<string>();
         // Players that own a placed unit (a placed hero's owner is among them, neutral slots excluded).
         // The arena's spell-dispatch triggers get their spell-effect event registered for these players
@@ -288,7 +348,8 @@ public static class PreplacedUnitsScript
         var heroOwners = units.Select(u => u.OwnerId)
             .Where(o => o >= 0 && o < PlayerColors.NeutralHostileId)
             .Distinct().OrderBy(o => o).ToList();
-        bool wireSpells = spellTriggers.Count > 0 && heroOwners.Count > 0;
+        bool wireSpells = (spellTriggers.Count > 0 || (heroSetup is not null && heroes.Count > 0))
+            && heroOwners.Count > 0;
 
         var sb = new StringBuilder();
         sb.Append(BeginMarker).Append(nl);
@@ -300,10 +361,44 @@ public static class PreplacedUnitsScript
                 // Fired by a 0-second timer from CreateAllUnits, so it runs once map init has finished
                 // and every gg_trg_* dispatch trigger has been created by InitCustomTriggers.
                 sb.Append("function ").Append(WireSpellsFunc).Append(" takes nothing returns nothing").Append(nl);
+                if (heroSetup is not null && heroes.Count > 0)
+                {
+                    sb.Append("    local group g = CreateGroup()").Append(nl);
+                    sb.Append("    local unit hu").Append(nl);
+                    if (heroSetup.ReturnsValue) sb.Append("    local boolean ok").Append(nl);
+                }
                 foreach (var trg in spellTriggers)
                     foreach (var owner in heroOwners)
                         sb.Append("    call TriggerRegisterPlayerUnitEvent(").Append(trg)
                           .Append(", Player(").Append(owner).Append("), EVENT_PLAYER_UNIT_SPELL_EFFECT, null)").Append(nl);
+                // Run the map own per-hero setup for each placed hero. That routine binds the
+                // hero caster globals and registers its per-unit spell events, which is how the
+                // arena makes a picked hero castable, so this replaces guessing prerequisite by
+                // prerequisite. Units are enumerated because a timer callback takes no arguments.
+                if (heroSetup is not null && heroes.Count > 0)
+                {
+                    foreach (var owner in heroes.Select(h => h.OwnerId).Distinct().OrderBy(o => o))
+                    {
+                        sb.Append("    call GroupEnumUnitsOfPlayer(g, Player(").Append(owner).Append("), null)").Append(nl);
+                        sb.Append("    loop").Append(nl);
+                        sb.Append("        set hu = FirstOfGroup(g)").Append(nl);
+                        sb.Append("        exitwhen hu == null").Append(nl);
+                        sb.Append("        call GroupRemoveUnit(g, hu)").Append(nl);
+                        foreach (var rc in heroes.Where(h => h.OwnerId == owner).Select(h => h.Rawcode).Distinct())
+                        {
+                            sb.Append("        if GetUnitTypeId(hu) == '").Append(rc).Append("' then").Append(nl);
+                            sb.Append("            ")
+                              .Append(heroSetup.ReturnsValue ? "set ok = " : "call ")
+                              .Append(heroSetup.Function).Append("(Player(").Append(owner)
+                              .Append("), hu, '").Append(rc).Append("')").Append(nl);
+                            sb.Append("        endif").Append(nl);
+                        }
+                        sb.Append("    endloop").Append(nl);
+                    }
+                    sb.Append("    call DestroyGroup(g)").Append(nl);
+                    sb.Append("    set g = null").Append(nl);
+                    sb.Append("    set hu = null").Append(nl);
+                }
                 sb.Append("    call DestroyTimer(GetExpiredTimer())").Append(nl);
                 sb.Append("endfunction").Append(nl);
             }
