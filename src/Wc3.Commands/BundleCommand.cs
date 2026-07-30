@@ -258,6 +258,11 @@ public static class BundleCommand
     /// a few thousand — beyond that the seed heuristic has almost certainly run away).</summary>
     private const int MaxFunctions = 4000;
 
+    /// <summary>Safety cap on objects carried because a handler spawns or grants them. A hero's kit
+    /// spawns on the order of tens of dummy types, so a far larger count means a shared dispatcher's
+    /// spawns leaked in, and the cap truncates loudly (a diagnostic) rather than running away.</summary>
+    private const int MaxScriptSpawnedObjects = 512;
+
     private static readonly Regex Identifier = new(@"[A-Za-z_][A-Za-z0-9_]*", RegexOptions.Compiled);
 
     /// <summary>A double-quoted JASS string literal (captures the inner text). Used to pull
@@ -274,6 +279,15 @@ public static class BundleCommand
     /// missed by the call detector, dropping the function from the closure.</summary>
     private static readonly Regex ExecuteFuncCall =
         new("ExecuteFunc\\s*\\(\\s*\"([^\"]+)\"", RegexOptions.Compiled);
+
+    /// <summary>A runtime spawn or grant whose argument names an object by rawcode, the unit type of
+    /// a CreateUnit family call or the ability of a UnitAddAbility. Only the type or ability argument
+    /// of one of these is read, so a bare rawcode elsewhere on a line is never mistaken for a spawn.
+    /// The match ends at the opening paren, the argument list is read from there.</summary>
+    private static readonly Regex SpawnGrantCall = new(
+        @"\b(?:CreateUnit|CreateUnitAtLoc|CreateUnitAtLocSaveLast|CreateNUnitsAtLoc"
+        + @"|CreateNUnitsAtLocFacingLocBJ|UnitAddAbility|UnitAddAbilityBJ)\s*\(",
+        RegexOptions.Compiled);
 
     /// <summary>A global declaration with an initializer: "[constant] type Name = ...".</summary>
     private static readonly Regex GlobalInitializer =
@@ -419,11 +433,13 @@ public static class BundleCommand
         var callees = new Dictionary<string, List<string>>(StringComparer.Ordinal);
         var aliasHits = new Dictionary<string, List<string>>(StringComparer.Ordinal);
         var assetRefs = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        var spawnRefs = new Dictionary<string, List<string>>(StringComparer.Ordinal); // custom ids spawned/granted
         foreach (var f in byName.Values)
         {
             var calls = new List<string>();
             var mentions = new List<string>();
             var assetLits = new List<string>();  // asset paths named on our (non-foreign) lines
+            var spawns = new List<string>();     // custom object rawcodes spawned/granted on our lines
             var seen = new HashSet<string>(StringComparer.Ordinal);
             var guardStack = new List<bool>(); // one entry per open 'if', true = foreign branch
 
@@ -489,10 +505,24 @@ public static class BundleCommand
                         var path = sl.Groups[1].Value.Replace(@"\\", @"\");
                         if (LooksLikeAssetPath(path) && seen.Add("$" + path)) assetLits.Add(path);
                     }
+
+                // Objects the handler SPAWNS (CreateUnit and kin) or GRANTS (UnitAddAbility) at
+                // runtime, named by rawcode in the call's argument, not in the hero's object data.
+                // Read only the type/ability argument of the spawn/grant call, and only on our
+                // (non-foreign) branches, so a shared dispatcher's other-hero spawns stay out.
+                if (!foreign)
+                    foreach (Match sg in SpawnGrantCall.Matches(line))
+                    {
+                        var args = CallArgs(line, sg.Index + sg.Length - 1);
+                        foreach (int rc in ArgRawcodeIds(args, allAliases))
+                            if (allCustomObjectIds.Contains(rc) && seen.Add("@" + rc))
+                                spawns.Add(rc.ToRawcode());
+                    }
             }
             callees[f.Name] = calls;
             aliasHits[f.Name] = mentions;
             assetRefs[f.Name] = assetLits;
+            spawnRefs[f.Name] = spawns;
         }
 
         // Seeds: functions referencing any ported rawcode — as a literal or via an alias.
@@ -524,6 +554,55 @@ public static class BundleCommand
         }
         if (capped) diagnostics.Add($"function cap ({MaxFunctions}) reached — script closure truncated");
 
+        // Doer-dummy recovery. A carried handler often READS a per-player unit array (unit array
+        // udg_X, indexed by a player slot) whose units are created in a SETUP function the closure
+        // never reached, so those dummy types are invisible to the spawn harvest above. Find the one
+        // setup function that assigns the array by creating units and carry it, so the harvest then
+        // picks up the dummies it makes. Strictly gated and it DECLINES rather than guesses, because
+        // this rule is inferred from a single map and a wrong guess on another of the user's maps is
+        // worse than admitting it does not know.
+        var unitArrays = Regex.Matches(source, @"^[ \t]*unit[ \t]+array[ \t]+([A-Za-z_][A-Za-z0-9_]*)",
+                RegexOptions.Multiline)
+            .Select(m => m.Groups[1].Value).ToHashSet(StringComparer.Ordinal);
+        if (unitArrays.Count > 0)
+        {
+            bool Reads(string body, string arr) => Regex.IsMatch(body, @"\b" + Regex.Escape(arr) + @"\s*\[");
+            bool Assigns(string body, string arr) =>
+                Regex.IsMatch(body, @"\bset\s+" + Regex.Escape(arr) + @"\s*\[");
+            string? Body(string n) => bodies.TryGetValue(n, out var b) ? b : null;
+
+            // An acceptable setup function, takes a player, populates the array by creating units,
+            // calls only natives, BJs or already-carried helpers, and does not branch on a rawcode
+            // (which would mark it a per-hero dispatcher rather than a shared per-player setup).
+            bool Qualifies(JassFunction f, string body) =>
+                Regex.IsMatch(f.Signature, @"\btakes\b.*\bplayer\b")
+                && (SpawnGrantCall.IsMatch(body) || body.Contains("bj_lastCreatedUnit", StringComparison.Ordinal))
+                && !callees[f.Name].Any(c => byName.ContainsKey(c) && !reasons.ContainsKey(c))
+                && !body.Split('\n').Any(l =>
+                    (StartsWithWord(l.TrimStart(), "if") || StartsWithWord(l.TrimStart(), "elseif"))
+                    && RawcodeLiteral.IsMatch(l));
+
+            var readByCarried = unitArrays.Where(a =>
+                reasons.Keys.Any(n => Body(n) is { } b && Reads(b, a))).ToList();
+            int declined = 0;
+            foreach (var arr in readByCarried)
+            {
+                if (reasons.Keys.Any(n => Body(n) is { } b && Assigns(b, arr))) continue; // already populated
+                var assigners = byName.Values
+                    .Where(f => !reasons.ContainsKey(f.Name) && Body(f.Name) is { } b
+                                && Assigns(b, arr) && Qualifies(f, b))
+                    .Select(f => f.Name).ToList();
+                if (assigners.Count == 1)
+                    reasons[assigners[0]] = $"populates {arr}, read by a carried handler";
+                else
+                    declined++; // zero or several qualify, decline rather than guess
+            }
+            if (declined > 0)
+                diagnostics.Add($"{declined} per-player unit array(s) read by the closure are populated by a "
+                    + "setup function that could not be carried safely (none qualified, or several did), so a "
+                    + "few of their spawned units may be absent (prune noise, or add them by hand)");
+        }
+
         // Custom skills are usually trigger-driven: the visual effect models live as string
         // literals inside the spell handlers (AddSpecialEffect("war3mapImported\\x.mdx"), dummy
         // unit model swaps, ...), NOT in the ability object fields. Scan every closure function
@@ -531,6 +610,37 @@ public static class BundleCommand
         foreach (var name in reasons.Keys)
             foreach (var path in assetRefs[name])
                 addFileRef(name, path, "script");
+
+        // Objects a carried handler spawns (CreateUnit and kin) or grants (UnitAddAbility) at runtime.
+        // The data-driven closure never reaches these (only the SCRIPT names them, by rawcode), so
+        // without this a ported spell's spawned dummies and granted sub-abilities are simply absent
+        // and it does nothing. This carries generously and reports the cost, rather than guessing.
+        //
+        // On a tightly-coupled arena the carried FUNCTION set contains other heroes' handlers too (a
+        // shared flat death or kill dispatcher calls every hero's), so some carried objects may belong
+        // to another hero's kit. Every static rule tried to separate them either dropped one of THIS
+        // hero's own handlers (breaking an ability, the worse failure) or still leaked, because shared
+        // objects mean no rawcode test tells the heroes apart. So the deliberate choice is to over-carry
+        // (bloat, which the map size budget tolerates) and report it loudly, leaving deliberate pruning
+        // to the user. The count below is that report.
+        var spawned = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (var name in reasons.Keys)
+            foreach (var rc in spawnRefs[name])
+                spawned.Add(rc);
+
+        int carried = 0;
+        foreach (var rc in spawned)
+        {
+            if (carried >= MaxScriptSpawnedObjects) break;
+            carryObject(rc);
+            carried++;
+        }
+        if (carried > 0)
+            diagnostics.Add($"carried {carried} object(s) a handler spawns or grants at runtime; "
+                + "on a tightly-coupled map some may belong to another hero's kit (over-carry, safe to prune)");
+        if (spawned.Count > carried)
+            diagnostics.Add($"script-spawned object cap ({MaxScriptSpawnedObjects}) reached, "
+                + $"{spawned.Count - carried} more spawned/granted object(s) not carried");
 
         return reasons
             .Select(kv => new BundleFunction(kv.Key, byName[kv.Key].StartLine, byName[kv.Key].EndLine, kv.Value))
@@ -554,6 +664,34 @@ public static class BundleCommand
         int i = m.Index + m.Length;
         while (i < body.Length && (body[i] == ' ' || body[i] == '\t')) i++;
         return i < body.Length && body[i] == '(';
+    }
+
+    /// <summary>The text of a call's argument list, from the opening paren at <paramref name="openParen"/>
+    /// to its matching close (nested parens balanced, e.g. the Player(0) inside CreateUnit). Truncates
+    /// at end of line when the call spans lines, which is fine, the type or ability argument comes first.</summary>
+    private static string CallArgs(string line, int openParen)
+    {
+        int depth = 0;
+        var sb = new StringBuilder();
+        for (int i = openParen; i < line.Length; i++)
+        {
+            char c = line[i];
+            if (c == '(') { depth++; if (depth == 1) continue; }
+            else if (c == ')') { depth--; if (depth == 0) break; }
+            sb.Append(c);
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>The object ids named in a call's argument text, as rawcode literals ('XXXX') or as an
+    /// id global initialized with one. For a spawn or grant call only the type or ability argument is a
+    /// rawcode, so this returns exactly the spawned or granted object(s), never a coordinate or player.</summary>
+    private static IEnumerable<int> ArgRawcodeIds(string args, Dictionary<string, int> allAliases)
+    {
+        foreach (Match rl in RawcodeLiteral.Matches(args))
+            yield return rl.Groups[1].Value.FromRawcode();
+        foreach (Match id in Identifier.Matches(args))
+            if (allAliases.TryGetValue(id.Value, out var rc)) yield return rc;
     }
 
     /// <summary>True when the matched identifier is a "function Foo" code reference —
