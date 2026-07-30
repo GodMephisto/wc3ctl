@@ -24,6 +24,7 @@ public class CliMcpParityTests
         ["object_new"] = "object new",
         ["audit_hero"] = "audit hero",
         ["audit_fidelity"] = "audit fidelity",
+        ["audit_readiness"] = "audit readiness",
         ["bundle_unit"] = "bundle unit",
         ["render_model"] = "render-model",
         ["port_unit"] = "port unit",
