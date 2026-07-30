@@ -261,19 +261,34 @@ public partial class MapWorkspaceView : UserControl
     /// <summary>Raised after a map is successfully opened into this workspace.</summary>
     public event EventHandler? MapChanged;
 
+    /// <summary>A port ask, the rooted unit plus whichever rawcodes/file paths the user
+    /// excluded on the Dependencies tab's graph (empty when nothing was excluded, the
+    /// default, port everything). MainWindow narrows the bundle through
+    /// <c>BundleFilter.Apply</c> before handing it to <c>PortCommand</c>.</summary>
+    public readonly record struct PortRequest(string Rawcode, IReadOnlySet<string> ExcludedKeys);
+
     /// <summary>
-    /// Raised (Source only) when the user clicks "Port → Target"; the argument is the
-    /// selected unit's rawcode. MainWindow handles it because only it holds both the
-    /// Source and Target sessions.
+    /// Raised (Source only) when the user clicks "Port → Target". MainWindow handles it
+    /// because only it holds both the Source and Target sessions.
     /// </summary>
-    public event EventHandler<string>? PortRequested;
+    public event EventHandler<PortRequest>? PortRequested;
 
     /// <summary>
     /// Raised (Source only) when the user asks for a dry-run preview of the port: the
     /// same report the real port would produce, with nothing written. Argument and
     /// handling mirror <see cref="PortRequested"/>.
     /// </summary>
-    public event EventHandler<string>? PortPreviewRequested;
+    public event EventHandler<PortRequest>? PortPreviewRequested;
+
+    /// <summary>The exclusion set to act on for the current port selection, the
+    /// Dependencies tab's graph state when it is showing exactly the unit about to be
+    /// ported, empty otherwise (the Objects tab alone never excludes anything).</summary>
+    private IReadOnlySet<string> ExcludedForPort =>
+        SelectedUnitForPort is { } rawcode
+            && DependenciesPanel.SelectedObjectKind == ObjectKind.Unit
+            && DependenciesPanel.SelectedRawcode == rawcode
+            ? DependenciesPanel.ExcludedKeys
+            : new HashSet<string>();
 
     /// <summary>Sets this workspace's status line (used to report port progress/results).</summary>
     public void SetStatus(string text) => StatusText.Text = text;
@@ -372,7 +387,7 @@ public partial class MapWorkspaceView : UserControl
     private void OnPortClick(object? sender, RoutedEventArgs e)
     {
         if (SelectedUnitForPort is { } rawcode)
-            PortRequested?.Invoke(this, rawcode);
+            PortRequested?.Invoke(this, new PortRequest(rawcode, ExcludedForPort));
         // Re-evaluate against the current selection so the button never keeps
         // offering a unit the user has since navigated away from.
         UpdatePortButtons();
@@ -381,7 +396,7 @@ public partial class MapWorkspaceView : UserControl
     private void OnPreviewPortClick(object? sender, RoutedEventArgs e)
     {
         if (SelectedUnitForPort is { } rawcode)
-            PortPreviewRequested?.Invoke(this, rawcode);
+            PortPreviewRequested?.Invoke(this, new PortRequest(rawcode, ExcludedForPort));
         UpdatePortButtons();
     }
 

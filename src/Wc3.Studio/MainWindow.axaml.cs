@@ -155,24 +155,25 @@ public partial class MainWindow : Window
     /// works on a fresh reload of each map on disk, so the open sessions stay untouched
     /// and the result is written to a sibling &lt;target&gt;.ported.&lt;ext&gt; (never clobbers).
     /// </summary>
-    private async void OnPortRequested(object? sender, string rawcode)
+    private async void OnPortRequested(object? sender, MapWorkspaceView.PortRequest request)
     {
         RevealTargetPane(); // pressing Port brings in the Target pane so a map can be set up there
-        await RunPort(rawcode, dryRun: false);
+        await RunPort(request, dryRun: false);
     }
 
     /// <summary>
     /// Dry-run preview: computes the identical report through PortCommand.PreviewPort
     /// (same code path as the real port) and shows it — nothing is written anywhere.
     /// </summary>
-    private async void OnPortPreviewRequested(object? sender, string rawcode)
+    private async void OnPortPreviewRequested(object? sender, MapWorkspaceView.PortRequest request)
     {
         RevealTargetPane();
-        await RunPort(rawcode, dryRun: true);
+        await RunPort(request, dryRun: true);
     }
 
-    private async Task RunPort(string rawcode, bool dryRun)
+    private async Task RunPort(MapWorkspaceView.PortRequest request, bool dryRun)
     {
+        var (rawcode, excludedKeys) = request;
         if (!SourceWorkspace.HasMap || SourceWorkspace.Session.MapPath is not { } sourcePath)
         { SourceWorkspace.SetStatus("Open a Source map first."); return; }
         if (!TargetWorkspace.HasMap || TargetWorkspace.Session.Current is not { } liveTarget)
@@ -184,9 +185,10 @@ public partial class MainWindow : Window
         var targetPath = TargetWorkspace.Session.MapPath;
         var gameDir = SourceWorkspace.Session.GameDir;
         var targetLabel = targetPath is not null ? Path.GetFileName(targetPath) : "the target map";
+        var exclusionNote = excludedKeys.Count > 0 ? $" ({excludedKeys.Count} node(s) excluded)" : "";
         SourceWorkspace.SetStatus(dryRun
-            ? $"Previewing port of {rawcode} → {targetLabel}…"
-            : $"Porting {rawcode} → {targetLabel}…");
+            ? $"Previewing port of {rawcode} → {targetLabel}{exclusionNote}…"
+            : $"Porting {rawcode} → {targetLabel}{exclusionNote}…");
 
         try
         {
@@ -196,6 +198,10 @@ public partial class MainWindow : Window
                 // Saved target → a fresh disk copy; blank/unsaved → the live in-memory doc.
                 var target = targetPath is not null ? MapDocument.Load(targetPath) : liveTarget;
                 var bundle = BundleCommand.ResolveUnit(source, rawcode, gameDir);
+                // Left-click exclusions from the Dependencies graph narrow the bundle before
+                // anything is ported, everything else about the pipeline is unaware of them.
+                if (excludedKeys.Count > 0)
+                    bundle = BundleFilter.Apply(bundle, excludedKeys);
                 if (dryRun)
                     return (PortCommand.PreviewPort(source, bundle, target), (string?)null);
                 var r = PortCommand.PortUnit(source, bundle, target);

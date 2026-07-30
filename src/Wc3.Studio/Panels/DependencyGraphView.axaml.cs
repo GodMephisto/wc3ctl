@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
@@ -45,6 +46,12 @@ public partial class DependencyGraphView : UserControl, IMapPanel
     private static readonly IBrush MissingBorder = new SolidColorBrush(Color.Parse("#C76B6B"));
     private static readonly IBrush MissingFill = new SolidColorBrush(Color.Parse("#14C76B6B"));
     private static readonly IBrush EdgeStroke = new SolidColorBrush(Color.Parse("#55889CB0"));
+    // A node the user excluded from the port (left click toggles it) renders greyed out
+    // with struck-through text, distinct from every other state above (custom/base/file/
+    // missing all still read at a glance, excluded reads as "not part of this port").
+    private static readonly IBrush ExcludedBorder = new SolidColorBrush(Color.Parse("#8F6B6B6B"));
+    private static readonly IBrush ExcludedFill = new SolidColorBrush(Color.Parse("#146B6B6B"));
+    private const double ExcludedOpacity = 0.45;
 
     // Layered layout constants (device-independent pixels): objects sit in
     // columns by depth from the root, files in a wrapped band underneath.
@@ -61,13 +68,30 @@ public partial class DependencyGraphView : UserControl, IMapPanel
     // dragging a node repositions it (its edges re-anchor live).
     private const double MinScale = 0.2, MaxScale = 3.0;
     private const double WheelZoomStep = 1.1, ButtonZoomStep = 1.25;
+    /// <summary>A press that moves less than this many pixels before release is a click
+    /// (toggles the node's excluded state), not a drag.</summary>
+    private const double ClickMoveThreshold = 3;
     private readonly ScaleTransform _zoomTransform = new();
     private readonly TranslateTransform _panTransform = new();
     /// <summary>Rendered edges keyed by their endpoint visuals, so a node drag can
     /// re-anchor just the lines/labels touching that node.</summary>
     private readonly List<GraphEdge> _edges = new();
+    /// <summary>Object node visuals keyed by rawcode, kept across the graph's lifetime so
+    /// a click can restyle exactly one node (exclude/include) without a full re-layout,
+    /// which would also throw away any manual dragging the user had done.</summary>
+    private readonly Dictionary<string, Border> _objVisuals = new(StringComparer.Ordinal);
+    /// <summary>File node visuals keyed by path (case-insensitive, WC3 paths compare that
+    /// way), same reasoning as <see cref="_objVisuals"/>.</summary>
+    private readonly Dictionary<string, Border> _fileVisuals = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>Rawcodes/paths the user has excluded from the port for the bundle currently
+    /// shown (left click on a node toggles membership). Cleared on every fresh resolve.
+    /// The root itself can never be a member, it is the object being ported.</summary>
+    private readonly HashSet<string> _excluded = new(StringComparer.Ordinal);
     /// <summary>Node being dragged, null while panning or idle.</summary>
     private Border? _dragNode;
+    /// <summary>True once the current press has moved past <see cref="ClickMoveThreshold"/>,
+    /// which marks it a drag rather than a toggle-click.</summary>
+    private bool _dragMoved;
     /// <summary>True while a press on empty canvas space is panning the view.</summary>
     private bool _panning;
     /// <summary>Pointer position at press, viewport coordinates (shared by pan and drag).</summary>
@@ -137,6 +161,7 @@ public partial class DependencyGraphView : UserControl, IMapPanel
             return;
         }
         _dragNode = node;
+        _dragMoved = false;
         _pressPoint = e.GetPosition(GraphViewport);
         _pressOrigin = new Point(Canvas.GetLeft(node), Canvas.GetTop(node));
         // Capture to the viewport so its Moved/Released handlers drive the drag.
@@ -149,6 +174,8 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         var delta = e.GetPosition(GraphViewport) - _pressPoint;
         if (_dragNode is { } node)
         {
+            if (!_dragMoved && delta.X * delta.X + delta.Y * delta.Y > ClickMoveThreshold * ClickMoveThreshold)
+                _dragMoved = true;
             // Viewport delta → canvas delta: divide out the zoom (pan cancels).
             double scale = _zoomTransform.ScaleX;
             Canvas.SetLeft(node, _pressOrigin.X + delta.X / scale);
@@ -166,12 +193,74 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         }
     }
 
+    /// <summary>A press that never moved past the click threshold is a plain left click,
+    /// not a drag, toggle that node's excluded state rather than leaving it where it was
+    /// (which a drag of zero distance would do anyway, so this only ever adds behaviour).</summary>
     private void OnViewportPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
+        if (_dragNode is { } node && !_dragMoved)
+            ToggleExcluded(node);
         _dragNode = null;
         _panning = false;
         if (ReferenceEquals(e.Pointer.Captured, GraphViewport))
             e.Pointer.Capture(null);
+    }
+
+    /// <summary>Left click on a node flips whether it is excluded from the port (default
+    /// included). The root cannot be excluded, it is the object being ported, clicking it
+    /// is a no-op. Restyles just this one node, everything else on the canvas is untouched.</summary>
+    private void ToggleExcluded(Border node)
+    {
+        string? key = node.Tag switch
+        {
+            BundleNode n => n.Rawcode,
+            BundleFile f => f.Path,
+            _ => null,
+        };
+        if (key is null || key == SelectedRawcode)
+            return;
+        if (!_excluded.Remove(key))
+            _excluded.Add(key);
+        RestyleNode(node);
+        ExclusionChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>(Re)applies the excluded-or-not look to one node border, driven entirely by
+    /// its Tag (the BundleNode or BundleFile it represents) and current membership in
+    /// <see cref="_excluded"/>, so this is idempotent and safe to call any time.</summary>
+    private void RestyleNode(Border visual)
+    {
+        (IBrush border, IBrush fill, string tip, bool excluded) = visual.Tag switch
+        {
+            BundleNode n when _excluded.Contains(n.Rawcode) =>
+                (ExcludedBorder, ExcludedFill,
+                    $"{n.Rawcode}, {n.Name ?? "(unnamed)"}\n{n.Kind}, EXCLUDED, left click to include it in the port again",
+                    true),
+            BundleNode n =>
+                (n.CustomToMap ? CustomBorder : BaseBorder, n.CustomToMap ? CustomFill : BaseFill,
+                    $"{n.Rawcode}, {n.Name ?? "(unnamed)"}\n{n.Kind}, "
+                    + (n.CustomToMap ? "custom to this map (must port)" : "base game (already in any target)")
+                    + "\nleft click to exclude it from the port",
+                    false),
+            BundleFile f when _excluded.Contains(f.Path) =>
+                (ExcludedBorder, ExcludedFill,
+                    $"{f.Path}\n{f.Category}, EXCLUDED, left click to include it in the port again", true),
+            BundleFile f =>
+                (f.PresentInMap ? FileBorder : MissingBorder, f.PresentInMap ? FileFill : MissingFill,
+                    $"{f.Path}\n{f.Category}, "
+                    + (f.PresentInMap
+                        ? "imported in this map (ports with the bundle)"
+                        : "not in this map, a base game asset or a missing import")
+                    + "\nleft click to exclude it from the port",
+                    false),
+            _ => (BaseBorder, BaseFill, "", false),
+        };
+        visual.BorderBrush = border;
+        visual.Background = fill;
+        visual.Opacity = excluded ? ExcludedOpacity : 1.0;
+        ToolTip.SetTip(visual, tip);
+        if (visual.Child is StackPanel { Children.Count: > 0 } stack && stack.Children[0] is TextBlock title)
+            title.TextDecorations = excluded ? TextDecorations.Strikethrough : null;
     }
 
     /// <summary>Wheel (plain or Ctrl) zooms about the cursor.</summary>
@@ -256,6 +345,15 @@ public partial class DependencyGraphView : UserControl, IMapPanel
 
     /// <summary>Raised whenever the selected object changes (including cleared).</summary>
     public event EventHandler? SelectionChanged;
+
+    /// <summary>Rawcodes/file paths the user has excluded from the port via a left click
+    /// on this graph's nodes (default is everything included, an empty set). Scoped to
+    /// whatever bundle is currently shown, a fresh resolve clears it. The workspace reads
+    /// this at port time and narrows the bundle through <c>BundleFilter.Apply</c>.</summary>
+    public IReadOnlySet<string> ExcludedKeys => _excluded;
+
+    /// <summary>Raised whenever a node's excluded state toggles.</summary>
+    public event EventHandler? ExclusionChanged;
 
     public void ShowMap(MapSession session)
     {
@@ -474,6 +572,7 @@ public partial class DependencyGraphView : UserControl, IMapPanel
     /// <summary>Render a freshly resolved closure into every view of this panel.</summary>
     private void RenderBundle(UnitBundle bundle)
     {
+        _excluded.Clear(); // a fresh resolve starts with everything included
         int custom = bundle.Objects.Count(o => o.CustomToMap);
         int deps = CleanReachableFiles(bundle).Count;
         int portAssets = bundle.Files.Count - deps;
@@ -491,7 +590,10 @@ public partial class DependencyGraphView : UserControl, IMapPanel
 
     /// <summary>
     /// Structured fallback view: root object → object deps grouped by kind, each
-    /// with a custom/base badge and the field codes ("via") that pull it in.
+    /// with a custom/base badge and the field codes ("via") that pull it in. Each
+    /// ability additionally nests the trigger functions attributed to it (and
+    /// whatever helpers those pulled in), so the script closure reads as "this
+    /// ability's own logic" instead of a flat, unrelated function list.
     /// </summary>
     private void BuildTree(UnitBundle bundle)
     {
@@ -504,6 +606,8 @@ public partial class DependencyGraphView : UserControl, IMapPanel
                 g => g.Key,
                 g => string.Join(", ", g.Select(e => e.Via).Distinct()),
                 StringComparer.Ordinal);
+
+        var (childrenOf, seedsByOwner) = AttributeFunctions(bundle);
 
         var rootNode = bundle.Objects.FirstOrDefault(o => o.Rawcode == bundle.RootRawcode);
         var rootKindWord = (rootNode?.Kind ?? SelectedObjectKind).ToString().ToLowerInvariant();
@@ -527,18 +631,114 @@ public partial class DependencyGraphView : UserControl, IMapPanel
             foreach (var node in group)
             {
                 var via = viaInto.TryGetValue(node.Rawcode, out var v) ? $", via {v}" : "";
-                groupItem.Items.Add(new TreeViewItem
+                var nodeItem = new TreeViewItem
                 {
                     Header = MakeTreeLabel(
                         $"{node.Rawcode} - {node.Name ?? "(base game)"}"
                         + $", {(node.CustomToMap ? "custom" : "base")}{via}",
                         node.CustomToMap, bold: false),
-                });
+                };
+                if (node.Kind == ObjectKind.Ability && seedsByOwner.TryGetValue(node.Rawcode, out var ownSeeds))
+                    nodeItem.Items.Add(FunctionGroupItem(ownSeeds, childrenOf));
+                groupItem.Items.Add(nodeItem);
             }
             rootItem.Items.Add(groupItem);
         }
 
+        // Every function that could not be pinned to one ability in the tree (references
+        // the hero itself, an ability outside this closure, or nothing at all) still needs
+        // a home, a clearly labelled group directly under the root rather than silently
+        // dropped or scattered.
+        if (seedsByOwner.TryGetValue(OtherOwnerKey, out var otherSeeds))
+            rootItem.Items.Add(FunctionGroupItem(otherSeeds, childrenOf, "Other triggers"));
+
         DepTree.Items.Add(rootItem);
+    }
+
+    /// <summary>Sentinel owner key for a seed function that names no ability present in
+    /// this bundle (references the hero itself, an out-of-closure rawcode, or nothing),
+    /// never a real rawcode (those are always exactly 4 characters).</summary>
+    private const string OtherOwnerKey = "";
+
+    private static readonly Regex QuotedRawcode = new(@"'([^']{4})'", RegexOptions.Compiled);
+
+    /// <summary>
+    /// Attributes every script-closure function to the one ability it belongs under. A
+    /// seed function ("references '...'") is owned by the first quoted rawcode that is an
+    /// ability actually in this bundle, or <see cref="OtherOwnerKey"/> when none match. A
+    /// discovered function ("called by Name") is not a seed at all, it nests as a CHILD of
+    /// whichever function pulled it in (<paramref name="bundle"/>'s BFS already recorded
+    /// exactly one discoverer per function), so helpers land under their calling trigger
+    /// rather than under an ability directly.
+    /// </summary>
+    private static (Dictionary<string, List<BundleFunction>> ChildrenOf,
+        Dictionary<string, List<BundleFunction>> SeedsByOwner) AttributeFunctions(UnitBundle bundle)
+    {
+        var abilityRawcodes = bundle.Objects
+            .Where(o => o.Kind == ObjectKind.Ability)
+            .Select(o => o.Rawcode)
+            .ToHashSet(StringComparer.Ordinal);
+
+        var childrenOf = new Dictionary<string, List<BundleFunction>>(StringComparer.Ordinal);
+        var seedsByOwner = new Dictionary<string, List<BundleFunction>>(StringComparer.Ordinal);
+        foreach (var f in bundle.Functions)
+        {
+            if (f.Reason.StartsWith("called by ", StringComparison.Ordinal))
+            {
+                var caller = f.Reason["called by ".Length..];
+                if (!childrenOf.TryGetValue(caller, out var kids)) childrenOf[caller] = kids = new();
+                kids.Add(f);
+                continue;
+            }
+            string owner = OtherOwnerKey;
+            foreach (Match m in QuotedRawcode.Matches(f.Reason))
+            {
+                if (!abilityRawcodes.Contains(m.Groups[1].Value)) continue;
+                owner = m.Groups[1].Value;
+                break; // first named ability wins, mirrors the reason's own discovery order
+            }
+            if (!seedsByOwner.TryGetValue(owner, out var seeds)) seedsByOwner[owner] = seeds = new();
+            seeds.Add(f);
+        }
+        return (childrenOf, seedsByOwner);
+    }
+
+    /// <summary>A collapsible "Trigger functions (N)" node holding <paramref name="seeds"/>,
+    /// each nested with whatever helpers it pulled in (recursively, via
+    /// <paramref name="childrenOf"/>).</summary>
+    private static TreeViewItem FunctionGroupItem(
+        IReadOnlyList<BundleFunction> seeds, Dictionary<string, List<BundleFunction>> childrenOf,
+        string label = "Trigger functions")
+    {
+        var group = new TreeViewItem
+        {
+            Header = MakeTreeLabel($"{label} ({seeds.Count})", custom: null, bold: true),
+            IsExpanded = false,
+        };
+        foreach (var seed in seeds.OrderBy(f => f.StartLine))
+            group.Items.Add(FunctionItem(seed, childrenOf, new HashSet<string>(StringComparer.Ordinal)));
+        return group;
+    }
+
+    /// <summary>One function's row, its own "called by" discoveries nested as children.
+    /// <paramref name="ancestry"/> guards against a cyclic caller chain (should never
+    /// happen given the BFS that assigns Reason, defensive only) turning into infinite
+    /// recursion, a foreign/self-referential edge is simply not descended into twice.</summary>
+    private static TreeViewItem FunctionItem(
+        BundleFunction fn, Dictionary<string, List<BundleFunction>> childrenOf, HashSet<string> ancestry)
+    {
+        var item = new TreeViewItem
+        {
+            Header = MakeTreeLabel($"{fn.Name} ({fn.Reason})", custom: null, bold: false),
+        };
+        if (ancestry.Add(fn.Name))
+        {
+            if (childrenOf.TryGetValue(fn.Name, out var kids))
+                foreach (var kid in kids.OrderBy(k => k.StartLine))
+                    item.Items.Add(FunctionItem(kid, childrenOf, ancestry));
+            ancestry.Remove(fn.Name);
+        }
+        return item;
     }
 
     private void BuildFilesList(UnitBundle bundle)
@@ -690,6 +890,8 @@ public partial class DependencyGraphView : UserControl, IMapPanel
     {
         GraphCanvas.Children.Clear();
         _edges.Clear();
+        _objVisuals.Clear();
+        _fileVisuals.Clear();
         _dragNode = null;
         _panning = false;
         ResetView(); // a fresh graph starts at 100%, origin top-left
@@ -792,8 +994,9 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         }
 
         // --- node visuals: created and positioned first so edges can anchor to
-        //     them, but added to the canvas after the edges (nodes draw on top) ---
-        var objVisuals = new Dictionary<string, Border>(StringComparer.Ordinal);
+        //     them, but added to the canvas after the edges (nodes draw on top).
+        //     Tagged with their own BundleNode/BundleFile and restyled through the
+        //     current exclusion state, so a click later only ever touches one node. ---
         foreach (var node in bundle.Objects)
         {
             var rect = objRects[node.Rawcode];
@@ -801,9 +1004,9 @@ public partial class DependencyGraphView : UserControl, IMapPanel
             Canvas.SetLeft(visual, rect.X);
             Canvas.SetTop(visual, rect.Y);
             MakeDraggable(visual);
-            objVisuals[node.Rawcode] = visual;
+            RestyleNode(visual);
+            _objVisuals[node.Rawcode] = visual;
         }
-        var fileVisuals = new Dictionary<string, Border>(StringComparer.OrdinalIgnoreCase);
         foreach (var file in depFiles)
         {
             var rect = fileRects[file.Path];
@@ -811,14 +1014,15 @@ public partial class DependencyGraphView : UserControl, IMapPanel
             Canvas.SetLeft(visual, rect.X);
             Canvas.SetTop(visual, rect.Y);
             MakeDraggable(visual);
-            fileVisuals[file.Path] = visual;
+            RestyleNode(visual);
+            _fileVisuals[file.Path] = visual;
         }
 
         // --- edges (below the nodes), parallel edges coalesced ---
         foreach (var group in bundle.Edges.GroupBy(e => (e.From, e.To)))
         {
-            if (!TryGetVisual(group.Key.From, objVisuals, fileVisuals, out var from, out _)
-                || !TryGetVisual(group.Key.To, objVisuals, fileVisuals, out var to, out var toIsFile))
+            if (!TryGetVisual(group.Key.From, _objVisuals, _fileVisuals, out var from, out _)
+                || !TryGetVisual(group.Key.To, _objVisuals, _fileVisuals, out var to, out var toIsFile))
             {
                 continue; // endpoint we didn't lay out; resolver guarantees make this rare
             }
@@ -840,9 +1044,9 @@ public partial class DependencyGraphView : UserControl, IMapPanel
 
         // --- nodes on top of the wiring ---
         foreach (var node in bundle.Objects)
-            GraphCanvas.Children.Add(objVisuals[node.Rawcode]);
+            GraphCanvas.Children.Add(_objVisuals[node.Rawcode]);
         foreach (var file in depFiles)
-            GraphCanvas.Children.Add(fileVisuals[file.Path]);
+            GraphCanvas.Children.Add(_fileVisuals[file.Path]);
 
         // Explicit size = the graph's extent, which Fit scales into the viewport;
         // slack for edge labels.
@@ -949,6 +1153,7 @@ public partial class DependencyGraphView : UserControl, IMapPanel
             BorderThickness = new Thickness(isRoot ? 2 : 1),
             BorderBrush = node.CustomToMap ? CustomBorder : BaseBorder,
             Background = node.CustomToMap ? CustomFill : BaseFill,
+            Tag = node, // read back by RestyleNode/ToggleExcluded to key the exclusion set
             Child = new StackPanel
             {
                 Margin = new Thickness(8, 5, 8, 5),
@@ -988,6 +1193,7 @@ public partial class DependencyGraphView : UserControl, IMapPanel
             BorderThickness = new Thickness(1),
             BorderBrush = file.PresentInMap ? FileBorder : MissingBorder,
             Background = file.PresentInMap ? FileFill : MissingFill,
+            Tag = file, // read back by RestyleNode/ToggleExcluded to key the exclusion set
             Child = new StackPanel
             {
                 Margin = new Thickness(8, 4, 8, 4),
@@ -1022,6 +1228,9 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         GraphCanvas.Width = 0;
         GraphCanvas.Height = 0;
         _edges.Clear();
+        _objVisuals.Clear();
+        _fileVisuals.Clear();
+        _excluded.Clear();
         _dragNode = null;
         _panning = false;
         ResetView();
