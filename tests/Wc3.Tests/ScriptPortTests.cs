@@ -490,6 +490,163 @@ endfunction
         Assert.Equal(3, result.Script!.Globals); // udg_RaidenQ_ID, TICK, DPS and nothing else
     }
 
+    // A spell that applies area damage does it inside a ForGroup callback, a GUI child of the same
+    // trigger (Trig_RaidenQ_Func005A is a child of Trig_RaidenQ). The callback is named only as a
+    // "function Foo" argument, so the data-driven closure never reaches it. Before fix (c) the whole
+    // ForGroupBJ statement was trimmed as a dropped reference and the spell dealt no area damage.
+    private const string CallbackAoESource = @"globals
+    integer udg_RaidenQ_ID= 'A000'
+endglobals
+function Trig_RaidenQ_Func005A takes nothing returns nothing
+    call UnitDamageTargetBJ(GetTriggerUnit(), GetEnumUnit(), 100., ATTACK_TYPE_NORMAL, DAMAGE_TYPE_NORMAL)
+endfunction
+function Trig_RaidenQ_Actions takes nothing returns nothing
+    if GetSpellAbilityId() == udg_RaidenQ_ID then
+        call ForGroupBJ(GetUnitsInRangeOfLocMatching(300., GetUnitLoc(GetTriggerUnit()), null), function Trig_RaidenQ_Func005A)
+    endif
+endfunction
+function InitTrig_RaidenQ takes nothing returns nothing
+    call TriggerAddAction(CreateTrigger(), function Trig_RaidenQ_Actions)
+endfunction
+";
+
+    [Fact]
+    public void Carries_a_same_trigger_ForGroup_callback_so_area_damage_survives_the_port()
+    {
+        var source = SourceMap(CallbackAoESource);
+        var target = TargetMap();
+
+        // Port the parent handler and its init but NOT the callback, the exact state ScriptPorter is in
+        // when a handler was pulled in by CarryRegisteringInits or the structural fixpoint rather than by
+        // the data-driven bundle crawl, so the bundle never followed its "function Foo" arguments. The
+        // callback pre-pass must carry the same-trigger child so the ForGroup call stays live.
+        var functions = CarriedExcept(CallbackAoESource, "Trig_RaidenQ_Func005A");
+        Assert.DoesNotContain(functions, f => f.Name == "Trig_RaidenQ_Func005A");
+
+        var info = ScriptPorter.PortScript(source, target, functions, "H000", new Dictionary<string, string>());
+        Assert.NotNull(info);
+
+        var j = Encoding.Latin1.GetString(MapDocument.Load(target.SaveToBytes()).GetFile("war3map.j")!.RawBytes);
+        Assert.Contains("function Trig_RaidenQ_Func005A takes", j);
+        Assert.True(CallbackLineIsLive(j, "Trig_RaidenQ_Func005A"),
+            "the ForGroup callback line must be carried live, not commented out");
+        Assert.True(JassScriptCheck.IsCompilable(JassScriptCheck.Check(j)));
+    }
+
+    // The same-trigger scope is the safeguard against snowballing. A carried handler that passes a
+    // callback belonging to a DIFFERENT trigger (a shared event system's child, the way GGGA's damage
+    // and death systems name every hero's callback) must NOT pull that callback, or the walk drags in
+    // the whole roster (measured at +2446 functions on GGGA). The cross-trigger callback stays dropped
+    // and its call is trimmed.
+    private const string CrossTriggerCallbackSource = @"globals
+    integer udg_RaidenQ_ID= 'A000'
+endglobals
+function Trig_SharedDmg_Func009A takes nothing returns nothing
+    call BJDebugMsg(""another trigger's child"")
+endfunction
+function Trig_RaidenQ_Actions takes nothing returns nothing
+    if GetSpellAbilityId() == udg_RaidenQ_ID then
+        call ForGroupBJ(GetUnitsInRangeOfLocMatching(300., GetUnitLoc(GetTriggerUnit()), null), function Trig_SharedDmg_Func009A)
+    endif
+endfunction
+function InitTrig_RaidenQ takes nothing returns nothing
+    call TriggerAddAction(CreateTrigger(), function Trig_RaidenQ_Actions)
+endfunction
+";
+
+    [Fact]
+    public void The_callback_walk_does_not_carry_a_callback_of_a_different_trigger()
+    {
+        var source = SourceMap(CrossTriggerCallbackSource);
+        var target = TargetMap();
+
+        var functions = CarriedExcept(CrossTriggerCallbackSource, "Trig_SharedDmg_Func009A");
+        Assert.DoesNotContain(functions, f => f.Name == "Trig_SharedDmg_Func009A");
+
+        var info = ScriptPorter.PortScript(source, target, functions, "H000", new Dictionary<string, string>());
+        Assert.NotNull(info);
+
+        var j = Encoding.Latin1.GetString(MapDocument.Load(target.SaveToBytes()).GetFile("war3map.j")!.RawBytes);
+        // Different trigger stem (Trig_SharedDmg vs Trig_RaidenQ), so it is NOT carried and its ForGroup
+        // call is trimmed, leaving no dangling reference.
+        Assert.DoesNotContain("function Trig_SharedDmg_Func009A takes", j);
+        Assert.False(CallbackLineIsLive(j, "Trig_SharedDmg_Func009A"),
+            "a callback belonging to a different trigger must stay trimmed");
+        Assert.True(JassScriptCheck.IsCompilable(JassScriptCheck.Check(j)));
+    }
+
+    // The callback walk must not become a call-graph walk. A function reached only by a plain call from a
+    // foreign-guarded branch (another hero's dispatcher branch) must stay dropped and its call commented,
+    // exactly as before, so the closure does not snowball into the whole shared engine.
+    private const string ForeignCallSource = @"globals
+    integer udg_RaidenQ_ID= 'A000'
+endglobals
+function ForeignAoE takes nothing returns nothing
+    call BJDebugMsg(""foreign"")
+endfunction
+function Trig_RaidenQ_Actions takes nothing returns nothing
+    if GetSpellAbilityId() == udg_RaidenQ_ID then
+        call BJDebugMsg(""ours"")
+    endif
+    if GetSpellAbilityId() == 'A999' then
+        call ForeignAoE()
+    endif
+endfunction
+function InitTrig_RaidenQ takes nothing returns nothing
+    call TriggerAddAction(CreateTrigger(), function Trig_RaidenQ_Actions)
+endfunction
+";
+
+    [Fact]
+    public void The_callback_walk_does_not_carry_a_function_reached_only_by_a_plain_call()
+    {
+        var source = SourceMap(ForeignCallSource);
+        var target = TargetMap();
+
+        // Carry the parent handler but not ForeignAoE. ForeignAoE is reached only by "call ForeignAoE()"
+        // (a foreign-guarded dispatch branch), never as a "function Foo" callback, so the callback walk
+        // must NOT pull it, and the existing trim must comment the call out. This is what keeps the walk
+        // from degenerating into a call-graph walk that snowballs the whole shared engine.
+        var functions = CarriedExcept(ForeignCallSource, "ForeignAoE");
+        Assert.DoesNotContain(functions, f => f.Name == "ForeignAoE");
+
+        var info = ScriptPorter.PortScript(source, target, functions, "H000", new Dictionary<string, string>());
+        Assert.NotNull(info);
+
+        var j = Encoding.Latin1.GetString(MapDocument.Load(target.SaveToBytes()).GetFile("war3map.j")!.RawBytes);
+        Assert.DoesNotContain("function ForeignAoE", j);
+        Assert.False(HasActiveCall(j, "ForeignAoE"), "a plain-call-only foreign function must stay trimmed");
+        Assert.True(JassScriptCheck.IsCompilable(JassScriptCheck.Check(j)));
+    }
+
+    /// <summary>Every function declared in <paramref name="script"/> as a carried BundleFunction, minus
+    /// the named ones. Lets a test hand ScriptPorter a carried set that deliberately omits a callback,
+    /// reproducing the state where the bundle crawl never reached it.</summary>
+    private static IReadOnlyList<BundleFunction> CarriedExcept(string script, params string[] omit)
+    {
+        var drop = omit.ToHashSet(StringComparer.Ordinal);
+        return JassFunctionIndex.Parse(script)
+            .Where(f => !drop.Contains(f.Name))
+            .Select(f => new BundleFunction(f.Name, f.StartLine, f.EndLine, "seed"))
+            .ToList();
+    }
+
+    /// <summary>True when some uncommented line uses <paramref name="fn"/> as a "function Foo" callback
+    /// argument (a live ForGroup/Condition pass), as opposed to merely declaring it. The declaration
+    /// line begins with "function fn", so it is excluded, only a callback USE returns true.</summary>
+    private static bool CallbackLineIsLive(string jass, string fn)
+    {
+        foreach (var line in jass.Replace("\r\n", "\n").Split('\n'))
+        {
+            int c = line.IndexOf("//", StringComparison.Ordinal);
+            var code = c >= 0 ? line[..c] : line;
+            if (code.Contains("function " + fn, StringComparison.Ordinal)
+                && !code.TrimStart().StartsWith("function " + fn, StringComparison.Ordinal))
+                return true;
+        }
+        return false;
+    }
+
     /// <summary>True when some line has an uncommented call to <paramref name="fn"/>.</summary>
     private static bool HasActiveCall(string jass, string fn)
     {

@@ -99,6 +99,24 @@ internal static class ScriptPorter
         // the target. Fixpoint, bounded by the function count.
         CarryRegisteringInits(carried, allByName, srcLines, codeRemap.Keys);
 
+        // Carry the GUI-generated child callbacks of a carried trigger, to a fixpoint. A spell that hits
+        // an area does its damage inside an iterator callback, for example inside Trig_Spell_Actions the
+        // World Editor emits call ForGroupBJ(GetHostileGroup(...), function Trig_Spell_Func016A), and that
+        // Func016A callback IS the code that deals the damage. Nothing but this argument names it and it
+        // is not a structural (if/loop/return) reference, so without this the whole ForGroupBJ statement
+        // is trimmed as a dropped reference and the ability silently deals no area damage on every port.
+        //
+        // The carry is deliberately scoped to callbacks that belong to the SAME GUI trigger as the
+        // carried body that names them (they share the Trig_<TriggerName> stem, so Trig_Spell_Actions may
+        // pull Trig_Spell_Func016A but nothing else). Following "function Foo" arguments WITHOUT that
+        // scope is not safe here, measured on GGGA it dragged in 2446 functions belonging to dozens of
+        // OTHER heroes (Shinon, Zion, Archer, ...), because the shared event systems this hero also uses
+        // (damage, kill, death) name every hero's callback the same way. Restricting to same-trigger
+        // children recovers the hero's own area effects without following those shared systems into the
+        // rest of the roster. A carried callback that in turn calls foreign code still has that inner call
+        // trimmed by the loop below, so carrying it can never leave a dangling reference.
+        CarryCallbackReferences(carried, allByName, srcLines);
+
         var residual = new HashSet<string>(StringComparer.Ordinal);
         Dictionary<string, string> bodies;
         for (int guard = 0; ; guard++)
@@ -399,6 +417,64 @@ internal static class ScriptPorter
                 // rawcodes are deliberately NOT added to the live set (see above).
                 foreach (var h in handlers)
                     if (carried.Add(h)) grew = true;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Adds to <paramref name="carried"/> every GUI child callback (a "function Foo" argument) that a
+    /// carried body names AND that belongs to the SAME GUI trigger as that body (same Trig_&lt;Name&gt;
+    /// stem), iterating to a fixpoint bounded by the function count. See the call site in
+    /// <see cref="PortScript"/> for why this is necessary (the callback applies a spell's area effect)
+    /// and why the same-trigger scope is required (an unscoped walk follows shared event systems into
+    /// every other hero's callbacks).
+    /// </summary>
+    private static void CarryCallbackReferences(
+        HashSet<string> carried, IReadOnlyDictionary<string, JassFunction> allByName, string[] srcLines)
+    {
+        // Bounded by the function count: each pass only adds names, and there are finitely many.
+        for (int guard = 0; guard <= allByName.Count; guard++)
+        {
+            var toAdd = new List<string>();
+            foreach (var n in carried)
+            {
+                if (!allByName.TryGetValue(n, out var f)) continue;
+                var stem = TriggerStem(n);
+                if (!stem.StartsWith("Trig_", StringComparison.Ordinal)) continue; // only GUI triggers have Func children
+                foreach (var cb in CallbackNames(BodyText(srcLines, f)))
+                    if (allByName.ContainsKey(cb) && !carried.Contains(cb) && TriggerStem(cb) == stem)
+                        toAdd.Add(cb);
+            }
+            if (toAdd.Count == 0) break;
+            foreach (var r in toAdd) carried.Add(r);
+        }
+    }
+
+    /// <summary>The GUI-trigger stem of a function name, the shared Trig_&lt;TriggerName&gt; prefix the
+    /// World Editor gives a trigger's Conditions, Actions and Func&lt;n&gt; children. Two functions with
+    /// the same stem belong to the same GUI trigger. A name that is not a Trig_ GUI function is returned
+    /// unchanged (so it matches only itself).</summary>
+    private static string TriggerStem(string name)
+    {
+        var m = Regex.Match(name, @"^(Trig_.+?)(_Conditions|_Actions|_Func\d)");
+        return m.Success ? m.Groups[1].Value : name;
+    }
+
+    /// <summary>Identifiers referenced as a function-pointer argument ("function Foo") in a snippet, the
+    /// JASS form for passing a callback to an iterator (ForGroup, Condition, Filter, TimerStart, enum).
+    /// Unlike <see cref="ReferencedNames"/> this deliberately EXCLUDES the plain-call form "Foo(", so it
+    /// never follows the call edges that would reach another hero's handler through a shared dispatcher.
+    /// Comment text is stripped so a name that survives only in a comment is not pulled.</summary>
+    private static IEnumerable<string> CallbackNames(string body)
+    {
+        foreach (var line in body.Split('\n'))
+        {
+            var code = StripComment(line);
+            Match? prev = null;
+            foreach (Match m in Ident.Matches(code))
+            {
+                if (prev is { Value: "function" }) yield return m.Value;
+                prev = m;
             }
         }
     }
