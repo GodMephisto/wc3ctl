@@ -72,6 +72,9 @@ public class CliMcpParityTests
         // compiles again. Porting now gates on this automatically, so it is only ever needed
         // for a map produced before the gate existed.
         "script repair",
+        // Diagnostic: reports, per ability of a placed hero, which link of the wiring chain is
+        // missing. A local troubleshooting aid rather than something an agent drives remotely.
+        "audit hero",
     };
 
     // The real MCP tool names, read straight from the [McpServerTool] attributes the

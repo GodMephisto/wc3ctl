@@ -698,6 +698,42 @@ public static class Program
         }));
         port.AddCommand(portUnit);
 
+        var auditHeroArg = new Argument<string?>("hero", () => null,
+            "Hero rawcode to audit. Omit to audit every hero placed on the map.");
+        var audit = new Command("audit", "Check that a map really wires up what it should.");
+        var auditHero = new Command("hero",
+            "Verify every ability of a placed hero is wired end to end (object present, dispatch carried, "
+            + "trigger attached, event covers the player, handler not empty, identity array registered, "
+            + "init called exactly once). Reports the exact missing link per ability. Exits 2 if any fail.")
+        { mapArg, auditHeroArg };
+        auditHero.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var doc = MapDocument.Load(p.GetValueForArgument(mapArg));
+            string? hero = p.GetValueForArgument(auditHeroArg);
+
+            var results = hero is null
+                ? HeroWiringAudit.AuditPlacedHeroes(doc)
+                : new[] { HeroWiringAudit.Audit(doc, hero, ownerId: 0) };
+
+            Emit(p.GetValueForOption(jsonOption), results, () =>
+            {
+                var sb = new System.Text.StringBuilder();
+                foreach (var r in results)
+                {
+                    sb.AppendLine($"{r.Hero}  \"{r.Name}\"  (player {r.OwnerId})  "
+                        + $"{r.Wired}/{r.Abilities.Count} abilities fully wired");
+                    foreach (var a in r.Abilities)
+                        sb.AppendLine($"  {(a.Status == WiringStatus.Ok ? "ok  " : "FAIL")} {a.Ability}"
+                            + $"  \"{a.Name}\"  {(a.Status == WiringStatus.Ok ? "" : a.Status + ": ")}{a.Detail}");
+                }
+                if (results.Count == 0) sb.AppendLine("no placed heroes found");
+                return sb.ToString().TrimEnd();
+            });
+            if (results.Any(r => r.Problems.Count > 0)) exitCode[0] = 2;
+        }));
+        audit.AddCommand(auditHero);
+
         var deepOption = new Option<bool>("--deep",
             "Also run pjass, the game's own JASS parser, over the map script (needs a Warcraft III install).");
         var validate = new Command("validate",
@@ -1287,6 +1323,7 @@ public static class Program
         root.AddCommand(extract); root.AddCommand(render); root.AddCommand(renderModel);
         root.AddCommand(script); root.AddCommand(bundle); root.AddCommand(port);
         root.AddCommand(convert); root.AddCommand(validate);
+        root.AddCommand(audit);
         root.AddCommand(place); root.AddCommand(palette); root.AddCommand(terrain);
         root.AddCommand(sound); root.AddCommand(camera); root.AddCommand(pathing);
         root.AddCommand(mapInfo); root.AddCommand(player); root.AddCommand(force);
