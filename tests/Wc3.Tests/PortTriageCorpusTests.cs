@@ -109,7 +109,12 @@ public class PortTriageCorpusTests
 
                     report.AppendLine($"  {rawcode} {heroName}: ok"
                         + (script is null ? " (no script carried)" : $" ({script.Functions} fn)")
-                        + $"  wiring {wiring.Wired}/{wiring.Abilities.Count}");
+                        // Score against CASTABLE abilities, not the total. Counting passives in the
+                        // denominator meant a hero with zero problems still read as partial, which is
+                        // the same overstating this sweep exists to avoid.
+                        + $"  wiring {wiring.Wired}/{wiring.Abilities.Count - wiring.NotCastable}"
+                        + (wiring.NotCastable > 0 ? $" +{wiring.NotCastable}passive" : "")
+                        + (wiring.Problems.Count > 0 ? $"  {wiring.Problems.Count} problem(s)" : ""));
                 }
                 catch (Exception ex)
                 {
