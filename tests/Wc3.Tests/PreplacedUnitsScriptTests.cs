@@ -245,6 +245,75 @@ public class PreplacedUnitsScriptTests
         Assert.Contains($"[gen v{PreplacedUnitsScript.GeneratorVersion + 1}]", ScriptOf(doc));
     }
 
+    // A hero setup routine that registers events and dispatches on the placed hero 'Hpal', so the
+    // generated block wires it. The (player, unit, integer) shape is what DetectHeroSetup looks for.
+    private const string ArenaSetupJass =
+        "function ArenaSetup takes player p, unit u, integer c returns boolean\n" +
+        "    call TriggerRegisterUnitEvent(gg_trg_X, u, EVENT_UNIT_SPELL_EFFECT)\n" +
+        "    if c == 'Hpal' then\n" +
+        "    endif\n" +
+        "    return true\n" +
+        "endfunction\n";
+
+    // A per-player doer-dummy setup, the general form of GGGA's WS_CreateWorkingSourceBagAndVendors,
+    // spawns a unit and stores it into a per-player unit array. It takes (player, integer) but does not
+    // dispatch on the integer, so it is a generic per-player routine, not a per-hero handler.
+    private const string DoerAssignerJass =
+        "function MakeDoer takes player p, integer c returns nothing\n" +
+        "    call CreateNUnitsAtLoc(1, 'hpea', p, GetRectCenter(gg_rct_X), 0.)\n" +
+        "    set udg_Doer[1 + GetPlayerId(p)] = bj_lastCreatedUnit\n" +
+        "endfunction\n";
+
+    [Fact]
+    public void WiresThePerPlayerDoerDummySetupUnderANullGuard()
+    {
+        string block = GeneratedBlock(ScriptOf(MapWithScript(
+            "globals\n    unit array udg_Doer\nendglobals\n" + ArenaSetupJass + DoerAssignerJass)));
+
+        // The setup is called for the placed hero, then the doer-dummy routine is called once, guarded
+        // on its own array still being null so a second placed hero cannot spawn a duplicate set.
+        Assert.Contains("set ok = ArenaSetup(Player(0), hu, 'Hpal')", block);
+        Assert.Contains("if udg_Doer[1 + GetPlayerId(Player(0))] == null then", block);
+        Assert.Contains("call MakeDoer(Player(0), 'Hpal')", block);
+    }
+
+    [Fact]
+    public void EmitsNoDoerDummyCallAndSaysSoWhenNoAssignerIsPresent()
+    {
+        // Degrade safely, no assigner in the script means no call is emitted (emitting one would call a
+        // function that does not exist and fail the compile gate), and the result says so.
+        var doc = MapWithScript("globals\n    unit array udg_Doer\nendglobals\n" + ArenaSetupJass);
+        var res = PreplacedUnitsScript.Sync(doc);
+
+        Assert.True(res.Ok);
+        Assert.Contains("no per-player doer-dummy setup routine detected", res.Message);
+        string block = GeneratedBlock(ScriptOf(doc));
+        Assert.Contains("set ok = ArenaSetup(Player(0), hu, 'Hpal')", block); // the hero is still wired
+        Assert.DoesNotContain("MakeDoer", block);
+        Assert.DoesNotContain("== null then", block);
+    }
+
+    [Fact]
+    public void DeclinesDoerDummyWiringWhenMoreThanOneRoutineQualifies()
+    {
+        // The rule is inferred from one map, so ambiguity is declined rather than guessed. Two qualifying
+        // routines means neither is called, and the result reports the decline.
+        var doc = MapWithScript(
+            "globals\n    unit array udg_Doer\n    unit array udg_Doer2\nendglobals\n" + ArenaSetupJass +
+            DoerAssignerJass +
+            "function MakeDoer2 takes player p returns nothing\n" +
+            "    call CreateNUnitsAtLoc(1, 'hpea', p, GetRectCenter(gg_rct_X), 0.)\n" +
+            "    set udg_Doer2[1 + GetPlayerId(p)] = bj_lastCreatedUnit\n" +
+            "endfunction\n");
+        var res = PreplacedUnitsScript.Sync(doc);
+
+        Assert.True(res.Ok);
+        Assert.Contains("declined doer-dummy wiring", res.Message);
+        Assert.Contains("2 candidate", res.Message);
+        string block = GeneratedBlock(ScriptOf(doc));
+        Assert.DoesNotContain("call MakeDoer", block);
+    }
+
     [Fact]
     public void SyncWithNoPlacements_LeavesTheScriptUnchanged()
     {

@@ -38,9 +38,11 @@ public static class PreplacedUnitsScript
     /// crash. Version 1 was the original create-only block, 2 added the per-instance unit properties
     /// and hero-array registration, 3 added the deferred spell-dispatch wiring, 4 registers EVERY per-player hero array
     /// (both 0-based and 1-based) rather than only the most-used one, 5 calls the map own
-    /// per-hero setup routine when it has one.
+    /// per-hero setup routine when it has one, 6 also calls the map own per-player doer-dummy setup
+    /// routine (the one that populates a per-player unit array from a CreateUnit, e.g. the stun and
+    /// damage-source dummies a hero's spells route through) under a null guard so it runs once.
     /// </summary>
-    public const int GeneratorVersion = 5;
+    public const int GeneratorVersion = 6;
 
     // The begin marker carries the generator version. Detection keys off the PREFIX so blocks
     // written before versioning existed (no "[gen vN]") are still recognised, and read as version 0.
@@ -177,11 +179,15 @@ public static class PreplacedUnitsScript
             .Where(x => x.Rawcode.Length == 4 && char.IsUpper(x.Rawcode[0]))
             .Distinct().ToList();
         var heroSetup = DetectHeroSetup(jass, placedHeroes.Select(h => h.Rawcode).Distinct().ToList());
+        // Only relevant once a per-hero setup is wired (an arena), the doer-dummy setup rides alongside it.
+        var (doerDummy, doerCandidates) = heroSetup is not null && placedHeroes.Count > 0
+            ? DetectDoerDummyAssigner(jass)
+            : (null, 0);
 
         jass = RemoveBlock(jass, nl);
         if (spawnable.Count > 0 || items.Count > 0)
         {
-            string block = BuildBlock(spawnable, items, nl, heroArrays, spellTriggers, heroSetup, placedHeroes);
+            string block = BuildBlock(spawnable, items, nl, heroArrays, spellTriggers, heroSetup, placedHeroes, doerDummy);
             jass = InsertBefore(jass, "function main takes nothing returns nothing", block + nl, nl);
         }
 
@@ -190,7 +196,18 @@ public static class PreplacedUnitsScript
         jass = EnsureMainCall(jass, ItemsFunc, wanted: items.Count > 0, nl);
 
         doc.AddOrReplaceRawFile(ScriptFile, enc.GetBytes(jass));
-        return new(true, $"wired {spawnable.Count} unit(s) and {items.Count} item(s) into main()", spawnable.Count, items.Count);
+
+        string message = $"wired {spawnable.Count} unit(s) and {items.Count} item(s) into main()";
+        if (heroSetup is not null && placedHeroes.Count > 0)
+        {
+            if (doerDummy is not null)
+                message += $", plus the per-player doer-dummy setup {doerDummy.Function} (guarded)";
+            else if (doerCandidates == 0)
+                message += ", no per-player doer-dummy setup routine detected so none wired";
+            else
+                message += $", declined doer-dummy wiring ({doerCandidates} candidate routines, ambiguous)";
+        }
+        return new(true, message, spawnable.Count, items.Count);
     }
 
     /// <summary>A spawnable unit is a real unit (not an item slot) and not a start location
@@ -330,12 +347,93 @@ public static class PreplacedUnitsScript
         return null;
     }
 
+    /// <summary>The map's per-player doer-dummy setup routine and what the generated call needs to know
+    /// about it. <see cref="GuardArray"/> and <see cref="IndexExpr"/> (with <see cref="PlayerParam"/>
+    /// substituted for the owner) form the null guard, <see cref="TakesCode"/> says whether the call
+    /// passes the hero rawcode as a second argument.</summary>
+    private sealed record DoerDummyAssigner(
+        string Function, bool TakesCode, string GuardArray, string IndexExpr, string PlayerParam);
+
+    /// <summary>
+    /// The map's own routine that fills a per-player unit array from freshly created units, the general
+    /// form of GGGA's WS_CreateWorkingSourceBagAndVendors which spawns the stun and damage-source dummies
+    /// a hero's spells route through. A placed hero never runs the arena's pick flow, so this never runs
+    /// and those arrays stay null, which is why a ported hero's stuns and routed damage silently do
+    /// nothing even when every trigger is wired.
+    ///
+    /// It qualifies when it takes a player (optionally plus an integer) and returns nothing, spawns a
+    /// unit (a CreateUnit-family call), and stores that unit into a `unit array` global at an index
+    /// derived from the player parameter. Guarded, it must NOT branch on the integer parameter as a
+    /// rawcode (that marks a per-hero dispatcher, not a generic per-player setup), and because the rule
+    /// is inferred from one map we DECLINE (return null) when zero or more than one function qualifies,
+    /// rather than guess. Detecting from the ported jass means an absent routine simply yields nothing to
+    /// call, so the caller degrades safely.
+    /// </summary>
+    private static (DoerDummyAssigner? Assigner, int Candidates) DetectDoerDummyAssigner(string jass)
+    {
+        var lines = jass.Replace("\r\n", "\n").Split('\n');
+        var unitArrays = UnitArrayGlobals(jass);
+        if (unitArrays.Count == 0) return (null, 0);
+
+        var signature = new Regex(
+            @"^\s*function\s+([A-Za-z_][A-Za-z0-9_]*)\s+takes\s+player\s+([A-Za-z_][A-Za-z0-9_]*)\s*"
+            + @"(?:,\s*integer\s+([A-Za-z_][A-Za-z0-9_]*)\s*)?returns\s+nothing\b");
+        var createFamily = new Regex(
+            @"\b(?:CreateUnit|CreateUnitAtLoc|CreateNUnitsAtLoc|CreateNUnitsAtLocFacingLocBJ)\s*\(");
+        var storeUnit = new Regex(@"set\s+([A-Za-z_][A-Za-z0-9_]*)\s*\[([^\]]*)\]\s*=\s*bj_lastCreatedUnit");
+
+        var found = new List<DoerDummyAssigner>();
+        foreach (var f in JassFunctionIndex.Parse(jass))
+        {
+            var m = signature.Match(f.Signature);
+            if (!m.Success) continue;
+            string playerParam = m.Groups[2].Value;
+            bool takesCode = m.Groups[3].Success;
+            string codeParam = m.Groups[3].Value;
+
+            var sb = new StringBuilder();
+            for (int i = f.StartLine - 1; i < f.EndLine && i < lines.Length; i++)
+                sb.Append(lines[i]).Append('\n');
+            string body = sb.ToString();
+
+            if (!createFamily.IsMatch(body)) continue;   // must spawn a unit
+            // Guard, a routine that dispatches on the integer parameter as a rawcode is a per-hero
+            // handler, not a generic per-player setup, so it is never treated as an assigner.
+            if (takesCode && Regex.IsMatch(body,
+                    @"(?:\b" + Regex.Escape(codeParam) + @"\s*==\s*')|(?:'[^']{4}'\s*==\s*"
+                    + Regex.Escape(codeParam) + @"\b)"))
+                continue;
+
+            foreach (Match a in storeUnit.Matches(body))
+            {
+                string arr = a.Groups[1].Value;
+                string idx = a.Groups[2].Value;
+                if (!unitArrays.Contains(arr)) continue;
+                if (!Regex.IsMatch(idx, @"\b" + Regex.Escape(playerParam) + @"\b")) continue; // slot from the player
+                found.Add(new DoerDummyAssigner(f.Name, takesCode, arr, idx.Trim(), playerParam));
+                break;
+            }
+        }
+        return found.Count == 1 ? (found[0], 1) : (null, found.Count);
+    }
+
+    /// <summary>Names declared as a <c>unit array</c> global in the script.</summary>
+    private static HashSet<string> UnitArrayGlobals(string jass)
+    {
+        var set = new HashSet<string>(StringComparer.Ordinal);
+        foreach (Match m in Regex.Matches(jass, @"^\s*unit\s+array\s+([A-Za-z_][A-Za-z0-9_]*)",
+                     RegexOptions.Multiline))
+            set.Add(m.Groups[1].Value);
+        return set;
+    }
+
     /// <summary>Builds the marker-wrapped block of creation functions. When <paramref name="heroArray"/>
     /// is the arena's per-player hero array, each placed hero registers itself into it (first hero per
     /// player wins) so the ported spell handlers recognise it.</summary>
     private static string BuildBlock(List<UnitData> units, List<UnitData> items, string nl,
         IReadOnlyList<HeroArray>? heroArraysOrNull = null, IReadOnlyList<string>? spellTriggersOrNull = null,
-        HeroSetup? heroSetup = null, IReadOnlyList<(string Rawcode, int OwnerId)>? placedHeroes = null)
+        HeroSetup? heroSetup = null, IReadOnlyList<(string Rawcode, int OwnerId)>? placedHeroes = null,
+        DoerDummyAssigner? doerDummy = null)
     {
         var heroArrays = heroArraysOrNull ?? Array.Empty<HeroArray>();
         var heroes = placedHeroes ?? Array.Empty<(string Rawcode, int OwnerId)>();
@@ -391,6 +489,23 @@ public static class PreplacedUnitsScript
                               .Append(heroSetup.ReturnsValue ? "set ok = " : "call ")
                               .Append(heroSetup.Function).Append("(Player(").Append(owner)
                               .Append("), hu, '").Append(rc).Append("')").Append(nl);
+                            // The per-player doer-dummy setup, if the map has one. A placed hero never
+                            // runs the arena's pick flow, so the per-player unit array this routine fills
+                            // (the stun and damage-source dummies its spells route through) stays null and
+                            // those spells do nothing. Call it once, guarded on the array still being null
+                            // so a second placed hero for this player cannot spawn a duplicate set.
+                            if (doerDummy is not null)
+                            {
+                                string idx = Regex.Replace(doerDummy.IndexExpr,
+                                    @"\b" + Regex.Escape(doerDummy.PlayerParam) + @"\b", $"Player({owner})");
+                                sb.Append("            if ").Append(doerDummy.GuardArray).Append('[').Append(idx)
+                                  .Append("] == null then").Append(nl);
+                                sb.Append("                call ").Append(doerDummy.Function)
+                                  .Append("(Player(").Append(owner).Append(')');
+                                if (doerDummy.TakesCode) sb.Append(", '").Append(rc).Append('\'');
+                                sb.Append(')').Append(nl);
+                                sb.Append("            endif").Append(nl);
+                            }
                             sb.Append("        endif").Append(nl);
                         }
                         sb.Append("    endloop").Append(nl);
