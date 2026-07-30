@@ -42,6 +42,11 @@ public static class MapFormatRegistry
 
     public static bool IsKnown(string fileName) => _parsers.ContainsKey(fileName);
 
+    /// <summary>Every file name this registry recognizes. Reused as the base of the standard
+    /// name list <see cref="StandardMapFileNames"/> probes into a protected archive, so the two
+    /// lists cannot drift apart.</summary>
+    public static IReadOnlyCollection<string> KnownFileNames => _parsers.Keys;
+
     public static bool TryGetParser(string fileName, out ParseFn parser)
     {
         if (_parsers.TryGetValue(fileName, out var p) && p is not null)

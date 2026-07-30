@@ -37,6 +37,13 @@ public sealed class MapDocument
         using var stream = new MemoryStream(fileBytes);
         using var archive = MpqArchive.Open(stream, loadListFile: true);
 
+        // A protected map's (listfile) is often stripped or curated down to a couple of
+        // decoy names, but the hash table that actually locates a file is untouched, a
+        // standard WC3 file name still resolves without it. AddFileNames only sets
+        // FileName on entries that are still unnamed, so a healthy map (everything already
+        // named from its own listfile) is unaffected.
+        archive.AddFileNames(StandardMapFileNames.All);
+
         int block = 0;
         foreach (var entry in archive)
         {
@@ -109,6 +116,10 @@ public sealed class MapDocument
     {
         using var source = new MemoryStream(_originalBytes);
         using var archive = MpqArchive.Open(source, loadListFile: true);
+        // Same probing as Load, kept in sync so a dirty entry on a protected map (named
+        // only via the probe, never via this archive's own listfile) still shadows its
+        // original by the same hashed name when the builder adds the replacement.
+        archive.AddFileNames(StandardMapFileNames.All);
         var builder = new MpqArchiveBuilder(archive);
 
         // An added file with the same hashed name shadows the original at save;
