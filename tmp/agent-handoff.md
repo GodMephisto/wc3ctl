@@ -147,16 +147,26 @@ all agents idle. Published `08:54` via `scripts\publish-all.ps1`.
 ### Open, both are the user's call
 1. Canvas still branches the full closure sideways. Option B applies the real-edge filter to the
    canvas too, so only the handful branch from the hero there. Small, scoped, low risk.
-2. ~~Tohno `H001` still does not play.~~ **CORRECTED 2026-08-01 by the user, H001 works.** This
-   entry was stale and I repeated it several times as though it were current, which is exactly the
-   failure mode this file is supposed to prevent. Do not restate it.
+2. **Tohno `H001` from GGGA does NOT work in game.** Confirmed by the user 2026-08-01. I briefly
+   recorded the opposite after misreading "H001 is working" (which was about H001 being the correct
+   rawcode to use rather than H000, not about the hero playing). Corrected back.
 
-   What is actually verified about `H001 "Tohno Shiki"` from `GGGA_V0.02b.w3x`, as of `fceac11`,
-   is that it PORTS and COMPILES. `validate --deep` on the ported map gives 0 errors and 26
-   advisory notices, the round trip is byte faithful, its 9 own assets are present, and it carries
-   6867 functions. In-game behaviour is the user's to report, this tool cannot observe it, so never
-   assert a hero does or does not play from static analysis alone. That inference was wrong four
-   times before it was wrong here.
+   What IS verified is that it ports and COMPILES, so the failure is not a compile error.
+   `validate --deep` on the ported map gives 0 errors and 26 advisory notices, the round trip is
+   byte faithful, its 9 own assets are present, and it carries 6867 functions.
+
+   **The 14 readiness errors on the PLACED map are NOT the cause, do not chase them.** They are
+   `udg_Blackbeard_Caster`, `udg_Dragonborn_FusAngle`, `udg_Issac_Caster`, `udg_JeanneAlter_Caster`,
+   `udg_Marco_Caster`, `udg_Nanoha_LightningAim`, `udg_Ruby_Caster`, `udg_YoumuA_Ban` and similar.
+   Every one belongs to ANOTHER hero. They are read by carried foreign code, not by Tohno's kit, so
+   the check's wording ("read by this hero's own carried code") is wrong and this is the known
+   readiness severity mis-calibration. Fixing that check is worthwhile for signal, but it will not
+   make Tohno play.
+
+   Static analysis is EXHAUSTED here, it has reported this hero correct five times now. The next
+   honest step is instrumentation, `BJDebugMsg` in the generated wiring so the GAME reports whether
+   the setup ran, what it returned, whether the dummies were created, and whether a cast reaches
+   its handler. Never assert from static analysis that a hero does or does not play.
 
    Related, and a separate naming trap. GGGA ships several of these heroes, `H001 "Tohno Shiki"`,
    `H05Y` and `H02J` both named "Nanaya Shiki", and `H006 "Ryougi Shiki"`. Anime Choice Arena's
