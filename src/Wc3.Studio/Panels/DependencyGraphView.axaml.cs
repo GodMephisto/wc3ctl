@@ -53,12 +53,12 @@ public partial class DependencyGraphView : UserControl, IMapPanel
     private static readonly IBrush ExcludedFill = new SolidColorBrush(Color.Parse("#146B6B6B"));
     private const double ExcludedOpacity = 0.45;
 
-    // Layered layout constants (device-independent pixels): objects sit in
-    // columns by depth from the root, files in a wrapped band underneath.
+    // Layered layout constants (device independent pixels). Objects sit in
+    // rows by depth from the root, files in a wrapped band underneath.
     private const double Pad = 24;
     private const double ObjW = 180, ObjH = 48;
-    private const double ColGap = 130;
-    private const double RowGap = 28;
+    private const double SiblingGapX = 130;
+    private const double LevelGapY = 28;
     private const double FileW = 250, FileH = 40;
     private const double FileGapX = 26, FileGapY = 26;
     private const double BandGap = 100;
@@ -599,7 +599,6 @@ public partial class DependencyGraphView : UserControl, IMapPanel
     {
         DepTree.Items.Clear();
 
-        // Field codes referencing each node, e.g. "via uhab" on an ability.
         var viaInto = bundle.Edges
             .GroupBy(e => e.To, StringComparer.Ordinal)
             .ToDictionary(
@@ -608,47 +607,148 @@ public partial class DependencyGraphView : UserControl, IMapPanel
                 StringComparer.Ordinal);
 
         var (childrenOf, seedsByOwner) = AttributeFunctions(bundle);
+        var objectCodes = bundle.Objects
+            .Select(o => o.Rawcode)
+            .ToHashSet(StringComparer.Ordinal);
+        var realAdjacency = bundle.Edges
+            .Where(e => e.Via != "script closure"
+                && objectCodes.Contains(e.From)
+                && objectCodes.Contains(e.To))
+            .GroupBy(e => e.From, StringComparer.Ordinal)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Select(e => e.To).Distinct().ToList(),
+                StringComparer.Ordinal);
+        var realParents = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+        foreach (var (from, targets) in realAdjacency)
+        {
+            foreach (var to in targets)
+            {
+                if (!realParents.TryGetValue(to, out var parents))
+                    realParents[to] = parents = new HashSet<string>(StringComparer.Ordinal);
+                parents.Add(from);
+            }
+        }
+        var byCode = bundle.Objects.ToDictionary(o => o.Rawcode, StringComparer.Ordinal);
+
+        void AddAbilityFunctions(TreeViewItem item, BundleNode node)
+        {
+            if (node.Kind == ObjectKind.Ability && seedsByOwner.TryGetValue(node.Rawcode, out var ownSeeds))
+                item.Items.Add(FunctionGroupItem(ownSeeds, childrenOf));
+        }
+
+        TreeViewItem CreateObjectItem(BundleNode node)
+        {
+            var via = viaInto.TryGetValue(node.Rawcode, out var v) ? $", via {v}" : "";
+            var item = new TreeViewItem
+            {
+                Header = MakeTreeLabel(
+                    $"{node.Rawcode} - {node.Name ?? "(base game)"}"
+                    + $", {(node.CustomToMap ? "custom" : "base")}{via}",
+                    node.CustomToMap, bold: false),
+            };
+            AddAbilityFunctions(item, node);
+            return item;
+        }
+
+        void AddObjectChildren(
+            TreeViewItem parentItem,
+            string parentRawcode,
+            HashSet<string> visited,
+            HashSet<string>? allowedRawcodes)
+        {
+            if (!realAdjacency.TryGetValue(parentRawcode, out var childCodes))
+                return;
+
+            foreach (var childRawcode in childCodes)
+            {
+                if (allowedRawcodes is not null && !allowedRawcodes.Contains(childRawcode))
+                    continue;
+                if (!visited.Add(childRawcode))
+                    continue;
+                if (!byCode.TryGetValue(childRawcode, out var childNode))
+                    continue;
+
+                var childItem = CreateObjectItem(childNode);
+                parentItem.Items.Add(childItem);
+                AddObjectChildren(childItem, childRawcode, visited, allowedRawcodes);
+            }
+        }
+
+        var realReachable = new HashSet<string>(StringComparer.Ordinal) { bundle.RootRawcode };
+        var realQueue = new Queue<string>();
+        realQueue.Enqueue(bundle.RootRawcode);
+        while (realQueue.Count > 0)
+        {
+            var current = realQueue.Dequeue();
+            if (!realAdjacency.TryGetValue(current, out var targets))
+                continue;
+            foreach (var to in targets)
+            {
+                if (realReachable.Add(to))
+                    realQueue.Enqueue(to);
+            }
+        }
 
         var rootNode = bundle.Objects.FirstOrDefault(o => o.Rawcode == bundle.RootRawcode);
         var rootKindWord = (rootNode?.Kind ?? SelectedObjectKind).ToString().ToLowerInvariant();
+        var rootCustom = rootNode?.CustomToMap ?? false;
         var rootItem = new TreeViewItem
         {
             Header = MakeTreeLabel(
-                $"{bundle.RootName ?? bundle.RootRawcode} ({bundle.RootRawcode}) - root {rootKindWord}",
+                $"{bundle.RootRawcode} - {bundle.RootName ?? "(base game)"}"
+                + $", {(rootCustom ? "custom" : "base")}, root {rootKindWord}",
                 rootNode?.CustomToMap, bold: true),
             IsExpanded = true,
         };
+        if (rootNode is not null)
+            AddAbilityFunctions(rootItem, rootNode);
 
-        foreach (var group in bundle.Objects
-                     .Where(o => o.Rawcode != bundle.RootRawcode)
-                     .GroupBy(o => o.Kind))
+        var expandedReal = new HashSet<string>(StringComparer.Ordinal) { bundle.RootRawcode };
+        AddObjectChildren(rootItem, bundle.RootRawcode, expandedReal, allowedRawcodes: null);
+
+        var carriedRawcodes = bundle.Objects
+            .Where(o => o.Rawcode != bundle.RootRawcode && !realReachable.Contains(o.Rawcode))
+            .Select(o => o.Rawcode)
+            .ToHashSet(StringComparer.Ordinal);
+        if (carriedRawcodes.Count > 0)
         {
-            var groupItem = new TreeViewItem
+            var carriedItem = new TreeViewItem
             {
-                Header = MakeTreeLabel($"{KindPlural(group.Key)} ({group.Count()})", custom: null, bold: true),
+                Header = MakeTreeLabel(
+                    $"Carried by the script closure ({carriedRawcodes.Count})",
+                    custom: null, bold: true),
                 IsExpanded = true,
             };
-            foreach (var node in group)
+
+            var carriedRoots = bundle.Objects
+                .Where(o => carriedRawcodes.Contains(o.Rawcode)
+                    && (!realParents.TryGetValue(o.Rawcode, out var parents)
+                        || !parents.Any(carriedRawcodes.Contains)))
+                .ToList();
+            var expandedCarried = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var node in carriedRoots)
             {
-                var via = viaInto.TryGetValue(node.Rawcode, out var v) ? $", via {v}" : "";
-                var nodeItem = new TreeViewItem
-                {
-                    Header = MakeTreeLabel(
-                        $"{node.Rawcode} - {node.Name ?? "(base game)"}"
-                        + $", {(node.CustomToMap ? "custom" : "base")}{via}",
-                        node.CustomToMap, bold: false),
-                };
-                if (node.Kind == ObjectKind.Ability && seedsByOwner.TryGetValue(node.Rawcode, out var ownSeeds))
-                    nodeItem.Items.Add(FunctionGroupItem(ownSeeds, childrenOf));
-                groupItem.Items.Add(nodeItem);
+                if (!expandedCarried.Add(node.Rawcode))
+                    continue;
+
+                var nodeItem = CreateObjectItem(node);
+                carriedItem.Items.Add(nodeItem);
+                AddObjectChildren(nodeItem, node.Rawcode, expandedCarried, carriedRawcodes);
             }
-            rootItem.Items.Add(groupItem);
+            foreach (var node in bundle.Objects.Where(o => carriedRawcodes.Contains(o.Rawcode)))
+            {
+                if (!expandedCarried.Add(node.Rawcode))
+                    continue;
+
+                var nodeItem = CreateObjectItem(node);
+                carriedItem.Items.Add(nodeItem);
+                AddObjectChildren(nodeItem, node.Rawcode, expandedCarried, carriedRawcodes);
+            }
+
+            rootItem.Items.Add(carriedItem);
         }
 
-        // Every function that could not be pinned to one ability in the tree (references
-        // the hero itself, an ability outside this closure, or nothing at all) still needs
-        // a home, a clearly labelled group directly under the root rather than silently
-        // dropped or scattered.
         if (seedsByOwner.TryGetValue(OtherOwnerKey, out var otherSeeds))
             rootItem.Items.Add(FunctionGroupItem(otherSeeds, childrenOf, "Other triggers"));
 
@@ -878,13 +978,14 @@ public partial class DependencyGraphView : UserControl, IMapPanel
     };
 
     /// <summary>
-    /// Node-link graph with a simple deterministic layered layout: column 0 is
-    /// the root unit, each further column the next BFS depth of object deps;
-    /// files get their own wrapped band along the bottom. Edges are straight
-    /// lines between node anchors, labeled with their field codes (parallel
-    /// edges between the same pair coalesce into one labeled line). The layout
-    /// is only the starting arrangement - nodes drag freely afterwards, with
-    /// <see cref="PositionEdge"/> re-anchoring their edges live.
+    /// Node-link graph with a simple deterministic layered layout. Level 0 is the
+    /// root unit at the top, each level below it the next BFS depth of object deps,
+    /// so a hero's abilities branch across the row beneath it. Files get their own
+    /// wrapped band along the bottom. Edges are straight lines between node anchors,
+    /// labeled with their field codes (parallel edges between the same pair coalesce
+    /// into one labeled line). The layout is only the starting arrangement, nodes
+    /// drag freely afterwards, with <see cref="PositionEdge"/> re-anchoring their
+    /// edges live.
     /// </summary>
     private void RenderGraph(UnitBundle bundle)
     {
@@ -894,7 +995,7 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         _fileVisuals.Clear();
         _dragNode = null;
         _panning = false;
-        ResetView(); // a fresh graph starts at 100%, origin top-left
+        ResetView();
         if (bundle.Objects.Count == 0)
         {
             GraphHint.IsVisible = true;
@@ -927,27 +1028,27 @@ public partial class DependencyGraphView : UserControl, IMapPanel
                     queue.Enqueue(to);
             }
         }
-        foreach (var node in bundle.Objects) // unreachable nodes still get drawn
+        foreach (var node in bundle.Objects)
             depth.TryAdd(node.Rawcode, 1);
 
-        // --- columns: one per depth, bundle order within a column, all
-        //     vertically centered against the tallest column ---
-        var columns = bundle.Objects
+        // Levels, one row per depth, bundle order across a row, each row
+        // horizontally centered against the widest row.
+        var levels = bundle.Objects
             .GroupBy(o => depth[o.Rawcode])
             .OrderBy(g => g.Key)
             .Select(g => g.ToList())
             .ToList();
-        double maxColHeight = columns.Max(c => c.Count * ObjH + (c.Count - 1) * RowGap);
+        double maxLevelWidth = levels.Max(level => level.Count * ObjW + (level.Count - 1) * SiblingGapX);
         var objRects = new Dictionary<string, Rect>(StringComparer.Ordinal);
-        for (int ci = 0; ci < columns.Count; ci++)
+        for (int li = 0; li < levels.Count; li++)
         {
-            double x = Pad + ci * (ObjW + ColGap);
-            double colHeight = columns[ci].Count * ObjH + (columns[ci].Count - 1) * RowGap;
-            double y = Pad + (maxColHeight - colHeight) / 2;
-            foreach (var node in columns[ci])
+            double y = Pad + li * (ObjH + LevelGapY);
+            double levelWidth = levels[li].Count * ObjW + (levels[li].Count - 1) * SiblingGapX;
+            double x = Pad + (maxLevelWidth - levelWidth) / 2;
+            foreach (var node in levels[li])
             {
                 objRects[node.Rawcode] = new Rect(x, y, ObjW, ObjH);
-                y += ObjH + RowGap;
+                x += ObjW + SiblingGapX;
             }
         }
 
@@ -959,9 +1060,9 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         var depFiles = bundle.Files.Where(f => objectDeps.Contains(f.Path)).ToList();
 
         var fileRects = new Dictionary<string, Rect>(StringComparer.OrdinalIgnoreCase);
-        double objAreaWidth = columns.Count * (ObjW + ColGap) - ColGap;
-        double bandTop = Pad + maxColHeight + BandGap;
-        int perRow = Math.Max(3, (int)((objAreaWidth + FileGapX) / (FileW + FileGapX)));
+        double objAreaWidth = maxLevelWidth;
+        double bandTop = objRects.Values.Max(r => r.Bottom) + BandGap;
+        int perRow = Math.Max(1, (int)((objAreaWidth + FileGapX) / (FileW + FileGapX)));
         for (int i = 0; i < depFiles.Count; i++)
         {
             fileRects[depFiles[i].Path] = new Rect(
@@ -971,10 +1072,9 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         }
         if (depFiles.Count > 0)
         {
-            int usedPerRow = Math.Min(perRow, depFiles.Count);
             var separator = new Border
             {
-                Width = usedPerRow * (FileW + FileGapX) - FileGapX,
+                Width = Math.Max(objAreaWidth, Math.Min(perRow, depFiles.Count) * (FileW + FileGapX) - FileGapX),
                 Height = 1,
                 Background = EdgeStroke,
             };
@@ -1091,9 +1191,10 @@ public partial class DependencyGraphView : UserControl, IMapPanel
     }
 
     /// <summary>
-    /// (Re)anchor an edge's line and label to its endpoints' current rects:
-    /// object → file drops from the bottom edge; otherwise the line leaves the
-    /// side facing the target (falling back to centers in the same column).
+    /// (Re)anchor an edge's line and label to its endpoints' current rects. An
+    /// object to file edge drops from the bottom edge. Otherwise the line leaves the
+    /// face toward the target (the bottom for a deeper level, the top for a back
+    /// edge), falling back to centers on the same level.
     /// </summary>
     private static void PositionEdge(GraphEdge edge)
     {
@@ -1103,22 +1204,22 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         Point p1, p2;
         if (edge.ToIsFile)
         {
-            p1 = new Point(from.Center.X, from.Bottom);   // object → file: drop down
+            p1 = new Point(from.Center.X, from.Bottom);   // object to file, drop straight down
             p2 = new Point(to.Center.X, to.Y);
         }
-        else if (to.X > from.X)
+        else if (to.Y > from.Y)
         {
-            p1 = new Point(from.Right, from.Center.Y);    // deeper column: left→right
-            p2 = new Point(to.X, to.Center.Y);
+            p1 = new Point(from.Center.X, from.Bottom);   // deeper level sits below, leave the bottom
+            p2 = new Point(to.Center.X, to.Y);
         }
-        else if (to.X < from.X)
+        else if (to.Y < from.Y)
         {
-            p1 = new Point(from.X, from.Center.Y);        // back-edge (cycle)
-            p2 = new Point(to.Right, to.Center.Y);
+            p1 = new Point(from.Center.X, from.Y);        // back edge points up, leave the top
+            p2 = new Point(to.Center.X, to.Bottom);
         }
         else
         {
-            p1 = from.Center;                             // same column
+            p1 = from.Center;                             // same level, connect centers
             p2 = to.Center;
         }
 
