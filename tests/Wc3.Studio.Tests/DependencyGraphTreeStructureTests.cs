@@ -125,7 +125,7 @@ public class DependencyGraphTreeStructureTests
         // count is still visible so the user can see how much is tucked away.
         Assert.True(check.IsVisible);
         Assert.True(check.IsChecked == false);
-        Assert.Contains("(4)", check.Content as string ?? "");
+        Assert.Contains("4 objects", check.Content as string ?? "");
         Assert.False(HasCarriedGroup(RootItem(view)));
         Assert.DoesNotContain("A003", objVisuals.Keys);
         Assert.Contains("A001", objVisuals.Keys);
@@ -186,10 +186,17 @@ public class DependencyGraphTreeStructureTests
         var check = Field<CheckBox>(view, "HideCarriedCheck");
         Assert.True(check.IsVisible);
         Assert.True(check.IsChecked == false);
-        Assert.Contains("(204)", check.Content as string ?? "");
+        Assert.Contains("204 objects", check.Content as string ?? "");
+        Assert.Contains("481 files", check.Content as string ?? "");
         var root = RootItem(view);
         Assert.False(HasCarriedGroup(root));
         Assert.Equal(6, ObjectRows(root).Count);
+
+        // The file and string lists get the same rule. Asta really needs 17 files (6 icons, his
+        // model, its 10 textures) out of the 498 the closure drags in, and 88 of 1875 strings.
+        Assert.Equal("Files (17)", Field<Expander>(view, "FilesExpander").Header);
+        Assert.False(Field<Expander>(view, "PortAssetsExpander").IsVisible);
+        Assert.Equal("Strings (88, 1787 carried hidden)", Field<Expander>(view, "StringsExpander").Header);
         var objVisuals = Field<Dictionary<string, Border>>(view, "_objVisuals");
         Assert.Equal(7, objVisuals.Count);
         Assert.Contains("H028", objVisuals.Keys);
@@ -201,6 +208,12 @@ public class DependencyGraphTreeStructureTests
         Assert.True(HasCarriedGroup(RootItem(view)));
         Assert.True(objVisuals.Count > 7);
         Assert.Empty(view.ExcludedKeys);
+
+        // The carried files and strings come back with it, one toggle over every list.
+        var carriedFiles = Field<Expander>(view, "PortAssetsExpander");
+        Assert.True(carriedFiles.IsVisible);
+        Assert.Equal("Files carried by the script closure (481)", carriedFiles.Header);
+        Assert.Equal("Strings (1875)", Field<Expander>(view, "StringsExpander").Header);
     }
 
     private static void AssertHeroDirectStructure(

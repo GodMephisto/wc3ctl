@@ -81,7 +81,10 @@ public class BundleCommandTests
         Assert.Contains(new BundleEdge("A000", "B000", "abuf:1"), bundle.Edges);
         Assert.Contains(new BundleEdge("H000", @"war3mapImported\hero.mdx", "umdl"), bundle.Edges);
         Assert.Contains(new BundleEdge(@"war3mapImported\hero.mdx", @"Textures\Hero.blp", "texture"), bundle.Edges);
-        Assert.Equal(4, bundle.Edges.Count);
+        // A string edge records WHICH object wants the display string, so a front end can tell the
+        // root's own names and tooltips from the ones the script closure carries in.
+        Assert.Contains(new BundleEdge("H000", "Dark Paladin", "string"), bundle.Edges);
+        Assert.Equal(5, bundle.Edges.Count);
     }
 
     [Fact]

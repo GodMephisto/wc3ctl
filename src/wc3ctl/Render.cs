@@ -142,13 +142,31 @@ public static class Render
             }
         }
 
-        sb.AppendLine().AppendLine($"Files ({r.Files.Count}):");
-        foreach (var f in r.Files)
-            sb.AppendLine($"  {(f.PresentInMap ? "[in map] " : "[missing]")} {f.Path}  ({f.Category})");
+        // Files and strings get the same treatment as the objects above. Every foreign icon
+        // arrives through a real art field of a foreign object, so the split is by WHICH object
+        // asked, never by the field code. The closure's share is counted, not dumped, since it is
+        // hundreds of other heroes' assets. --json still carries the complete lists.
+        var realFiles = BundleStructure.RealFiles(r);
+        var ownFiles = r.Files.Where(f => realFiles.Contains(f.Path)).ToList();
+        var carriedFiles = r.Files.Where(f => !realFiles.Contains(f.Path)).ToList();
 
-        sb.AppendLine().AppendLine($"Strings ({r.Strings.Count}):");
-        foreach (var s in r.Strings)
+        sb.AppendLine().AppendLine($"Files ({ownFiles.Count}):");
+        foreach (var f in ownFiles)
+            sb.AppendLine($"  {(f.PresentInMap ? "[in map] " : "[missing]")} {f.Path}  ({f.Category})");
+        if (carriedFiles.Count > 0)
+            sb.AppendLine($"  plus {carriedFiles.Count} carried by the script closure"
+                + $" ({Tally(carriedFiles.Select(f => f.Category))}), run with --json to list them");
+
+        var realStrings = BundleStructure.RealStrings(r);
+        var ownStrings = r.Strings.Where(realStrings.Contains).ToList();
+        int carriedStrings = r.Strings.Count - ownStrings.Count;
+
+        sb.AppendLine().AppendLine($"Strings ({ownStrings.Count}):");
+        foreach (var s in ownStrings)
             sb.AppendLine($"  \"{s}\"");
+        if (carriedStrings > 0)
+            sb.AppendLine($"  plus {carriedStrings} carried by the script closure,"
+                + " run with --json to list them");
 
         sb.AppendLine().AppendLine($"Functions ({r.Functions.Count}):");
         foreach (var f in r.Functions)
@@ -158,6 +176,15 @@ public static class Render
             sb.AppendLine($"note: {d}");
         return sb.ToString().TrimEnd('\r', '\n');
     }
+
+    /// <summary>"187 icon, 157 sound, 36 model", commonest first, for summarizing a list that is
+    /// too long to print.</summary>
+    private static string Tally(IEnumerable<string> values) =>
+        string.Join(", ", values
+            .GroupBy(v => v, StringComparer.Ordinal)
+            .OrderByDescending(g => g.Count())
+            .ThenBy(g => g.Key, StringComparer.Ordinal)
+            .Select(g => $"{g.Count()} {g.Key}"));
 
     /// <summary>One port report; a null <paramref name="outPath"/> marks a dry run.</summary>
     public static string Port(PortResult r, string? outPath)

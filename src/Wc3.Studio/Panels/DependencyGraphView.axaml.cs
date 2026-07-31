@@ -583,17 +583,23 @@ public partial class DependencyGraphView : UserControl, IMapPanel
     {
         _excluded.Clear(); // a fresh resolve starts with everything included
         _lastBundle = bundle;
-        int carriedCount = BundleStructure.CarriedByScriptClosure(bundle).Count;
-        HideCarriedCheck.Content = $"Show objects carried by the script closure ({carriedCount})";
-        HideCarriedCheck.IsVisible = carriedCount > 0;
+        // One count of the over-carry across all three lists, so the checkbox says what it governs.
+        int carriedObjects = BundleStructure.CarriedByScriptClosure(bundle).Count;
+        int realFiles = BundleStructure.RealFiles(bundle).Count;
+        int carriedFiles = bundle.Files.Count - realFiles;
+        int realStrings = bundle.Strings.Count(BundleStructure.RealStrings(bundle).Contains);
+        HideCarriedCheck.Content = "Show what the script closure carries"
+            + $" ({carriedObjects} objects, {carriedFiles} files)";
+        HideCarriedCheck.IsVisible = carriedObjects > 0 || carriedFiles > 0;
+        int realObjects = BundleStructure.RealObjects(bundle).Count;
         int custom = bundle.Objects.Count(o => o.CustomToMap);
-        int deps = CleanReachableFiles(bundle).Count;
-        int portAssets = bundle.Files.Count - deps;
         SummaryText.Text =
-            $"{bundle.Objects.Count} objects ({custom} custom / {bundle.Objects.Count - custom} base)"
-            + $", {deps} files"
-            + (portAssets > 0 ? $" (+{portAssets} port assets)" : "")
-            + $", {bundle.Strings.Count} strings";
+            $"{realObjects} objects, {realFiles} files, {realStrings} strings"
+            + (carriedObjects > 0 || carriedFiles > 0
+                ? $" (closure carries {carriedObjects} objects, {carriedFiles} files,"
+                  + $" {bundle.Strings.Count - realStrings} strings)"
+                : "")
+            + $", {custom} of {bundle.Objects.Count} custom to this map";
         StatusText.Text = bundle.Diagnostics.Count > 0 ? string.Join("; ", bundle.Diagnostics) : "";
         BuildTree(bundle);
         BuildFilesList(bundle);
@@ -601,14 +607,17 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         RenderGraph(bundle);
     }
 
-    /// <summary>Rebuilds the tree and graph for the current toggle state. This is view only,
-    /// and never changes the bundle or the port exclusion set.</summary>
+    /// <summary>Rebuilds every view for the current toggle state, the tree, the graph, the file
+    /// list and the string list. This is view only, and never changes the bundle or the port
+    /// exclusion set.</summary>
     private void OnHideCarriedToggled()
     {
         _hideCarried = HideCarriedCheck.IsChecked != true;
         if (_lastBundle is { } bundle)
         {
             BuildTree(bundle);
+            BuildFilesList(bundle);
+            BuildStringsList(bundle);
             RenderGraph(bundle);
         }
     }
@@ -842,23 +851,23 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         FilesList.Children.Clear();
         PortAssetsList.Children.Clear();
 
-        // Split the bundle's files. A file is a real object dependency when it is reachable from
-        // the root WITHOUT crossing a trigger-script edge (object fields, their models, and those
-        // models' textures). Files reachable only through "script" edges are the hero's
-        // trigger-driven skill effects, they belong to a PORT but are noise when browsing, so they
-        // go under a separate, collapsed "Port assets" group instead of burying the real list.
-        var objectDeps = CleanReachableFiles(bundle);
-        var deps = bundle.Files.Where(f => objectDeps.Contains(f.Path)).ToList();
-        var portAssets = bundle.Files.Where(f => !objectDeps.Contains(f.Path)).ToList();
+        // Split the bundle's files by WHICH object asked for them, the same rule the tree uses.
+        // The old split asked whether a file arrived through an art field rather than a script
+        // edge, which every foreign icon does, so a hero listed all 498 files in the closure as
+        // its own. Asta really needs 17, his icons, his model, and that model's textures.
+        var realFiles = BundleStructure.RealFiles(bundle);
+        var own = bundle.Files.Where(f => realFiles.Contains(f.Path)).ToList();
+        var carried = bundle.Files.Where(f => !realFiles.Contains(f.Path)).ToList();
 
-        FilesExpander.Header = $"Files ({deps.Count})";
-        FilesExpander.IsExpanded = deps.Count > 0;
-        foreach (var file in deps) FilesList.Children.Add(FileRow(file));
+        FilesExpander.Header = $"Files ({own.Count})";
+        FilesExpander.IsExpanded = own.Count > 0;
+        foreach (var file in own) FilesList.Children.Add(FileRow(file));
 
-        PortAssetsExpander.Header = $"Port assets ({portAssets.Count})";
+        // Same toggle as the tree, so one checkbox governs every view of the over-carry.
+        PortAssetsExpander.Header = $"Files carried by the script closure ({carried.Count})";
         PortAssetsExpander.IsExpanded = false;
-        PortAssetsExpander.IsVisible = portAssets.Count > 0;
-        foreach (var file in portAssets) PortAssetsList.Children.Add(FileRow(file));
+        PortAssetsExpander.IsVisible = carried.Count > 0 && !_hideCarried;
+        foreach (var file in carried) PortAssetsList.Children.Add(FileRow(file));
     }
 
     private Control FileRow(BundleFile file)
@@ -878,42 +887,20 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         return row;
     }
 
-    /// <summary>Files reachable from the root without crossing a trigger-script edge, the object's
-    /// real field dependencies (models, textures, icons) as opposed to its trigger-carried assets.</summary>
-    private static HashSet<string> CleanReachableFiles(UnitBundle bundle)
-    {
-        var filePaths = bundle.Files.Select(f => f.Path).ToHashSet(StringComparer.Ordinal);
-        var adjacency = new Dictionary<string, List<(string To, string Via)>>(StringComparer.Ordinal);
-        foreach (var e in bundle.Edges)
-        {
-            if (!adjacency.TryGetValue(e.From, out var list)) adjacency[e.From] = list = new();
-            list.Add((e.To, e.Via));
-        }
-
-        var clean = new HashSet<string>(StringComparer.Ordinal);
-        var seen = new HashSet<string>(StringComparer.Ordinal) { bundle.RootRawcode };
-        var stack = new Stack<string>();
-        stack.Push(bundle.RootRawcode);
-        while (stack.Count > 0)
-        {
-            var node = stack.Pop();
-            if (!adjacency.TryGetValue(node, out var outs)) continue;
-            foreach (var (to, via) in outs)
-            {
-                if (via == "script") continue; // trigger-carried assets are not field dependencies
-                if (seen.Add(to)) stack.Push(to);
-                if (filePaths.Contains(to)) clean.Add(to);
-            }
-        }
-        return clean;
-    }
-
     private void BuildStringsList(UnitBundle bundle)
     {
         StringsList.Children.Clear();
-        StringsExpander.Header = $"Strings ({bundle.Strings.Count})";
+        // The root's own tooltips and names, not every hero's. Same owner rule as the files.
+        var realStrings = BundleStructure.RealStrings(bundle);
+        var shown = _hideCarried
+            ? bundle.Strings.Where(realStrings.Contains).ToList()
+            : bundle.Strings.ToList();
+        int carried = bundle.Strings.Count - bundle.Strings.Count(realStrings.Contains);
+        StringsExpander.Header = _hideCarried && carried > 0
+            ? $"Strings ({shown.Count}, {carried} carried hidden)"
+            : $"Strings ({shown.Count})";
         StringsExpander.IsExpanded = false; // usually the longest list; opt-in
-        foreach (var s in bundle.Strings)
+        foreach (var s in shown)
         {
             var row = new TextBlock
             {
@@ -1059,9 +1046,9 @@ public partial class DependencyGraphView : UserControl, IMapPanel
 
         // --- files band: wrapped rows under the object area (case-insensitive
         //     keys - WC3 paths compare case-insensitively) ---
-        // Only the object's real dependencies appear as file nodes. The trigger-carried
-        // "port assets" are listed separately in the panel and would just swamp the graph.
-        var objectDeps = CleanReachableFiles(bundle);
+        // Only the object's real dependencies appear as file nodes. What the closure carries is
+        // listed separately in the panel and would just swamp the graph.
+        var objectDeps = BundleStructure.RealFiles(bundle);
         var depFiles = bundle.Files.Where(f => objectDeps.Contains(f.Path)).ToList();
 
         var fileRects = new Dictionary<string, Rect>(StringComparer.OrdinalIgnoreCase);

@@ -174,7 +174,13 @@ public static class BundleCommand
             {
                 var resolved = strings.Resolve(value.Trim());
                 if (resolved.Length > 0 && !resolved.StartsWith("TRIGSTR_", StringComparison.Ordinal))
+                {
                     stringSet.Add(resolved);
+                    // Record WHICH object wants this string. The list itself stays flat (the porter
+                    // inlines all of it), but a front end needs the owner to tell the root's own
+                    // tooltips apart from the closure's, exactly as it does for files.
+                    AddEdge(from, resolved, BundleStructure.StringVia);
+                }
             }
 
             // Cross-references are 4-char rawcodes or comma-separated lists of them —
