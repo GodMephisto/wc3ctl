@@ -11,14 +11,14 @@ using Wc3.Studio.Panels;
 namespace Wc3.Studio.Tests;
 
 /// <summary>
-/// Pins the shape of the dependency tree (DepTree). A hero in these tightly coupled
-/// maps carries a very large script closure, hundreds of objects including other
-/// heroes' whole kits. That over-carry is deliberate and stays in the bundle, but the
-/// tree must not present it as if the hero owns it. The hero's DIRECT children are only
-/// the objects it references through real object-data fields (uhab, uabi, abuf and the
-/// like), never the objects attached to the root by the synthetic "script closure"
-/// edge. Everything reachable only through that edge lives under one clearly labelled
-/// "Carried by the script closure" group.
+/// Pins what the dependency panel shows. A hero on one of these tightly coupled arena maps
+/// carries a very large script closure, hundreds of objects including other heroes' whole
+/// kits, because the shared trigger script needs them present to compile and run. That
+/// over-carry stays in the bundle and still ports, but it is NOT this unit's dependency, so
+/// this panel never lists it, in the tree, the graph, the file list or the string list. What
+/// the unit shows is only what its own object data references (uhab, uabi, abuf and the like),
+/// plus, for files, the textures its own models name. The closure's size stays visible on the
+/// summary line so its cost on a port is not silently hidden.
 /// </summary>
 public class DependencyGraphTreeStructureTests
 {
@@ -29,239 +29,157 @@ public class DependencyGraphTreeStructureTests
 
     private static readonly TimeSpan LoadTimeout = TimeSpan.FromSeconds(180);
 
-    // An object row header starts with the four character rawcode followed by a space
-    // hyphen space and the name. Group headers ("Carried by the script closure (N)",
-    // "Other triggers", "Trigger functions (N)") never begin that way, so this pattern
-    // selects object rows and skips the group nodes.
+    // An object row header starts with the four character rawcode followed by a space hyphen
+    // space and the name. Group headers ("Other triggers", "Trigger functions (N)") never begin
+    // that way, so this pattern selects object rows and skips group nodes.
     private static readonly Regex ObjectRow = new(@"^.{4} - ", RegexOptions.Compiled);
 
     /// <summary>
-    /// Hermetic, no map or game data needed. A synthetic bundle where the root reaches
-    /// two abilities through real fields (one of them owning a buff) and three more
-    /// objects only through the "script closure" edge (one of those owning a buff of its
-    /// own). The tree must show exactly the two real abilities directly under the hero,
-    /// nest the real buff under its ability, and park the three closure objects (plus the
-    /// nested buff) under the carried group.
+    /// Hermetic, no map or game data needed. A synthetic bundle where the root reaches two
+    /// abilities through real fields (one owning a buff) and three more objects only through the
+    /// "script closure" edge (one of those owning a buff of its own, and one owning an icon
+    /// through an ordinary art field). The tree shows exactly the two real abilities under the
+    /// hero with the real buff nested, and the closure objects appear nowhere.
     /// </summary>
     [AvaloniaFact]
-    public void Real_references_are_the_hero_s_direct_children_closure_objects_are_grouped()
+    public void Only_real_references_appear_and_the_closure_is_absent_entirely()
     {
-        var bundle = SampleBundle();
-
         var view = new DependencyGraphView();
-        SetField(view, "_hideCarried", false); // this test inspects the carried group, so reveal it
-        InvokeBuildTree(view, bundle);
+        InvokeBuildTree(view, SampleBundle());
         var root = RootItem(view);
 
         var directRows = ObjectRows(root);
         Assert.Equal(new[] { "A001", "A002" }, directRows.Select(RawcodeOf).OrderBy(r => r).ToArray());
 
-        // The real buff hangs under its ability, not at the top and not in the closure group.
+        // The real buff hangs under its ability.
         var a001 = directRows.Single(i => RawcodeOf(i) == "A001");
         Assert.Contains(ObjectRows(a001), i => RawcodeOf(i) == "B001");
 
-        var carried = root.Items.OfType<TreeViewItem>()
-            .Single(i => HeaderText(i).StartsWith("Carried by the script closure", StringComparison.Ordinal));
-        Assert.Contains("(4)", HeaderText(carried));
-
-        var carriedTop = ObjectRows(carried).Select(RawcodeOf).OrderBy(r => r).ToArray();
-        Assert.Equal(new[] { "A003", "A004", "U002" }, carriedTop);
-
-        // The foreign buff nests under the foreign ability that pulls it in, inside the group.
-        var a004 = ObjectRows(carried).Single(i => RawcodeOf(i) == "A004");
-        Assert.Contains(ObjectRows(a004), i => RawcodeOf(i) == "B002");
-
-        // No object row anywhere claims the hero directly owns a closure object.
-        Assert.DoesNotContain(directRows, i => RawcodeOf(i) is "A003" or "A004" or "U002" or "B002");
+        // No carried group, and no closure object anywhere in the tree. The group header is what
+        // is being ruled out, not the word, a REAL child legitimately lists "script closure" among
+        // its vias when the closure seed also names an object its owner already references.
+        Assert.DoesNotContain(root.Items.OfType<TreeViewItem>(), IsCarriedGroup);
+        foreach (var code in new[] { "A003", "A004", "U002", "B002" })
+            Assert.DoesNotContain(code, AllHeaders(root));
     }
 
-    /// <summary>
-    /// The reported repro. Asta (H028) in Anime_WOS2_0.28a2 resolves to 193 abilities in
-    /// the closure, but only 6 are real references of the hero. The old tree listed all
-    /// 193 flat under the hero. The tree must now show 6 direct abilities and carry the
-    /// remaining 204 objects in the labelled group, while the bundle itself keeps the full
-    /// over-carry untouched.
-    /// </summary>
+    /// <summary>The file and string lists follow the same rule. The root's own icon and its
+    /// model's texture show, the foreign object's icon does not, and there is no second list for
+    /// the closure to hide in.</summary>
     [AvaloniaFact]
-    [Trait("Category", "Corpus")]
-    public void Asta_H028_shows_six_direct_abilities_not_the_whole_closure()
-    {
-        if (!File.Exists(AstaMap)) return;
-        AssertHeroDirectStructure(AstaMap, "H028",
-            expectedDirectRows: 6, expectedTotalAbilities: 193, expectedCarried: 204);
-    }
-
-    /// <summary>Second hero, so the fix is not overfitted to Asta. Shadow Nanaya (H0DA)
-    /// in Anime Choice Arena V0.31C has 9 real direct abilities out of 40 in the closure,
-    /// with the deeper real structure (buffs and spellbook entries) hanging under them.</summary>
-    [AvaloniaFact]
-    [Trait("Category", "Corpus")]
-    public void Second_hero_H0DA_shows_nine_direct_abilities()
-    {
-        if (!File.Exists(ChoiceArenaMap)) return;
-        AssertHeroDirectStructure(ChoiceArenaMap, "H0DA",
-            expectedDirectRows: 9, expectedTotalAbilities: 40, expectedCarried: 66);
-    }
-
-    /// <summary>
-    /// The toggle is a view change only, and it defaults to hidden. On a fresh resolve the
-    /// carried group is absent from the tree and its nodes are off the graph, with the count
-    /// still shown on the checkbox. Revealing then hiding never changes the port exclusion
-    /// set. A node the user excluded from the port stays excluded while it is hidden, hiding
-    /// is not excluding.
-    /// </summary>
-    [AvaloniaFact]
-    public void Hiding_the_carried_group_is_view_only_and_keeps_exclusions()
+    public void Files_and_strings_show_only_the_root_s_own()
     {
         var view = new DependencyGraphView();
         var window = new Window { Width = 900, Height = 600, Content = view };
         window.Show();
         InvokeRenderBundle(view, SampleBundle());
 
-        var check = Field<CheckBox>(view, "HideCarriedCheck");
+        Assert.Equal("Files (3)", Field<Expander>(view, "FilesExpander").Header);
+        var fileRows = Field<StackPanel>(view, "FilesList").Children
+            .OfType<TextBlock>().Select(t => t.Text ?? "").ToList();
+        Assert.Contains(fileRows, t => t.Contains("BTNOwn.blp"));
+        Assert.Contains(fileRows, t => t.Contains("hero0.blp")); // through the root's own model
+        Assert.DoesNotContain(fileRows, t => t.Contains("BTNForeign.blp"));
+        Assert.DoesNotContain(fileRows, t => t.Contains("foreign.mdl"));
+
+        Assert.Equal("Strings (2)", Field<Expander>(view, "StringsExpander").Header);
+        var stringRows = Field<StackPanel>(view, "StringsList").Children
+            .OfType<TextBlock>().Select(t => t.Text ?? "").ToList();
+        Assert.Contains("Test Hero", stringRows);
+        Assert.DoesNotContain("Foreign Skill", stringRows);
+
+        // The closure's size is still reported, so the port cost is visible rather than hidden.
+        var summary = Field<TextBlock>(view, "SummaryText").Text ?? "";
+        Assert.Contains("closure carries", summary);
+        Assert.Contains("4 objects", summary);
+    }
+
+    /// <summary>The graph lays out only the real dependencies, and a node the user excludes from
+    /// the port stays excluded. Not listing the closure is a view decision, it never touches the
+    /// bundle or the exclusion set.</summary>
+    [AvaloniaFact]
+    public void Graph_lays_out_real_dependencies_only_and_exclusions_still_work()
+    {
+        var view = new DependencyGraphView();
+        var window = new Window { Width = 900, Height = 600, Content = view };
+        window.Show();
+        InvokeRenderBundle(view, SampleBundle());
+
         var objVisuals = Field<Dictionary<string, Border>>(view, "_objVisuals");
+        Assert.Equal(new[] { "A001", "A002", "B001", "H001" }, objVisuals.Keys.OrderBy(k => k).ToArray());
+        Assert.Empty(view.ExcludedKeys);
 
-        // Hidden by default. The group is absent and the carried node is not drawn, but the
-        // count is still visible so the user can see how much is tucked away.
-        Assert.True(check.IsVisible);
-        Assert.True(check.IsChecked == false);
-        Assert.Contains("4 objects", check.Content as string ?? "");
-        Assert.False(HasCarriedGroup(RootItem(view)));
-        Assert.DoesNotContain("A003", objVisuals.Keys);
-        Assert.Contains("A001", objVisuals.Keys);
-
-        // Reveal, the group and its nodes appear.
-        check.IsChecked = true;
-        Dispatcher.UIThread.RunJobs();
-        Assert.True(HasCarriedGroup(RootItem(view)));
-        Assert.Contains("A003", objVisuals.Keys);
-
-        // The user excludes a carried node from the port, then hides again.
         var excluded = Field<HashSet<string>>(view, "_excluded");
-        excluded.Add("A003");
-        check.IsChecked = false;
+        excluded.Add("A002");
         Dispatcher.UIThread.RunJobs();
-
-        // Both surfaces drop the carried objects, the real abilities remain.
-        Assert.False(HasCarriedGroup(RootItem(view)));
-        Assert.DoesNotContain("A003", objVisuals.Keys);
-        Assert.DoesNotContain("A004", objVisuals.Keys);
-        Assert.DoesNotContain("U002", objVisuals.Keys);
-        Assert.Contains("H001", objVisuals.Keys);
-        Assert.Contains("A001", objVisuals.Keys);
-        Assert.Contains("A002", objVisuals.Keys);
-
-        // Hiding never touched the exclusion set, the hidden node is still excluded.
-        Assert.Contains("A003", view.ExcludedKeys);
-
-        // Reveal once more, the exclusion is still intact.
-        check.IsChecked = true;
-        Dispatcher.UIThread.RunJobs();
-        Assert.True(HasCarriedGroup(RootItem(view)));
-        Assert.Contains("A003", objVisuals.Keys);
-        Assert.Contains("A003", view.ExcludedKeys);
+        Assert.Contains("A002", view.ExcludedKeys);
     }
 
     /// <summary>
-    /// End to end on the reported map, the default. Asta (H028) opens with the closure
-    /// hidden, so the hero shows its 6 real abilities and the graph is just the 7 real nodes
-    /// (the hero plus 6), with the "(204)" count on the checkbox and nothing excluded.
-    /// Revealing brings the whole closure back. The checkbox declutters without touching the
-    /// bundle or the exclusion set.
+    /// The reported repro. Asta (H028) in Anime_WOS2_0.28a2 resolves to 193 abilities and 498
+    /// files in the closure, of which 6 abilities and 17 files are his. The panel shows his.
     /// </summary>
     [AvaloniaFact]
     [Trait("Category", "Corpus")]
-    public void Hiding_the_carried_group_declutters_Asta_H028_without_excluding()
+    public void Asta_H028_shows_only_his_own_six_abilities_and_seventeen_files()
     {
         if (!File.Exists(AstaMap)) return;
-        var doc = MapDocument.Load(AstaMap);
-        var view = new DependencyGraphView();
-        var window = new Window { Width = 1200, Height = 800, Content = view };
-        window.Show();
-        view.ShowObject(new MapSession { Current = doc, MapPath = AstaMap }, ObjectKind.Unit, "H028");
-        var tree = Field<TreeView>(view, "DepTree");
-        PumpUntilPopulated(tree);
+        var view = ShowHero(AstaMap, "H028", expectedDirectRows: 6,
+            expectedTotalAbilities: 193, expectedCarried: 204);
 
-        // Hidden by default, decluttered.
-        var check = Field<CheckBox>(view, "HideCarriedCheck");
-        Assert.True(check.IsVisible);
-        Assert.True(check.IsChecked == false);
-        Assert.Contains("204 objects", check.Content as string ?? "");
-        Assert.Contains("481 files", check.Content as string ?? "");
-        var root = RootItem(view);
-        Assert.False(HasCarriedGroup(root));
-        Assert.Equal(6, ObjectRows(root).Count);
-
-        // The file and string lists get the same rule. Asta really needs 17 files (6 icons, his
-        // model, its 10 textures) out of the 498 the closure drags in, and 88 of 1875 strings.
         Assert.Equal("Files (17)", Field<Expander>(view, "FilesExpander").Header);
-        Assert.False(Field<Expander>(view, "PortAssetsExpander").IsVisible);
-        Assert.Equal("Strings (88, 1787 carried hidden)", Field<Expander>(view, "StringsExpander").Header);
-        var objVisuals = Field<Dictionary<string, Border>>(view, "_objVisuals");
-        Assert.Equal(7, objVisuals.Count);
-        Assert.Contains("H028", objVisuals.Keys);
+        Assert.Equal("Strings (88)", Field<Expander>(view, "StringsExpander").Header);
+        // The hero plus his 6 real abilities, nothing else on the canvas.
+        Assert.Equal(7, Field<Dictionary<string, Border>>(view, "_objVisuals").Count);
         Assert.Empty(view.ExcludedKeys);
-
-        // Reveal, the whole closure comes back and still nothing is excluded.
-        check.IsChecked = true;
-        Dispatcher.UIThread.RunJobs();
-        Assert.True(HasCarriedGroup(RootItem(view)));
-        Assert.True(objVisuals.Count > 7);
-        Assert.Empty(view.ExcludedKeys);
-
-        // The carried files and strings come back with it, one toggle over every list.
-        var carriedFiles = Field<Expander>(view, "PortAssetsExpander");
-        Assert.True(carriedFiles.IsVisible);
-        Assert.Equal("Files carried by the script closure (481)", carriedFiles.Header);
-        Assert.Equal("Strings (1875)", Field<Expander>(view, "StringsExpander").Header);
     }
 
-    private static void AssertHeroDirectStructure(
+    /// <summary>Second hero, so the rule is not overfitted to Asta. Shadow Nanaya (H0DA) in
+    /// Anime Choice Arena V0.31C has 9 real direct abilities out of 40 in the closure, with the
+    /// deeper real structure (buffs and spellbook entries) hanging under them.</summary>
+    [AvaloniaFact]
+    [Trait("Category", "Corpus")]
+    public void Second_hero_H0DA_shows_nine_direct_abilities()
+    {
+        if (!File.Exists(ChoiceArenaMap)) return;
+        ShowHero(ChoiceArenaMap, "H0DA", expectedDirectRows: 9,
+            expectedTotalAbilities: 40, expectedCarried: 66);
+    }
+
+    /// <summary>Resolves a hero on a real map, checks the command layer still holds the whole
+    /// over-carry, and that the panel shows only the hero's own with no closure group anywhere.</summary>
+    private static DependencyGraphView ShowHero(
         string mapPath, string rawcode, int expectedDirectRows, int expectedTotalAbilities, int expectedCarried)
     {
-        // Ground truth from the command layer, the over-carry must be intact.
+        // Ground truth from the command layer, the over-carry must still be intact in the bundle.
         var doc = MapDocument.Load(mapPath);
         var bundle = BundleCommand.ResolveObject(doc, ObjectKind.Unit, rawcode, null);
-        var objectCodes = bundle.Objects.Select(o => o.Rawcode).ToHashSet(StringComparer.Ordinal);
         Assert.Equal(expectedTotalAbilities, bundle.Objects.Count(o => o.Kind == ObjectKind.Ability));
-        var realDirectAbilities = bundle.Edges
-            .Where(e => e.From == rawcode && e.Via != "script closure" && objectCodes.Contains(e.To))
-            .Select(e => e.To)
-            .Distinct()
-            .Count(to => bundle.Objects.First(o => o.Rawcode == to).Kind == ObjectKind.Ability);
-        Assert.Equal(expectedDirectRows, realDirectAbilities);
+        Assert.Equal(expectedCarried, BundleStructure.CarriedByScriptClosure(bundle).Count);
 
-        // The panel must reflect that, a handful of direct rows and the rest in the group.
         var view = new DependencyGraphView();
         var window = new Window { Width = 1200, Height = 800, Content = view };
         window.Show();
-        var session = new MapSession { Current = doc, MapPath = mapPath };
-        view.ShowObject(session, ObjectKind.Unit, rawcode);
+        view.ShowObject(new MapSession { Current = doc, MapPath = mapPath }, ObjectKind.Unit, rawcode);
+        PumpUntilPopulated(Field<TreeView>(view, "DepTree"));
 
-        var tree = Field<TreeView>(view, "DepTree");
-        PumpUntilPopulated(tree);
-
-        // The carried group is hidden by default, the hero's real children still show.
-        var root = tree.Items.OfType<TreeViewItem>().First();
+        var root = RootItem(view);
         Assert.Equal(expectedDirectRows, ObjectRows(root).Count);
-        Assert.DoesNotContain(root.Items.OfType<TreeViewItem>(),
-            i => HeaderText(i).StartsWith("Carried by the script closure", StringComparison.Ordinal));
+        Assert.DoesNotContain(root.Items.OfType<TreeViewItem>(), IsCarriedGroup);
 
-        // Reveal it, the group appears with the full carried count and the real rows persist.
-        Field<CheckBox>(view, "HideCarriedCheck").IsChecked = true;
-        Dispatcher.UIThread.RunJobs();
-        root = tree.Items.OfType<TreeViewItem>().First();
-        Assert.Equal(expectedDirectRows, ObjectRows(root).Count);
-        var carried = root.Items.OfType<TreeViewItem>()
-            .Single(i => HeaderText(i).StartsWith("Carried by the script closure", StringComparison.Ordinal));
-        Assert.Contains($"({expectedCarried})", HeaderText(carried));
+        // The summary still reports what the closure carries, so the port cost stays visible.
+        Assert.Contains($"closure carries {expectedCarried} objects",
+            Field<TextBlock>(view, "SummaryText").Text ?? "");
+        return view;
     }
 
     // helpers
 
-    /// <summary>A small closure the root reaches two abilities through real fields (A001
-    /// owning buff B001), and three more objects only through the script closure edge (A004
-    /// owning buff B002). Four objects are carried, A003, A004, U002, and B002.</summary>
+    /// <summary>A small closure. The root reaches two abilities through real fields (A001 owning
+    /// buff B001) and three more objects only through the script closure edge (A004 owning buff
+    /// B002). Four objects are carried, A003, A004, B002 and U002. Assets matter as much, the
+    /// root's model names its OWN texture, and the foreign ability owns an icon through "aart",
+    /// an ordinary art field, which is why the field code can never tell them apart.</summary>
     private static UnitBundle SampleBundle()
     {
         var objects = new List<BundleNode>
@@ -275,6 +193,15 @@ public class DependencyGraphTreeStructureTests
             new("B002", ObjectKind.Buff, "Foreign Buff", true),
             new("U002", ObjectKind.Unit, "Foreign Dummy", true),
         };
+        var files = new List<BundleFile>
+        {
+            new(@"war3mapImported\hero.mdl", "model", PresentInMap: true),
+            new(@"war3mapImported\hero0.blp", "texture", PresentInMap: true),
+            new(@"ReplaceableTextures\CommandButtons\BTNOwn.blp", "icon", PresentInMap: true),
+            new(@"ReplaceableTextures\CommandButtons\BTNForeign.blp", "icon", PresentInMap: true),
+            new(@"war3mapImported\foreign.mdl", "model", PresentInMap: true),
+        };
+        var strings = new List<string> { "Test Hero", "Real Skill One", "Foreign Skill" };
         var edges = new List<BundleEdge>
         {
             new("H001", "A001", "uhab"),
@@ -284,15 +211,35 @@ public class DependencyGraphTreeStructureTests
             new("H001", "A004", "script closure"),
             new("H001", "U002", "script closure"),
             new("A004", "B002", "abuf"),
+
+            new("H001", @"war3mapImported\hero.mdl", "umdl"),
+            new(@"war3mapImported\hero.mdl", @"war3mapImported\hero0.blp", "texture"),
+            new("A001", @"ReplaceableTextures\CommandButtons\BTNOwn.blp", "aart"),
+            new("A003", @"ReplaceableTextures\CommandButtons\BTNForeign.blp", "aart"),
+            new("U002", @"war3mapImported\foreign.mdl", "umdl"),
+
+            new("H001", "Test Hero", "string"),
+            new("A001", "Real Skill One", "string"),
+            new("A003", "Foreign Skill", "string"),
         };
-        return new UnitBundle("H001", "Test Hero", objects,
-            Array.Empty<BundleFile>(), Array.Empty<string>(), edges,
-            Array.Empty<string>(), Array.Empty<BundleFunction>());
+        return new UnitBundle("H001", "Test Hero", objects, files,
+            strings, edges, Array.Empty<string>(), Array.Empty<BundleFunction>());
     }
 
-    private static bool HasCarriedGroup(TreeViewItem root) =>
-        root.Items.OfType<TreeViewItem>()
-            .Any(i => HeaderText(i).StartsWith("Carried by the script closure", StringComparison.Ordinal));
+    /// <summary>The group node the panel used to add for the over-carry, identified by its header
+    /// form rather than by the phrase, which also appears as an ordinary via label.</summary>
+    private static bool IsCarriedGroup(TreeViewItem item) =>
+        HeaderText(item).StartsWith("Carried by the script closure", StringComparison.Ordinal);
+
+    /// <summary>Every header in the subtree, so a test can assert a rawcode appears nowhere.</summary>
+    private static IEnumerable<string> AllHeaders(TreeViewItem item)
+    {
+        foreach (var child in item.Items.OfType<TreeViewItem>())
+        {
+            yield return HeaderText(child);
+            foreach (var deeper in AllHeaders(child)) yield return deeper;
+        }
+    }
 
     private static void InvokeRenderBundle(DependencyGraphView view, UnitBundle bundle) =>
         typeof(DependencyGraphView)
@@ -331,8 +278,4 @@ public class DependencyGraphTreeStructureTests
     private static T Field<T>(object obj, string name) => (T)obj.GetType()
         .GetField(name, BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance)!
         .GetValue(obj)!;
-
-    private static void SetField(object obj, string name, object? value) => obj.GetType()
-        .GetField(name, BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance)!
-        .SetValue(obj, value);
 }

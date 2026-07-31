@@ -33,10 +33,6 @@
             <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" Margin="6,4">
                 <TextBlock Name="KindLabel" Text="Unit:" VerticalAlignment="Center"/>
                 <controls:SearchableComboBox Name="ObjectCombo" MinWidth="280"/>
-                <CheckBox Name="HideCarriedCheck" IsChecked="False" IsVisible="False"
-                          VerticalAlignment="Center"
-                          Content="Show objects carried by the script closure"
-                          ToolTip.Tip="Hidden by default. Check to show the objects the trigger script drags in (other heroes' kits), in both the tree and the graph. This only changes the view, it never changes what gets ported."/>
                 <TextBlock Name="SummaryText" VerticalAlignment="Center"
                            Foreground="#8FA3B8" Text=""/>
             </StackPanel>
@@ -80,9 +76,6 @@
                         <TreeView Name="DepTree"/>
                         <Expander Name="FilesExpander" Header="Files (0)">
                             <StackPanel Name="FilesList" Spacing="2" Margin="4"/>
-                        </Expander>
-                        <Expander Name="PortAssetsExpander" Header="Port assets (0)" IsExpanded="False">
-                            <StackPanel Name="PortAssetsList" Spacing="2" Margin="4"/>
                         </Expander>
                         <Expander Name="StringsExpander" Header="Strings (0)">
                             <StackPanel Name="StringsList" Spacing="2" Margin="4"/>

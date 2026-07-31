@@ -119,10 +119,6 @@ public partial class DependencyGraphView : UserControl, IMapPanel
     /// graph without resolving again. Null when nothing is rendered.</summary>
     private UnitBundle? _lastBundle;
 
-    /// <summary>View only. True hides objects carried only by the script closure from the
-    /// tree and the graph. It never affects the bundle or the port exclusion set.</summary>
-    private bool _hideCarried = true;
-
     public DependencyGraphView()
     {
         InitializeComponent();
@@ -145,7 +141,6 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         ZoomOutButton.Click += (_, _) => ZoomAt(ViewportCenter(), 1 / ButtonZoomStep);
         ZoomFitButton.Click += (_, _) => FitView();
         ZoomResetButton.Click += (_, _) => ResetView();
-        HideCarriedCheck.IsCheckedChanged += (_, _) => OnHideCarriedToggled();
     }
 
     // --- canvas interaction: pan / zoom / node drag ---
@@ -583,14 +578,12 @@ public partial class DependencyGraphView : UserControl, IMapPanel
     {
         _excluded.Clear(); // a fresh resolve starts with everything included
         _lastBundle = bundle;
-        // One count of the over-carry across all three lists, so the checkbox says what it governs.
+        // The over-carry is never listed in this panel, it is not this unit's. It stays counted in
+        // the summary below so its cost on a port is visible rather than silently dropped.
         int carriedObjects = BundleStructure.CarriedByScriptClosure(bundle).Count;
         int realFiles = BundleStructure.RealFiles(bundle).Count;
         int carriedFiles = bundle.Files.Count - realFiles;
         int realStrings = bundle.Strings.Count(BundleStructure.RealStrings(bundle).Contains);
-        HideCarriedCheck.Content = "Show what the script closure carries"
-            + $" ({carriedObjects} objects, {carriedFiles} files)";
-        HideCarriedCheck.IsVisible = carriedObjects > 0 || carriedFiles > 0;
         int realObjects = BundleStructure.RealObjects(bundle).Count;
         int custom = bundle.Objects.Count(o => o.CustomToMap);
         SummaryText.Text =
@@ -605,21 +598,6 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         BuildFilesList(bundle);
         BuildStringsList(bundle);
         RenderGraph(bundle);
-    }
-
-    /// <summary>Rebuilds every view for the current toggle state, the tree, the graph, the file
-    /// list and the string list. This is view only, and never changes the bundle or the port
-    /// exclusion set.</summary>
-    private void OnHideCarriedToggled()
-    {
-        _hideCarried = HideCarriedCheck.IsChecked != true;
-        if (_lastBundle is { } bundle)
-        {
-            BuildTree(bundle);
-            BuildFilesList(bundle);
-            BuildStringsList(bundle);
-            RenderGraph(bundle);
-        }
     }
 
     /// <summary>
@@ -715,44 +693,8 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         var expandedReal = new HashSet<string>(StringComparer.Ordinal) { bundle.RootRawcode };
         AddObjectChildren(rootItem, bundle.RootRawcode, expandedReal, allowedRawcodes: null);
 
-        var carriedRawcodes = BundleStructure.CarriedByScriptClosure(bundle);
-        if (carriedRawcodes.Count > 0 && !_hideCarried)
-        {
-            var carriedItem = new TreeViewItem
-            {
-                Header = MakeTreeLabel(
-                    $"Carried by the script closure ({carriedRawcodes.Count})",
-                    custom: null, bold: true),
-                IsExpanded = true,
-            };
-
-            var carriedRoots = bundle.Objects
-                .Where(o => carriedRawcodes.Contains(o.Rawcode)
-                    && (!realParents.TryGetValue(o.Rawcode, out var parents)
-                        || !parents.Any(carriedRawcodes.Contains)))
-                .ToList();
-            var expandedCarried = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var node in carriedRoots)
-            {
-                if (!expandedCarried.Add(node.Rawcode))
-                    continue;
-
-                var nodeItem = CreateObjectItem(node);
-                carriedItem.Items.Add(nodeItem);
-                AddObjectChildren(nodeItem, node.Rawcode, expandedCarried, carriedRawcodes);
-            }
-            foreach (var node in bundle.Objects.Where(o => carriedRawcodes.Contains(o.Rawcode)))
-            {
-                if (!expandedCarried.Add(node.Rawcode))
-                    continue;
-
-                var nodeItem = CreateObjectItem(node);
-                carriedItem.Items.Add(nodeItem);
-                AddObjectChildren(nodeItem, node.Rawcode, expandedCarried, carriedRawcodes);
-            }
-
-            rootItem.Items.Add(carriedItem);
-        }
+        // No carried group. What the script closure drags in is another hero's kit, not this
+        // unit's dependency, so this panel never lists it. The counts live on the summary line.
 
         if (seedsByOwner.TryGetValue(OtherOwnerKey, out var otherSeeds))
             rootItem.Items.Add(FunctionGroupItem(otherSeeds, childrenOf, "Other triggers"));
@@ -849,25 +791,17 @@ public partial class DependencyGraphView : UserControl, IMapPanel
     private void BuildFilesList(UnitBundle bundle)
     {
         FilesList.Children.Clear();
-        PortAssetsList.Children.Clear();
 
-        // Split the bundle's files by WHICH object asked for them, the same rule the tree uses.
-        // The old split asked whether a file arrived through an art field rather than a script
-        // edge, which every foreign icon does, so a hero listed all 498 files in the closure as
-        // its own. Asta really needs 17, his icons, his model, and that model's textures.
+        // The unit's own assets only, decided by WHICH object asked for them. Every foreign icon
+        // arrives through a perfectly ordinary art field, just on a foreign object, so the field
+        // code cannot tell them apart. Asta needs 17 of the closure's 498, his icons, his model,
+        // and that model's textures.
         var realFiles = BundleStructure.RealFiles(bundle);
         var own = bundle.Files.Where(f => realFiles.Contains(f.Path)).ToList();
-        var carried = bundle.Files.Where(f => !realFiles.Contains(f.Path)).ToList();
 
         FilesExpander.Header = $"Files ({own.Count})";
         FilesExpander.IsExpanded = own.Count > 0;
         foreach (var file in own) FilesList.Children.Add(FileRow(file));
-
-        // Same toggle as the tree, so one checkbox governs every view of the over-carry.
-        PortAssetsExpander.Header = $"Files carried by the script closure ({carried.Count})";
-        PortAssetsExpander.IsExpanded = false;
-        PortAssetsExpander.IsVisible = carried.Count > 0 && !_hideCarried;
-        foreach (var file in carried) PortAssetsList.Children.Add(FileRow(file));
     }
 
     private Control FileRow(BundleFile file)
@@ -892,13 +826,8 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         StringsList.Children.Clear();
         // The root's own tooltips and names, not every hero's. Same owner rule as the files.
         var realStrings = BundleStructure.RealStrings(bundle);
-        var shown = _hideCarried
-            ? bundle.Strings.Where(realStrings.Contains).ToList()
-            : bundle.Strings.ToList();
-        int carried = bundle.Strings.Count - bundle.Strings.Count(realStrings.Contains);
-        StringsExpander.Header = _hideCarried && carried > 0
-            ? $"Strings ({shown.Count}, {carried} carried hidden)"
-            : $"Strings ({shown.Count})";
+        var shown = bundle.Strings.Where(realStrings.Contains).ToList();
+        StringsExpander.Header = $"Strings ({shown.Count})";
         StringsExpander.IsExpanded = false; // usually the longest list; opt-in
         foreach (var s in shown)
         {
@@ -987,12 +916,11 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         }
         GraphHint.IsVisible = false;
 
-        // Hiding is view only, so the layout skips closure carried objects when the toggle
-        // is off. Their edges fall away with them, and TryGetVisual skips endpoints that
-        // were not laid out.
-        var hidden = _hideCarried
-            ? BundleStructure.CarriedByScriptClosure(bundle)
-            : new HashSet<string>(StringComparer.Ordinal);
+        // View only. The canvas lays out the unit's real dependencies, never the closure over-carry,
+        // which on a shared arena script is hundreds of other heroes' objects. Their edges fall away
+        // with them, and TryGetVisual skips endpoints that were not laid out. The bundle itself and
+        // the port exclusion set are untouched by this.
+        var hidden = BundleStructure.CarriedByScriptClosure(bundle);
         var objects = bundle.Objects.Where(o => !hidden.Contains(o.Rawcode)).ToList();
         bundle = bundle with { Objects = objects };
 
@@ -1325,7 +1253,6 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         _fileVisuals.Clear();
         _excluded.Clear();
         _lastBundle = null;
-        HideCarriedCheck.IsVisible = false;
         _dragNode = null;
         _panning = false;
         ResetView();
