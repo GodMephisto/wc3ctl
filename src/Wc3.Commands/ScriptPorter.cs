@@ -640,7 +640,11 @@ internal static class ScriptPorter
             var candidateResidual = new HashSet<string>(StringComparer.Ordinal);
             var trimmed = TrimToGlobals(
                 BodyText(srcLines, allByName[name]), allGlobals, keepGlobals, candidateResidual);
-            if (CountKeptAssignments(trimmed) == 0) continue;
+            // InitGlobals is exempt. It is the conventional entry point the target's main calls, and
+            // an empty one is harmless, whereas dropping it leaves the target with no InitGlobals at
+            // all, which the runtime-readiness check correctly flags. The rule exists to keep FOREIGN
+            // system initializers out, not to remove the map's own convention.
+            if (name != "InitGlobals" && CountKeptAssignments(trimmed) == 0) continue;
             // Then the SAME function trim every other carried body gets. Without it a
             // "function BelR_OnCast" callback survives here naming a function nothing carried,
             // because that line holds no bad global for TrimToGlobals to catch.
