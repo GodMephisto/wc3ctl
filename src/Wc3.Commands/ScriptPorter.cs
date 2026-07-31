@@ -163,7 +163,7 @@ internal static class ScriptPorter
                 foreach (Match m in Ident.Matches(srcGlobals[g]))
                     if (srcGlobals.ContainsKey(m.Value) && used.Add(m.Value)) grew = true;
         }
-        var carriedGlobals = srcGlobalOrder.Where(used.Contains).ToList();
+        var carriedGlobals = srcGlobalOrder.Where(used.Contains).ToList();  // recomputed below after the initializers
 
         // Carry the map's own global-state initializer(s) too: the conventional InitGlobals (the
         // JASS entry point a GUI map's Variable Editor values are normally assigned through), plus
@@ -177,7 +177,24 @@ internal static class ScriptPorter
         // the assignments that touch a global the closure above actually needs, so a map with
         // thousands of OTHER heroes' state does not bloat the port.
         var residualGlobalRefs = new HashSet<string>(StringComparer.Ordinal);
-        var globalInitBodies = CarryGlobalInitializers(allByName, srcLines, srcGlobals, used, carried, residualGlobalRefs);
+        var initResidualFns = new HashSet<string>(StringComparer.Ordinal);
+        var droppedForInits = allByName.Keys.Where(n => !carried.Contains(n)).ToHashSet(StringComparer.Ordinal);
+        var globalInitBodies = CarryGlobalInitializers(allByName, srcLines, srcGlobals, used, carried,
+            residualGlobalRefs, droppedForInits, initResidualFns);
+
+        // A global these bodies still READ in a structural line has to be DECLARED, or the script does
+        // not compile. TrimToGlobals correctly comments out "set RINQ_registered=true" but cannot
+        // touch the "if RINQ_registered then" guarding it, so the reference survives. Declaring an
+        // extra global costs one line and no behaviour, leaving it undeclared kills the whole script,
+        // so this is strictly the safer direction. Only the DECLARATION is added, never the
+        // assignment, so no foreign hero's state gets set up.
+        // Only the ones stuck in a structural line, which is exactly what residualGlobalRefs holds.
+        // Scanning the whole body instead would also declare globals whose assignment was correctly
+        // trimmed, and a declaration carries its own initial value, so an unrelated global would come
+        // back to life through the globals block.
+        foreach (var g in residualGlobalRefs)
+            if (srcGlobals.ContainsKey(g)) used.Add(g);
+        carriedGlobals = srcGlobalOrder.Where(used.Contains).ToList();
         int carriedInitializers = globalInitBodies.Values.Sum(CountKeptAssignments);
         if (globalInitBodies.Count > 0)
             notes.Add(carriedInitializers > 0
@@ -585,7 +602,8 @@ internal static class ScriptPorter
     private static Dictionary<string, string> CarryGlobalInitializers(
         IReadOnlyDictionary<string, JassFunction> allByName, string[] srcLines,
         IReadOnlyDictionary<string, string> allGlobals, IReadOnlySet<string> keepGlobals,
-        IReadOnlySet<string> alreadyCarried, HashSet<string> residual)
+        IReadOnlySet<string> alreadyCarried, HashSet<string> residual,
+        IReadOnlySet<string> droppedFunctions, HashSet<string> residualFunctions)
     {
         // Already carried (verbatim, by the ordinary closure) means it will already be emitted once
         // from srcFns; adding it here too would define the same function twice and fail to compile.
@@ -602,9 +620,34 @@ internal static class ScriptPorter
                     && allByName.ContainsKey(name) && !alreadyCarried.Contains(name) && !names.Contains(name))
                     names.Add(name);
 
+        // Keep an initializer ONLY if, after trimming, it still assigns a global this hero needs.
+        // That is this feature's whole stated purpose, and carrying the rest is actively harmful.
+        // InitCustomTriggers on a dense arena names every hand-written system's initializer for the
+        // WHOLE map (AcnoG_Init, BelR_Init, RINQ_Register, ...), and TrimToGlobals is keyed on
+        // globals, so a foreign init arrived with two kinds of dangling reference. Its
+        // "function BelR_OnCast" callback survived untouched, because no bad GLOBAL appears on that
+        // line, naming a function that was never carried. And a trimmed "set RINQ_registered=true"
+        // left its guarding "if RINQ_registered then" in place, since commenting a structural line
+        // would break block nesting, reading a global nobody carried. Both are compile errors, and a
+        // script that does not compile means config() never runs and the host lobby shows no slots.
+        //
+        // Measured on Anime Choice Arena porting H0DA, that regression took the port from 0 pjass
+        // errors to 11. An initializer with nothing left to set up has no reason to be in the port,
+        // and dropping it removes the dangling references with it.
         var bodies = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var name in names)
-            bodies[name] = TrimToGlobals(BodyText(srcLines, allByName[name]), allGlobals, keepGlobals, residual);
+        {
+            var candidateResidual = new HashSet<string>(StringComparer.Ordinal);
+            var trimmed = TrimToGlobals(
+                BodyText(srcLines, allByName[name]), allGlobals, keepGlobals, candidateResidual);
+            if (CountKeptAssignments(trimmed) == 0) continue;
+            // Then the SAME function trim every other carried body gets. Without it a
+            // "function BelR_OnCast" callback survives here naming a function nothing carried,
+            // because that line holds no bad global for TrimToGlobals to catch.
+            trimmed = Trim(trimmed, droppedFunctions, residualFunctions);
+            bodies[name] = trimmed;
+            residual.UnionWith(candidateResidual);
+        }
         return bodies;
     }
 
