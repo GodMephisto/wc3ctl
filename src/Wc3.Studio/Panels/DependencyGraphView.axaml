@@ -33,7 +33,7 @@
             <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" Margin="6,4">
                 <TextBlock Name="KindLabel" Text="Unit:" VerticalAlignment="Center"/>
                 <controls:SearchableComboBox Name="ObjectCombo" MinWidth="280"/>
-                <CheckBox Name="HideCarriedCheck" IsChecked="True" IsVisible="False"
+                <CheckBox Name="HideCarriedCheck" IsChecked="False" IsVisible="False"
                           VerticalAlignment="Center"
                           Content="Show objects carried by the script closure"
                           ToolTip.Tip="Uncheck to hide the objects the trigger script drags in (other heroes' kits), in both the tree and the graph. This only changes the view, it never changes what gets ported."/>

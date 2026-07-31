@@ -90,10 +90,10 @@ public static class Render
     {
         var sb = new StringBuilder();
         var byCode = r.Objects.ToDictionary(o => o.Rawcode, StringComparer.Ordinal);
-        var children = r.Edges
-            .Where(e => byCode.ContainsKey(e.To))
-            .GroupBy(e => e.From, StringComparer.Ordinal)
-            .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.Ordinal);
+        // Real references only. The script closure seed edges are the deliberate over-carry
+        // (other heroes' kits), shown in their own group below rather than as the hero's own.
+        var realChildren = BundleStructure.RealChildEdges(r);
+        var carried = BundleStructure.CarriedByScriptClosure(r);
 
         if (!byCode.ContainsKey(r.RootRawcode))
         {
@@ -112,10 +112,34 @@ public static class Render
                   .Append(via is null ? "" : $"  (via {via})");
                 if (!printed.Add(code)) { sb.AppendLine("  (see above)"); return; }
                 sb.AppendLine();
-                if (children.TryGetValue(code, out var kids))
+                if (realChildren.TryGetValue(code, out var kids))
                     foreach (var e in kids) Print(e.To, e.Via, depth + 1);
             }
             Print(r.RootRawcode, via: null, depth: 0);
+
+            if (carried.Count > 0)
+            {
+                var carriedParents = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+                foreach (var kv in realChildren)
+                    foreach (var e in kv.Value)
+                    {
+                        if (!carriedParents.TryGetValue(e.To, out var ps))
+                            carriedParents[e.To] = ps = new HashSet<string>(StringComparer.Ordinal);
+                        ps.Add(e.From);
+                    }
+                bool HasCarriedParent(string code) =>
+                    carriedParents.TryGetValue(code, out var ps) && ps.Any(carried.Contains);
+                string ViaInto(string code) =>
+                    string.Join(", ", r.Edges.Where(e => e.To == code).Select(e => e.Via).Distinct());
+
+                sb.AppendLine().AppendLine($"Carried by the script closure ({carried.Count}):");
+                foreach (var o in r.Objects)
+                    if (carried.Contains(o.Rawcode) && !HasCarriedParent(o.Rawcode) && !printed.Contains(o.Rawcode))
+                        Print(o.Rawcode, ViaInto(o.Rawcode), depth: 1);
+                foreach (var o in r.Objects)
+                    if (carried.Contains(o.Rawcode) && !printed.Contains(o.Rawcode))
+                        Print(o.Rawcode, ViaInto(o.Rawcode), depth: 1);
+            }
         }
 
         sb.AppendLine().AppendLine($"Files ({r.Files.Count}):");

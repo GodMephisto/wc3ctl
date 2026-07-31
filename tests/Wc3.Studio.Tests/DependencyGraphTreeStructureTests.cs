@@ -49,6 +49,7 @@ public class DependencyGraphTreeStructureTests
         var bundle = SampleBundle();
 
         var view = new DependencyGraphView();
+        SetField(view, "_hideCarried", false); // this test inspects the carried group, so reveal it
         InvokeBuildTree(view, bundle);
         var root = RootItem(view);
 
@@ -103,11 +104,11 @@ public class DependencyGraphTreeStructureTests
     }
 
     /// <summary>
-    /// The hide toggle is a view change only. Unchecking the checkbox drops the "Carried by
-    /// the script closure" group from the tree and its nodes from the graph, keeps the
-    /// hero's real abilities, and does NOT change the port exclusion set. A node the user
-    /// already excluded from the port stays excluded while it is hidden, hiding is not
-    /// excluding.
+    /// The toggle is a view change only, and it defaults to hidden. On a fresh resolve the
+    /// carried group is absent from the tree and its nodes are off the graph, with the count
+    /// still shown on the checkbox. Revealing then hiding never changes the port exclusion
+    /// set. A node the user excluded from the port stays excluded while it is hidden, hiding
+    /// is not excluding.
     /// </summary>
     [AvaloniaFact]
     public void Hiding_the_carried_group_is_view_only_and_keeps_exclusions()
@@ -120,14 +121,22 @@ public class DependencyGraphTreeStructureTests
         var check = Field<CheckBox>(view, "HideCarriedCheck");
         var objVisuals = Field<Dictionary<string, Border>>(view, "_objVisuals");
 
-        // Shown by default, the group is in the tree and the carried node is on the canvas.
+        // Hidden by default. The group is absent and the carried node is not drawn, but the
+        // count is still visible so the user can see how much is tucked away.
         Assert.True(check.IsVisible);
-        Assert.True(check.IsChecked == true);
+        Assert.True(check.IsChecked == false);
         Assert.Contains("(4)", check.Content as string ?? "");
+        Assert.False(HasCarriedGroup(RootItem(view)));
+        Assert.DoesNotContain("A003", objVisuals.Keys);
+        Assert.Contains("A001", objVisuals.Keys);
+
+        // Reveal, the group and its nodes appear.
+        check.IsChecked = true;
+        Dispatcher.UIThread.RunJobs();
         Assert.True(HasCarriedGroup(RootItem(view)));
         Assert.Contains("A003", objVisuals.Keys);
 
-        // The user excludes a carried node from the port, then hides the group.
+        // The user excludes a carried node from the port, then hides again.
         var excluded = Field<HashSet<string>>(view, "_excluded");
         excluded.Add("A003");
         check.IsChecked = false;
@@ -145,7 +154,7 @@ public class DependencyGraphTreeStructureTests
         // Hiding never touched the exclusion set, the hidden node is still excluded.
         Assert.Contains("A003", view.ExcludedKeys);
 
-        // Unhiding restores the group and the node, the exclusion is still intact.
+        // Reveal once more, the exclusion is still intact.
         check.IsChecked = true;
         Dispatcher.UIThread.RunJobs();
         Assert.True(HasCarriedGroup(RootItem(view)));
@@ -154,9 +163,10 @@ public class DependencyGraphTreeStructureTests
     }
 
     /// <summary>
-    /// End to end on the reported map. With the group hidden, Asta (H028) keeps its 6 real
-    /// abilities and the graph drops to the 7 real nodes (the hero plus 6), while nothing is
-    /// excluded from the port. The checkbox declutters the real map without touching the
+    /// End to end on the reported map, the default. Asta (H028) opens with the closure
+    /// hidden, so the hero shows its 6 real abilities and the graph is just the 7 real nodes
+    /// (the hero plus 6), with the "(204)" count on the checkbox and nothing excluded.
+    /// Revealing brings the whole closure back. The checkbox declutters without touching the
     /// bundle or the exclusion set.
     /// </summary>
     [AvaloniaFact]
@@ -172,22 +182,24 @@ public class DependencyGraphTreeStructureTests
         var tree = Field<TreeView>(view, "DepTree");
         PumpUntilPopulated(tree);
 
-        // Shown, the carried group holds 204 objects.
+        // Hidden by default, decluttered.
         var check = Field<CheckBox>(view, "HideCarriedCheck");
         Assert.True(check.IsVisible);
+        Assert.True(check.IsChecked == false);
         Assert.Contains("(204)", check.Content as string ?? "");
-        Assert.True(HasCarriedGroup(RootItem(view)));
-
-        // Hide it.
-        check.IsChecked = false;
-        Dispatcher.UIThread.RunJobs();
-
         var root = RootItem(view);
         Assert.False(HasCarriedGroup(root));
         Assert.Equal(6, ObjectRows(root).Count);
         var objVisuals = Field<Dictionary<string, Border>>(view, "_objVisuals");
         Assert.Equal(7, objVisuals.Count);
         Assert.Contains("H028", objVisuals.Keys);
+        Assert.Empty(view.ExcludedKeys);
+
+        // Reveal, the whole closure comes back and still nothing is excluded.
+        check.IsChecked = true;
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(HasCarriedGroup(RootItem(view)));
+        Assert.True(objVisuals.Count > 7);
         Assert.Empty(view.ExcludedKeys);
     }
 
@@ -216,10 +228,17 @@ public class DependencyGraphTreeStructureTests
         var tree = Field<TreeView>(view, "DepTree");
         PumpUntilPopulated(tree);
 
+        // The carried group is hidden by default, the hero's real children still show.
         var root = tree.Items.OfType<TreeViewItem>().First();
-        var directRows = ObjectRows(root);
-        Assert.Equal(expectedDirectRows, directRows.Count);
+        Assert.Equal(expectedDirectRows, ObjectRows(root).Count);
+        Assert.DoesNotContain(root.Items.OfType<TreeViewItem>(),
+            i => HeaderText(i).StartsWith("Carried by the script closure", StringComparison.Ordinal));
 
+        // Reveal it, the group appears with the full carried count and the real rows persist.
+        Field<CheckBox>(view, "HideCarriedCheck").IsChecked = true;
+        Dispatcher.UIThread.RunJobs();
+        root = tree.Items.OfType<TreeViewItem>().First();
+        Assert.Equal(expectedDirectRows, ObjectRows(root).Count);
         var carried = root.Items.OfType<TreeViewItem>()
             .Single(i => HeaderText(i).StartsWith("Carried by the script closure", StringComparison.Ordinal));
         Assert.Contains($"({expectedCarried})", HeaderText(carried));
@@ -299,4 +318,8 @@ public class DependencyGraphTreeStructureTests
     private static T Field<T>(object obj, string name) => (T)obj.GetType()
         .GetField(name, BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance)!
         .GetValue(obj)!;
+
+    private static void SetField(object obj, string name, object? value) => obj.GetType()
+        .GetField(name, BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance)!
+        .SetValue(obj, value);
 }
