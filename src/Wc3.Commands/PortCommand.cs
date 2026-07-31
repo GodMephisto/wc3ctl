@@ -45,9 +45,10 @@ public static class PortCommand
     /// (they already exist in any target). Returns a full report of what was done.
     /// </summary>
     public static PortResult PortUnit(
-        MapDocument source, UnitBundle bundle, MapDocument target, bool includeScript = true)
+        MapDocument source, UnitBundle bundle, MapDocument target, bool includeScript = true,
+        bool synthDispatch = false)
         => PortCore(source, bundle, target, RawcodeAllocator.UsedRawcodes(target),
-            alreadyPorted: null, pendingCopies: null, includeScript, apply: true);
+            alreadyPorted: null, pendingCopies: null, includeScript, apply: true, synthDispatch);
 
     /// <summary>
     /// Computes exactly the report <see cref="PortUnit"/> would produce — the rawcode
@@ -57,11 +58,12 @@ public static class PortCommand
     /// so preview and port cannot drift.
     /// </summary>
     public static PortResult PreviewPort(
-        MapDocument source, UnitBundle bundle, MapDocument target, bool includeScript = true)
+        MapDocument source, UnitBundle bundle, MapDocument target, bool includeScript = true,
+        bool synthDispatch = false)
         => PortCore(source, bundle, target, RawcodeAllocator.UsedRawcodes(target),
             alreadyPorted: null,
             pendingCopies: new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase),
-            includeScript, apply: false);
+            includeScript, apply: false, synthDispatch);
 
     /// <summary>
     /// Ports several units into the SAME target in one operation. The used-rawcode set
@@ -137,7 +139,7 @@ public static class PortCommand
         MapDocument source, UnitBundle bundle, MapDocument target,
         HashSet<int> used, Dictionary<int, int>? alreadyPorted,
         Dictionary<string, byte[]>? pendingCopies,
-        bool includeScript, bool apply)
+        bool includeScript, bool apply, bool synthDispatch = false)
     {
         var warnings = new List<string>();
         var diagnostics = new List<string>(bundle.Diagnostics);
@@ -340,7 +342,8 @@ public static class PortCommand
                 var codeRemap = remap.Where(kv => kv.Key != kv.Value)
                     .ToDictionary(kv => kv.Key.ToRawcode(), kv => kv.Value.ToRawcode(), StringComparer.Ordinal);
                 scriptInfo = ScriptPorter.PortScript(source, target, bundle.Functions,
-                    $"{bundle.RootName ?? bundle.RootRawcode} ({bundle.RootRawcode})", codeRemap, apply);
+                    $"{bundle.RootName ?? bundle.RootRawcode} ({bundle.RootRawcode})", codeRemap, apply,
+                    synthDispatch ? bundle.RootRawcode : null);
             }
             catch (Exception ex)
             {

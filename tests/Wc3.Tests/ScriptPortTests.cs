@@ -740,6 +740,177 @@ endfunction
         Assert.True(JassScriptCheck.IsCompilable(JassScriptCheck.Check(j)));
     }
 
+    // The shape a shared hero arena dispatcher actually takes: a gate the source map wired around
+    // it (DisableMoveRoot), the hero's own "GetUnitTypeId(c) == Hero_ID" branch, and inside that an
+    // ability id chain. HeroQ2 is a combo ability the hero grants at runtime (not on its own object
+    // data), the same shape as Asta's Q2/W2 on the real corpus this was built against. The carried
+    // set below deliberately excludes HeroQ2_Start, reproducing the state where the ordinary
+    // closure never reached it, so --synth-dispatch's own seeding is what has to recover it.
+    private const string SynthDispatchSource = @"globals
+    integer udg_Hero_ID= 'H000'
+    integer udg_HeroQ_ID= 'A000'
+    integer udg_HeroQ2_ID= 'A001'
+    trigger gg_trg_CastCheck= null
+endglobals
+function DisableMoveRoot takes unit u, integer id returns boolean
+    return true
+endfunction
+function HeroQ_Start takes unit c, real x, real y returns nothing
+    call UnitAddAbility(c, udg_HeroQ2_ID)
+endfunction
+function HeroQ2_Start takes unit c, real x, real y returns nothing
+    call KillUnit(c)
+endfunction
+function CastHero_Conditions takes nothing returns boolean
+    local unit c= GetSpellAbilityUnit()
+    local integer id= GetSpellAbilityId()
+    local real x= GetSpellTargetX()
+    local real y= GetSpellTargetY()
+    local boolean b= DisableMoveRoot(c, id)
+    if b then
+        if GetUnitTypeId(c) == udg_Hero_ID then
+            if id == udg_HeroQ_ID then
+                call HeroQ_Start(c, x, y)
+            elseif id == udg_HeroQ2_ID then
+                call HeroQ2_Start(c, x, y)
+            endif
+        endif
+    endif
+    return false
+endfunction
+function InitTrig_CastCheck takes nothing returns nothing
+    set gg_trg_CastCheck = CreateTrigger()
+    call TriggerAddCondition(gg_trg_CastCheck, Condition(function CastHero_Conditions))
+endfunction
+";
+
+    [Fact]
+    public void SynthDispatch_reads_the_hero_own_branch_and_seeds_the_combo_handler_the_ordinary_closure_missed()
+    {
+        var source = SourceMap(SynthDispatchSource);
+        var target = TargetMap();
+
+        // Simulate the ordinary closure's blind spot directly: it carried the dispatcher and Q's
+        // own handler, but never reached HeroQ2_Start (granted at runtime, not on the hero's own
+        // ability list).
+        var functions = CarriedExcept(SynthDispatchSource, "HeroQ2_Start");
+        Assert.DoesNotContain(functions, f => f.Name == "HeroQ2_Start");
+
+        var info = ScriptPorter.PortScript(source, target, functions, "H000",
+            new Dictionary<string, string>(), apply: true, synthDispatchHero: "H000");
+        Assert.NotNull(info);
+        Assert.True(info!.Written, "the ported script was refused: " + string.Join(" | ", info.Notes));
+
+        var j = Encoding.Latin1.GetString(MapDocument.Load(target.SaveToBytes()).GetFile("war3map.j")!.RawBytes);
+        Assert.True(JassScriptCheck.IsCompilable(JassScriptCheck.Check(j)),
+            "synthesized dispatcher made the script uncompilable");
+
+        // Both branches present, literal rawcodes (no hero-specific id global needed at all).
+        Assert.Contains("if id == 'A000' then", j);
+        Assert.Contains("elseif id == 'A001' then", j);
+        // The combo handler's call is LIVE, and its definition was seeded in even though the
+        // ordinary carried set excluded it — the whole point of the feature.
+        Assert.True(HasActiveCall(j, "HeroQ2_Start"), "the combo ability's call must not be trimmed");
+        Assert.Contains("function HeroQ2_Start takes", j);
+
+        // Its own trigger (a fresh gg_trg_, not the source's gg_trg_CastCheck), wired end to end.
+        var dispatchFn = JassFunctionIndex.Parse(j).Single(f => f.Name.StartsWith("wc3ctl_SynthCast_", StringComparison.Ordinal)
+            && !f.Name.EndsWith("Init", StringComparison.Ordinal));
+        Assert.Contains("trigger gg_trg_wc3ctl_SynthCast_", j);
+        Assert.Contains($"call TriggerAddAction(gg_trg_wc3ctl_SynthCast_H000, function {dispatchFn.Name})", j);
+        Assert.Contains("call TriggerRegisterAnyUnitEventBJ(gg_trg_wc3ctl_SynthCast_H000, EVENT_PLAYER_UNIT_SPELL_EFFECT)", j);
+        var initFn = JassFunctionIndex.Parse(j).Single(f => f.Name == "InitCustomTriggers");
+        var initBody = string.Join('\n', j.Replace("\r\n", "\n").Split('\n')[(initFn.StartLine - 1)..initFn.EndLine]);
+        Assert.Contains("wc3ctl_SynthCast_H000Init()", initBody);
+
+        // None of the shared dispatcher's gates or its hero-id check appear in the SYNTHESIZED
+        // function itself (the source's own CastHero_Conditions still exists elsewhere, carried
+        // whole like any other carried body — only the fresh function must be gate-free).
+        var body = FunctionBody(j, dispatchFn.Name);
+        Assert.DoesNotContain("DisableMoveRoot", body);
+        Assert.DoesNotContain("GetUnitTypeId", body);
+        Assert.DoesNotContain("udg_Hero_ID", body);
+    }
+
+    [Fact]
+    public void SynthDispatch_is_a_no_op_when_the_flag_is_left_off()
+    {
+        var source = SourceMap(SynthDispatchSource);
+        var target = TargetMap();
+        var functions = CarriedExcept(SynthDispatchSource, "HeroQ2_Start");
+
+        var info = ScriptPorter.PortScript(source, target, functions, "H000", new Dictionary<string, string>());
+        Assert.NotNull(info);
+
+        var j = Encoding.Latin1.GetString(MapDocument.Load(target.SaveToBytes()).GetFile("war3map.j")!.RawBytes);
+        Assert.DoesNotContain("wc3ctl_SynthCast_", j);
+        Assert.DoesNotContain("gg_trg_wc3ctl_SynthCast_", j);
+        // Without the flag, the ordinary closure's blind spot is exactly that: the combo handler
+        // stays uncarried and its call stays trimmed, the pre-existing (unchanged) behavior.
+        Assert.DoesNotContain("function HeroQ2_Start", j);
+    }
+
+    [Fact]
+    public void SynthDispatch_reports_and_does_not_guess_when_the_source_has_no_matching_dispatcher_shape()
+    {
+        // A hero whose script never compares GetUnitTypeId against anything: an unsupported shape,
+        // the flag must degrade gracefully (still port normally) rather than synthesize nonsense.
+        const string noDispatcherSource = @"globals
+    integer udg_HeroQ_ID= 'A000'
+endglobals
+function Trig_HeroQ_Actions takes nothing returns nothing
+    if GetSpellAbilityId() == udg_HeroQ_ID then
+        call KillUnit(GetTriggerUnit())
+    endif
+endfunction
+function InitTrig_HeroQ takes nothing returns nothing
+    call TriggerAddAction(CreateTrigger(), function Trig_HeroQ_Actions)
+endfunction
+";
+        var source = SourceMap(noDispatcherSource);
+        var target = TargetMap();
+        var bundle = BundleCommand.ResolveUnit(source, "H000", gameDirOverride: null);
+
+        var result = PortCommand.PortUnit(source, bundle, target, includeScript: true, synthDispatch: true);
+        Assert.NotNull(result.Script);
+        Assert.True(result.Script!.Written);
+        Assert.Contains(result.Script.Notes, n => n.Contains("no per-hero cast branch", StringComparison.Ordinal));
+
+        var j = Encoding.Latin1.GetString(MapDocument.Load(target.SaveToBytes()).GetFile("war3map.j")!.RawBytes);
+        Assert.DoesNotContain("wc3ctl_SynthCast_", j);
+        // The ordinary port still happened.
+        Assert.Contains("function Trig_HeroQ_Actions", j);
+    }
+
+    [Fact]
+    public void PortCommand_threads_synth_dispatch_through_the_full_bundle_resolved_port()
+    {
+        // End to end through the real entry point (BundleCommand.ResolveUnit + PortCommand.PortUnit),
+        // not a hand-built carried set, so the CLI-facing plumbing (bundle.RootRawcode -> ScriptPorter)
+        // is covered too, not just ScriptPorter's own seeding logic.
+        var source = SourceMap(SynthDispatchSource);
+        var target = TargetMap();
+        var bundle = BundleCommand.ResolveUnit(source, "H000", gameDirOverride: null);
+
+        var result = PortCommand.PortUnit(source, bundle, target, includeScript: true, synthDispatch: true);
+        Assert.NotNull(result.Script);
+        Assert.True(result.Script!.Written, string.Join(" | ", result.Script.Notes));
+
+        var j = Encoding.Latin1.GetString(MapDocument.Load(target.SaveToBytes()).GetFile("war3map.j")!.RawBytes);
+        Assert.Contains("function wc3ctl_SynthCast_H000", j);
+        Assert.True(JassScriptCheck.IsCompilable(JassScriptCheck.Check(j)));
+    }
+
+    /// <summary>The text of one function's body (signature line through endfunction), the same slice
+    /// every "hook into InitCustomTriggers" assertion above already takes inline, pulled out once
+    /// the synth-dispatch tests need it more than once.</summary>
+    private static string FunctionBody(string jass, string functionName)
+    {
+        var f = JassFunctionIndex.Parse(jass).Single(x => x.Name == functionName);
+        var lines = jass.Replace("\r\n", "\n").Split('\n');
+        return string.Join('\n', lines[(f.StartLine - 1)..f.EndLine]);
+    }
+
     /// <summary>Every function declared in <paramref name="script"/> as a carried BundleFunction, minus
     /// the named ones. Lets a test hand ScriptPorter a carried set that deliberately omits a callback,
     /// reproducing the state where the bundle crawl never reached it.</summary>

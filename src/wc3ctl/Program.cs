@@ -650,10 +650,17 @@ public static class Program
             "Port object data + assets + strings only; skip the best-effort JASS script closure append.");
         var dryRunOption = new Option<bool>("--dry-run",
             "Preview the port: print the full report (remaps, objects, files, strings, script) without writing anything.");
+        var synthDispatchOption = new Option<bool>("--synth-dispatch",
+            "Single-unit port only. Instead of carrying the source's shared cast dispatcher (every gate it was "
+            + "written to satisfy on the source map — a placed-hero registration array, a map rect that reads "
+            + "null off the source map, a cooldown hashtable), read the unit's OWN branch of it and synthesize "
+            + "a fresh, minimal, self-contained dispatcher for exactly its abilities. Does not make the unit "
+            + "dependency-free (spell handlers still need their own carried state), only replaces the SHARED "
+            + "entry point into them. Default off: a plain port is unaffected.");
         var port = new Command("port", "Port content between maps.");
         var portUnit = new Command("unit",
             "Port a unit (its custom objects + assets + strings, and best-effort its trigger script) from one map into another, auto-remapping rawcode collisions.")
-        { portSource, portRawcodes, portTarget, outOption, noScriptOption, dryRunOption };
+        { portSource, portRawcodes, portTarget, outOption, noScriptOption, dryRunOption, synthDispatchOption };
         portUnit.SetHandler(ctx => RunSafely(() =>
         {
             var p = ctx.ParseResult;
@@ -666,7 +673,10 @@ public static class Program
             bool json = p.GetValueForOption(jsonOption);
             bool dryRun = p.GetValueForOption(dryRunOption);
             bool includeScript = !p.GetValueForOption(noScriptOption);
+            bool synthDispatch = p.GetValueForOption(synthDispatchOption);
             string? gameDir = p.GetValueForOption(gameDirOption);
+            if (synthDispatch && rawcodes.Length != 1)
+                throw new ArgumentException("--synth-dispatch only applies when porting a single unit");
 
             var source = MapDocument.Load(sourcePath);
             var target = MapDocument.Load(targetPath);
@@ -681,8 +691,8 @@ public static class Program
             {
                 var bundle = BundleCommand.ResolveUnit(source, rawcodes[0], gameDir);
                 var result = dryRun
-                    ? PortCommand.PreviewPort(source, bundle, target, includeScript)
-                    : PortCommand.PortUnit(source, bundle, target, includeScript);
+                    ? PortCommand.PreviewPort(source, bundle, target, includeScript, synthDispatch)
+                    : PortCommand.PortUnit(source, bundle, target, includeScript, synthDispatch);
                 if (outPath is not null) target.Save(outPath);
                 Emit(json, result, () => Render.Port(result, outPath));
             }

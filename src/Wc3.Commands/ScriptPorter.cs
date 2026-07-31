@@ -40,11 +40,21 @@ internal static class ScriptPorter
     /// remapped on collision; <paramref name="markerLabel"/> names the port in the spliced
     /// block's BEGIN/END comments (e.g. "Raiden Ei (H000)"). Returns null when there is
     /// nothing to port (no functions, or no target script).
+    ///
+    /// <paramref name="synthDispatchHero"/> is opt-in (null by default, so ordinary ports are
+    /// byte-for-byte unchanged): the rawcode of the unit being ported, ROOT one, so the source's
+    /// shared cast dispatcher's OWN branch for it can be read and turned into a fresh, minimal,
+    /// self-contained dispatcher that bypasses every gate the shared one carries (a placed-hero
+    /// registration array, a map rect that reads null off the source map, a cooldown hashtable,
+    /// the hero-type-id check itself). See <see cref="SynthDispatchBuilder"/>. This does not
+    /// replace the ordinary carried closure, a spell handler still needs its own carried body
+    /// (timers, dummies, per-player state), it only replaces the SHARED entry point into it.
     /// </summary>
     public static ScriptPortInfo? PortScript(
         MapDocument source, MapDocument target,
         IReadOnlyList<BundleFunction> functions, string markerLabel,
-        IReadOnlyDictionary<string, string> codeRemap, bool apply = true)
+        IReadOnlyDictionary<string, string> codeRemap, bool apply = true,
+        string? synthDispatchHero = null)
     {
         var notes = new List<string>();
         if (functions.Count == 0) return null;
@@ -92,6 +102,31 @@ internal static class ScriptPorter
         // and the ported script only ever calls carried functions or natives.
         var carried = new HashSet<string>(functions.Select(f => f.Name), StringComparer.Ordinal);
 
+        // Opt-in: read the hero's OWN branch of the source's shared cast dispatcher and seed every
+        // function it calls into the carry set, BEFORE the ordinary closure rules below run, so
+        // those handlers come along even when the ordinary closure's scoping missed them. That is
+        // not hypothetical: a combo ability a hero grants at runtime through a shared "start a
+        // timer, then add this ability" helper is invisible to a plain call-graph walk (the helper
+        // receives the ability id as a plain argument, not a callback reference), exactly the trap
+        // that silently drops a hero's second-tier abilities from a port that only trusted its
+        // object data. See SynthDispatchBuilder for what "the hero's own branch" means and how it
+        // is found; the actual dispatcher function is built and spliced in further down, once the
+        // rename/rawcode-remap machinery below is available to rewrite it consistently with every
+        // other carried body.
+        IReadOnlyList<SynthDispatchBuilder.CastBranch>? synthBranches = null;
+        if (synthDispatchHero is not null)
+        {
+            synthBranches = SynthDispatchBuilder.ExtractHeroCastBranches(srcJ, synthDispatchHero);
+            if (synthBranches is { Count: > 0 })
+                foreach (var branch in synthBranches)
+                    foreach (var callee in branch.Callees)
+                        carried.Add(callee);
+            else
+                notes.Add("--synth-dispatch requested but no per-hero cast branch was found in the "
+                    + "source's shared dispatcher (unsupported script shape) — no synthesized "
+                    + "dispatcher was added, the ordinary carried closure (if any) is unaffected.");
+        }
+
         // Also carry each InitTrig_* that turns on one of the hero's spells, plus the handlers it wires.
         // The closure only reaches functions the hero's DATA references; a spell's InitTrig (CreateTrigger
         // + TriggerAddAction of the handler) is reached only from the source's InitCustomTriggers, never
@@ -135,6 +170,11 @@ internal static class ScriptPorter
             if (toAdd.Count == 0 || guard > allSourceFns.Count) break; // converges, bounded by the function count
             foreach (var r in toAdd) carried.Add(r);
         }
+        // The set the last fixpoint pass trimmed against, kept around for the synthesized dispatcher
+        // below: it must go through the exact same discipline (a call to something not actually
+        // carried gets commented out, never left calling into the void) as every other carried body.
+        var finalDropped = new HashSet<string>(allSourceFns, StringComparer.Ordinal);
+        finalDropped.ExceptWith(carried);
 
         var srcFns = carried.Where(allByName.ContainsKey)
             .Select(n => allByName[n]).OrderBy(f => f.StartLine).ToList();
@@ -236,16 +276,56 @@ internal static class ScriptPorter
 
         string Rewrite(string code) => RewriteRawcodes(ApplyRenames(code, rename, carriedSymbols), codeRemap);
 
+        // Names for the synthesized dispatcher (see the seeding step above), reserved now against
+        // the SAME collision-avoidance set the ordinary rename pass just finished with, so its
+        // trigger global can be declared alongside the other carried globals below.
+        string? synthDispatchFn = null, synthInitFn = null, synthTriggerGlobal = null;
+        if (synthBranches is { Count: > 0 })
+        {
+            string baseName = "wc3ctl_SynthCast_" + SynthDispatchBuilder.SanitizeIdentifier(synthDispatchHero!);
+            synthDispatchFn = UniqueName(baseName, taken);
+            synthInitFn = UniqueName(baseName + "Init", taken);
+            synthTriggerGlobal = UniqueName("gg_trg_" + baseName, taken);
+        }
+
         // Build the ported globals + functions text.
         var portedGlobals = new StringBuilder();
         foreach (var g in carriedGlobals)
             portedGlobals.Append("    ").Append(Rewrite(srcGlobals[g].Trim())).Append('\n');
+        if (synthTriggerGlobal is not null)
+            portedGlobals.Append("    ").Append(SynthDispatchBuilder.BuildGlobalDeclaration(synthTriggerGlobal)).Append('\n');
 
         var portedFns = new StringBuilder();
         foreach (var f in srcFns)
             portedFns.Append(Rewrite(bodies[f.Name])).Append('\n');
         foreach (var name in globalInitBodies.Keys)
             portedFns.Append(Rewrite(globalInitBodies[name])).Append('\n');
+
+        // The synthesized dispatcher's function bodies: built from the hero's own extracted
+        // branches, run through the exact same Trim discipline as every other carried body (so a
+        // callee this port could not actually carry — for any reason — is commented out here too,
+        // rather than left calling into the void), then through the SAME Rewrite every other
+        // carried body gets, so a renamed callee or a remapped ability rawcode is picked up
+        // consistently.
+        string? synthInitToHook = null;
+        if (synthBranches is { Count: > 0 })
+        {
+            string raw = SynthDispatchBuilder.BuildRawText(synthDispatchFn!, synthInitFn!, synthTriggerGlobal!, synthBranches);
+            var synthResidual = new HashSet<string>(StringComparer.Ordinal);
+            raw = Trim(raw, finalDropped, synthResidual);
+            int synthTrimmed = CountTrimMarkers(raw);
+            portedFns.Append(Rewrite(raw)).Append('\n');
+            notes.Add($"synthesized {synthDispatchFn}(), a fresh minimal cast dispatcher for {markerLabel} "
+                + $"covering {synthBranches.Count} ability branch(es) read from the source's own per-hero "
+                + "dispatch section, wired through its own trigger (any-unit spell-effect event) so it "
+                + "never touches the shared dispatcher's gates (map rects, the hero-type-id check, the "
+                + "cooldown hashtable, any placed-hero registration array).");
+            if (synthTrimmed > 0)
+                notes.Add($"{synthTrimmed} call(s) inside the synthesized dispatcher named a function this "
+                    + "port could not carry and were commented out — those ability branch(es) will not "
+                    + "cast, verify the ported map.");
+            synthInitToHook = synthInitFn;
+        }
 
         // A non-carried function named in a condition or return could not be safely commented out
         // without breaking block structure, so it was left in place. Flag it (best-effort port).
@@ -293,6 +373,18 @@ internal static class ScriptPorter
         {
             notes.Add("no InitTrig_* init functions in the closure — if the spells register via a custom " +
                       "init path, verify it runs in the target.");
+        }
+
+        // Hook the synthesized dispatcher's own init (creates its own trigger, so it is wired
+        // unconditionally, independent of whether the closure carried any ordinary InitTrig_*).
+        if (synthInitToHook is not null)
+        {
+            merged = HookInit(merged, new[] { synthInitToHook }, marker, out bool synthHooked);
+            notes.Add(synthHooked
+                ? $"wired {synthInitToHook}() into the target's InitCustomTriggers, registering the "
+                  + "synthesized dispatcher's trigger."
+                : "synthesized a cast dispatcher but could not find InitCustomTriggers in the target — " +
+                  "its trigger registration may need to be wired manually.");
         }
 
         // Call the carried global initializer(s), in the same relative order the source used: the
@@ -743,6 +835,18 @@ internal static class ScriptPorter
     {
         var (byName, order) = JassGlobals.Parse(lines);
         return (byName, order);
+    }
+
+    /// <summary>A name not already in <paramref name="taken"/>, reserving it there (numbered
+    /// suffixes, same convention as the ordinary collision rename above) — used for the synthesized
+    /// dispatcher's own function names, which have no source name to collide under, only a freshly
+    /// chosen one that must not collide with anything already spoken for.</summary>
+    private static string UniqueName(string baseName, HashSet<string> taken)
+    {
+        string candidate = baseName;
+        int n = 1;
+        while (!taken.Add(candidate)) candidate = $"{baseName}_{n++}";
+        return candidate;
     }
 
     private static string ApplyRenames(string code, IReadOnlyDictionary<string, string> rename, IEnumerable<string> _)
