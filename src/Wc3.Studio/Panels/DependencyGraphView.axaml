@@ -36,7 +36,7 @@
                 <CheckBox Name="HideCarriedCheck" IsChecked="False" IsVisible="False"
                           VerticalAlignment="Center"
                           Content="Show objects carried by the script closure"
-                          ToolTip.Tip="Uncheck to hide the objects the trigger script drags in (other heroes' kits), in both the tree and the graph. This only changes the view, it never changes what gets ported."/>
+                          ToolTip.Tip="Hidden by default. Check to show the objects the trigger script drags in (other heroes' kits), in both the tree and the graph. This only changes the view, it never changes what gets ported."/>
                 <TextBlock Name="SummaryText" VerticalAlignment="Center"
                            Foreground="#8FA3B8" Text=""/>
             </StackPanel>
