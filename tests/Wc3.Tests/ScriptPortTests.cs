@@ -901,6 +901,175 @@ endfunction
         Assert.True(JassScriptCheck.IsCompilable(JassScriptCheck.Check(j)));
     }
 
+    // ---- bootstrap-state -------------------------------------------------------------------
+
+    // One of every safe-to-construct handle type, read by the hero's own closure and assigned
+    // nowhere, the general shape of the two real bugs this feature exists for: gg_rct_Base
+    // (CreateRegions never carried) and GearTimer05 (built only by a hand-written Init nothing
+    // here reaches).
+    private const string BootstrapStateSource = @"globals
+    rect gg_rct_Base
+    timer GearTimer05
+    hashtable udg_HT
+    trigger gg_trg_Extra
+    force udg_Force
+    group udg_Group
+endglobals
+function TestHandler takes nothing returns nothing
+    if ( GetUnitTypeId(GetTriggerUnit()) == 'H000' ) then
+        call RemoveUnit(GetRectCenterUnit(gg_rct_Base))
+        call TimerStart(GearTimer05, 1.0, true, null)
+        call FlushParentHashtable(udg_HT)
+        call DisableTrigger(gg_trg_Extra)
+        call ForceClear(udg_Force)
+        call GroupClear(udg_Group)
+    endif
+endfunction
+";
+
+    [Theory]
+    [InlineData("H028", "H028")]                              // a rawcode, unaffected (the pre-existing use)
+    [InlineData("Asta (H028)", "Asta__H028")]                  // a marker label, trailing "_" trimmed
+    [InlineData("Asta (H028) + Foo (H0DA)", "Asta__H028____Foo__H0DA")]
+    [InlineData("_underscored_", "underscored")]
+    [InlineData("___", "x")]
+    [InlineData("123abc", "x123abc")]
+    public void SanitizeIdentifier_never_starts_or_ends_with_an_underscore(string input, string expected)
+    {
+        // The real World Editor JASS parser (pjass) rejects a boundary underscore outright
+        // ("Unrecognized character _"), a shape this codebase's own lenient JassScriptCheck never
+        // catches. wc3ctl_BootstrapState_Asta__H028_ (from the label "Asta (H028)") passed every
+        // internal check and still failed the real compiler, exactly the trap this test pins down.
+        string result = SynthDispatchBuilder.SanitizeIdentifier(input);
+        Assert.Equal(expected, result);
+        Assert.False(result.StartsWith('_'), "must not start with an underscore");
+        Assert.False(result.EndsWith('_'), "must not end with an underscore");
+        Assert.False(char.IsDigit(result[0]), "must not start with a digit");
+    }
+
+    [Fact]
+    public void BootstrapState_constructs_every_safe_typed_global_the_closure_reads_but_never_assigns()
+    {
+        var source = SourceMap(BootstrapStateSource);
+        var target = TargetMap();
+        var bundle = BundleCommand.ResolveUnit(source, "H000", gameDirOverride: null);
+
+        var result = PortCommand.PortUnit(source, bundle, target, includeScript: true, bootstrapState: true);
+        Assert.NotNull(result.Script);
+        Assert.True(result.Script!.Written, "the ported script was refused: " + string.Join(" | ", result.Script.Notes));
+
+        var j = Encoding.Latin1.GetString(MapDocument.Load(target.SaveToBytes()).GetFile("war3map.j")!.RawBytes);
+        Assert.True(JassScriptCheck.IsCompilable(JassScriptCheck.Check(j)),
+            "bootstrap-state made the script uncompilable");
+
+        var bootstrapFn = JassFunctionIndex.Parse(j)
+            .Single(f => f.Name.StartsWith("wc3ctl_BootstrapState_", StringComparison.Ordinal));
+        var body = FunctionBody(j, bootstrapFn.Name);
+        Assert.Contains("set gg_rct_Base = Rect(0., 0., 0., 0.)", body);
+        Assert.Contains("set GearTimer05 = CreateTimer()", body);
+        Assert.Contains("set udg_HT = InitHashtable()", body);
+        Assert.Contains("set gg_trg_Extra = CreateTrigger()", body);
+        Assert.Contains("set udg_Force = CreateForce()", body);
+        Assert.Contains("set udg_Group = CreateGroup()", body);
+
+        // Wired into main before InitCustomTriggers, the same call site InitGlobals already uses,
+        // so every bootstrapped global exists before any carried code could read it.
+        var mainBody = FunctionBody(j, "main");
+        int bootstrapCallAt = mainBody.IndexOf(bootstrapFn.Name + "()", StringComparison.Ordinal);
+        int initCustomAt = mainBody.IndexOf("call InitCustomTriggers", StringComparison.Ordinal);
+        Assert.True(bootstrapCallAt >= 0 && initCustomAt >= 0 && bootstrapCallAt < initCustomAt,
+            "the bootstrap call must be wired before InitCustomTriggers runs");
+    }
+
+    // unit has no safe universal constructor at all, and a "timer array" is an array, neither
+    // may ever be built here, see BootstrapStateBuilder for why inventing one is worse than null.
+    private const string BootstrapStateUnsafeSource = @"globals
+    unit udg_SomeUnit
+    timer array udg_TimerArr
+endglobals
+function TestHandler takes nothing returns nothing
+    if ( GetUnitTypeId(GetTriggerUnit()) == 'H000' ) then
+        call RemoveUnit(udg_SomeUnit)
+        call TimerStart(udg_TimerArr[0], 1.0, true, null)
+    endif
+endfunction
+";
+
+    [Fact]
+    public void BootstrapState_leaves_unconstructible_types_alone_and_reports_them()
+    {
+        var source = SourceMap(BootstrapStateUnsafeSource);
+        var target = TargetMap();
+        var bundle = BundleCommand.ResolveUnit(source, "H000", gameDirOverride: null);
+
+        var result = PortCommand.PortUnit(source, bundle, target, includeScript: true, bootstrapState: true);
+        Assert.NotNull(result.Script);
+        Assert.True(result.Script!.Written, string.Join(" | ", result.Script.Notes));
+
+        var j = Encoding.Latin1.GetString(MapDocument.Load(target.SaveToBytes()).GetFile("war3map.j")!.RawBytes);
+        // Nothing was constructible, so no bootstrap function at all, and neither global was touched.
+        Assert.DoesNotContain("wc3ctl_BootstrapState_", j);
+        Assert.DoesNotContain("set udg_SomeUnit", j);
+        Assert.DoesNotContain("set udg_TimerArr", j);
+
+        Assert.Contains(result.Script.Notes, n => n.Contains("udg_SomeUnit (unit)", StringComparison.Ordinal)
+            && n.Contains("udg_TimerArr (timer array)", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void BootstrapState_is_a_no_op_when_the_flag_is_left_off()
+    {
+        var source = SourceMap(BootstrapStateSource);
+        var target = TargetMap();
+        var bundle = BundleCommand.ResolveUnit(source, "H000", gameDirOverride: null);
+
+        PortCommand.PortUnit(source, bundle, target, includeScript: true); // bootstrapState defaults to false
+
+        var j = Encoding.Latin1.GetString(MapDocument.Load(target.SaveToBytes()).GetFile("war3map.j")!.RawBytes);
+        Assert.DoesNotContain("wc3ctl_BootstrapState_", j);
+        Assert.DoesNotContain("set gg_rct_Base", j);
+        Assert.DoesNotContain("set GearTimer05", j);
+        // The bare declarations are still carried (the closure reads them), just never assigned,
+        // the pre-existing behavior this feature is opt-in on top of.
+        Assert.Contains("rect gg_rct_Base", j);
+        Assert.Contains("timer GearTimer05", j);
+    }
+
+    [Fact]
+    public void BootstrapState_does_not_construct_a_global_the_port_already_assigns_elsewhere()
+    {
+        // gg_rct_Base is assigned by a SECOND carried function (also part of H000's closure), the
+        // shape of a region a hero's own setup routine builds rather than the map's shared
+        // CreateRegions. It must not be re-constructed on top of that real value.
+        const string script = @"globals
+    rect gg_rct_Base
+endglobals
+function SetupRegion takes nothing returns nothing
+    if ( GetUnitTypeId(GetTriggerUnit()) == 'H000' ) then
+        set gg_rct_Base=Rect(-100.0, -100.0, 100.0, 100.0)
+    endif
+endfunction
+function TestHandler takes nothing returns nothing
+    if ( GetUnitTypeId(GetTriggerUnit()) == 'H000' ) then
+        call RemoveUnit(GetRectCenterUnit(gg_rct_Base))
+    endif
+endfunction
+";
+        var source = SourceMap(script);
+        var target = TargetMap();
+        var bundle = BundleCommand.ResolveUnit(source, "H000", gameDirOverride: null);
+        Assert.Contains(bundle.Functions, f => f.Name == "SetupRegion");
+
+        var result = PortCommand.PortUnit(source, bundle, target, includeScript: true, bootstrapState: true);
+        Assert.NotNull(result.Script);
+        Assert.True(result.Script!.Written, string.Join(" | ", result.Script.Notes));
+
+        var j = Encoding.Latin1.GetString(MapDocument.Load(target.SaveToBytes()).GetFile("war3map.j")!.RawBytes);
+        Assert.DoesNotContain("wc3ctl_BootstrapState_", j);
+        Assert.True(HasActiveCall(j, "Rect"), "the real assignment must survive");
+        Assert.DoesNotContain("Rect(0., 0., 0., 0.)", j);
+    }
+
     /// <summary>The text of one function's body (signature line through endfunction), the same slice
     /// every "hook into InitCustomTriggers" assertion above already takes inline, pulled out once
     /// the synth-dispatch tests need it more than once.</summary>

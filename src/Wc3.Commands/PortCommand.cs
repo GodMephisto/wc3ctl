@@ -46,9 +46,9 @@ public static class PortCommand
     /// </summary>
     public static PortResult PortUnit(
         MapDocument source, UnitBundle bundle, MapDocument target, bool includeScript = true,
-        bool synthDispatch = false)
+        bool synthDispatch = false, bool bootstrapState = false)
         => PortCore(source, bundle, target, RawcodeAllocator.UsedRawcodes(target),
-            alreadyPorted: null, pendingCopies: null, includeScript, apply: true, synthDispatch);
+            alreadyPorted: null, pendingCopies: null, includeScript, apply: true, synthDispatch, bootstrapState);
 
     /// <summary>
     /// Computes exactly the report <see cref="PortUnit"/> would produce — the rawcode
@@ -59,11 +59,11 @@ public static class PortCommand
     /// </summary>
     public static PortResult PreviewPort(
         MapDocument source, UnitBundle bundle, MapDocument target, bool includeScript = true,
-        bool synthDispatch = false)
+        bool synthDispatch = false, bool bootstrapState = false)
         => PortCore(source, bundle, target, RawcodeAllocator.UsedRawcodes(target),
             alreadyPorted: null,
             pendingCopies: new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase),
-            includeScript, apply: false, synthDispatch);
+            includeScript, apply: false, synthDispatch, bootstrapState);
 
     /// <summary>
     /// Ports several units into the SAME target in one operation. The used-rawcode set
@@ -74,17 +74,19 @@ public static class PortCommand
     /// the target once at the end.
     /// </summary>
     public static BatchPortResult PortUnits(
-        MapDocument source, IReadOnlyList<UnitBundle> bundles, MapDocument target, bool includeScript = true)
-        => BatchCore(source, bundles, target, includeScript, apply: true);
+        MapDocument source, IReadOnlyList<UnitBundle> bundles, MapDocument target, bool includeScript = true,
+        bool bootstrapState = false)
+        => BatchCore(source, bundles, target, includeScript, apply: true, bootstrapState);
 
     /// <summary>The combined report <see cref="PortUnits"/> would produce, writing nothing.</summary>
     public static BatchPortResult PreviewPorts(
-        MapDocument source, IReadOnlyList<UnitBundle> bundles, MapDocument target, bool includeScript = true)
-        => BatchCore(source, bundles, target, includeScript, apply: false);
+        MapDocument source, IReadOnlyList<UnitBundle> bundles, MapDocument target, bool includeScript = true,
+        bool bootstrapState = false)
+        => BatchCore(source, bundles, target, includeScript, apply: false, bootstrapState);
 
     private static BatchPortResult BatchCore(
         MapDocument source, IReadOnlyList<UnitBundle> bundles, MapDocument target,
-        bool includeScript, bool apply)
+        bool includeScript, bool apply, bool bootstrapState = false)
     {
         var used = RawcodeAllocator.UsedRawcodes(target);
         var alreadyPorted = new Dictionary<int, int>();
@@ -114,7 +116,8 @@ public static class PortCommand
                     foreach (var m in r.Remaps)
                         codeRemap.TryAdd(m.From, m.To);
                 var label = string.Join(" + ", results.Select(r => $"{r.RootName ?? r.RootRawcode} ({r.RootRawcode})"));
-                script = ScriptPorter.PortScript(source, target, functions, label, codeRemap, apply);
+                script = ScriptPorter.PortScript(source, target, functions, label, codeRemap, apply,
+                    synthDispatchHero: null, bootstrapState: bootstrapState);
             }
             catch (Exception ex)
             {
@@ -139,7 +142,7 @@ public static class PortCommand
         MapDocument source, UnitBundle bundle, MapDocument target,
         HashSet<int> used, Dictionary<int, int>? alreadyPorted,
         Dictionary<string, byte[]>? pendingCopies,
-        bool includeScript, bool apply, bool synthDispatch = false)
+        bool includeScript, bool apply, bool synthDispatch = false, bool bootstrapState = false)
     {
         var warnings = new List<string>();
         var diagnostics = new List<string>(bundle.Diagnostics);
@@ -343,7 +346,7 @@ public static class PortCommand
                     .ToDictionary(kv => kv.Key.ToRawcode(), kv => kv.Value.ToRawcode(), StringComparer.Ordinal);
                 scriptInfo = ScriptPorter.PortScript(source, target, bundle.Functions,
                     $"{bundle.RootName ?? bundle.RootRawcode} ({bundle.RootRawcode})", codeRemap, apply,
-                    synthDispatch ? bundle.RootRawcode : null);
+                    synthDispatch ? bundle.RootRawcode : null, bootstrapState);
             }
             catch (Exception ex)
             {

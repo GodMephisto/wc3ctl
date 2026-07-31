@@ -657,10 +657,18 @@ public static class Program
             + "a fresh, minimal, self-contained dispatcher for exactly its abilities. Does not make the unit "
             + "dependency-free (spell handlers still need their own carried state), only replaces the SHARED "
             + "entry point into them. Default off: a plain port is unaffected.");
+        var bootstrapStateOption = new Option<bool>("--bootstrap-state",
+            "Construct every carried global the ported code reads but nothing ever assigns (a region "
+            + "CreateRegions never carried, a timer only a hand-written Init reached through "
+            + "ExecuteFunc(\"Init\") ever built), so it holds a real handle instead of silently sitting "
+            + "at its type default. Only timer, group, hashtable, trigger, rect and force are ever "
+            + "constructed this way (a rect is built empty, never guessed at). Anything else this cannot "
+            + "safely build, unit, item, destructable, effect, code, framehandle, an array, is left alone "
+            + "and reported instead. Default off, a plain port is unaffected.");
         var port = new Command("port", "Port content between maps.");
         var portUnit = new Command("unit",
             "Port a unit (its custom objects + assets + strings, and best-effort its trigger script) from one map into another, auto-remapping rawcode collisions.")
-        { portSource, portRawcodes, portTarget, outOption, noScriptOption, dryRunOption, synthDispatchOption };
+        { portSource, portRawcodes, portTarget, outOption, noScriptOption, dryRunOption, synthDispatchOption, bootstrapStateOption };
         portUnit.SetHandler(ctx => RunSafely(() =>
         {
             var p = ctx.ParseResult;
@@ -674,6 +682,7 @@ public static class Program
             bool dryRun = p.GetValueForOption(dryRunOption);
             bool includeScript = !p.GetValueForOption(noScriptOption);
             bool synthDispatch = p.GetValueForOption(synthDispatchOption);
+            bool bootstrapState = p.GetValueForOption(bootstrapStateOption);
             string? gameDir = p.GetValueForOption(gameDirOption);
             if (synthDispatch && rawcodes.Length != 1)
                 throw new ArgumentException("--synth-dispatch only applies when porting a single unit");
@@ -691,8 +700,8 @@ public static class Program
             {
                 var bundle = BundleCommand.ResolveUnit(source, rawcodes[0], gameDir);
                 var result = dryRun
-                    ? PortCommand.PreviewPort(source, bundle, target, includeScript, synthDispatch)
-                    : PortCommand.PortUnit(source, bundle, target, includeScript, synthDispatch);
+                    ? PortCommand.PreviewPort(source, bundle, target, includeScript, synthDispatch, bootstrapState)
+                    : PortCommand.PortUnit(source, bundle, target, includeScript, synthDispatch, bootstrapState);
                 if (outPath is not null) target.Save(outPath);
                 Emit(json, result, () => Render.Port(result, outPath));
             }
@@ -700,8 +709,8 @@ public static class Program
             {
                 var bundles = rawcodes.Select(rc => BundleCommand.ResolveUnit(source, rc, gameDir)).ToList();
                 var result = dryRun
-                    ? PortCommand.PreviewPorts(source, bundles, target, includeScript)
-                    : PortCommand.PortUnits(source, bundles, target, includeScript);
+                    ? PortCommand.PreviewPorts(source, bundles, target, includeScript, bootstrapState)
+                    : PortCommand.PortUnits(source, bundles, target, includeScript, bootstrapState);
                 if (outPath is not null) target.Save(outPath);
                 Emit(json, result, () => Render.PortBatch(result, outPath));
             }

@@ -217,6 +217,59 @@ endfunction
     }
 
     [Fact]
+    public void GlobalNeverAssigned_fires_for_a_non_udg_global_too()
+    {
+        // The general shape found on a real map: gg_rct_Base is not a udg_ variable at all (it is
+        // the World Editor's own name for a placed region), CreateRegions (the function that would
+        // set it) is not carried, and a gate reading GetRectMinX(gg_rct_Base) as (0,0) on a null
+        // rect silently blocked every cast. Rule 3 used to only look at udg_ names and would have
+        // missed this entirely.
+        const string jass = @"globals
+    rect gg_rct_Base
+endglobals
+function TestHandler takes nothing returns nothing
+    if ( GetUnitTypeId(GetTriggerUnit()) == 'H000' ) then
+        call RemoveUnit(GetRectCenterUnit(gg_rct_Base))
+    endif
+endfunction
+function main takes nothing returns nothing
+endfunction
+";
+        var doc = BuildMap(jass);
+
+        var result = RuntimeReadinessCommand.Check(doc, "H000", ownerId: 0);
+
+        var f = Assert.Single(result.Findings, f => f.Issue == ReadinessIssue.GlobalNeverAssigned);
+        Assert.Equal("gg_rct_Base", f.Global);
+    }
+
+    [Fact]
+    public void GlobalNeverAssigned_stays_quiet_for_a_non_udg_global_assigned_elsewhere()
+    {
+        // Same shape as GearTimer05 on a real map: a hand-written system's own timer, assigned in
+        // its own Init function rather than the conventional InitGlobals.
+        const string jass = @"globals
+    timer GearTimer05
+endglobals
+function TestHandler takes nothing returns nothing
+    if ( GetUnitTypeId(GetTriggerUnit()) == 'H000' ) then
+        call TimerStart(GearTimer05, 1.0, true, null)
+    endif
+endfunction
+function Init takes nothing returns nothing
+    set GearTimer05=CreateTimer()
+endfunction
+function main takes nothing returns nothing
+endfunction
+";
+        var doc = BuildMap(jass);
+
+        var result = RuntimeReadinessCommand.Check(doc, "H000", ownerId: 0);
+
+        Assert.DoesNotContain(result.Findings, f => f.Issue == ReadinessIssue.GlobalNeverAssigned);
+    }
+
+    [Fact]
     public void GlobalNeverAssigned_ignores_a_variable_outside_this_heros_own_closure()
     {
         // udg_OtherHeroVar is genuinely never assigned anywhere, but nothing that reads it

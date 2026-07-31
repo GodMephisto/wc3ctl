@@ -1,5 +1,4 @@
 // src/Wc3.Commands/RuntimeReadinessCommand.cs
-using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 using War3Net.Common.Extensions;
@@ -15,10 +14,11 @@ public enum ReadinessIssue
     /// (a damage coefficient, a range, a duration, a dummy id) silently reads as its type
     /// default instead.</summary>
     GlobalInitMissing,
-    /// <summary>A udg_ global this hero's own carried code reads is assigned nowhere in the
-    /// whole script, so it can only ever hold its type default. The general form of
-    /// GlobalInitMissing, it also catches a loss narrower than the whole InitGlobals function,
-    /// for instance a single value a port dropped while carrying the rest.</summary>
+    /// <summary>A global (udg_ or otherwise, a gg_rct_* region or a hand-written system's own
+    /// timer/group/hashtable) this hero's own carried code reads is assigned nowhere in the whole
+    /// script, so it can only ever hold its type default. The general form of GlobalInitMissing, it
+    /// also catches a loss narrower than the whole InitGlobals function, for instance a single value
+    /// a port dropped while carrying the rest.</summary>
     GlobalNeverAssigned,
     /// <summary>The script carries GUI trigger handlers, but RunInitializationTriggers is
     /// missing, or defined and never called, so a trigger whose only event is Map Initialization
@@ -129,24 +129,17 @@ public static class RuntimeReadinessCommand
                           + "trigger, which registers no event of its own, never runs"));
         }
 
-        // 3. A udg_ global this hero's own carried code reads, assigned nowhere in the whole
-        //    script. Scoped to the hero's OWN dependency closure so another hero's own dead
-        //    variable on a shared, tightly-coupled map is never mistaken for this hero's problem.
-        //    "Assigned" still looks at the WHOLE script, because the natural home for the
-        //    assignment, InitGlobals, is never itself part of a hero's own closure.
-        var assigned = new HashSet<string>(StringComparer.Ordinal);
-        foreach (Match m in Regex.Matches(codeText, @"\bset\s+(udg_[A-Za-z0-9_]+)\b"))
-            assigned.Add(m.Groups[1].Value);
-
-        // A handle-typed global (hashtable, timer, group, ...) is routinely constructed right in
-        // its own declaration ("hashtable udg_X=InitHashtable()"), not through a later "set" at
-        // all, and that is just as real an initialization. World Editor itself still writes every
-        // SCALAR default (0, 0.0, false, null) inline too, so only a NON-default initializer counts
-        // here, otherwise every trivially-defaulted global would read as "assigned" and this whole
-        // check would never fire.
-        foreach (var g in udgGlobals)
-            if (globalsByName.TryGetValue(g, out var decl) && HasRealInitializer(decl))
-                assigned.Add(g);
+        // 3. A global this hero's own carried code reads, assigned nowhere in the whole script.
+        //    Not scoped to udg_: gg_rct_* (a region CreateRegions never carried) and a
+        //    hand-written system's own timer/group/hashtable globals broke exactly this way on a
+        //    real map, and nothing but the name distinguishes them from a udg_ one. Scoped to the
+        //    hero's OWN dependency closure so another hero's own dead variable on a shared,
+        //    tightly-coupled map is never mistaken for this hero's problem. "Assigned" still looks
+        //    at the WHOLE script, because the natural home for the assignment, InitGlobals (or a
+        //    hand-written system's own Init), is never itself part of a hero's own closure. Shared
+        //    with the porter's bootstrap-state feature, see JassGlobals.Assigned, so the two can
+        //    never disagree about what counts as an assignment.
+        var assigned = JassGlobals.Assigned(globalsByName, codeText);
 
         IReadOnlyList<BundleFunction> closure;
         try
@@ -166,8 +159,8 @@ public static class RuntimeReadinessCommand
             var usedByHero = new HashSet<string>(StringComparer.Ordinal);
             foreach (var f in closure)
                 for (int i = f.StartLine - 1; i < f.EndLine && i < code.Length; i++)
-                    foreach (Match m in Regex.Matches(code[i], @"\budg_[A-Za-z0-9_]+\b"))
-                        usedByHero.Add(m.Value);
+                    foreach (Match m in Regex.Matches(code[i], @"[A-Za-z_][A-Za-z0-9_]*"))
+                        if (globalsByName.ContainsKey(m.Value)) usedByHero.Add(m.Value);
 
             foreach (var g in usedByHero.Where(g => !assigned.Contains(g)).OrderBy(g => g, StringComparer.Ordinal))
                 findings.Add(new(ReadinessIssue.GlobalNeverAssigned, DiagnosticSeverity.Error, g,
@@ -187,19 +180,5 @@ public static class RuntimeReadinessCommand
             if (e.Id == id && ObjectKinds.DeltaName(ObjectKinds.ModsToDict(e.Mods), info, strings) is { } n)
                 return n;
         return null;
-    }
-
-    /// <summary>True when a "[constant] type [array] name = rhs" declaration's rhs is something
-    /// other than the type's own zero value. A bare array declaration or one with no "=" at all
-    /// has no rhs and returns false, exactly like a trivial default, since nothing here was
-    /// actually initialized either way.</summary>
-    private static bool HasRealInitializer(string declLine)
-    {
-        int eq = declLine.IndexOf('=');
-        if (eq < 0) return false;
-        string rhs = declLine[(eq + 1)..].Trim();
-        if (rhs is "false" or "null" or "") return false;
-        return !double.TryParse(rhs.TrimEnd('.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var d)
-            || d != 0;
     }
 }

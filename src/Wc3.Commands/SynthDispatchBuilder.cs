@@ -145,15 +145,32 @@ internal static class SynthDispatchBuilder
         return sb.ToString();
     }
 
-    /// <summary>A safe JASS identifier fragment out of a rawcode (or anything else): non
-    /// alphanumeric bytes become underscores, and a leading digit gets an underscore in front
-    /// (JASS identifiers cannot start with one).</summary>
+    /// <summary>A safe JASS identifier fragment out of a rawcode, a human-readable port label
+    /// ("Asta (H028)"), or anything else: non alphanumeric bytes become underscores, then any run
+    /// of underscores is trimmed off BOTH ends (an embedded one, "Asta__H028", is left alone, only
+    /// a boundary one is a problem), and a leading digit (or an empty result) gets an "x" prefix,
+    /// a letter, never an underscore.
+    ///
+    /// The real World Editor JASS parser (pjass) rejects an identifier that starts OR ends with an
+    /// underscore outright ("Unrecognized character _"), embedded runs are fine. This codebase's
+    /// own lenient JassScriptCheck does not catch that shape at all, so a name built by naively
+    /// replacing "(" and ")" with "_" (a marker label always ends in one) passed this tool's own
+    /// compile gate and then failed the real compiler, an uncompilable map is worse than any
+    /// cosmetic ugliness in the generated name, so this is a correctness fix, not a style one.
+    /// </summary>
     public static string SanitizeIdentifier(string s)
     {
         var sb = new StringBuilder(s.Length);
         foreach (var c in s) sb.Append(char.IsLetterOrDigit(c) ? c : '_');
-        if (sb.Length == 0 || char.IsDigit(sb[0])) sb.Insert(0, '_');
-        return sb.ToString();
+
+        int start = 0;
+        while (start < sb.Length && sb[start] == '_') start++;
+        int end = sb.Length;
+        while (end > start && sb[end - 1] == '_') end--;
+        string trimmed = sb.ToString(start, end - start);
+
+        if (trimmed.Length == 0) return "x";
+        return char.IsDigit(trimmed[0]) ? "x" + trimmed : trimmed;
     }
 
     // ---- one hero guard --------------------------------------------------------------------

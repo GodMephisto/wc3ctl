@@ -49,12 +49,23 @@ internal static class ScriptPorter
     /// the hero-type-id check itself). See <see cref="SynthDispatchBuilder"/>. This does not
     /// replace the ordinary carried closure, a spell handler still needs its own carried body
     /// (timers, dummies, per-player state), it only replaces the SHARED entry point into it.
+    ///
+    /// <paramref name="bootstrapState"/> is opt-in too (false by default, so an ordinary port is
+    /// unaffected): every carried global this port's own carried code reads but assigns nowhere in
+    /// the spliced text (no InitGlobals ever carried it, no differently named helper Init ever
+    /// reached it) is a global stuck at its type default, null for a handle. For the types that
+    /// have a safe, universal, argument-free constructor (timer, group, hashtable, trigger, rect,
+    /// force) a fresh generated function builds one, wired into the target's main before
+    /// InitCustomTriggers runs, the same call site InitGlobals already uses, so the state exists
+    /// before any carried code could read it. Every other type is left alone and reported instead,
+    /// see <see cref="BootstrapStateBuilder"/> for the full reasoning (a rect is built EMPTY, never
+    /// guessed at, and why that is the right tradeoff for a gate).
     /// </summary>
     public static ScriptPortInfo? PortScript(
         MapDocument source, MapDocument target,
         IReadOnlyList<BundleFunction> functions, string markerLabel,
         IReadOnlyDictionary<string, string> codeRemap, bool apply = true,
-        string? synthDispatchHero = null)
+        string? synthDispatchHero = null, bool bootstrapState = false)
     {
         var notes = new List<string>();
         if (functions.Count == 0) return null;
@@ -327,6 +338,51 @@ internal static class ScriptPorter
             synthInitToHook = synthInitFn;
         }
 
+        // Opt-in: find every carried global this port's own spliced-in text reads but never
+        // assigns anywhere, and construct the ones whose type has a safe, universal constructor.
+        // See BootstrapStateBuilder for the full reasoning and the type-to-constructor mapping.
+        // Declarations are keyed by their FINAL (post rename) name, since that is the name the
+        // spliced text (already renamed) actually uses, the ORIGINAL decl text still describes the
+        // right type and initializer shape, renaming never touches either.
+        string? bootstrapFnToHook = null;
+        if (bootstrapState)
+        {
+            var declaredByFinalName = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var g in carriedGlobals)
+                declaredByFinalName[rename.GetValueOrDefault(g, g)] = srcGlobals[g];
+            if (synthTriggerGlobal is not null)
+                declaredByFinalName[synthTriggerGlobal] =
+                    SynthDispatchBuilder.BuildGlobalDeclaration(synthTriggerGlobal);
+
+            var candidates = BootstrapStateBuilder.FindUnassigned(declaredByFinalName, portedFns.ToString());
+            var constructible = candidates.Where(c => c.Constructor is not null).ToList();
+            var left = candidates.Where(c => c.Constructor is null).ToList();
+
+            if (constructible.Count > 0)
+            {
+                string bootstrapFn = UniqueName(
+                    "wc3ctl_BootstrapState_" + SynthDispatchBuilder.SanitizeIdentifier(markerLabel), taken);
+                portedFns.Append(BootstrapStateBuilder.BuildRawText(bootstrapFn, constructible)).Append('\n');
+                bootstrapFnToHook = bootstrapFn;
+                notes.Add($"synthesized {bootstrapFn}(), constructing {constructible.Count} global(s) that "
+                    + "this hero's own carried code reads but nothing in the port ever assigns "
+                    + $"({string.Join(", ", constructible.Select(c => $"{c.Name} ({c.Type})"))}), so each "
+                    + "reads as a fresh, real handle instead of null.");
+                if (constructible.Any(c => c.Type == "rect"))
+                    notes.Add("a bootstrapped rect is built EMPTY, bounds (0,0) to (0,0), never a guess "
+                        + "at the source's real region, for a GATE that is strictly safer (it can never "
+                        + "falsely block). The tradeoff, a handler that used the rect to pick a location "
+                        + "now reads (0,0), verify the ported map.");
+            }
+            if (left.Count > 0)
+            {
+                var leftDescriptions = left.Select(c => c.Name + " (" + (c.IsArray ? c.Type + " array" : c.Type) + ")");
+                notes.Add($"{left.Count} global(s) are read by this hero's own carried code but assigned "
+                    + "nowhere in the port, and were deliberately left untouched rather than guessed at "
+                    + $"({string.Join(", ", leftDescriptions)}), verify the ported map.");
+            }
+        }
+
         // A non-carried function named in a condition or return could not be safely commented out
         // without breaking block structure, so it was left in place. Flag it (best-effort port).
         if (residual.Count > 0)
@@ -411,6 +467,19 @@ internal static class ScriptPorter
                   + "target's InitCustomTriggers, ahead of the trigger wiring above."
                 : "carried a global-initializer helper but could not find InitCustomTriggers in the " +
                   "target — call it manually, before any trigger registration.");
+        }
+
+        // The synthesized bootstrap function, same call site as InitGlobals (before
+        // InitCustomTriggers), so every global it constructs exists before any carried code,
+        // including the synthesized dispatcher above, could ever read it.
+        if (bootstrapFnToHook is not null)
+        {
+            merged = HookMain(merged, bootstrapFnToHook, marker, out bool hookedBootstrap);
+            notes.Add(hookedBootstrap
+                ? $"wired {bootstrapFnToHook}() into the target's main, before InitCustomTriggers, so "
+                  + "every bootstrapped global exists before any carried code could read it."
+                : "synthesized a bootstrap-state function but could not find the target's main, call it "
+                  + "manually, before anything else runs.");
         }
 
         // The compile gate. Trimming a call to a function we did not carry can leave a variable
