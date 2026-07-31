@@ -169,6 +169,120 @@ mis-calibrated for globals belonging to heroes not placed on the map. Downgrade 
   will wrongly conclude there is no remote.
 - **Republish after every merge.** Stale `dist` has three times made a fixed bug look unfixed.
 
+### Graph and CLI closure structure, closed 2026-07-31 10:14
+
+The rule that separates a hero's real dependencies from the script closure over-carry now
+lives in ONE place, `BundleStructure` in `Wc3.Commands` (`ScriptClosureVia`, `RealAdjacency`,
+`RealChildEdges`, `CarriedByScriptClosure`). The Studio panel and the CLI renderer both
+consume it. Before this, the rule lived only in the panel, so `wc3ctl bundle unit` still
+printed the whole closure flat under the hero. Two front ends, one definition, that is why
+this class of bug happened at all.
+
+The panel's carried group now defaults to HIDDEN with the count on the checkbox. Hiding is a
+view concern only, it never changes the bundle or the port exclusion set, and there is a test
+that pins exactly that.
+
+Verified by running the published exe, not by reading a report.
+`dist\wc3ctl.exe bundle unit "...Anime_WOS2_0.28a2.w3x" H028` shows 6 direct abilities, all
+Asta's own, and `Carried by the script closure (204)` below. `H0DA` in
+`Anime Choice Arena V0.31C.w3x` shows 9, with buffs and spellbook entries nested under the
+abilities that pull them in. 874 hermetic tests green, corpus panel tests green, all six
+binaries published 10:14.
+
+Note for whoever runs the corpus tests. The map-backed tests silently `return` when the map
+file is absent, so a green run does NOT prove they exercised anything. Confirm the map exists
+before trusting one, `Anime Choice Arena V0.31C.w3x` and `Anime_WOS2_0.28a2.w3x` are the two
+in use.
+
+### Then the same rule for files and strings, `21f87d1`, published 10:41
+
+Splitting only the OBJECT tree was half a fix, and the user found the other half immediately.
+Asta still listed all 498 files and 1875 strings as his own, so the panel and the CLI showed
+Akainu's icons and every hero's tooltips under a hero with 6 abilities. He really needs 17
+files (6 ability icons, hero icon, model, its 10 textures) and 88 strings. `H0DA` goes 468 to
+13.
+
+The lesson worth keeping. The OLD file rule asked whether an asset arrived through an art
+field rather than a script edge. Every foreign icon arrives through an art field too, just on
+a foreign object, so that walk crossed the seed edge into another hero's kit and adopted its
+art. **The question is never which field code the edge carries, it is which object asked.**
+Any future "is this really the root's" rule must seed from `BundleStructure.RealObjects`.
+`RealFiles` continues THROUGH a file because a model's textures hang off the model path.
+
+Strings had no owner recorded at all, `ScanField` knew it and discarded it. There is now an
+object to string edge. `UnitBundle.Strings` stays the full flat list so the porter is
+unchanged. Guard to remember, a display string can be four characters and look like a
+rawcode, so the object rules skip `StringVia`, else a string could forge a real reference and
+pull a carried object out of the carried set. Pinned by a test.
+
+### Still open, and now the real question
+
+The VIEW is fixed. The PORT still carries all 481 foreign files. Whether it should is the
+user's call and is NOT decided. The asymmetry is the opposite of the object one, and that is
+why it is worth revisiting. An under-carried OBJECT is a broken ability, so over-carry wins.
+An under-carried FILE is a missing icon on a foreign object nobody plays, which is cosmetic.
+The one real risk is a shared effect dummy that the hero's own carried handler spawns, drop
+its model and a vfx dies silently, and the user has asked about vfx before. So do not narrow
+the port's file set on this reasoning alone, measure a port with and without and test in game.
+The exclusion mechanism already exists (click a node, or `BundleFilter`).
+
+## Claude, 2026-08-01. The 7 remaining pjass errors, root-caused, NOT yet fixed
+
+State at `493e17e`, published 01:53, 880 hermetic and 44 corpus tests green. Asta ports clean
+(validate OK, byte-faithful). **Shadow Nanaya H0DA still does not compile, 7 pjass errors.**
+
+`validate --deep` now correctly says `INVALID - 7 error(s)` with exit 2. Before today it said
+`OK - valid (0 error(s), 0 warning(s))` on the same map, which is worth remembering as a warning
+about trusting our own green checks.
+
+### The single root cause behind all 7
+
+They all come from function bodies emitted by **`CarryGlobalInitializers`**, not by the ordinary
+closure. That path trims with `TrimToGlobals`, which is keyed on **globals only and never on
+non-carried functions**. Two consequences, and both are in the errors.
+
+1. A `function X` reference survives untouched, because no bad GLOBAL appears on that line. Hence
+   `call TriggerAddAction(tCast, function BelR_OnCast)` with `BelR_OnCast` never emitted.
+   `BelR_OnCast` IS in the source index (source line 95880), so this is not an indexer gap.
+2. A bad `set` IS commented out but the `if` that guards it is structural and stays, so the script
+   reads a global that was never carried.
+   ```
+   40977: if RINQ_registered then              <- survives, undeclared
+   40980: //[wc3ctl trimmed]  set RINQ_registered=true
+   ```
+   `RINQ_registered` IS declared in the source globals block (`boolean RINQ_registered= false`,
+   source line 8197), so `ParseGlobals` is not the problem either. It simply never reached `used`,
+   because `used` is computed from `bodies` (the ordinary closure's trimmed bodies) and these
+   initializer bodies are a separate collection.
+
+The enclosing functions are `BelR_Init` and `RINQ_Register`. Note `RINQ_Register` does not match
+any init naming pattern, so do not try to fix this by widening a name filter.
+
+### The fix, in the order to do it
+
+1. In the `CarryGlobalInitializers` path, run the FUNCTION trim as well as the global trim, so a
+   `function X` naming a non-carried function gets its statement commented out like anywhere else.
+2. For any global left in a residual STRUCTURAL line, carry its DECLARATION (not its assignment).
+   An unused declared global costs one line and no behaviour, whereas an undeclared one is a
+   compile error that kills the whole script. This is strictly the safer direction.
+3. Fold these initializer bodies into the `used` computation so their global references are counted.
+
+### Do NOT repeat these two mistakes
+
+- **The `_Init` suffix fix in `493e17e` is correct, keep it.** I reverted it once claiming a
+  cascade, having compared Nanaya's 1854 carried functions against ASTA's 165. Different heroes on
+  different maps. Real cost was 1827 to 1854, and it took pjass from 11 errors to 7.
+- **Do not prune assets or objects on NAME.** Asta's own handlers genuinely play `Hero_Kirito_Q2`
+  and use `wos_ZarakiWCrack1.mdl` and `wos_OPm (434)3small.mdl`, with `wos_GodBoy_*` textures
+  inside that model. The author reused other heroes' art, so a name rule strips his vfx and sfx.
+
+### Also still open, small
+6 `wos_Erza*_port.blp` portraits (about 937 KB) remain in Asta's port, from `GuideEnter`, which
+names only 6 assets so it sits under the fan-out threshold of 24. Lowering the threshold would
+also drop Asta's own busiest handler at 12. The real fix is reachability, `GuideEnter` is dead code
+in the ported map, along with `OnClick`, `RandomPick` and `MyHeroIdInit`, 30 of 171 functions and
+32% of the ported script's lines.
+
 ### Method that actually worked
 Contrast a broken case against a genuinely working one, and read real output. Reasoning from an
 absence produced four wrong diagnoses on Tohno. Never use a product of this pipeline as a control,
