@@ -851,12 +851,15 @@ public static class Program
                         p.GetValueForOption(gameDirOption));
             }
 
+            // pjass is the game's own parser, so its findings become real issues and change the
+            // verdict. Printing "OK, valid" above a list of undefined functions is worse than
+            // printing nothing, and that is exactly what this used to do.
+            r = ValidateCommand.WithPjass(r, deep);
+
             Emit(json, new { r.Valid, r.Errors, r.Warnings, r.Issues, Pjass = deep }, () =>
                 Render.Validate(r)
-                + (deep is null ? "" : $"\npjass: {deep.Note}"
-                    + (deep.Errors.Count == 0 ? "" : "\n" + string.Join("\n", deep.Errors.Select(e => "  ! " + e)))));
+                + (deep is null ? "" : $"\npjass: {deep.Note}"));
 
-            // pjass is authoritative when it actually ran, so a script it rejects fails the map.
             if (!r.Valid || deep is { Ran: true, Passed: false }) exitCode[0] = 2;
         }));
 

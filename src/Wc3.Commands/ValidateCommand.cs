@@ -99,6 +99,34 @@ public static class ValidateCommand
         //    is the only check that would have caught a real map that shipped exactly this broken.
         issues.AddRange(ReadinessIssues(doc));
 
+        return Summarize(issues);
+    }
+
+    /// <summary>
+    /// Folds a pjass run into the verdict. pjass is the game's own parser, so a script it rejects
+    /// cannot load, and that has to reach the VERDICT and not only the exit code. It did not, and
+    /// the result was validate printing "OK, valid (0 error(s), 0 warning(s))" one line above
+    /// eleven undefined-function errors, on a ported map that could never host. Anyone who read the
+    /// headline and stopped was told the exact opposite of the truth.
+    ///
+    /// A run that could not happen (no install, no pjass, a timeout) is not a failure. That is what
+    /// <see cref="PjassResult.Ran"/> is for, and <see cref="JassScriptCheck"/> stays the guaranteed
+    /// line of defense in that case.
+    /// </summary>
+    public static ValidateResult WithPjass(ValidateResult result, PjassResult? pjass)
+    {
+        if (pjass is null || !pjass.Ran) return result;
+
+        var issues = new List<ValidationIssue>(result.Issues);
+        foreach (var e in pjass.Errors)
+            issues.Add(new ValidationIssue(DiagnosticSeverity.Error, "pjass", "war3map.j", e));
+        foreach (var w in pjass.Warnings)
+            issues.Add(new ValidationIssue(DiagnosticSeverity.Warning, "pjass", "war3map.j", w));
+        return Summarize(issues);
+    }
+
+    private static ValidateResult Summarize(List<ValidationIssue> issues)
+    {
         int errors = issues.Count(i => i.Severity == DiagnosticSeverity.Error);
         int warnings = issues.Count(i => i.Severity == DiagnosticSeverity.Warning);
         return new ValidateResult(errors == 0, errors, warnings, issues);

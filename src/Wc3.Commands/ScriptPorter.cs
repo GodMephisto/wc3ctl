@@ -481,9 +481,19 @@ internal static class ScriptPorter
             ? s
             : rawcodesOf[n] = RawcodeLiterals(BodyText(srcLines, allByName[n]));
 
-        // Each InitTrig_* -> the source functions it references (the handlers it registers).
+        // Each initializer -> the source functions it references (the handlers it registers).
+        //
+        // InitTrig_* is the World Editor's form, but a hand-written system names its own initializer
+        // and the suffix form was missing here. Acnologia's AcnoG_Init was carried by the ordinary
+        // closure, so none of the safety below applied to it, and its four registered handlers were
+        // never carried. The ported script then referenced functions that do not exist, which is a
+        // compile error, so the map could not host at all.
+        //
+        // Measured on Anime Choice Arena porting H0DA, adding the suffix costs 27 more carried
+        // functions (1827 to 1854) and one more wired init, and takes pjass from 11 errors to 7.
         var initHandlers = allByName.Values
-            .Where(f => f.Name.StartsWith("InitTrig_", StringComparison.Ordinal))
+            .Where(f => f.Name.StartsWith("InitTrig_", StringComparison.Ordinal)
+                || f.Name.EndsWith("_Init", StringComparison.Ordinal))
             .ToDictionary(
                 f => f.Name,
                 f => ReferencedNames(BodyText(srcLines, f)).Where(allByName.ContainsKey).Distinct().ToList(),
@@ -504,7 +514,16 @@ internal static class ScriptPorter
             grew = false;
             foreach (var (init, handlers) in initHandlers)
             {
-                if (carried.Contains(init)) continue;
+                if (carried.Contains(init))
+                {
+                    // Already carried by the ordinary closure, which used to mean this loop skipped
+                    // it and its handlers were never carried, so the registration named a function
+                    // that was never emitted. However the init got here, if it is in the port then
+                    // its handlers have to be too.
+                    foreach (var h in handlers)
+                        if (carried.Add(h)) grew = true;
+                    continue;
+                }
                 // The hero's own init: it wires a handler we already carry, or wires a handler that
                 // fires on one of the hero's rawcodes. Unrelated heroes' inits fire on their own
                 // (different) ability ids, so they are not pulled in.
