@@ -15,10 +15,17 @@ public enum ReadinessIssue
     /// default instead.</summary>
     GlobalInitMissing,
     /// <summary>A global (udg_ or otherwise, a gg_rct_* region or a hand-written system's own
-    /// timer/group/hashtable) this hero's own carried code reads is assigned nowhere in the whole
-    /// script, so it can only ever hold its type default. The general form of GlobalInitMissing, it
-    /// also catches a loss narrower than the whole InitGlobals function, for instance a single value
-    /// a port dropped while carrying the rest.</summary>
+    /// timer/group/hashtable) that appears, unassigned, somewhere in the script text this hero's
+    /// port would carry. Warning severity, not Error, on purpose, the carried text for a hero on a
+    /// tightly-coupled arena routinely includes shared framework code every other hero's closure
+    /// reaches the same way (a common UI frame system, a mouse handler, a pick-phase state
+    /// machine), so a global found this way is not provably THIS hero's own bug, only a lead worth
+    /// checking. It found the real gg_rct_Base and GearTimer05 bugs this feature was built for, and
+    /// it also found dozens of other heroes' own unrelated frame globals on a real corpus map, at
+    /// Error severity that made a script that compiles and round trips byte faithful come out
+    /// INVALID, which is worse than under-reporting. The general form of GlobalInitMissing, it also
+    /// catches a loss narrower than the whole InitGlobals function, for instance a single value a
+    /// port dropped while carrying the rest.</summary>
     GlobalNeverAssigned,
     /// <summary>The script carries GUI trigger handlers, but RunInitializationTriggers is
     /// missing, or defined and never called, so a trigger whose only event is Map Initialization
@@ -49,12 +56,16 @@ public sealed record RuntimeReadinessResult(
 ///
 /// Two of the three checks are whole-script facts. InitGlobals and RunInitializationTriggers are
 /// generated exactly once per map, under those exact names, the same fixed World Editor
-/// convention <see cref="JassScriptCheck"/> already relies on for config and main. The third is
-/// scoped to the hero's own dependency closure, the same one <see cref="BundleCommand"/> computes
-/// for porting, so an unrelated hero's own dead variable on a large multi-hero map is never
-/// mistaken for this hero's problem. A prototype that skipped this scoping found problems on a
-/// map the user plays without issue, purely from other heroes' own unrelated leftovers, so the
-/// scoping is load-bearing, not decorative.
+/// convention <see cref="JassScriptCheck"/> already relies on for config and main, both stay Error
+/// severity, neither depends on which hero is being checked. The third is scoped to the hero's
+/// own dependency closure, the same one <see cref="BundleCommand"/> computes for porting, which
+/// narrows a whole-map scan down to what this hero's port would actually carry, cutting a real
+/// map's noise down enormously (a prototype that skipped this scoping entirely found problems
+/// purely from other heroes' own unrelated leftovers, on a map the user plays without issue). It
+/// does not prove exclusivity though, a tightly-coupled arena's closure routinely pulls in shared
+/// framework code that every hero's own closure reaches the same way, so this one finding stays at
+/// Warning severity, informative rather than verdict-flipping, see
+/// <see cref="ReadinessIssue.GlobalNeverAssigned"/> for the real map evidence behind that choice.
 /// </summary>
 public static class RuntimeReadinessCommand
 {
@@ -129,13 +140,16 @@ public static class RuntimeReadinessCommand
                           + "trigger, which registers no event of its own, never runs"));
         }
 
-        // 3. A global this hero's own carried code reads, assigned nowhere in the whole script.
-        //    Not scoped to udg_: gg_rct_* (a region CreateRegions never carried) and a
+        // 3. A global that appears, unassigned, somewhere in the script text this hero's port
+        //    would carry. Not scoped to udg_: gg_rct_* (a region CreateRegions never carried) and a
         //    hand-written system's own timer/group/hashtable globals broke exactly this way on a
         //    real map, and nothing but the name distinguishes them from a udg_ one. Scoped to the
-        //    hero's OWN dependency closure so another hero's own dead variable on a shared,
-        //    tightly-coupled map is never mistaken for this hero's problem. "Assigned" still looks
-        //    at the WHOLE script, because the natural home for the assignment, InitGlobals (or a
+        //    hero's OWN dependency closure, which cuts a whole-map scan down a great deal, but a
+        //    tightly-coupled arena's closure still routinely pulls in shared framework code every
+        //    other hero's closure reaches too (a UI frame system, a mouse handler), so this can
+        //    never prove the global is exclusively this hero's, Warning severity reflects exactly
+        //    that (see the finding text below for the honest claim). "Assigned" still looks at the
+        //    WHOLE script, because the natural home for the assignment, InitGlobals (or a
         //    hand-written system's own Init), is never itself part of a hero's own closure. Shared
         //    with the porter's bootstrap-state feature, see JassGlobals.Assigned, so the two can
         //    never disagree about what counts as an assignment.
@@ -163,9 +177,12 @@ public static class RuntimeReadinessCommand
                         if (globalsByName.ContainsKey(m.Value)) usedByHero.Add(m.Value);
 
             foreach (var g in usedByHero.Where(g => !assigned.Contains(g)).OrderBy(g => g, StringComparer.Ordinal))
-                findings.Add(new(ReadinessIssue.GlobalNeverAssigned, DiagnosticSeverity.Error, g,
-                    $"'{g}' is read by this hero's own carried code but assigned nowhere in the "
-                    + "script, so it can only ever hold its type default (0, false or null)"));
+                findings.Add(new(ReadinessIssue.GlobalNeverAssigned, DiagnosticSeverity.Warning, g,
+                    $"'{g}' appears, unassigned, in the script text carried for this hero (which can "
+                    + "include shared framework code other heroes' closures reach too, so this is "
+                    + "not proven to be this hero's own bug) and is assigned nowhere in the whole "
+                    + "script, so it can only ever hold its type default (0, false or null), worth "
+                    + "checking rather than a confirmed problem"));
         }
 
         return new(heroRawcode, heroName, ownerId, findings, diagnostics);

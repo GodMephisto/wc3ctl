@@ -164,6 +164,12 @@ endfunction
 
         var f = Assert.Single(result.Findings, f => f.Issue == ReadinessIssue.GlobalNeverAssigned);
         Assert.Equal("udg_TestVar", f.Global);
+        // Warning, not Error. The hero's own closure on a tightly-coupled arena routinely pulls in
+        // shared framework code other heroes' closures reach too, so this can never be proven to
+        // be THIS hero's own bug, only a lead worth checking, see Check's rule 3 comment. A map
+        // that compiles and round trips byte faithful must not come out INVALID over this alone.
+        Assert.Equal(DiagnosticSeverity.Warning, f.Severity);
+        Assert.True(result.Ready, "a Warning-only finding must not flip the verdict to not-ready");
     }
 
     [Fact]
