@@ -828,6 +828,60 @@ public static class Program
         }));
         audit.AddCommand(auditReadiness);
 
+        // ---- debug: instrument a map so the running game reports what it is doing ----
+        var debugWiringHeroArg = new Argument<string?>("hero", () => null,
+            "Hero rawcode to add a per-hero branch checkpoint for. Omit to instrument only the "
+            + "checkpoints shared by every cast, with no per-hero branch print.");
+        var debugWiringOut = new Option<string?>(new[] { "-o", "--out" },
+            "Output map path. Default is '<map>.debug.<ext>' next to the input, the original is "
+            + "never overwritten.");
+        var debug = new Command("debug",
+            "Instrument a map so the running game reports what it is doing, for problems static analysis cannot see.");
+        var debugWiring = new Command("wiring",
+            "Instruments an already-ported map's cast-dispatch chain with BJDebugMsg calls, so the running "
+            + "game reports exactly where a hero's cast attempt stops. Use this when a hero audits clean on "
+            + "'audit hero' and 'audit readiness' and still cannot cast in game, since neither static check "
+            + "can see whether the dispatcher's own gate passes, whether its own per-hero branch is ever "
+            + "entered, or whether a deferred trigger registration ran before the cast. Opt in, meant for a "
+            + "disposable copy of a map, never run as part of an ordinary port.")
+        { mapArg, debugWiringHeroArg, debugWiringOut };
+        debugWiring.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            string? hero = p.GetValueForArgument(debugWiringHeroArg);
+            var r = DebugWiringCommand.Instrument(doc, hero);
+
+            string? dest = null;
+            if (r.Ok)
+            {
+                dest = p.GetValueForOption(debugWiringOut) ?? Path.Combine(
+                    Path.GetDirectoryName(map) ?? "",
+                    Path.GetFileNameWithoutExtension(map) + ".debug" + Path.GetExtension(map));
+                doc.Save(dest);
+            }
+            else
+            {
+                exitCode[0] = 1;
+            }
+
+            Emit(p.GetValueForOption(jsonOption), new { r.Ok, r.Message, r.Targets, r.Diagnostics, SavedTo = dest }, () =>
+            {
+                var sb = new System.Text.StringBuilder();
+                sb.AppendLine(r.Message);
+                foreach (var t in r.Targets)
+                {
+                    sb.AppendLine($"  {t.Function}  (trigger {t.Trigger})");
+                    foreach (var c in t.Checkpoints) sb.AppendLine($"    + {c}");
+                }
+                foreach (var d in r.Diagnostics) sb.AppendLine("  note, " + d);
+                if (dest is not null) sb.AppendLine("saved to " + dest);
+                return sb.ToString().TrimEnd();
+            });
+        }));
+        debug.AddCommand(debugWiring);
+
         var deepOption = new Option<bool>("--deep",
             "Also run pjass, the game's own JASS parser, over the map script (needs a Warcraft III install).");
         var validate = new Command("validate",
@@ -1421,6 +1475,7 @@ public static class Program
         root.AddCommand(script); root.AddCommand(bundle); root.AddCommand(port);
         root.AddCommand(convert); root.AddCommand(validate);
         root.AddCommand(audit);
+        root.AddCommand(debug);
         root.AddCommand(place); root.AddCommand(palette); root.AddCommand(terrain);
         root.AddCommand(sound); root.AddCommand(camera); root.AddCommand(pathing);
         root.AddCommand(mapInfo); root.AddCommand(player); root.AddCommand(force);

@@ -56,7 +56,9 @@ public static class PreplacedUnitsScript
 
     private const string UnitsFunc = "CreateAllUnits";
     private const string ItemsFunc = "CreateAllItems";
-    private const string WireSpellsFunc = "wc3ctl_WirePlacedHeroSpells";
+    // Internal, not private: DebugWiringCommand instruments this exact generated function on an
+    // already-ported map, and reuses the fixed name rather than keeping its own copy of it.
+    internal const string WireSpellsFunc = "wc3ctl_WirePlacedHeroSpells";
 
     public sealed record SyncResult(bool Ok, string Message, int Units, int Items);
 
@@ -287,8 +289,11 @@ public static class PreplacedUnitsScript
     /// normally during hero creation. A placed hero never triggers that registration, so its casts do
     /// not reach the dispatcher, CreateAllUnits registers the placed hero's player on each instead.
     /// Registering an unrelated dispatcher is harmless, its condition just filters the cast out.
+    ///
+    /// Internal, not private: DebugWiringCommand reuses this exact detection to find which trigger
+    /// to instrument on an already-ported map, rather than keeping a second copy of the pattern.
     /// </summary>
-    private static List<string> DetectPerPlayerSpellTriggers(string jass)
+    internal static List<string> DetectPerPlayerSpellTriggers(string jass)
     {
         var set = new HashSet<string>(StringComparer.Ordinal);
         foreach (Match m in Regex.Matches(jass,

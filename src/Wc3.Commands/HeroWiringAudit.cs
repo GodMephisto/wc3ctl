@@ -67,6 +67,18 @@ public sealed record HeroWiringResult(
 /// </summary>
 public static class HeroWiringAudit
 {
+    /// <summary>The gg_trg_* a function is attached to, as a condition or an action, on a
+    /// comment-stripped view of the whole script. Shared with <see cref="DebugWiringCommand"/>,
+    /// which walks this the other way round (trigger to dispatch function) to find what to
+    /// instrument on an already-ported map.</summary>
+    public static string? FindAttachedTrigger(string codeText, string function)
+    {
+        var m = Regex.Match(codeText,
+            @"TriggerAdd(?:Condition|Action)\s*\(\s*(gg_trg_[A-Za-z0-9_]+)\s*,[^)]*\b"
+            + Regex.Escape(function) + @"\b");
+        return m.Success ? m.Groups[1].Value : null;
+    }
+
     /// <summary>Audits every distinct hero type placed on the map.</summary>
     public static IReadOnlyList<HeroWiringResult> AuditPlacedHeroes(MapDocument doc)
     {
@@ -491,13 +503,7 @@ public static class HeroWiringAudit
                 double.TryParse(v, NumberStyles.Any, CultureInfo.InvariantCulture, out var d) && d > 0);
 
         /// <summary>The gg_trg_* the function is attached to, as a condition or an action.</summary>
-        public string? TriggerFor(string function)
-        {
-            var m = Regex.Match(CodeText,
-                @"TriggerAdd(?:Condition|Action)\s*\(\s*(gg_trg_[A-Za-z0-9_]+)\s*,[^)]*\b"
-                + Regex.Escape(function) + @"\b");
-            return m.Success ? m.Groups[1].Value : null;
-        }
+        public string? TriggerFor(string function) => FindAttachedTrigger(CodeText, function);
 
         /// <summary>The trigger a dispatch is wired to, directly or through a bounded chain of callers,
         /// plus the function that actually carries it. A dispatch found inside an inline condition

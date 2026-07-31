@@ -75,6 +75,10 @@ public class CliMcpParityTests
         // compiles again. Porting now gates on this automatically, so it is only ever needed
         // for a map produced before the gate existed.
         "script repair",
+        // Debug tool: instruments an already-ported map with BJDebugMsg calls so the running game,
+        // not an agent, reports where its cast chain stops. A one-off local investigation aid over
+        // a disposable copy of a map, not something an agent drives through MCP.
+        "debug wiring",
     };
 
     // The real MCP tool names, read straight from the [McpServerTool] attributes the
