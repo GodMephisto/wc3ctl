@@ -115,6 +115,14 @@ public partial class DependencyGraphView : UserControl, IMapPanel
     /// <summary>Rawcode to select-and-resolve once the in-flight object list lands.</summary>
     private string? _pendingSelect;
 
+    /// <summary>The last resolved closure, kept so the hide toggle can rebuild the tree and
+    /// graph without resolving again. Null when nothing is rendered.</summary>
+    private UnitBundle? _lastBundle;
+
+    /// <summary>View only. True hides objects carried only by the script closure from the
+    /// tree and the graph. It never affects the bundle or the port exclusion set.</summary>
+    private bool _hideCarried;
+
     public DependencyGraphView()
     {
         InitializeComponent();
@@ -137,6 +145,7 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         ZoomOutButton.Click += (_, _) => ZoomAt(ViewportCenter(), 1 / ButtonZoomStep);
         ZoomFitButton.Click += (_, _) => FitView();
         ZoomResetButton.Click += (_, _) => ResetView();
+        HideCarriedCheck.IsCheckedChanged += (_, _) => OnHideCarriedToggled();
     }
 
     // --- canvas interaction: pan / zoom / node drag ---
@@ -573,6 +582,10 @@ public partial class DependencyGraphView : UserControl, IMapPanel
     private void RenderBundle(UnitBundle bundle)
     {
         _excluded.Clear(); // a fresh resolve starts with everything included
+        _lastBundle = bundle;
+        int carriedCount = CarriedByScriptClosure(bundle).Count;
+        HideCarriedCheck.Content = $"Show objects carried by the script closure ({carriedCount})";
+        HideCarriedCheck.IsVisible = carriedCount > 0;
         int custom = bundle.Objects.Count(o => o.CustomToMap);
         int deps = CleanReachableFiles(bundle).Count;
         int portAssets = bundle.Files.Count - deps;
@@ -586,6 +599,49 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         BuildFilesList(bundle);
         BuildStringsList(bundle);
         RenderGraph(bundle);
+    }
+
+    /// <summary>Rebuilds the tree and graph for the current toggle state. This is view only,
+    /// and never changes the bundle or the port exclusion set.</summary>
+    private void OnHideCarriedToggled()
+    {
+        _hideCarried = HideCarriedCheck.IsChecked != true;
+        if (_lastBundle is { } bundle)
+        {
+            BuildTree(bundle);
+            RenderGraph(bundle);
+        }
+    }
+
+    /// <summary>Returns rawcodes reached only through script closure edges, never through
+    /// real object data references. This shared rule keeps the tree, the graph, and the
+    /// count aligned.</summary>
+    private static HashSet<string> CarriedByScriptClosure(UnitBundle bundle)
+    {
+        var objectCodes = bundle.Objects.Select(o => o.Rawcode).ToHashSet(StringComparer.Ordinal);
+        var realAdjacency = bundle.Edges
+            .Where(e => e.Via != "script closure"
+                && objectCodes.Contains(e.From)
+                && objectCodes.Contains(e.To))
+            .GroupBy(e => e.From, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.Select(e => e.To).Distinct().ToList(),
+                StringComparer.Ordinal);
+        var reachable = new HashSet<string>(StringComparer.Ordinal) { bundle.RootRawcode };
+        var queue = new Queue<string>();
+        queue.Enqueue(bundle.RootRawcode);
+        while (queue.Count > 0)
+        {
+            var current = queue.Dequeue();
+            if (!realAdjacency.TryGetValue(current, out var targets))
+                continue;
+            foreach (var to in targets)
+                if (reachable.Add(to))
+                    queue.Enqueue(to);
+        }
+        return bundle.Objects
+            .Where(o => o.Rawcode != bundle.RootRawcode && !reachable.Contains(o.Rawcode))
+            .Select(o => o.Rawcode)
+            .ToHashSet(StringComparer.Ordinal);
     }
 
     /// <summary>
@@ -675,21 +731,6 @@ public partial class DependencyGraphView : UserControl, IMapPanel
             }
         }
 
-        var realReachable = new HashSet<string>(StringComparer.Ordinal) { bundle.RootRawcode };
-        var realQueue = new Queue<string>();
-        realQueue.Enqueue(bundle.RootRawcode);
-        while (realQueue.Count > 0)
-        {
-            var current = realQueue.Dequeue();
-            if (!realAdjacency.TryGetValue(current, out var targets))
-                continue;
-            foreach (var to in targets)
-            {
-                if (realReachable.Add(to))
-                    realQueue.Enqueue(to);
-            }
-        }
-
         var rootNode = bundle.Objects.FirstOrDefault(o => o.Rawcode == bundle.RootRawcode);
         var rootKindWord = (rootNode?.Kind ?? SelectedObjectKind).ToString().ToLowerInvariant();
         var rootCustom = rootNode?.CustomToMap ?? false;
@@ -707,11 +748,8 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         var expandedReal = new HashSet<string>(StringComparer.Ordinal) { bundle.RootRawcode };
         AddObjectChildren(rootItem, bundle.RootRawcode, expandedReal, allowedRawcodes: null);
 
-        var carriedRawcodes = bundle.Objects
-            .Where(o => o.Rawcode != bundle.RootRawcode && !realReachable.Contains(o.Rawcode))
-            .Select(o => o.Rawcode)
-            .ToHashSet(StringComparer.Ordinal);
-        if (carriedRawcodes.Count > 0)
+        var carriedRawcodes = CarriedByScriptClosure(bundle);
+        if (carriedRawcodes.Count > 0 && !_hideCarried)
         {
             var carriedItem = new TreeViewItem
             {
@@ -1004,8 +1042,17 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         }
         GraphHint.IsVisible = false;
 
-        // --- object depth from the root (BFS over object→object edges) ---
-        var byCode = bundle.Objects.ToDictionary(o => o.Rawcode, StringComparer.Ordinal);
+        // Hiding is view only, so the layout skips closure carried objects when the toggle
+        // is off. Their edges fall away with them, and TryGetVisual skips endpoints that
+        // were not laid out.
+        var hidden = _hideCarried
+            ? CarriedByScriptClosure(bundle)
+            : new HashSet<string>(StringComparer.Ordinal);
+        var objects = bundle.Objects.Where(o => !hidden.Contains(o.Rawcode)).ToList();
+        bundle = bundle with { Objects = objects };
+
+        // Object depth from the root, BFS over object to object edges.
+        var byCode = objects.ToDictionary(o => o.Rawcode, StringComparer.Ordinal);
         var adjacency = bundle.Edges
             .Where(e => byCode.ContainsKey(e.From) && byCode.ContainsKey(e.To))
             .GroupBy(e => e.From, StringComparer.Ordinal)
@@ -1033,7 +1080,7 @@ public partial class DependencyGraphView : UserControl, IMapPanel
 
         // Levels, one row per depth, bundle order across a row, each row
         // horizontally centered against the widest row.
-        var levels = bundle.Objects
+        var levels = objects
             .GroupBy(o => depth[o.Rawcode])
             .OrderBy(g => g.Key)
             .Select(g => g.ToList())
@@ -1332,6 +1379,8 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         _objVisuals.Clear();
         _fileVisuals.Clear();
         _excluded.Clear();
+        _lastBundle = null;
+        HideCarriedCheck.IsVisible = false;
         _dragNode = null;
         _panning = false;
         ResetView();

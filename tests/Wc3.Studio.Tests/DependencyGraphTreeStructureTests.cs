@@ -46,30 +46,7 @@ public class DependencyGraphTreeStructureTests
     [AvaloniaFact]
     public void Real_references_are_the_hero_s_direct_children_closure_objects_are_grouped()
     {
-        var objects = new List<BundleNode>
-        {
-            new("H001", ObjectKind.Unit, "Test Hero", true),
-            new("A001", ObjectKind.Ability, "Real Skill One", true),
-            new("A002", ObjectKind.Ability, "Real Skill Two", true),
-            new("B001", ObjectKind.Buff, "Real Buff", true),
-            new("A003", ObjectKind.Ability, "Foreign Skill", true),
-            new("A004", ObjectKind.Ability, "Foreign Skill With Buff", true),
-            new("B002", ObjectKind.Buff, "Foreign Buff", true),
-            new("U002", ObjectKind.Unit, "Foreign Dummy", true),
-        };
-        var edges = new List<BundleEdge>
-        {
-            new("H001", "A001", "uhab"),
-            new("H001", "A002", "uhab"),
-            new("A001", "B001", "abuf"),
-            new("H001", "A003", "script closure"),
-            new("H001", "A004", "script closure"),
-            new("H001", "U002", "script closure"),
-            new("A004", "B002", "abuf"),
-        };
-        var bundle = new UnitBundle("H001", "Test Hero", objects,
-            Array.Empty<BundleFile>(), Array.Empty<string>(), edges,
-            Array.Empty<string>(), Array.Empty<BundleFunction>());
+        var bundle = SampleBundle();
 
         var view = new DependencyGraphView();
         InvokeBuildTree(view, bundle);
@@ -125,6 +102,95 @@ public class DependencyGraphTreeStructureTests
             expectedDirectRows: 9, expectedTotalAbilities: 40, expectedCarried: 66);
     }
 
+    /// <summary>
+    /// The hide toggle is a view change only. Unchecking the checkbox drops the "Carried by
+    /// the script closure" group from the tree and its nodes from the graph, keeps the
+    /// hero's real abilities, and does NOT change the port exclusion set. A node the user
+    /// already excluded from the port stays excluded while it is hidden, hiding is not
+    /// excluding.
+    /// </summary>
+    [AvaloniaFact]
+    public void Hiding_the_carried_group_is_view_only_and_keeps_exclusions()
+    {
+        var view = new DependencyGraphView();
+        var window = new Window { Width = 900, Height = 600, Content = view };
+        window.Show();
+        InvokeRenderBundle(view, SampleBundle());
+
+        var check = Field<CheckBox>(view, "HideCarriedCheck");
+        var objVisuals = Field<Dictionary<string, Border>>(view, "_objVisuals");
+
+        // Shown by default, the group is in the tree and the carried node is on the canvas.
+        Assert.True(check.IsVisible);
+        Assert.True(check.IsChecked == true);
+        Assert.Contains("(4)", check.Content as string ?? "");
+        Assert.True(HasCarriedGroup(RootItem(view)));
+        Assert.Contains("A003", objVisuals.Keys);
+
+        // The user excludes a carried node from the port, then hides the group.
+        var excluded = Field<HashSet<string>>(view, "_excluded");
+        excluded.Add("A003");
+        check.IsChecked = false;
+        Dispatcher.UIThread.RunJobs();
+
+        // Both surfaces drop the carried objects, the real abilities remain.
+        Assert.False(HasCarriedGroup(RootItem(view)));
+        Assert.DoesNotContain("A003", objVisuals.Keys);
+        Assert.DoesNotContain("A004", objVisuals.Keys);
+        Assert.DoesNotContain("U002", objVisuals.Keys);
+        Assert.Contains("H001", objVisuals.Keys);
+        Assert.Contains("A001", objVisuals.Keys);
+        Assert.Contains("A002", objVisuals.Keys);
+
+        // Hiding never touched the exclusion set, the hidden node is still excluded.
+        Assert.Contains("A003", view.ExcludedKeys);
+
+        // Unhiding restores the group and the node, the exclusion is still intact.
+        check.IsChecked = true;
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(HasCarriedGroup(RootItem(view)));
+        Assert.Contains("A003", objVisuals.Keys);
+        Assert.Contains("A003", view.ExcludedKeys);
+    }
+
+    /// <summary>
+    /// End to end on the reported map. With the group hidden, Asta (H028) keeps its 6 real
+    /// abilities and the graph drops to the 7 real nodes (the hero plus 6), while nothing is
+    /// excluded from the port. The checkbox declutters the real map without touching the
+    /// bundle or the exclusion set.
+    /// </summary>
+    [AvaloniaFact]
+    [Trait("Category", "Corpus")]
+    public void Hiding_the_carried_group_declutters_Asta_H028_without_excluding()
+    {
+        if (!File.Exists(AstaMap)) return;
+        var doc = MapDocument.Load(AstaMap);
+        var view = new DependencyGraphView();
+        var window = new Window { Width = 1200, Height = 800, Content = view };
+        window.Show();
+        view.ShowObject(new MapSession { Current = doc, MapPath = AstaMap }, ObjectKind.Unit, "H028");
+        var tree = Field<TreeView>(view, "DepTree");
+        PumpUntilPopulated(tree);
+
+        // Shown, the carried group holds 204 objects.
+        var check = Field<CheckBox>(view, "HideCarriedCheck");
+        Assert.True(check.IsVisible);
+        Assert.Contains("(204)", check.Content as string ?? "");
+        Assert.True(HasCarriedGroup(RootItem(view)));
+
+        // Hide it.
+        check.IsChecked = false;
+        Dispatcher.UIThread.RunJobs();
+
+        var root = RootItem(view);
+        Assert.False(HasCarriedGroup(root));
+        Assert.Equal(6, ObjectRows(root).Count);
+        var objVisuals = Field<Dictionary<string, Border>>(view, "_objVisuals");
+        Assert.Equal(7, objVisuals.Count);
+        Assert.Contains("H028", objVisuals.Keys);
+        Assert.Empty(view.ExcludedKeys);
+    }
+
     private static void AssertHeroDirectStructure(
         string mapPath, string rawcode, int expectedDirectRows, int expectedTotalAbilities, int expectedCarried)
     {
@@ -160,6 +226,46 @@ public class DependencyGraphTreeStructureTests
     }
 
     // helpers
+
+    /// <summary>A small closure the root reaches two abilities through real fields (A001
+    /// owning buff B001), and three more objects only through the script closure edge (A004
+    /// owning buff B002). Four objects are carried, A003, A004, U002, and B002.</summary>
+    private static UnitBundle SampleBundle()
+    {
+        var objects = new List<BundleNode>
+        {
+            new("H001", ObjectKind.Unit, "Test Hero", true),
+            new("A001", ObjectKind.Ability, "Real Skill One", true),
+            new("A002", ObjectKind.Ability, "Real Skill Two", true),
+            new("B001", ObjectKind.Buff, "Real Buff", true),
+            new("A003", ObjectKind.Ability, "Foreign Skill", true),
+            new("A004", ObjectKind.Ability, "Foreign Skill With Buff", true),
+            new("B002", ObjectKind.Buff, "Foreign Buff", true),
+            new("U002", ObjectKind.Unit, "Foreign Dummy", true),
+        };
+        var edges = new List<BundleEdge>
+        {
+            new("H001", "A001", "uhab"),
+            new("H001", "A002", "uhab"),
+            new("A001", "B001", "abuf"),
+            new("H001", "A003", "script closure"),
+            new("H001", "A004", "script closure"),
+            new("H001", "U002", "script closure"),
+            new("A004", "B002", "abuf"),
+        };
+        return new UnitBundle("H001", "Test Hero", objects,
+            Array.Empty<BundleFile>(), Array.Empty<string>(), edges,
+            Array.Empty<string>(), Array.Empty<BundleFunction>());
+    }
+
+    private static bool HasCarriedGroup(TreeViewItem root) =>
+        root.Items.OfType<TreeViewItem>()
+            .Any(i => HeaderText(i).StartsWith("Carried by the script closure", StringComparison.Ordinal));
+
+    private static void InvokeRenderBundle(DependencyGraphView view, UnitBundle bundle) =>
+        typeof(DependencyGraphView)
+            .GetMethod("RenderBundle", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .Invoke(view, new object[] { bundle });
 
     private static void InvokeBuildTree(DependencyGraphView view, UnitBundle bundle) =>
         typeof(DependencyGraphView)
