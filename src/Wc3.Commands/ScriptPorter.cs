@@ -20,6 +20,11 @@ namespace Wc3.Commands;
 internal static class ScriptPorter
 {
     private static readonly Regex Ident = new(@"[A-Za-z_][A-Za-z0-9_]*", RegexOptions.Compiled);
+
+    /// <summary>An <c>ExecuteFunc("Name")</c> call. The name is a STRING, so no identifier scan can
+    /// see it, yet this is how a World Editor main invokes hand-written system initializers.</summary>
+    private static readonly Regex ExecuteFuncLiteral =
+        new(@"ExecuteFunc\s*\(\s*""([A-Za-z_][A-Za-z0-9_]*)""\s*\)", RegexOptions.Compiled);
     private static readonly Regex Rawcode = new(@"'(\\?.|[^'\\]{1,4})'", RegexOptions.Compiled);
 
     /// <summary>Byte-faithful codec (Latin1 is a bijection on all 256 byte values), so decoding
@@ -619,6 +624,23 @@ internal static class ScriptPorter
                 if (name != ict.Name && !name.StartsWith("InitTrig_", StringComparison.Ordinal)
                     && allByName.ContainsKey(name) && !alreadyCarried.Contains(name) && !names.Contains(name))
                     names.Add(name);
+
+        // Also the initializers main invokes as ExecuteFunc("Name") STRING LITERALS. A real World
+        // Editor main does exactly this for hand-written systems, and a string is invisible to
+        // identifier based reference scanning, so these were never carried at all. Measured on Anime
+        // WOS2, `function Init` (source line 26612) is the only thing that creates GearTimer03,
+        // GearTimer05 and GearTimer10 plus their callbacks, and main reaches it solely through
+        // `call ExecuteFunc("Init")`. Without it those timers stay null, so every timed part of a
+        // ported spell silently does nothing while its instant part works, which reads in game as
+        // "casts but half the spell is missing". The name also matches no init pattern, it is
+        // literally `Init`, so nothing else here would have found it either.
+        if (allByName.TryGetValue("main", out var mainFn))
+            foreach (Match m in ExecuteFuncLiteral.Matches(BodyText(srcLines, mainFn)))
+            {
+                var name = m.Groups[1].Value;
+                if (allByName.ContainsKey(name) && !alreadyCarried.Contains(name) && !names.Contains(name))
+                    names.Add(name);
+            }
 
         // Keep an initializer ONLY if, after trimming, it still assigns a global this hero needs.
         // That is this feature's whole stated purpose, and carrying the rest is actively harmful.
