@@ -320,3 +320,69 @@ in the ported map, along with `OnClick`, `RandomPick` and `MyHeroIdInit`, 30 of 
 Contrast a broken case against a genuinely working one, and read real output. Reasoning from an
 absence produced four wrong diagnoses on Tohno. Never use a product of this pipeline as a control,
 `ShikiArena.w3x` says "Created with wc3ctl" in its own config.
+
+---
+
+## Claude, 2026-08-01 07:05. The barebone port, three new flags
+
+State `1e51fb6`, pushed, binaries published 07:06, 903 hermetic and 44 corpus green.
+Delivered `C:/Users/GodMephisto/Documents/Warcraft III/Maps/Download/1/1/Asta Arena.w3x`.
+
+### THE finding that reframed everything
+
+**The cast chain was never broken.** The user ran an instrumented map and it printed
+`CastHero_Conditions entered, ability=1093682252` (that is `A0DL`, Asta's Q),
+`casterType=1211118136` (`H028`), `IsUnitType(HERO)=true`, `b=true`, `area/extension gate=true`,
+`entered Asta_ID branch`, and critically `check=1`, meaning a branch MATCHED and the handler ran.
+The screenshot showed the spell effect firing.
+
+I had produced SIX static hypotheses before that, all wrong or partial (null regions, Gear timers,
+DisableMoveRoot, Asta_ID, ability id globals, the trim). A clean `validate` and an `8/8 wired`
+audit kept convincing me I understood a map I could not observe running. **Build the
+instrumentation first next time.** `wc3ctl debug wiring <map> [hero]` exists now, use it.
+
+**The real defect was what the user said from the start.** The port carried the source map's GAME
+FRAMEWORK, 19 initializers wired into the target, of which one related to Asta. Mode selection,
+shop, chat UI, music player, game start sequence, base regions, damage system. That is why the map
+booted as a partial WOS2 rather than an arena.
+
+### The three flags that fix it, all opt in, default off
+
+- `--synth-dispatch`. Reads the hero's OWN branch of the shared cast dispatcher and synthesizes
+  `wc3ctl_SynthCast_<code>()`, a minimal self-contained dispatcher on its own trigger. For Asta it
+  covers all 10 branches including the runtime granted Q2, W2, R2, T2, with argument shapes lifted
+  verbatim. It reads NONE of the shared gates, no `gg_rct_*`, no `GetUnitTypeId(c) == <Hero>_ID`,
+  no cooldown hashtable, no `DisableMoveRoot`, no `ItemsCast`, no `SpellExtension`.
+- Framework prune, rides with `--synth-dispatch`. An init is wired only when it registers a
+  hero-reachable function through `TriggerAddAction`, `TriggerAddCondition`, `TimerStart`,
+  `ExecuteFunc` or a direct call. Result, `InitCustomTriggers` in the ported map is ONE line.
+  Unwired functions stay CARRIED so the script still compiles, they are just inert.
+- `--bootstrap-state`. Constructs every read but never assigned global that has a universal
+  constructor, timer, group, hashtable, trigger, rect (empty), force. Types with no safe
+  construction (unit, item, effect, code, framehandle, any array) are REPORTED, never invented.
+
+### Traps recorded, do not relearn these
+
+- **Reachability must exclude natives.** A walk over every identifier makes every init look
+  hero-related, because the hero's code calls `TimerStart` and `Condition` constantly. Restrict to
+  names the map's own script declares.
+- **A bare function pointer is not wiring.** `InitTrig_ModeDialog` and Asta's AoE independently
+  build the same `Condition(function NoDecor_Filter)`. Only count a pointer when the SAME line has
+  `TriggerAddAction`, `TriggerAddCondition` or `TimerStart`.
+- **pjass rejects an identifier starting or ending with `_`.** Our own `JassScriptCheck` passed
+  `wc3ctl_BootstrapState_Asta__H028_` and pjass failed it. Caught only by real corpus verification.
+- **`GlobalNeverAssigned` is a Warning, not an Error**, and its wording must not claim the global is
+  read by "this hero's own" code, because the check cannot attribute that. Generalizing it to all
+  globals turned a working map INVALID with 57 false errors before this was fixed.
+- **`ExecuteFunc("Name")` string literals** are how a World Editor `main` starts hand written
+  systems. Invisible to identifier scanning. That is why `function Init`, the only creator of
+  `GearTimer03/05/10`, was never carried.
+
+### Known gaps, flagged not fixed
+
+A hero partly driven by its OWN separately registered trigger (not through the shared dispatcher)
+would have that trigger pruned too, since nothing calls it forward from the synthesized dispatcher.
+Asta's whole kit goes through the one dispatcher so it did not arise. The three `GearTimer*Callback`
+globals (type `code`) stay null, there is no safe universal way to build a function reference.
+`.toc` and `.fdf` are still not in `AssetExtensions`, so UI template files are never carried (moot
+once the music player is unwired).
