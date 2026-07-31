@@ -152,6 +152,48 @@ public class BundleStructureAndRenderTests
         Assert.Contains(lines, l => l.Contains("plus 1 carried by the script closure"));
     }
 
+    /// <summary>The port report gets the same treatment as the bundle view. A port of one hero on a
+    /// shared arena script carries other heroes' whole kits, and listing those under "Objects" read
+    /// as if the hero owned them. They still port, the report counts them.</summary>
+    [Fact]
+    public void Port_report_lists_only_the_root_s_own_objects_and_files_and_counts_the_carried()
+    {
+        var result = new PortResult(
+            "H001", "H001", "Test Hero",
+            Array.Empty<RawcodeRemap>(),
+            new[]
+            {
+                new PortedObject(ObjectKind.Unit, "H001", "Test Hero", false),
+                new PortedObject(ObjectKind.Ability, "A001", "Real Skill One", false),
+                new PortedObject(ObjectKind.Ability, "A003", "Foreign Skill", false,
+                    CarriedByScriptClosure: true),
+                new PortedObject(ObjectKind.Ability, "A004", "Foreign Skill Two", false,
+                    CarriedByScriptClosure: true),
+            },
+            new[] { @"war3mapImported\own.blp", @"war3mapImported\foreign.blp" },
+            Array.Empty<string>(), 0, Array.Empty<string>(), Array.Empty<string>(),
+            Script: null,
+            CarriedFiles: new[] { @"war3mapImported\foreign.blp" });
+
+        var lines = Wc3Ctl.Render.Port(result, outPath: null)
+            .Split('\n').Select(l => l.TrimEnd('\r')).ToList();
+
+        // Headline counts the root's own, with the over-carry parenthesised rather than hidden.
+        Assert.Contains(lines, l => l.Contains("2 object(s) (plus 2 carried by the script closure)"));
+
+        Assert.Contains(lines, l => l.StartsWith("Objects (2)"));
+        Assert.Contains(lines, l => l.Contains("H001") && l.Contains("Test Hero"));
+        Assert.Contains(lines, l => l.Contains("A001"));
+        Assert.DoesNotContain(lines, l => l.Contains("A003") || l.Contains("A004"));
+        Assert.Contains(lines, l => l.Contains("plus 2 carried by the script closure") && l.Contains("--json"));
+
+        // Files split the same way, and the foreign icon is counted, not named.
+        Assert.Contains(lines, l => l.StartsWith("Copied files (1)"));
+        Assert.Contains(lines, l => l.Contains("own.blp"));
+        Assert.DoesNotContain(lines, l => l.Contains("foreign.blp"));
+        Assert.Contains(lines, l => l.Contains("plus 1 carried by the script closure"));
+    }
+
     [Fact]
     public void BundleUnit_shows_the_hero_s_real_children_then_a_labelled_carried_group()
     {

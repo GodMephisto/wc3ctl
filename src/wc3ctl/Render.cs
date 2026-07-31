@@ -234,7 +234,11 @@ public static class Render
     {
         string root = r.RootPortedTo == r.RootRawcode ? r.RootRawcode : $"{r.RootRawcode} → {r.RootPortedTo}";
         sb.AppendLine($"Ported {root}{(r.RootName is null ? "" : $"  \"{r.RootName}\"")}");
-        sb.AppendLine($"  {r.Objects.Count} object(s), {r.CopiedFiles.Count} file(s) copied, "
+        int ownCount = r.Objects.Count(o => !o.CarriedByScriptClosure);
+        int carriedCount = r.Objects.Count - ownCount;
+        sb.AppendLine($"  {ownCount} object(s)"
+                      + (carriedCount > 0 ? $" (plus {carriedCount} carried by the script closure)" : "")
+                      + $", {r.CopiedFiles.Count} file(s) copied, "
                       + $"{r.InlinedStrings} string(s) inlined, {r.Remaps.Count} rawcode(s) remapped.");
 
         if (r.Remaps.Count > 0)
@@ -244,16 +248,32 @@ public static class Render
                 sb.AppendLine($"  {m.Kind.ToString().ToLowerInvariant()} {m.From} → {m.To}");
         }
 
-        sb.AppendLine().AppendLine($"Objects ({r.Objects.Count}):");
-        foreach (var o in r.Objects)
+        // The root's own objects only. On a shared arena script the closure also carries other
+        // heroes' whole kits, and listing those here read as if the unit owned them. They still
+        // port, they are counted rather than named. --json carries the full list with the flag.
+        var own = r.Objects.Where(o => !o.CarriedByScriptClosure).ToList();
+        var carried = r.Objects.Count - own.Count;
+
+        sb.AppendLine().AppendLine($"Objects ({own.Count}):");
+        foreach (var o in own)
             sb.AppendLine($"  {o.Kind.ToString().ToLowerInvariant()} {o.Rawcode}"
                           + $"{(o.Name is null ? "" : $"  \"{o.Name}\"")}"
                           + $"{(o.ModifiesStandard ? "  (modifies standard object)" : "")}");
+        if (carried > 0)
+            sb.AppendLine($"  plus {carried} carried by the script closure (other heroes' kits the "
+                + "shared trigger script needs present), run with --json to list them");
 
         if (r.CopiedFiles.Count > 0)
         {
-            sb.AppendLine().AppendLine($"Copied files ({r.CopiedFiles.Count}):");
-            foreach (var f in r.CopiedFiles) sb.AppendLine($"  {f}");
+            // Same split as the objects. Every foreign icon was copied through a real art field of
+            // a foreign object, so listing them here read as the unit's own art.
+            var carriedSet = (r.CarriedFiles ?? Array.Empty<string>()).ToHashSet(StringComparer.Ordinal);
+            var ownFiles = r.CopiedFiles.Where(f => !carriedSet.Contains(f)).ToList();
+            sb.AppendLine().AppendLine($"Copied files ({ownFiles.Count}):");
+            foreach (var f in ownFiles) sb.AppendLine($"  {f}");
+            if (carriedSet.Count > 0)
+                sb.AppendLine($"  plus {carriedSet.Count} carried by the script closure, "
+                    + "run with --json to list them");
         }
 
         if (r.Script is { } s)

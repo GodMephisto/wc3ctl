@@ -145,6 +145,10 @@ public static class PortCommand
         var customs = bundle.Objects.Where(o => o.CustomToMap).ToList();
         var srcStrings = MapStrings.From(source);
 
+        // Which of these are the root's own and which the script closure dragged in. Recorded per
+        // ported object so the report can group them, the port itself carries both alike.
+        var carriedByClosure = BundleStructure.CarriedByScriptClosure(bundle);
+
         // 1) Rawcode remap: reassign any custom rawcode already defined in the target.
         //    A collision whose target content is exactly what this port would inject is
         //    a prior port of the same object — reused, so re-porting stays idempotent.
@@ -246,7 +250,8 @@ public static class PortCommand
                     InjectGroup(target, kind, remapped);
                 var node = byKind.First(o => o.Rawcode.FromRawcode() == (g.NewId != 0 ? g.NewId : g.OldId));
                 string ownId = (remapped.NewId != 0 ? remapped.NewId : remapped.OldId).ToRawcode();
-                portedObjects.Add(new PortedObject(kind, ownId, node.Name, remapped.NewId == 0));
+                portedObjects.Add(new PortedObject(kind, ownId, node.Name, remapped.NewId == 0,
+                    carriedByClosure.Contains(node.Rawcode)));
                 if (remapped.NewId == 0)
                     warnings.Add($"{kind} {ownId} modifies a standard object — it will change that object in the target too.");
             }
@@ -254,6 +259,10 @@ public static class PortCommand
 
         // 3) Copy imported assets (present-in-source only) + register in war3map.imp.
         var copied = new List<string>();
+        // Recorded here rather than matched afterwards, because copied entries are the STORED name
+        // (the .mdx backing a .mdl reference) while the bundle keys files by reference spelling.
+        var realFilePaths = BundleStructure.RealFiles(bundle);
+        var carriedFiles = new List<string>();
         var skipped = new List<string>();
         var srcImports = (source.GetFile("war3map.imp")?.Model as ImportedFiles);
         // If the target's import registry is present but unparsed, do NOT rebuild it from scratch
@@ -307,6 +316,7 @@ public static class PortCommand
                 pendingCopies![NormalizePath(storedName)] = srcEntry.RawBytes;
             }
             copied.Add(storedName);
+            if (!realFilePaths.Contains(f.Path)) carriedFiles.Add(storedName);
         }
         if (apply && importsChanged && !impUnparsed)
             target.AddOrReplaceModelFile("war3map.imp", tgtImports);
@@ -351,7 +361,8 @@ public static class PortCommand
 
         return new PortResult(
             bundle.RootRawcode, rootPortedTo, bundle.RootName,
-            remapReport, portedObjects, copied, skipped, inlinedStrings, warnings, diagnostics, scriptInfo);
+            remapReport, portedObjects, copied, skipped, inlinedStrings, warnings, diagnostics, scriptInfo,
+            carriedFiles);
     }
 
     // ---- prior-port detection (idempotent re-port) --------------------------
