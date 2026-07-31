@@ -277,6 +277,14 @@ public static class BundleCommand
     /// other-hero spawns, this catches the other shape, a flat loop over the whole roster.</summary>
     private const int RosterRegistryGrantCount = 24;
 
+    /// <summary>Above this many DISTINCT asset paths named in one function, that function is a
+    /// shared asset bank (a pick screen, a hero guide, a random-pick roller) rather than one hero's
+    /// spell handler, so its models, textures and sounds belong to the whole roster. Measured on
+    /// Anime_WOS2, OnClick names 155 assets and RandomPick 30, while Asta's busiest own handler
+    /// names 12. Same shape and same justification as RosterRegistryGrantCount, and both are why a
+    /// port of one hero stops importing every hero's art.</summary>
+    private const int SharedAssetBankCount = 24;
+
     private static readonly Regex Identifier = new(@"[A-Za-z_][A-Za-z0-9_]*", RegexOptions.Compiled);
 
     /// <summary>A double-quoted JASS string literal (captures the inner text). Used to pull
@@ -621,9 +629,26 @@ public static class BundleCommand
         // literals inside the spell handlers (AddSpecialEffect("war3mapImported\\x.mdx"), dummy
         // unit model swaps, ...), NOT in the ability object fields. Scan every closure function
         // body for asset-path literals so those models/textures/sounds port along with the skill.
+        int assetBanks = 0, bankAssets = 0;
         foreach (var name in reasons.Keys)
+        {
+            // A shared asset bank names every hero's art in one body (a pick screen, a guide), so
+            // its paths attribute to nobody. Skipping it is what stops a port of one hero from
+            // importing the whole roster's models and sounds. An asset a real handler also names is
+            // still carried by that handler.
+            if (assetRefs[name].Count > SharedAssetBankCount)
+            {
+                assetBanks++;
+                bankAssets += assetRefs[name].Count;
+                continue;
+            }
             foreach (var path in assetRefs[name])
                 addFileRef(name, path, "script");
+        }
+        if (assetBanks > 0)
+            diagnostics.Add($"skipped {bankAssets} asset path(s) in {assetBanks} shared asset bank "
+                + $"function(s) (over {SharedAssetBankCount} distinct assets named in one body, so "
+                + "they belong to the whole roster rather than this unit)");
 
         // Objects a carried handler spawns (CreateUnit and kin) or grants (UnitAddAbility) at runtime.
         // The data-driven closure never reaches these (only the SCRIPT names them, by rawcode), so
