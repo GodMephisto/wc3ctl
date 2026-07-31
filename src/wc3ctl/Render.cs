@@ -1,4 +1,4 @@
-// src/wc3ctl/Render.cs
+﻿// src/wc3ctl/Render.cs
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -230,68 +230,9 @@ public static class Render
     private static void AppendPortFooter(StringBuilder sb, string? outPath) =>
         sb.AppendLine().AppendLine(outPath is null ? "DRY RUN - nothing written" : $"Saved: {outPath}");
 
-    private static void AppendPortBody(StringBuilder sb, PortResult r)
-    {
-        string root = r.RootPortedTo == r.RootRawcode ? r.RootRawcode : $"{r.RootRawcode} → {r.RootPortedTo}";
-        sb.AppendLine($"Ported {root}{(r.RootName is null ? "" : $"  \"{r.RootName}\"")}");
-        int ownCount = r.Objects.Count(o => !o.CarriedByScriptClosure);
-        int carriedCount = r.Objects.Count - ownCount;
-        sb.AppendLine($"  {ownCount} object(s)"
-                      + (carriedCount > 0 ? $" (plus {carriedCount} carried by the script closure)" : "")
-                      + $", {r.CopiedFiles.Count} file(s) copied, "
-                      + $"{r.InlinedStrings} string(s) inlined, {r.Remaps.Count} rawcode(s) remapped.");
-
-        if (r.Remaps.Count > 0)
-        {
-            sb.AppendLine().AppendLine("Rawcode remaps (collisions with the target):");
-            foreach (var m in r.Remaps)
-                sb.AppendLine($"  {m.Kind.ToString().ToLowerInvariant()} {m.From} → {m.To}");
-        }
-
-        // The root's own objects only. On a shared arena script the closure also carries other
-        // heroes' whole kits, and listing those here read as if the unit owned them. They still
-        // port, they are counted rather than named. --json carries the full list with the flag.
-        var own = r.Objects.Where(o => !o.CarriedByScriptClosure).ToList();
-        var carried = r.Objects.Count - own.Count;
-
-        sb.AppendLine().AppendLine($"Objects ({own.Count}):");
-        foreach (var o in own)
-            sb.AppendLine($"  {o.Kind.ToString().ToLowerInvariant()} {o.Rawcode}"
-                          + $"{(o.Name is null ? "" : $"  \"{o.Name}\"")}"
-                          + $"{(o.ModifiesStandard ? "  (modifies standard object)" : "")}");
-        if (carried > 0)
-            sb.AppendLine($"  plus {carried} carried by the script closure (other heroes' kits the "
-                + "shared trigger script needs present), run with --json to list them");
-
-        if (r.CopiedFiles.Count > 0)
-        {
-            // Same split as the objects. Every foreign icon was copied through a real art field of
-            // a foreign object, so listing them here read as the unit's own art.
-            var carriedSet = (r.CarriedFiles ?? Array.Empty<string>()).ToHashSet(StringComparer.Ordinal);
-            var ownFiles = r.CopiedFiles.Where(f => !carriedSet.Contains(f)).ToList();
-            sb.AppendLine().AppendLine($"Copied files ({ownFiles.Count}):");
-            foreach (var f in ownFiles) sb.AppendLine($"  {f}");
-            if (carriedSet.Count > 0)
-                sb.AppendLine($"  plus {carriedSet.Count} carried by the script closure, "
-                    + "run with --json to list them");
-        }
-
-        if (r.Script is { } s)
-        {
-            sb.AppendLine().AppendLine(
-                $"Script (best-effort): {s.Functions} function(s), {s.Globals} global(s) carried, "
-                + $"{s.Renamed} renamed, init {(s.InitHooked ? "wired" : "NOT wired")}.");
-            foreach (var n in s.Notes) sb.AppendLine($"  - {n}");
-        }
-
-        if (r.Warnings.Count > 0)
-        {
-            sb.AppendLine().AppendLine("Warnings:");
-            foreach (var w in r.Warnings) sb.AppendLine($"  ! {w}");
-        }
-
-        foreach (var d in r.Diagnostics) sb.AppendLine($"note: {d}");
-    }
+    // One shared report body, PortReport in Wc3.Commands. It used to live here and again inline
+    // in Studio's port dialog, and the copies drifted, so Studio kept listing the whole closure.
+    private static void AppendPortBody(StringBuilder sb, PortResult r) => PortReport.Append(sb, r);
 
     public static string ScriptFunctions(ScriptFunctionsResult r) =>
         $"{r.Functions.Count} functions in {r.ScriptFile}"

@@ -175,8 +175,13 @@ public class BundleStructureAndRenderTests
             Script: null,
             CarriedFiles: new[] { @"war3mapImported\foreign.blp" });
 
-        var lines = Wc3Ctl.Render.Port(result, outPath: null)
-            .Split('\n').Select(l => l.TrimEnd('\r')).ToList();
+        var rendered = Wc3Ctl.Render.Port(result, outPath: null);
+        var lines = rendered.Split('\n').Select(l => l.TrimEnd('\r')).ToList();
+
+        // The CLI must not carry its own copy of this report. Studio had one, it drifted, and Studio
+        // went on listing the whole closure long after the CLI stopped. One formatter, every caller.
+        static string Normalize(string s) => s.Replace("\r\n", "\n").TrimEnd('\n');
+        Assert.StartsWith(Normalize(PortReport.Body(result)), Normalize(rendered), StringComparison.Ordinal);
 
         // Headline counts the root's own, with the over-carry parenthesised rather than hidden.
         Assert.Contains(lines, l => l.Contains("2 object(s) (plus 2 carried by the script closure)"));

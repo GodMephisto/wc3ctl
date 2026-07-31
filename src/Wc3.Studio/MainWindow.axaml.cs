@@ -244,37 +244,11 @@ public partial class MainWindow : Window
     /// port into an unsaved target (<paramref name="outPath"/> null but not a dry run).</summary>
     private async Task ShowPortReport(PortResult r, string? outPath, bool dryRun)
     {
-        var sb = new StringBuilder();
-        string root = r.RootPortedTo == r.RootRawcode ? r.RootRawcode : $"{r.RootRawcode} → {r.RootPortedTo}";
-        sb.AppendLine($"Ported {root}{(r.RootName is null ? "" : $"  \"{r.RootName}\"")}");
-        sb.AppendLine($"{r.Objects.Count} object(s), {r.CopiedFiles.Count} file(s) copied, "
-                      + $"{r.InlinedStrings} string(s) inlined, {r.Remaps.Count} rawcode(s) remapped");
-        sb.AppendLine();
-        if (r.Remaps.Count > 0)
-        {
-            sb.AppendLine("Rawcode remaps (collisions):");
-            foreach (var m in r.Remaps)
-                sb.AppendLine($"  {m.Kind.ToString().ToLowerInvariant()} {m.From} → {m.To}");
-            sb.AppendLine();
-        }
-        sb.AppendLine("Objects:");
-        foreach (var o in r.Objects)
-            sb.AppendLine($"  {o.Kind.ToString().ToLowerInvariant()} {o.Rawcode}"
-                          + $"{(o.Name is null ? "" : $"  \"{o.Name}\"")}"
-                          + $"{(o.ModifiesStandard ? "  (modifies standard object)" : "")}");
-        if (r.Script is { } s)
-        {
-            sb.AppendLine().AppendLine(
-                $"Script (best-effort): {s.Functions} function(s), {s.Globals} global(s) carried, "
-                + $"{s.Renamed} renamed, init {(s.InitHooked ? "wired" : "NOT wired")}.");
-            foreach (var n in s.Notes) sb.AppendLine($"  - {n}");
-        }
-        if (r.Warnings.Count > 0)
-        {
-            sb.AppendLine().AppendLine("Warnings:");
-            foreach (var w in r.Warnings) sb.AppendLine($"  ! {w}");
-        }
-        foreach (var d in r.Diagnostics) sb.AppendLine($"note: {d}");
+        // One shared report body, PortReport in Wc3.Commands. This used to be a second copy of the
+        // CLI's renderer, and it drifted, so Studio went on listing every object the script closure
+        // carries as if the ported unit owned them long after the CLI stopped. Studio only owns the
+        // footer below, because only Studio can port into an unsaved target.
+        var sb = new StringBuilder(PortReport.Body(r));
         sb.AppendLine().AppendLine(dryRun
             ? "DRY RUN - nothing written"
             : outPath is not null
