@@ -578,21 +578,16 @@ public partial class DependencyGraphView : UserControl, IMapPanel
     {
         _excluded.Clear(); // a fresh resolve starts with everything included
         _lastBundle = bundle;
-        // The over-carry is never listed in this panel, it is not this unit's. It stays counted in
-        // the summary below so its cost on a port is visible rather than silently dropped.
-        int carriedObjects = BundleStructure.CarriedByScriptClosure(bundle).Count;
+        // This panel is about the selected unit, so every count here is the unit's own. What the
+        // script closure carries belongs to other heroes and is not reported at all. The port
+        // report is where the over-carry is accounted for, since that is where it costs something.
+        var realObjects = BundleStructure.RealObjects(bundle);
         int realFiles = BundleStructure.RealFiles(bundle).Count;
-        int carriedFiles = bundle.Files.Count - realFiles;
         int realStrings = bundle.Strings.Count(BundleStructure.RealStrings(bundle).Contains);
-        int realObjects = BundleStructure.RealObjects(bundle).Count;
-        int custom = bundle.Objects.Count(o => o.CustomToMap);
+        int custom = bundle.Objects.Count(o => realObjects.Contains(o.Rawcode) && o.CustomToMap);
         SummaryText.Text =
-            $"{realObjects} objects, {realFiles} files, {realStrings} strings"
-            + (carriedObjects > 0 || carriedFiles > 0
-                ? $" (closure carries {carriedObjects} objects, {carriedFiles} files,"
-                  + $" {bundle.Strings.Count - realStrings} strings)"
-                : "")
-            + $", {custom} of {bundle.Objects.Count} custom to this map";
+            $"{realObjects.Count} objects, {realFiles} files, {realStrings} strings"
+            + $", {custom} custom to this map";
         StatusText.Text = bundle.Diagnostics.Count > 0 ? string.Join("; ", bundle.Diagnostics) : "";
         BuildTree(bundle);
         BuildFilesList(bundle);
@@ -611,7 +606,11 @@ public partial class DependencyGraphView : UserControl, IMapPanel
     {
         DepTree.Items.Clear();
 
+        // A via label names the object-data field that pulls a dependency in, so the synthetic
+        // vias are excluded. Without this every row on a shared arena map read "via uhab, script
+        // closure", because the closure seed also names objects the unit already references.
         var viaInto = bundle.Edges
+            .Where(e => e.Via != BundleStructure.ScriptClosureVia && e.Via != BundleStructure.StringVia)
             .GroupBy(e => e.To, StringComparer.Ordinal)
             .ToDictionary(
                 g => g.Key,
@@ -693,11 +692,11 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         var expandedReal = new HashSet<string>(StringComparer.Ordinal) { bundle.RootRawcode };
         AddObjectChildren(rootItem, bundle.RootRawcode, expandedReal, allowedRawcodes: null);
 
-        // No carried group. What the script closure drags in is another hero's kit, not this
-        // unit's dependency, so this panel never lists it. The counts live on the summary line.
-
-        if (seedsByOwner.TryGetValue(OtherOwnerKey, out var otherSeeds))
-            rootItem.Items.Add(FunctionGroupItem(otherSeeds, childrenOf, "Other triggers"));
+        // Nothing else. No carried-objects group, and no "Other triggers" group either. What the
+        // script closure drags in is another hero's kit and another hero's logic, and the functions
+        // that group held are exactly the ones that could NOT be attributed to any ability of this
+        // unit. Trigger functions still appear, nested under the ability they belong to, which is
+        // the only place they are this unit's.
 
         DepTree.Items.Add(rootItem);
     }

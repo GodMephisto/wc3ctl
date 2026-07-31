@@ -88,10 +88,12 @@ public class DependencyGraphTreeStructureTests
         Assert.Contains("Test Hero", stringRows);
         Assert.DoesNotContain("Foreign Skill", stringRows);
 
-        // The closure's size is still reported, so the port cost is visible rather than hidden.
+        // Every count on the summary is the unit's own. The over-carry is not mentioned at all,
+        // it is accounted for in the port report, which is where it actually costs something.
         var summary = Field<TextBlock>(view, "SummaryText").Text ?? "";
-        Assert.Contains("closure carries", summary);
-        Assert.Contains("4 objects", summary);
+        Assert.StartsWith("4 objects, 3 files, 2 strings", summary);
+        Assert.DoesNotContain("closure", summary);
+        Assert.DoesNotContain("carried", summary);
     }
 
     /// <summary>The graph lays out only the real dependencies, and a node the user excludes from
@@ -167,9 +169,16 @@ public class DependencyGraphTreeStructureTests
         Assert.Equal(expectedDirectRows, ObjectRows(root).Count);
         Assert.DoesNotContain(root.Items.OfType<TreeViewItem>(), IsCarriedGroup);
 
-        // The summary still reports what the closure carries, so the port cost stays visible.
-        Assert.Contains($"closure carries {expectedCarried} objects",
-            Field<TextBlock>(view, "SummaryText").Text ?? "");
+        // No group holds the unattributable remainder either, and nothing in the panel reports the
+        // over-carry. On a real map this is where "Other triggers" used to park other heroes' logic.
+        Assert.DoesNotContain(root.Items.OfType<TreeViewItem>(),
+            i => HeaderText(i).StartsWith("Other triggers", StringComparison.Ordinal));
+        var summary = Field<TextBlock>(view, "SummaryText").Text ?? "";
+        Assert.DoesNotContain("closure", summary);
+        Assert.DoesNotContain("carried", summary);
+
+        // Every via label names a real object-data field, never the synthetic closure seed.
+        Assert.DoesNotContain(AllHeaders(root), h => h.Contains("script closure", StringComparison.Ordinal));
         return view;
     }
 
