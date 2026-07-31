@@ -123,3 +123,53 @@ the v3 rebuild are not done. Nothing is half-written, the tree is clean at `4df5
 ---
 
 ## Codex, add your section below
+
+---
+
+## Claude, session close
+
+State, local and GitHub and the published binaries all at `85ceafd`, 870 tests green, tree clean,
+all agents idle. Published `08:54` via `scripts\publish-all.ps1`.
+
+### Landed and verified
+- Dependencies graph shows a hero's REAL abilities. Asta `H028` went from 193 to 6, the rest
+  collapsed under a carried-by-script-closure group, canvas branching transposed to horizontal.
+  Key measurement, only 6 of Asta's outgoing edges are real object-data references, about 197 are
+  synthetic root edges tagged `Via = "script closure"`. Filter on that Via, an edge walk alone
+  does NOT fix it.
+- Protected map recovery. 32 of 50 map files readable. Asset harvest took two of them from 3 and 2
+  named entries to 1504 and 2544. A hero that ported with 0 asset files now ports with real bytes.
+- Porter fixes, area damage (ForGroup callbacks), runtime object carry, no double-firing, doer-dummy
+  setup wired (`WS_CreateWorkingSourceBagAndVendors` under a null guard).
+- Diagnostics, hero wiring audit, runtime readiness, object fidelity, JASS compile gate. CLI, MCP,
+  `validate`, and a Studio Hero Audit tab.
+
+### Open, both are the user's call
+1. Canvas still branches the full closure sideways. Option B applies the real-edge filter to the
+   canvas too, so only the handful branch from the hero there. Small, scoped, low risk.
+2. Tohno `H001` still does not play. `Shiki_Tohno_v4.w3x` is the best build. Static analysis is
+   EXHAUSTED, it has reported the hero correct four times while it does not work. Next honest step
+   is instrumentation, `BJDebugMsg` in the generated wiring so the game reports whether the setup
+   ran, what it returned, whether dummies were created, whether a cast reaches its handler.
+
+### Known defect I introduced
+`validate` reports maps INVALID over other heroes' unused globals. The readiness check's severity is
+mis-calibrated for globals belonging to heroes not placed on the map. Downgrade those.
+
+### Coordination lessons, expensive ones
+- **Two agents at most in one working tree.** Six cost three commit races, one lost commit, one
+  shipped regression, and one agent reverting work that was already published because messages crossed.
+- **Never `git add -A`.** That is how the rejected closure narrowing shipped and killed four abilities.
+  Stage by explicit path.
+- **Agent runs draw on the user's own usage.** Be economical, one careful pass, no polling loops.
+- Codex CLI works as `codex exec --sandbox workspace-write -C <dir> -` with the prompt on stdin.
+  `--full-auto` and the bypass flag are blocked by the host. Codex CANNOT reliably run the test
+  suite here, it loops on PowerShell, so the supervisor runs build, tests and commit.
+- Pushing needs `gh auth switch --user GodMephisto`. Other accounts see "Repository not found" and
+  will wrongly conclude there is no remote.
+- **Republish after every merge.** Stale `dist` has three times made a fixed bug look unfixed.
+
+### Method that actually worked
+Contrast a broken case against a genuinely working one, and read real output. Reasoning from an
+absence produced four wrong diagnoses on Tohno. Never use a product of this pipeline as a control,
+`ShikiArena.w3x` says "Created with wc3ctl" in its own config.
