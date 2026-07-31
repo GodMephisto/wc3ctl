@@ -63,8 +63,9 @@ public sealed record BlankMapOptions
 /// <para>The recipe — a war3map.w3i (info) file plus a war3map.w3e (terrain) file packed
 /// into an MPQ with a generated listfile — was verified empirically against the pinned
 /// War3Net build by tests/Wc3.Tests/War3NetApiProbe.cs. A war3map.j carrying the
-/// standard GUI-map skeleton (globals / InitCustomTriggers / main / config) rides along
-/// so ScriptPorter can splice + hook ported trigger code into a blank map.</para>
+/// standard GUI-map skeleton (globals / InitCustomTriggers / RunInitializationTriggers /
+/// main / config) rides along so ScriptPorter can splice + hook ported trigger code into
+/// a blank map.</para>
 ///
 /// <para>For external World Editor openability the synthesized bytes carry the full
 /// on-disk .w3x shape: a 512-byte HM3W pre-archive header, a war3map.wpm pathing map
@@ -319,11 +320,15 @@ public static class BlankMap
     /// <summary>
     /// Emits the minimal standard GUI-map JASS skeleton the World Editor generates for
     /// a fresh one-player map: empty globals, an empty <c>InitCustomTriggers</c> (the
-    /// exact function ScriptPorter's init hook targets — keep the name), player/team
-    /// setup, <c>main</c> (camera bounds / day-night models / sound environment /
-    /// InitBlizzard / InitCustomTriggers) and <c>config</c> (lobby identity, one player,
-    /// one team, one start location). Deliberately conservative — just enough structure
-    /// for splice + hook and for WC3 to treat the map as a sane starting point.
+    /// exact function ScriptPorter's init hook targets, keep the name), an empty
+    /// <c>RunInitializationTriggers</c> (the other fixed World Editor name, the only
+    /// thing that ever executes a trigger whose sole event is Map Initialization, since
+    /// such a trigger registers no event of its own), player/team setup, <c>main</c>
+    /// (camera bounds / day-night models / sound environment / InitBlizzard /
+    /// InitCustomTriggers / RunInitializationTriggers) and <c>config</c> (lobby identity,
+    /// one player, one team, one start location). Both empty stubs stay conventionally
+    /// named and called so a later port has somewhere to splice real content in, exactly
+    /// how InitCustomTriggers itself already sits empty here.
     /// </summary>
     private static string BuildScript(BlankMapOptions o)
     {
@@ -377,6 +382,10 @@ public static class BlankMap
             function InitCustomTriggers takes nothing returns nothing
             endfunction
 
+            //===========================================================================
+            function RunInitializationTriggers takes nothing returns nothing
+            endfunction
+
             //***************************************************************************
             //*
             //*  Players
@@ -410,6 +419,7 @@ public static class BlankMap
                 call FogEnable( false )
                 call FogMaskEnable( false )
                 call InitCustomTriggers(  )
+                call RunInitializationTriggers(  )
             endfunction
 
             //***************************************************************************
