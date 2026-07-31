@@ -269,6 +269,14 @@ public static class BundleCommand
     /// spawns leaked in, and the cap truncates loudly (a diagnostic) rather than running away.</summary>
     private const int MaxScriptSpawnedObjects = 512;
 
+    /// <summary>Above this many DISTINCT objects granted or spawned by one function, that function is
+    /// a roster registry rather than a hero's handler, and its references say nothing about which
+    /// hero we are porting. Measured on Anime_WOS2, MyHeroIdInit grants 183 abilities onto pick
+    /// screen dummies while a real handler grants a handful, so the gap either side of this is
+    /// enormous. The existing branch-guard scoping already excludes a shared if/elseif dispatcher's
+    /// other-hero spawns, this catches the other shape, a flat loop over the whole roster.</summary>
+    private const int RosterRegistryGrantCount = 24;
+
     private static readonly Regex Identifier = new(@"[A-Za-z_][A-Za-z0-9_]*", RegexOptions.Compiled);
 
     /// <summary>A double-quoted JASS string literal (captures the inner text). Used to pull
@@ -630,9 +638,27 @@ public static class BundleCommand
         // (bloat, which the map size budget tolerates) and report it loudly, leaving deliberate pruning
         // to the user. The count below is that report.
         var spawned = new SortedSet<string>(StringComparer.Ordinal);
+        int registries = 0, registryGrants = 0;
         foreach (var name in reasons.Keys)
+        {
+            // A roster registry grants every hero's abilities onto pick screen dummies in one flat
+            // loop, so its grants attribute to nobody. Skipping it is what stops a port of one hero
+            // from carrying the whole roster. Anything a real handler grants still comes through,
+            // and a rawcode this registry shares with a real handler is still carried by that
+            // handler, so the exclusion cannot cost the hero an ability it actually uses.
+            if (spawnRefs[name].Count > RosterRegistryGrantCount)
+            {
+                registries++;
+                registryGrants += spawnRefs[name].Count;
+                continue;
+            }
             foreach (var rc in spawnRefs[name])
                 spawned.Add(rc);
+        }
+        if (registries > 0)
+            diagnostics.Add($"skipped {registryGrants} grant(s) in {registries} roster registry "
+                + $"function(s) (over {RosterRegistryGrantCount} distinct objects granted in one body, "
+                + "so they belong to the whole roster rather than this unit)");
 
         int carried = 0;
         foreach (var rc in spawned)

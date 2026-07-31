@@ -118,8 +118,10 @@ public class DependencyGraphTreeStructureTests
     }
 
     /// <summary>
-    /// The reported repro. Asta (H028) in Anime_WOS2_0.28a2 resolves to 193 abilities and 498
-    /// files in the closure, of which 6 abilities and 17 files are his. The panel shows his.
+    /// The reported repro. Asta (H028) once resolved to 193 abilities and 498 files, almost all of
+    /// them other heroes' kits pulled in by one roster registry function. With that registry's
+    /// grants excluded the closure is 17 abilities, all Asta's own (his 5 plus the sub-abilities his
+    /// handlers grant at runtime, Q2, W2, TR, T2 and the two swords), and 6 of them are direct.
     /// </summary>
     [AvaloniaFact]
     [Trait("Category", "Corpus")]
@@ -127,10 +129,23 @@ public class DependencyGraphTreeStructureTests
     {
         if (!File.Exists(AstaMap)) return;
         var view = ShowHero(AstaMap, "H028", expectedDirectRows: 6,
-            expectedTotalAbilities: 193, expectedCarried: 204);
+            expectedTotalAbilities: 17, expectedCarried: 18);
 
         Assert.Equal("Files (17)", Field<Expander>(view, "FilesExpander").Header);
         Assert.Equal("Strings (88)", Field<Expander>(view, "StringsExpander").Header);
+
+        // The registry exclusion must never cost Asta a sub-ability his own handlers grant at
+        // runtime. A0DS (Q2) and A0DT (W2) are the dangerous pair, named by no grant statement at
+        // all, only passed as arguments inside his own handler, so a naive rule drops them and
+        // silently breaks Q1 into Q2.
+        var doc = MapDocument.Load(AstaMap);
+        var carried = BundleCommand.ResolveObject(doc, ObjectKind.Unit, "H028", null)
+            .Objects.Select(o => o.Rawcode).ToHashSet(StringComparer.Ordinal);
+        foreach (var own in new[] { "A0DQ", "A0DR", "A0DS", "A0DT", "A0DU", "A0DV", "A0DW", "A0DX" })
+            Assert.Contains(own, carried);
+        // And no other hero's kit survives. These are Akainu, Kyoraku, Barragan and Raiden Ei.
+        foreach (var foreign in new[] { "A06V", "A050", "A0B1", "A000" })
+            Assert.DoesNotContain(foreign, carried);
         // The hero plus his 6 real abilities, nothing else on the canvas.
         Assert.Equal(7, Field<Dictionary<string, Border>>(view, "_objVisuals").Count);
         Assert.Empty(view.ExcludedKeys);

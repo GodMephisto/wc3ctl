@@ -55,8 +55,9 @@ public static class PortReport
                           + $"{(o.Name is null ? "" : $"  \"{o.Name}\"")}"
                           + $"{(o.ModifiesStandard ? "  (modifies standard object)" : "")}");
         if (carried > 0)
-            sb.AppendLine($"  plus {carried} carried by the script closure (other heroes' kits the "
-                + "shared trigger script needs present), run with --json to list them");
+            sb.AppendLine($"  plus {carried} reached through the trigger script rather than this "
+                + "unit's own fields (sub-abilities its handlers grant at runtime, dummies they "
+                + "spawn), run with --json to list them");
 
         if (r.CopiedFiles.Count > 0)
         {

@@ -190,7 +190,7 @@ public class BundleStructureAndRenderTests
         Assert.Contains(lines, l => l.Contains("H001") && l.Contains("Test Hero"));
         Assert.Contains(lines, l => l.Contains("A001"));
         Assert.DoesNotContain(lines, l => l.Contains("A003") || l.Contains("A004"));
-        Assert.Contains(lines, l => l.Contains("plus 2 carried by the script closure") && l.Contains("--json"));
+        Assert.Contains(lines, l => l.Contains("plus 2 reached through the trigger script") && l.Contains("--json"));
 
         // Files split the same way, and the foreign icon is counted, not named.
         Assert.Contains(lines, l => l.StartsWith("Copied files (1)"));
