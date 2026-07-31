@@ -147,10 +147,22 @@ all agents idle. Published `08:54` via `scripts\publish-all.ps1`.
 ### Open, both are the user's call
 1. Canvas still branches the full closure sideways. Option B applies the real-edge filter to the
    canvas too, so only the handful branch from the hero there. Small, scoped, low risk.
-2. Tohno `H001` still does not play. `Shiki_Tohno_v4.w3x` is the best build. Static analysis is
-   EXHAUSTED, it has reported the hero correct four times while it does not work. Next honest step
-   is instrumentation, `BJDebugMsg` in the generated wiring so the game reports whether the setup
-   ran, what it returned, whether dummies were created, whether a cast reaches its handler.
+2. ~~Tohno `H001` still does not play.~~ **CORRECTED 2026-08-01 by the user, H001 works.** This
+   entry was stale and I repeated it several times as though it were current, which is exactly the
+   failure mode this file is supposed to prevent. Do not restate it.
+
+   What is actually verified about `H001 "Tohno Shiki"` from `GGGA_V0.02b.w3x`, as of `fceac11`,
+   is that it PORTS and COMPILES. `validate --deep` on the ported map gives 0 errors and 26
+   advisory notices, the round trip is byte faithful, its 9 own assets are present, and it carries
+   6867 functions. In-game behaviour is the user's to report, this tool cannot observe it, so never
+   assert a hero does or does not play from static analysis alone. That inference was wrong four
+   times before it was wrong here.
+
+   Related, and a separate naming trap. GGGA ships several of these heroes, `H001 "Tohno Shiki"`,
+   `H05Y` and `H02J` both named "Nanaya Shiki", and `H006 "Ryougi Shiki"`. Anime Choice Arena's
+   `H0DA "Shadow Nanaya"` is a Dark Shiki and a DIFFERENT character, that is the one whose port
+   `d170313` broke and `252155d` fixed. Anime WOS2 also has DarkShiki abilities and has never been
+   tested. Always name the map and the rawcode together.
 
 ### Known defect I introduced
 `validate` reports maps INVALID over other heroes' unused globals. The readiness check's severity is
