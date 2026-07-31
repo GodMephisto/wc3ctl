@@ -168,11 +168,22 @@ all agents idle. Published `08:54` via `scripts\publish-all.ps1`.
    the setup ran, what it returned, whether the dummies were created, and whether a cast reaches
    its handler. Never assert from static analysis that a hero does or does not play.
 
-   Related, and a separate naming trap. GGGA ships several of these heroes, `H001 "Tohno Shiki"`,
-   `H05Y` and `H02J` both named "Nanaya Shiki", and `H006 "Ryougi Shiki"`. Anime Choice Arena's
-   `H0DA "Shadow Nanaya"` is a Dark Shiki and a DIFFERENT character, that is the one whose port
-   `d170313` broke and `252155d` fixed. Anime WOS2 also has DarkShiki abilities and has never been
-   tested. Always name the map and the rawcode together.
+   **Naming trap, stated by the user 2026-08-01. These are all DIFFERENT CHARACTERS WITH DIFFERENT
+   KITS that merely share part of a name. They are not variants of one hero.**
+
+   ```
+   GGGA  H001  "Tohno Shiki"      does not work in game
+   GGGA  H05Y  "Nanaya Shiki"     different hero, different kit
+   GGGA  H02J  "Nanaya Shiki"     different again (an early closure narrowing broke this one)
+   GGGA  H006  "Ryougi Shiki"     different again
+   ACA   H0DA  "Shadow Nanaya"    different again, this is the one d170313 broke and 252155d fixed
+   WOS2  ----  DarkShiki abilities, never tested, different again
+   ```
+
+   Consequences that matter. One of these working says NOTHING about another. Porting a different
+   one is not a substitute or a workaround for a broken one, the user wants the specific hero. Their
+   ability rawcodes are per map and unrelated, so never carry a finding about `A1R6` or `A0DS` from
+   one to another. Always name the map AND the rawcode, never just "Shiki" or "Tohno".
 
 ### Known defect I introduced
 `validate` reports maps INVALID over other heroes' unused globals. The readiness check's severity is
