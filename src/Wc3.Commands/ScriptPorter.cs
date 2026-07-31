@@ -392,6 +392,15 @@ internal static class ScriptPorter
         // Splice into the target: globals into its globals block, functions after endglobals.
         string merged = Splice(tgtJ, portedGlobals.ToString(), portedFns.ToString(), marker, notes);
 
+        // Opt-in (only once the synthesized dispatcher above actually found branches). The hero's
+        // own code, defined as the forward call closure starting at the branches' own callees, the
+        // functions the dispatcher hands off to. The init-wiring filters below judge every carried
+        // InitTrig_* and global-initializer helper against this set, so a source map's OWN framework
+        // (a mode-selection screen, a shop registry, a music player, a chat overlay, none of it this
+        // hero) stays carried, so the script still compiles, but is no longer CALLED. See
+        // ReachableFromHeroCode and WiresReachableCode for the mechanics.
+        var heroReachable = synthBranches is { Count: > 0 } ? ReachableFromHeroCode(synthBranches, bodies, allByName) : null;
+
         // Best-effort init hook: call carried InitTrig_* functions from InitCustomTriggers.
         //
         // An init that a carried aggregator ALREADY calls must not be hooked a second time. Calling
@@ -408,14 +417,25 @@ internal static class ScriptPorter
             foreach (Match m in Regex.Matches(bodies[f.Name], @"\bcall\s+(InitTrig_[A-Za-z0-9_]+)"))
                 if (m.Groups[1].Value != f.Name) hookedByAggregator.Add(m.Groups[1].Value);
 
-        var initFns = srcFns.Select(f => f.Name)
+        var initTrigCandidates = srcFns.Select(f => f.Name)
             .Where(nm => nm.StartsWith("InitTrig_", StringComparison.Ordinal))
-            .Where(nm => !hookedByAggregator.Contains(nm))
+            .Where(nm => !hookedByAggregator.Contains(nm)).ToList();
+        // --synth-dispatch's own filter, see the heroReachable comment above. A candidate that wires
+        // nothing the hero's own code reaches is the source map's framework, not this hero, and is
+        // dropped from the WIRING only, its body stays carried above so nothing dangles.
+        var frameworkInitTrigs = heroReachable is null ? new List<string>()
+            : initTrigCandidates.Where(nm => !WiresReachableCode(bodies[nm], heroReachable)).ToList();
+        var initFns = initTrigCandidates.Except(frameworkInitTrigs, StringComparer.Ordinal)
             .Select(nm => rename.GetValueOrDefault(nm, nm)).ToList();
         if (hookedByAggregator.Count > 0)
             notes.Add($"skipped hooking {hookedByAggregator.Count} InitTrig_* function(s) that a carried "
                 + "init already calls, so their triggers register once instead of twice (a double "
                 + "registration makes every affected spell fire twice).");
+        if (frameworkInitTrigs.Count > 0)
+            notes.Add($"--synth-dispatch also skipped hooking {frameworkInitTrigs.Count} InitTrig_* "
+                + "function(s) that wire nothing reachable from the hero's own ability handlers, the "
+                + "source map's own framework, not this hero, still carried so the script compiles, "
+                + $"just not called ({string.Join(", ", frameworkInitTrigs.Take(8))}).");
         bool hooked = false;
         if (initFns.Count > 0)
         {
@@ -425,11 +445,13 @@ internal static class ScriptPorter
                 : "carried InitTrig_* functions but could not find InitCustomTriggers in the target — " +
                   "trigger registration may need to be wired manually.");
         }
-        else
+        else if (initTrigCandidates.Count == 0)
         {
             notes.Add("no InitTrig_* init functions in the closure — if the spells register via a custom " +
                       "init path, verify it runs in the target.");
         }
+        // else, every InitTrig_* candidate was the source map's own framework (see the note above),
+        // not "none found", so no further note is needed here.
 
         // Hook the synthesized dispatcher's own init (creates its own trigger, so it is wired
         // unconditionally, independent of whether the closure carried any ordinary InitTrig_*).
@@ -456,9 +478,19 @@ internal static class ScriptPorter
                 ? $"wired {fn}() into the target's main, before InitCustomTriggers."
                 : "carried InitGlobals but could not find the target's main — call it manually.");
         }
-        var otherInitHelpers = globalInitBodies.Keys
-            .Where(nm => nm != "InitGlobals")
+        var otherInitHelperCandidates = globalInitBodies.Keys.Where(nm => nm != "InitGlobals").ToList();
+        // Same --synth-dispatch filter as the InitTrig_* one above, applied to a differently named
+        // global-initializer helper (InitGlobals itself stays exempt, the map's own convention entry
+        // point, not framework this feature exists to prune).
+        var frameworkInitHelpers = heroReachable is null ? new List<string>()
+            : otherInitHelperCandidates.Where(nm => !WiresReachableCode(globalInitBodies[nm], heroReachable)).ToList();
+        var otherInitHelpers = otherInitHelperCandidates.Except(frameworkInitHelpers, StringComparer.Ordinal)
             .Select(nm => rename.GetValueOrDefault(nm, nm)).ToList();
+        if (frameworkInitHelpers.Count > 0)
+            notes.Add($"--synth-dispatch also skipped hooking {frameworkInitHelpers.Count} "
+                + "global-initializer helper(s) that wire nothing reachable from the hero's own ability "
+                + "handlers, still carried so the script compiles, just not called "
+                + $"({string.Join(", ", frameworkInitHelpers.Take(8))}).");
         if (otherInitHelpers.Count > 0)
         {
             merged = HookInit(merged, otherInitHelpers, marker, out bool hookedHelpers, atFront: true);
@@ -749,6 +781,113 @@ internal static class ScriptPorter
             }
             if (toAdd.Count == 0) break;
             foreach (var r in toAdd) carried.Add(r);
+        }
+    }
+
+    /// <summary>The forward call-graph closure starting at <paramref name="branches"/>' own callees
+    /// (the functions the synthesized dispatcher hands off to), following <see cref="ReferencedNames"/>
+    /// through each further function's own CARRIED body in <paramref name="bodies"/> (keyed by
+    /// original, pre-rename name, the same dictionary <see cref="PortScript"/> already built for every
+    /// other carried-body step). This is the definition of "the hero's own code" the init-wiring
+    /// filters in <see cref="PortScript"/> judge every carried InitTrig_* and global-initializer
+    /// helper against, see the call site there for why.
+    ///
+    /// Restricted to names <paramref name="allByName"/> actually declares, the map's OWN functions,
+    /// never a native or a common.j/BJ wrapper. Without that gate almost every initializer "hits", a
+    /// hero's ability calling TimerStart or Condition (as nearly every one does) makes those two
+    /// names "reachable", and every OTHER initializer that also happens to call TimerStart or
+    /// Condition for its own, unrelated purpose (as nearly every trigger-registering initializer
+    /// does) would then look hero-related too. Measured on the Asta corpus port, gating on
+    /// <paramref name="allByName"/> is what tells apart a shared helper Asta's own spells genuinely
+    /// call from the source map's shared native vocabulary every system, hero-related or not, uses.
+    ///
+    /// Only LIVE code counts (see <see cref="LiveCode"/>), a call this port already trimmed away
+    /// never grows the set. A declared name outside <paramref name="bodies"/> (this port genuinely
+    /// could not carry it) still joins the set, the hero's own code does reach for it, it is simply a
+    /// dead end for further expansion. Bounded by the function count, the set only ever grows.
+    /// </summary>
+    private static HashSet<string> ReachableFromHeroCode(
+        IReadOnlyList<SynthDispatchBuilder.CastBranch> branches, IReadOnlyDictionary<string, string> bodies,
+        IReadOnlyDictionary<string, JassFunction> allByName)
+    {
+        var reachable = new HashSet<string>(StringComparer.Ordinal);
+        var frontier = new Queue<string>();
+        foreach (var callee in branches.SelectMany(b => b.Callees).Where(allByName.ContainsKey))
+            if (reachable.Add(callee)) frontier.Enqueue(callee);
+
+        while (frontier.Count > 0)
+        {
+            if (!bodies.TryGetValue(frontier.Dequeue(), out var body)) continue; // no body, a dead end
+            foreach (var code in LiveCode(body))
+                foreach (var name in ReferencedNames(code))
+                    if (allByName.ContainsKey(name) && reachable.Add(name)) frontier.Enqueue(name);
+        }
+        return reachable;
+    }
+
+    /// <summary>The wiring calls <see cref="WiresReachableCode"/> looks for, textually, on the SAME
+    /// line as the "function Foo" callback it registers (the same single-statement-per-line
+    /// assumption this file already makes elsewhere, see <see cref="ExtractOneCall"/> in
+    /// <see cref="SynthDispatchBuilder"/>). A bare "function Foo" with none of these on its own line
+    /// is building a reusable value (a boolexpr handed to an unrelated one-off filter, say), not
+    /// registering a persistent callback, and must not count, see the doc comment below for why that
+    /// distinction is load-bearing, not cosmetic.</summary>
+    private static readonly Regex WiringCallHead =
+        new(@"\b(TriggerAddAction|TriggerAddCondition|TimerStart)\s*\(", RegexOptions.Compiled);
+
+    /// <summary>True when <paramref name="body"/> wires a function in <paramref name="reachable"/>,
+    /// through one of the forms <see cref="PortScript"/>'s init-wiring filter treats as "the hero's
+    /// own", a TriggerAddAction/TriggerAddCondition/TimerStart registering it as a "function Foo"
+    /// callback (see <see cref="WiringCallHead"/>), an ExecuteFunc string literal, or a plain direct
+    /// call ("Foo(...)", invoked synchronously, not merely passed as a callback pointer).
+    ///
+    /// A bare "function Foo" pointer NOT on a TriggerAddAction/TriggerAddCondition/TimerStart line
+    /// does NOT count on its own, even though it is exactly the shape <see cref="ReferencedNames"/>
+    /// recognizes elsewhere in this file. Measured on the Asta corpus port, the map's mode-selection
+    /// initializer builds "NoDecor_Cond=Condition(function NoDecor_Filter)", a reusable filter VALUE,
+    /// never itself registered as a trigger condition, and Asta's own AoE abilities happen to build
+    /// that exact same reusable filter for their own, unrelated purpose. Treating that shared value
+    /// as "wiring" made the initializer look hero-related when it is not, this narrower rule is what
+    /// tells the two apart without naming either function.
+    ///
+    /// <paramref name="reachable"/> only ever holds names the map's own script declares (see
+    /// <see cref="ReachableFromHeroCode"/>), so this never trips on a shared native or BJ wrapper both
+    /// the hero and an unrelated system happen to both call either. Only LIVE references count (see
+    /// <see cref="LiveCode"/>), so a wiring statement this port already trimmed away never falsely
+    /// justifies keeping an initializer hooked.</summary>
+    private static bool WiresReachableCode(string body, IReadOnlySet<string> reachable)
+    {
+        foreach (var code in LiveCode(body))
+        {
+            foreach (Match m in ExecuteFuncLiteral.Matches(code))
+                if (reachable.Contains(m.Groups[1].Value)) return true;
+
+            if (WiringCallHead.IsMatch(code))
+                foreach (var name in CallbackNames(code))
+                    if (reachable.Contains(name)) return true;
+
+            Match? prev = null;
+            foreach (Match m in Ident.Matches(code))
+            {
+                bool directCall = prev is not { Value: "function" } && FollowedByOpenParen(code, m);
+                if (directCall && reachable.Contains(m.Value)) return true;
+                prev = m;
+            }
+        }
+        return false;
+    }
+
+    /// <summary>Every line of <paramref name="body"/> with any comment stripped (this port's own
+    /// trim-comment counts as one, see <see cref="StripComment"/>), skipping the function's own
+    /// "function Name takes ... returns ..." header line. That header names the function itself in
+    /// the exact "function X" callback shape <see cref="ReferencedNames"/> looks for, and would
+    /// otherwise make a function that happens to be reachable self-match on its own declaration.</summary>
+    private static IEnumerable<string> LiveCode(string body)
+    {
+        foreach (var line in body.Split('\n'))
+        {
+            if (line.TrimStart().StartsWith("function ", StringComparison.Ordinal)) continue;
+            yield return StripComment(line);
         }
     }
 

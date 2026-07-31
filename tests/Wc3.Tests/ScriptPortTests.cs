@@ -1070,6 +1070,191 @@ endfunction
         Assert.DoesNotContain("Rect(0., 0., 0., 0.)", j);
     }
 
+    // ---- --synth-dispatch prunes framework init wiring -------------------------------------
+
+    // The shared dispatcher itself (InitTrig_CastCheck, wiring CastHero_Conditions, which calls the
+    // hero's OWN handlers, never the other way around) plus an entirely unrelated system
+    // (InitTrig_Framework, a periodic trigger for something the hero never touches). Both get
+    // carried (the closure pulls them in for its own, unrelated reasons, exactly how a real map's
+    // InitTrig_ModeDialog or InitTrig_DmgSys gets carried alongside a ported hero), and both must
+    // still compile, but neither is something HeroQ_Start (the hero's own code) reaches.
+    private const string FrameworkInitSource = @"globals
+    integer udg_Hero_ID= 'H000'
+    integer udg_HeroQ_ID= 'A000'
+    trigger gg_trg_CastCheck= null
+    trigger gg_trg_Framework= null
+endglobals
+function HeroQ_Start takes unit c, real x, real y returns nothing
+    call KillUnit(c)
+endfunction
+function CastHero_Conditions takes nothing returns boolean
+    local unit c= GetSpellAbilityUnit()
+    local integer id= GetSpellAbilityId()
+    local real x= GetSpellTargetX()
+    local real y= GetSpellTargetY()
+    if GetUnitTypeId(c) == udg_Hero_ID then
+        if id == udg_HeroQ_ID then
+            call HeroQ_Start(c, x, y)
+        endif
+    endif
+    return false
+endfunction
+function InitTrig_CastCheck takes nothing returns nothing
+    set gg_trg_CastCheck = CreateTrigger()
+    call TriggerAddCondition(gg_trg_CastCheck, Condition(function CastHero_Conditions))
+endfunction
+function FrameworkAction takes nothing returns nothing
+    call BJDebugMsg(""mode select"")
+endfunction
+function InitTrig_Framework takes nothing returns nothing
+    set gg_trg_Framework = CreateTrigger()
+    call TriggerRegisterTimerEvent(gg_trg_Framework, 8, false)
+    call TriggerAddAction(gg_trg_Framework, function FrameworkAction)
+endfunction
+";
+
+    [Fact]
+    public void SynthDispatch_does_not_wire_a_framework_InitTrig_that_shares_nothing_with_the_hero()
+    {
+        var source = SourceMap(FrameworkInitSource);
+        var target = TargetMap();
+        var functions = CarriedExcept(FrameworkInitSource); // nothing excluded, both InitTrig_* carried up front
+
+        var info = ScriptPorter.PortScript(source, target, functions, "H000",
+            new Dictionary<string, string>(), apply: true, synthDispatchHero: "H000");
+        Assert.NotNull(info);
+        Assert.True(info!.Written, string.Join(" | ", info.Notes));
+
+        var j = Encoding.Latin1.GetString(MapDocument.Load(target.SaveToBytes()).GetFile("war3map.j")!.RawBytes);
+        Assert.True(JassScriptCheck.IsCompilable(JassScriptCheck.Check(j)));
+
+        // Both stay carried, so the script compiles and nothing dangles.
+        Assert.Contains("function InitTrig_CastCheck takes", j);
+        Assert.Contains("function InitTrig_Framework takes", j);
+        // Neither is CALLED. HeroQ_Start (the hero's own code) never reaches CastHero_Conditions
+        // (that dispatcher reaches HeroQ_Start, never the other way) or FrameworkAction.
+        var initBody = FunctionBody(j, "InitCustomTriggers");
+        Assert.DoesNotContain("InitTrig_CastCheck()", initBody);
+        Assert.DoesNotContain("InitTrig_Framework()", initBody);
+        Assert.Contains(info.Notes, n => n.Contains("InitTrig_CastCheck", StringComparison.Ordinal)
+            && n.Contains("InitTrig_Framework", StringComparison.Ordinal));
+    }
+
+    // Same shape, but InitTrig_HeroQBuff registers a function (HeroQBuffTick) that HeroQ_Start, the
+    // hero's OWN code, calls directly. A hero-relevant init must still be wired even once
+    // --synth-dispatch is pruning the framework around it.
+    private const string LegitimateInitSource = @"globals
+    integer udg_Hero_ID= 'H000'
+    integer udg_HeroQ_ID= 'A000'
+    trigger gg_trg_CastCheck= null
+    trigger gg_trg_HeroQBuff= null
+endglobals
+function HeroQBuffTick takes nothing returns nothing
+    call BJDebugMsg(""tick"")
+endfunction
+function HeroQ_Start takes unit c, real x, real y returns nothing
+    call HeroQBuffTick()
+endfunction
+function CastHero_Conditions takes nothing returns boolean
+    local unit c= GetSpellAbilityUnit()
+    local integer id= GetSpellAbilityId()
+    local real x= GetSpellTargetX()
+    local real y= GetSpellTargetY()
+    if GetUnitTypeId(c) == udg_Hero_ID then
+        if id == udg_HeroQ_ID then
+            call HeroQ_Start(c, x, y)
+        endif
+    endif
+    return false
+endfunction
+function InitTrig_CastCheck takes nothing returns nothing
+    set gg_trg_CastCheck = CreateTrigger()
+    call TriggerAddCondition(gg_trg_CastCheck, Condition(function CastHero_Conditions))
+endfunction
+function InitTrig_HeroQBuff takes nothing returns nothing
+    set gg_trg_HeroQBuff = CreateTrigger()
+    call TriggerRegisterTimerEvent(gg_trg_HeroQBuff, 1.0, true)
+    call TriggerAddAction(gg_trg_HeroQBuff, function HeroQBuffTick)
+endfunction
+";
+
+    [Fact]
+    public void SynthDispatch_still_wires_an_InitTrig_that_registers_a_function_the_hero_reaches()
+    {
+        var source = SourceMap(LegitimateInitSource);
+        var target = TargetMap();
+        var functions = CarriedExcept(LegitimateInitSource);
+
+        var info = ScriptPorter.PortScript(source, target, functions, "H000",
+            new Dictionary<string, string>(), apply: true, synthDispatchHero: "H000");
+        Assert.NotNull(info);
+        Assert.True(info!.Written, string.Join(" | ", info.Notes));
+
+        var j = Encoding.Latin1.GetString(MapDocument.Load(target.SaveToBytes()).GetFile("war3map.j")!.RawBytes);
+        var initBody = FunctionBody(j, "InitCustomTriggers");
+        Assert.Contains("InitTrig_HeroQBuff()", initBody);
+        // The shared dispatcher itself is still not the hero's own code, and stays unwired.
+        Assert.DoesNotContain("InitTrig_CastCheck()", initBody);
+    }
+
+    // A shared, reusable VALUE (a boolexpr), never itself registered as a trigger condition, timer
+    // callback, or ExecuteFunc target. InitTrig_Framework builds the exact same filter HeroQ_Start
+    // happens to also build, for its own, unrelated purpose, a plain "set" assignment, not wiring.
+    // The real corpus map this rule was built against hit exactly this shape (a shared decoration
+    // filter both a ported hero's own area ability and the map's mode-selection setup both build),
+    // and treating "the same function is merely referenced somewhere" as wiring made an unrelated
+    // framework initializer look hero-related.
+    private const string SharedValueNotWiringSource = @"globals
+    integer udg_Hero_ID= 'H000'
+    integer udg_HeroQ_ID= 'A000'
+    trigger gg_trg_CastCheck= null
+    boolexpr udg_SharedCond= null
+endglobals
+function SharedFilter takes nothing returns boolean
+    return true
+endfunction
+function HeroQ_Start takes unit c, real x, real y returns nothing
+    call GroupEnumUnitsInRange(bj_lastCreatedGroup, GetUnitX(c), GetUnitY(c), 300, Condition(function SharedFilter))
+endfunction
+function CastHero_Conditions takes nothing returns boolean
+    local unit c= GetSpellAbilityUnit()
+    local integer id= GetSpellAbilityId()
+    local real x= GetSpellTargetX()
+    local real y= GetSpellTargetY()
+    if GetUnitTypeId(c) == udg_Hero_ID then
+        if id == udg_HeroQ_ID then
+            call HeroQ_Start(c, x, y)
+        endif
+    endif
+    return false
+endfunction
+function InitTrig_CastCheck takes nothing returns nothing
+    set gg_trg_CastCheck = CreateTrigger()
+    call TriggerAddCondition(gg_trg_CastCheck, Condition(function CastHero_Conditions))
+endfunction
+function InitTrig_Framework takes nothing returns nothing
+    set udg_SharedCond= Condition(function SharedFilter)
+endfunction
+";
+
+    [Fact]
+    public void SynthDispatch_does_not_count_a_shared_filter_value_as_wiring_the_hero_in()
+    {
+        var source = SourceMap(SharedValueNotWiringSource);
+        var target = TargetMap();
+        var functions = CarriedExcept(SharedValueNotWiringSource);
+
+        var info = ScriptPorter.PortScript(source, target, functions, "H000",
+            new Dictionary<string, string>(), apply: true, synthDispatchHero: "H000");
+        Assert.NotNull(info);
+        Assert.True(info!.Written, string.Join(" | ", info.Notes));
+
+        var j = Encoding.Latin1.GetString(MapDocument.Load(target.SaveToBytes()).GetFile("war3map.j")!.RawBytes);
+        Assert.Contains("function InitTrig_Framework takes", j); // still carried, still compiles
+        var initBody = FunctionBody(j, "InitCustomTriggers");
+        Assert.DoesNotContain("InitTrig_Framework()", initBody);
+    }
+
     /// <summary>The text of one function's body (signature line through endfunction), the same slice
     /// every "hook into InitCustomTriggers" assertion above already takes inline, pulled out once
     /// the synth-dispatch tests need it more than once.</summary>
