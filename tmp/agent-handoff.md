@@ -386,3 +386,63 @@ Asta's whole kit goes through the one dispatcher so it did not arise. The three 
 globals (type `code`) stay null, there is no safe universal way to build a function reference.
 `.toc` and `.fdf` are still not in `AssetExtensions`, so UI template files are never carried (moot
 once the music player is unwired).
+
+### DO NOT PUBLISH `b88ec77` AS IS, one regression and one gap
+
+`b88ec77` is committed on `development` and deliberately NOT pushed or published. Published state
+is `2fc7ef7`. Read this before touching it.
+
+**What is good in it, keep all of this.**
+- `gg_rct_Arena` now gets the TARGET map's real bounds (`Rect(-6144., -6144., 6144., 6144.)` on a 96
+  tile map, read from its own camera bounds) instead of `Rect(0., 0., 0., 0.)`. Measured cause,
+  `CheckCoordsInRect` is `GetRectMinX <= x and x <= GetRectMaxX` and so on, so an empty rect
+  collapses "is this in bounds" into "is this exactly the origin". Three of Asta's OWN movement
+  helpers gate on it (`MoveEff` for the Q slash travel, `MoveUnit` and `PosUnit` for the W dash and
+  the shared knockback), so a spell froze the moment it moved one tick off (0,0). Correctly scoped,
+  only rects reached SOLELY through bounds style helpers get the new default, the other eight stayed
+  empty.
+- `function Init` (GearSystems) is now wired, so `GearTimer03/05/10 = CreateTimer()` actually runs.
+- `RuntimeReadinessCommand` now catches Shape B, see below.
+
+**The regression, must be undone.** The rule I specified was "wire an initializer when it wires
+hero reachable code OR when it assigns a global the hero's reachable code reads". That makes
+`InitTrig_ModeDialog` qualify, because it assigns `NoDecor_Cond` which Asta's Q and W read. So mode
+selection is wired back in, along with its tooltips, camera pan, a 20 second `CheckPickedMode` timer
+and `FogMaskEnable`. **That is the user's single loudest complaint** ("mode selection and some text,
+i dont want those"). The trade does not even pay, `NoDecor_Cond` is DEGRADED not BROKEN, a null
+boolexpr in `GroupEnumUnitsInRange` means "match everyone" and Asta's loop bodies re-verify anyway.
+
+**The fix, and it was proposed to me first and I wrongly overruled it.** Line replay. For a global
+the hero's reachable code reads whose ONLY assignments across the source are the static argument
+free shape (`set X = function F`, `set X = Condition(function F)`), replay that ONE assignment line
+into the hero's bootstrap function, carrying `F`'s body if needed, and do NOT wire the enclosing
+function. Gets the value without importing the side effects. `function Init` should stay wired even
+so, it is a genuine state constructor rather than framework, an explicit allowance is fine.
+
+**The gap my diagnosis missed.** Wiring `Init` was necessary but NOT sufficient. `Init`'s body still
+has `set GearTimer03Callback = function GearSystems__GearTimer03Loop` trim marked, because
+`GearSystems__GearTimer03Loop` was never carried at all, its only reference being a bare
+`function X` inside an assignment in what used to be a dead function. So the timers now EXIST but
+tick NOTHING, and the knockback still never writes a position, which is the user's actual reported
+symptom. Carry that loop function and replay the assignment, same mechanism.
+
+### Shape A and Shape B, name them when you see them
+
+- **Shape A**, a global read in the carried script with NO assignment anywhere in the text. A
+  textual "does `set X=` appear" scan finds it. `--bootstrap-state` handles the constructible types.
+- **Shape B**, NEW, three instances found in one pass. The assignment IS present in the text, so a
+  textual scan reports it fine, but the enclosing FUNCTION is never called. Live in the text, dead
+  at runtime. Instances, `GearTimer03/05/10` (the handles), their `Callback` globals, and
+  `NoDecor_Cond`. `b88ec77` extends `GlobalNeverAssigned` to catch this, keep that.
+
+### Ruled out, do not re-chase
+- The 57 `GetRectCenter(gg_rct_Caster)` positions belong to about 30 OTHER heroes. Asta reaches that
+  rect only via the shared `StunUnit`. This was MY prime suspect and it was wrong.
+- `AstaW_Stun` is `real AstaW_Stun= 0` in the SOURCE too. Pre existing, not a port regression.
+- `s__GearSystems__KS_MoveEffectToUnit_c` reads `_c[this]` before writing it in the SOURCE too.
+- `InitTrig_DmgSys` is FINE to leave unwired, Asta's damage calls `UnitDamageTarget` directly and
+  the custom engine never mentions him.
+- `InitTrig_LvlUpCheck` is genuinely UNKNOWN, confounded by the preplace at level 35 test recipe.
+
+### Corpus count note
+`Category=Corpus` is 32 in `Wc3.Tests` plus 12 in `Wc3.Studio.Tests`, 44 total. Run both projects.
