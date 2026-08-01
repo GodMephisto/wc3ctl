@@ -489,9 +489,23 @@ internal static class ScriptPorter
         // on heroOwnGlobals for why that scoping matters, an initializer can matter purely through
         // shared state). A candidate that does neither is the source map's framework, not this hero,
         // and is dropped from the WIRING only, its body stays carried above so nothing dangles.
+        // The shared-state arm is deliberately NOT available to an InitTrig_*. A World Editor
+        // InitTrig_ exists to CREATE A TRIGGER, so wiring is the only thing it is for, and letting
+        // it qualify on a global instead imports its whole body. Measured, InitTrig_ModeDialog
+        // assigns NoDecor_Cond which Asta's Q and W read, so it qualified and dragged the mode
+        // selection dialog, its tooltips, a camera pan, a 20 second CheckPickedMode timer and
+        // FogMaskEnable back into a map the user specifically wants free of them. The trade did not
+        // even pay, a null boolexpr in GroupEnumUnitsInRange means "match everyone" and Asta's loop
+        // bodies re-verify alive and enemy anyway, so that global is degraded, never broken.
+        //
+        // A bare initializer like GearSystems' Init is the opposite case. It wires nothing, its
+        // entire purpose is constructing state (GearTimer03/05/10 = CreateTimer()), and the hero's
+        // knockback and effect animations are dead without it. So it keeps the shared-state arm.
+        static bool IsGuiTriggerInit(string name) =>
+            name.StartsWith("InitTrig_", StringComparison.Ordinal);
         var frameworkInitTrigs = heroReachable is null ? new List<string>()
             : initTrigCandidates.Where(nm => !WiresReachableCode(bodies[nm], heroReachable)
-                && !AssignsUsedGlobal(bodies[nm], heroOwnGlobals!)).ToList();
+                && !(!IsGuiTriggerInit(nm) && AssignsUsedGlobal(bodies[nm], heroOwnGlobals!))).ToList();
         var initFns = initTrigCandidates.Except(frameworkInitTrigs, StringComparer.Ordinal)
             .Select(nm => rename.GetValueOrDefault(nm, nm)).ToList();
         if (hookedByAggregator.Count > 0)
