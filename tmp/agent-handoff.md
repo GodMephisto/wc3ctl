@@ -539,3 +539,61 @@ hero, rather than PreplacedUnitsScript trying to reason about it after the fact.
 Gates. Hermetic 934 (930 Wc3.Tests, 4 Wc3.Studio.Tests). Corpus, see the commit this session lands
 on for the exact count, both projects re-run after this fix. Three reference heroes (H028, H0DA,
 H001) validate 0 errors with flags off.
+
+### NEXT JOB, grant level up abilities at spawn, with the blocker already located
+
+**Field status.** The user confirmed `Asta WOSBASE.w3x` (untouched WOS2 copy plus `place unit`, built
+at `9abe916`) is **100% working, damage applies perfectly**. So the double registration was the real
+bug and it is closed. The ONLY remaining gap is his level up granted abilities.
+
+**Missing abilities.** `A0DQ` (Asta G, "Black Clover"), `A0DR` (Asta F, "Causality Break"), and
+`A0DW` (Asta Sword) which rides with G.
+
+**Cause, measured.** WOS2 grants them in `Trig_LvlUpCheck_Actions`, source line 92782.
+```
+if Asta_ID == id then
+    if GetUnitAbilityLevel(c, AstaG_ID) == 0 then
+        call UnitAddAbility(c, AstaG_ID)
+        call UnitMakeAbilityPermanent(c, true, AstaG_ID)
+        call UnitAddAbility(c, AstaSword_ID)
+    endif
+    if GetUnitAbilityLevel(c, AstaF_ID) == 0 then
+        call UnitAddAbility(c, AstaF_ID)
+        call UnitMakeAbilityPermanent(c, true, AstaF_ID)
+    endif
+endif
+```
+A PREPLACED hero is created and levelled in one shot, so that event never fires for it.
+
+**Measured behaviour per path, in a blank map.**
+```
+plain port          InitTrig_LvlUpCheck wired 1,  grant reachable, works AFTER one level up
+--synth-dispatch    InitTrig_LvlUpCheck wired 0,  grant carried but NEVER reachable, 3 abilities lost
+```
+The second is a regression from the framework prune. Do NOT fix it by wiring that trigger back, it is
+also what re-registers the cast dispatcher, the latent double fire `9abe916` closed.
+
+**THE BLOCKER, this is the part worth not rediscovering.** The obvious reuse does not work.
+`SynthDispatchBuilder.TryFindHeroBranch` (around line 210) rejects the level up guard, because it
+requires the condition text to contain `GetUnitTypeId`, and this guard is `if Asta_ID == id` where
+`id` is a LOCAL assigned from `GetUnitTypeId` earlier in the function. So the matcher needs relaxing
+to accept an id alias compared against a local that was assigned from `GetUnitTypeId`, and only then
+can `ExtractAbilityBranches` style extraction pull the grant block out.
+
+**DO NOT take the shortcut** of scanning for `UnitAddAbility(c, <alias>)` and granting anything in the
+hero's carried set. The ported script contains EVERY hero's grant code, so that hands Asta other
+heroes' passives. The hero guard scoping is the whole difficulty, it is not incidental.
+
+**Requirements.** Emit at spawn in the generated block, so no level up is needed. Works with flags on
+and off. Keep the source's `if GetUnitAbilityLevel(c, X) == 0` guard so a re-grant is idempotent, and
+keep `UnitMakeAbilityPermanent` where the source has it, that is what survives a morph. Key it on the
+hero's own branch so it generalises to any arena granting on level up, and emit nothing when a hero
+has no such branch.
+
+**Verification.** Blank map, port then place, with flags OFF and again with
+`--synth-dispatch --bootstrap-state`, prove `A0DQ`, `A0DR`, `A0DW` are added at spawn with no level
+up. Placement into an untouched `Anime_WOS2_0.28a2.w3x` copy, same proof, AND prove our duplicate
+dispatcher registration is still absent so `9abe916` does not regress. Hermetic at or above 934,
+corpus 44, three reference heroes at 0 errors with flags off.
+
+**Today's workaround for the user.** Level once and the full kit appears.
