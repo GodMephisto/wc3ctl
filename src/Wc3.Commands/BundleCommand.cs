@@ -524,7 +524,7 @@ public static class BundleCommand
                 if (!foreign)
                     foreach (Match sl in StringLiteral.Matches(line))
                     {
-                        var path = sl.Groups[1].Value.Replace(@"\\", @"\");
+                        var path = AssetPathCandidates.Unescape(sl.Groups[1].Value);
                         if (LooksLikeAssetPath(path) && seen.Add("$" + path)) assetLits.Add(path);
                     }
 

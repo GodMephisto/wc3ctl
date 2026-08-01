@@ -32,6 +32,14 @@ public static class AssetPathCandidates
         token.Length > 0 &&
         (token.Contains('\\') || AllExt.Any(ext => token.Contains(ext, StringComparison.OrdinalIgnoreCase)));
 
+    /// <summary>Un-escapes a JASS/Lua string literal captured raw out of a script (the inner text
+    /// between the quotes, doubled backslash and all). A JASS source file writes one literal path
+    /// separator as two backslash characters, EffectSpawn("war3mapImported\\Foo.mdx" ...) means the
+    /// single-backslash path war3mapImported\Foo.mdx at runtime, so any caller that pulls a path out
+    /// of script text with a plain "([^\"]*)" style regex must run it through here before treating
+    /// it as a map file name, or every lookup silently misses a file that is genuinely present.</summary>
+    public static string Unescape(string rawLiteral) => rawLiteral.Replace(@"\\", @"\");
+
     /// <summary>
     /// Every spelling <paramref name="path"/> might actually be stored under in the archive,
     /// both slash conventions times {<paramref name="path"/> and its icon-prefix siblings, if

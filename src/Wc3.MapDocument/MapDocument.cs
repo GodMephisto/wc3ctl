@@ -155,7 +155,7 @@ public sealed class MapDocument
         {
             var text = Encoding.UTF8.GetString(script.RawBytes);
             foreach (Match m in AssetStringLiteral.Matches(text))
-                Harvest(m.Groups[1].Value.Replace("\\\\", "\\"));
+                Harvest(AssetPathCandidates.Unescape(m.Groups[1].Value));
         }
 
         // Source 2: path-like field values inside the map's own object data (all seven kinds,

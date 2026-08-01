@@ -825,3 +825,56 @@ order, oldest first. Appending `H0DA` at the end already matches that, nothing e
 Delivered map path unchanged, `Download/1/1/1/GGGA Shadow Nanaya.w3x`, overwritten in place with the
 four field fixes, same job, no new commit needed in this repo since nothing in `src/` or `tests/`
 changed for this part.
+
+---
+
+## Claude, 2026-08-02, later still. The four missing FX assets, the premise was wrong
+
+Asked to bring `Gear_HakkeStart.mdx`, `Gear_Satsu-WSFX-1.mdl` and `Gear_mh_nanaya_xd.mdl` into the
+delivered Nanaya map, either with a general import CLI command or a porter reachability rule. Traced
+it first rather than building either, and both are unnecessary. **The files were already in the map,
+correctly registered in `war3map.imp`, with correct bytes.** `ls` on the delivered map shows all
+three under `war3mapImported\` already, and `render-model` against the real file resolves every one
+of them once given a single backslash.
+
+Also false, the earlier note that these paths "live inside ACA's shared asset bank function". Read
+the source script directly, each of the four effects sits inside Nanaya's own small per ability
+function (`DarkShikiW_Start` for `A1R1`, `Loop_DarkShikiE` for `A1R2`, `DarkShikiR_Start` for `A1R3`,
+`Loop_DarkShikiT` for `A1R4`), each with a handful of distinct assets, nowhere near the 24 threshold.
+The bundle for `H0DA` on the source map already lists all three files as carried, confirmed by running
+`bundle unit` directly and reading its own file list and diagnostics.
+
+**The real bug was in `wc3ctl audit ability`, not the porter.** `AbilityAuditCommand.EffectsCheck`
+pulls a path straight out of a JASS string literal with a bare `"([^\"]*)"` regex and never un-escapes
+it. These scripts always write one real path separator as a doubled backslash in source text,
+`EffectSpawn("war3mapImported\\Gear_HakkeStart.mdx", ...)` means the single-backslash path at runtime,
+the same thing a C string means by `\\`. `MapDocument.HarvestAssetNames` and `BundleCommand`'s own
+literal scan already knew this and un-escaped it, which is exactly why the porter carried these files
+correctly in the first place, but the audit tool's separate regex never did, so it looked up a path
+with two backslash characters that can never equal any file name the map actually stores, and reported
+a false absent.
+
+Confirmed with `render-model` directly against the real map file, the double backslash form fails to
+resolve, the single backslash form (after either manual unescaping or asking for the ability's own
+wrong sibling extension `.mdl` against the source's actual `.mdx`) resolves fine, the existing
+`.mdx`/`.mdl` swap and case insensitive lookup in `RenderModelCommand.FindAssetEntry` already handle
+the rest, nothing else needed touching.
+
+Fixed by moving the unescape into one place, `AssetPathCandidates.Unescape` in `Wc3.MapDocument`
+(alongside its sibling path spelling helpers), and pointing the three call sites that were each doing
+their own inline `.Replace` at it, `MapDocument.HarvestAssetNames`, `BundleCommand`'s script literal
+scan, and the new call in `AbilityAuditCommand.EffectsCheck`. No map file changed, no porter behaviour
+changed, `audit ability` on the delivered map now reports `H0DA` 10 of 10 fully verified, all four FX
+columns flip to ok.
+
+**Do not repeat this.** Before reaching for a new CLI capability or a porter rule change, check
+whether the reported defect is actually a defect in the CHECKING tool first. A confident sounding
+cause written in a previous session ("lives inside a shared asset bank function") was never verified
+against the actual source script and was wrong.
+
+Gates. Hermetic 947 (943 `Wc3.Tests`, 4 `Wc3.Studio.Tests`), corpus 44 (32 `Wc3.Tests`, 12
+`Wc3.Studio.Tests`). Re-ported Asta `H028` from `Anime_WOS2_0.28a2.w3x` into a fresh blank 96 tile map
+with `--synth-dispatch --bootstrap-state`, still exactly 127 files copied, the asset bank threshold is
+unmoved. `H028`, `H0DA` (`Anime Choice Arena V0.31C.w3x`), `H001` (`GGGA_V0.02d.w3x`, untouched) all
+validate 0 errors with flags off. The delivered map itself, untouched by this fix, still `validate
+--deep` 0 errors 13 warnings and round trips byte faithful.

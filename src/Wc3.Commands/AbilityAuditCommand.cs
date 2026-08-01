@@ -349,7 +349,10 @@ public static class AbilityAuditCommand
                 if (!EffectCall.IsMatch(code)) continue;
                 var pathMatch = StringLiteral.Match(code);
                 if (!pathMatch.Success) continue; // path built dynamically, cannot check statically
-                string path = pathMatch.Groups[1].Value;
+                // Un-escape the doubled backslash a JASS literal always writes for one real path
+                // separator, or a genuinely present asset looks absent because the raw source
+                // spelling never matches any file name the map actually stores.
+                string path = AssetPathCandidates.Unescape(pathMatch.Groups[1].Value);
 
                 // Only a path shaped like this project's own custom-import convention is checked
                 // against the map's files, a base-game reference (Doodads\, Abilities\, ...) never
