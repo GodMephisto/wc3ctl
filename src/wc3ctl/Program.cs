@@ -765,6 +765,73 @@ public static class Program
         }));
         audit.AddCommand(auditHero);
 
+        var auditAbilityArg = new Argument<string?>("hero", () => null,
+            "Hero rawcode to audit. Omit to audit every hero placed on the map.");
+        var auditAbility = new Command("ability",
+            "Walk each ability's own runtime chain, not just whether a cast reaches a live trigger: is "
+            + "the handler carried and not gutted, does its follow-up loop actually start, does anything "
+            + "in its closure deal damage, is every pause matched by an unpause, does a timer callback "
+            + "still point at a declared function, is every global it reads actually assigned, does a "
+            + "special-effect asset still exist. 'audit hero' only proves dispatch, a hero can read '8 of "
+            + "8 wired' there and still do nothing in game. Exits 2 if any ability fails a check.")
+        { mapArg, auditAbilityArg };
+        auditAbility.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var doc = MapDocument.Load(p.GetValueForArgument(mapArg));
+            string? hero = p.GetValueForArgument(auditAbilityArg);
+
+            var results = hero is null
+                ? AbilityAuditCommand.AuditPlacedHeroes(doc)
+                : new[] { AbilityAuditCommand.Audit(doc, hero, ownerId: 0) };
+
+            Emit(p.GetValueForOption(jsonOption), results, () =>
+            {
+                var columns = new (AbilityCheck Check, string Label)[]
+                {
+                    (AbilityCheck.Dispatch, "DISP"), (AbilityCheck.Handler, "HNDLR"),
+                    (AbilityCheck.Loop, "LOOP"), (AbilityCheck.Damage, "DMG"),
+                    (AbilityCheck.PauseBalance, "PAUSE"), (AbilityCheck.TimerCallbacks, "CB"),
+                    (AbilityCheck.State, "STATE"), (AbilityCheck.Effects, "FX"),
+                };
+                string Mark(AbilityAuditRow a, AbilityCheck c)
+                {
+                    var chk = a.Checks.FirstOrDefault(x => x.Check == c);
+                    return chk is null ? "?" : chk.Verdict switch
+                    {
+                        CheckVerdict.Pass => "ok",
+                        CheckVerdict.NotApplicable => "-",
+                        _ => "FAIL",
+                    };
+                }
+
+                var sb = new System.Text.StringBuilder();
+                foreach (var r in results)
+                {
+                    sb.AppendLine($"{r.Hero}  \"{r.Name}\"  (player {r.OwnerId})  "
+                        + $"{r.Passed}/{r.Total} abilities fully verified");
+                    sb.Append("  ").Append("ABILITY".PadRight(9)).Append("NAME".PadRight(28));
+                    foreach (var col in columns) sb.Append(col.Label.PadRight(7));
+                    sb.AppendLine("VERDICT");
+                    foreach (var a in r.Abilities)
+                    {
+                        string name = a.Name ?? "";
+                        if (name.Length > 26) name = name[..26];
+                        sb.Append("  ").Append(a.Ability.PadRight(9)).Append(name.PadRight(28));
+                        foreach (var col in columns) sb.Append(Mark(a, col.Check).PadRight(7));
+                        sb.AppendLine(a.Pass ? "PASS" : "FAIL");
+                    }
+                    foreach (var a in r.Abilities.Where(a => !a.Pass))
+                        foreach (var f in a.Failures)
+                            sb.AppendLine($"    {a.Ability} {f.Check}: {f.Detail}");
+                }
+                if (results.Count == 0) sb.AppendLine("no placed heroes found");
+                return sb.ToString().TrimEnd();
+            });
+            if (results.Any(r => r.Abilities.Any(a => !a.Pass))) exitCode[0] = 2;
+        }));
+        audit.AddCommand(auditAbility);
+
         var fidSource = new Argument<string>("source-map", "Path to the SOURCE map the object was ported FROM.");
         var fidTarget = new Argument<string>("target-map", "Path to the TARGET map the object was ported INTO.");
         var fidRawcode = new Argument<string>("rawcode", "Root object rawcode to compare (the same rawcode in both maps).");

@@ -142,6 +142,66 @@ public class PreplacedUnitsScriptTests
         Assert.DoesNotContain("TriggerRegisterPlayerUnitEvent", cauBody);
     }
 
+    [Fact]
+    public void SynthDispatchedHero_IsNotAlsoRegisteredOnTheSharedDispatcher()
+    {
+        // A --synth-dispatch port gives a hero its own self-contained cast dispatcher, an any-unit
+        // registration that needs no per-player wiring at all. If the deferred wiring here ALSO
+        // registers that hero's owner on the source's shared dispatcher trigger too, every one of its
+        // spells fires twice, once through each path, the exact double-damage and permanent-pause
+        // bug this guards against.
+        string j = ScriptOf(MapWithScript(
+            "function ArenaCast takes nothing returns nothing\n"
+            + "    call TriggerRegisterPlayerUnitEvent(gg_trg_GearCastCheck, GetOwningPlayer(GetTriggerUnit()), EVENT_PLAYER_UNIT_SPELL_EFFECT, null)\n"
+            + "endfunction\n"
+            + "function wc3ctl_SynthCast_Hpal takes nothing returns nothing\n"
+            + "    local unit c = GetSpellAbilityUnit()\n"
+            + "endfunction\n"));
+
+        // The synth-covered hero's owner is excluded, so no registration line survives at all
+        // (it was the map's only placed hero). Scoped to the GENERATED block only, the fixture's
+        // own ArenaCast function (added just so DetectPerPlayerSpellTriggers finds a dispatcher)
+        // legitimately names the same trigger.
+        string block = GeneratedBlock(j);
+        Assert.DoesNotContain("TriggerRegisterPlayerUnitEvent(gg_trg_GearCastCheck", block);
+        // The deferred wiring function is still generated, a synth-dispatched hero still needs
+        // the hero-array registration and other placement bookkeeping this block does.
+        Assert.Contains("function wc3ctl_WirePlacedHeroSpells", block);
+    }
+
+    [Fact]
+    public void APlainPortedHeroSharingTheMap_StillGetsTheSharedDispatcherRegistration()
+    {
+        // A player whose hero was ported WITHOUT --synth-dispatch still needs the shared dispatcher
+        // (that IS its only entry point), so its owner must stay registered even though another
+        // player's synth-dispatched hero on the same map is excluded.
+        var doc = BlankMap.Create();
+        var entry = doc.GetFile(PreplacedUnitsScript.ScriptFile)!;
+        string orig = Encoding.Latin1.GetString(entry.RawBytes);
+        string withDispatcher = orig.Replace(
+            "function main takes nothing returns nothing",
+            "function ArenaCast takes nothing returns nothing\n"
+            + "    call TriggerRegisterPlayerUnitEvent(gg_trg_GearCastCheck, GetOwningPlayer(GetTriggerUnit()), EVENT_PLAYER_UNIT_SPELL_EFFECT, null)\n"
+            + "endfunction\n"
+            + "function wc3ctl_SynthCast_Hpal takes nothing returns nothing\n"
+            + "    local unit c = GetSpellAbilityUnit()\n"
+            + "endfunction\n"
+            + "function main takes nothing returns nothing");
+        doc.AddOrReplaceRawFile(PreplacedUnitsScript.ScriptFile, Encoding.Latin1.GetBytes(withDispatcher));
+
+        PlacementCommand.PlaceUnit(doc, "Hpal", ownerId: 0, x: 0f, y: 0f);   // synth-dispatched
+        PlacementCommand.PlaceUnit(doc, "Hkot", ownerId: 1, x: 64f, y: 0f); // plain port, no synth dispatcher
+
+        string j = ScriptOf(doc);
+
+        Assert.DoesNotContain(
+            "TriggerRegisterPlayerUnitEvent(gg_trg_GearCastCheck, Player(0), EVENT_PLAYER_UNIT_SPELL_EFFECT",
+            j);
+        Assert.Contains(
+            "TriggerRegisterPlayerUnitEvent(gg_trg_GearCastCheck, Player(1), EVENT_PLAYER_UNIT_SPELL_EFFECT",
+            j);
+    }
+
     /// <summary>Only the generated block, so assertions cannot be satisfied (or broken) by the
     /// fixture's own script text that happens to mention the same array.</summary>
     private static string GeneratedBlock(string jass)

@@ -765,7 +765,9 @@ internal static class ScriptPorter
         return found;
     }
 
-    private static string StripComment(string line)
+    /// <summary>Internal, not private: <see cref="AbilityAuditCommand"/> reuses this exact
+    /// comment/trim view rather than keeping a second copy of it.</summary>
+    internal static string StripComment(string line)
     {
         int i = line.IndexOf("//", StringComparison.Ordinal);
         return i >= 0 ? line[..i] : line;
@@ -1224,8 +1226,10 @@ internal static class ScriptPorter
     /// trim-comment counts as one, see <see cref="StripComment"/>), skipping the function's own
     /// "function Name takes ... returns ..." header line. That header names the function itself in
     /// the exact "function X" callback shape <see cref="ReferencedNames"/> looks for, and would
-    /// otherwise make a function that happens to be reachable self-match on its own declaration.</summary>
-    private static IEnumerable<string> LiveCode(string body)
+    /// otherwise make a function that happens to be reachable self-match on its own declaration.
+    /// Internal, not private: <see cref="AbilityAuditCommand"/> walks this same live-vs-trimmed view
+    /// per ability rather than re-deriving it.</summary>
+    internal static IEnumerable<string> LiveCode(string body)
     {
         foreach (var line in body.Split('\n'))
         {
@@ -1335,7 +1339,9 @@ internal static class ScriptPorter
     /// Unlike <see cref="ReferencedNames"/> this deliberately EXCLUDES the plain-call form "Foo(", so it
     /// never follows the call edges that would reach another hero's handler through a shared dispatcher.
     /// Comment text is stripped so a name that survives only in a comment is not pulled.</summary>
-    private static IEnumerable<string> CallbackNames(string body)
+    /// <summary>Internal, not private: <see cref="AbilityAuditCommand"/> reuses this to find a
+    /// handler's own timer-callback assignments.</summary>
+    internal static IEnumerable<string> CallbackNames(string body)
     {
         foreach (var line in body.Split('\n'))
         {
@@ -1359,7 +1365,9 @@ internal static class ScriptPorter
     }
 
     /// <summary>Identifiers used as a function reference in a snippet ("Foo(" or "function Foo").</summary>
-    private static IEnumerable<string> ReferencedNames(string code)
+    /// <summary>Internal, not private: <see cref="AbilityAuditCommand"/> reuses this together
+    /// with <see cref="ForwardClosure"/> to walk one ability's own reachable code.</summary>
+    internal static IEnumerable<string> ReferencedNames(string code)
     {
         Match? prev = null;
         foreach (Match m in Ident.Matches(code))
@@ -1372,7 +1380,9 @@ internal static class ScriptPorter
     private static MapFileEntry? ScriptEntry(MapDocument doc) =>
         doc.GetFile("war3map.j") ?? doc.GetFile("scripts\\war3map.j");
 
-    private static string BodyText(string[] lines, JassFunction f)
+    /// <summary>Internal, not private: <see cref="AbilityAuditCommand"/> reuses this to read a
+    /// carried function's raw (trim-marker-visible) body.</summary>
+    internal static string BodyText(string[] lines, JassFunction f)
     {
         var sb = new StringBuilder();
         for (int i = f.StartLine - 1; i < f.EndLine && i < lines.Length; i++)

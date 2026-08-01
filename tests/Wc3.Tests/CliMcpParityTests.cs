@@ -23,6 +23,7 @@ public class CliMcpParityTests
         ["object_set"] = "object set",
         ["object_new"] = "object new",
         ["audit_hero"] = "audit hero",
+        ["audit_ability"] = "audit ability",
         ["audit_fidelity"] = "audit fidelity",
         ["audit_readiness"] = "audit readiness",
         ["bundle_unit"] = "bundle unit",

@@ -94,6 +94,32 @@ internal static class SynthDispatchBuilder
         return result.Count > 0 ? result : null;
     }
 
+    /// <summary>
+    /// Every ability branch inside <paramref name="functionName"/>'s OWN body directly, no enclosing
+    /// hero guard, the shape <see cref="BuildRawText"/> itself generates for a synthesized dispatcher
+    /// (an unconditional "if id == 'A0DL' then ... elseif id == 'A0DM' then ... endif" chain, already
+    /// scoped to one hero since the whole function is). Reuses the exact same branch/call extraction
+    /// <see cref="ExtractHeroCastBranches"/> uses once IT has found a hero's guard, entered here
+    /// without that search since a --synth-dispatch dispatcher already represents exactly one hero.
+    ///
+    /// This is <see cref="AbilityAuditCommand"/>'s way to read a per-ability call closure back out of
+    /// an already-ported map for a --synth-dispatch hero, the same way <see cref="ExtractHeroCastBranches"/>
+    /// does it for a plain-ported one (which still carries the source's hero-guarded shared dispatcher).
+    /// Null when the function is not declared, or declares no ability branch at all.
+    /// </summary>
+    internal static IReadOnlyList<CastBranch>? ExtractBranchesFromDispatchFunction(string jass, string functionName)
+    {
+        var f = JassFunctionIndex.Parse(jass).FirstOrDefault(x => x.Name == functionName);
+        if (f is null) return null;
+
+        var aliases = JassRawcodeAliases.Parse(jass);
+        var lines = jass.Replace("\r\n", "\n").Split('\n');
+        int bodyStart = f.StartLine;                                  // just past "function ... takes"
+        int bodyEnd = Math.Min(f.EndLine - 1, lines.Length);           // just before "endfunction"
+        var result = ExtractAbilityBranches(lines, bodyStart, bodyEnd, aliases);
+        return result.Count > 0 ? result : null;
+    }
+
     /// <summary>The bare "trigger gg_trg_..." declaration <paramref name="triggerGlobal"/> needs in
     /// the target's globals block (no initializer, JASS convention for every gg_trg_* the World
     /// Editor itself emits, and how HeroWiringAudit's static analysis recognizes an attached

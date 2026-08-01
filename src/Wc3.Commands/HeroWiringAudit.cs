@@ -39,6 +39,13 @@ public enum WiringStatus
     InitNeverCalled,
     /// <summary>Two calls to the init build two triggers, so the ability fires twice.</summary>
     InitCalledTwice,
+    /// <summary>Two (or more) DIFFERENT triggers each independently complete the whole chain for this
+    /// ability, so it fires once per trigger per cast. This is the double-registration shape
+    /// (a synthesized --synth-dispatch dispatcher AND the source's own shared dispatcher both live
+    /// for the same hero) that made every affected spell deal doubled damage and left a hero
+    /// permanently paused, the earlier per-candidate check only caught ONE trigger built twice, not
+    /// two DIFFERENT triggers each built once.</summary>
+    MultipleLiveDispatchers,
 }
 
 public sealed record AbilityWiring(string Ability, string? Name, WiringStatus Status, string Detail);
@@ -107,11 +114,12 @@ public static class HeroWiringAudit
         var ctx = new ScriptContext(jass, ownerId, doc);
         var abilityNames = AbilityNames(doc);
         var results = new List<AbilityWiring>();
+        var heroAbilities = HeroAbilities(doc, heroRawcode, ctx).ToHashSet(StringComparer.Ordinal);
 
-        foreach (var ability in HeroAbilities(doc, heroRawcode, ctx))
+        foreach (var ability in heroAbilities)
         {
             abilityNames.TryGetValue(ability, out var name);
-            results.Add(CheckAbility(ability, name, ctx));
+            results.Add(CheckAbility(ability, name, ctx, heroAbilities));
         }
 
         string? heroName = UnitNames(doc).TryGetValue(heroRawcode, out var hn) ? hn : null;
@@ -122,7 +130,8 @@ public static class HeroWiringAudit
 
     // ---- the chain -----------------------------------------------------------
 
-    private static AbilityWiring CheckAbility(string ability, string? name, ScriptContext ctx)
+    private static AbilityWiring CheckAbility(
+        string ability, string? name, ScriptContext ctx, IReadOnlySet<string> heroAbilities)
     {
         AbilityWiring Fail(WiringStatus s, string detail) => new(ability, name, s, detail);
 
@@ -159,18 +168,71 @@ public static class HeroWiringAudit
         //       duplicate stub (empty body, no event) beside the real handler. Judging by a single
         //       arbitrarily chosen dispatch then blamed the ability for the stub, so run the whole
         //       chain for every candidate and let the ability read as wired if ANY of them completes.
-        var evaluated = dispatches.Select(d => EvaluateDispatch(ability, name, d, ctx)).ToList();
+        var evaluated = dispatches.Select(d => (Dispatch: d, Result: EvaluateDispatch(ability, name, d, ctx))).ToList();
 
-        // A candidate that completes everything but builds its trigger twice is a genuine double-fire,
-        // so it outranks even a clean Ok elsewhere, a second healthy trigger must not hide it.
-        if (evaluated.FirstOrDefault(e => e.Status == WiringStatus.InitCalledTwice) is { } doubled)
-            return doubled;
-        if (evaluated.FirstOrDefault(e => e.Status == WiringStatus.Ok) is { } wired)
+        // A candidate that completes everything but builds its OWN trigger twice is a genuine
+        // double-fire, so it outranks even a clean Ok elsewhere, a second healthy trigger must not
+        // hide it.
+        if (evaluated.FirstOrDefault(e => e.Result.Status == WiringStatus.InitCalledTwice) is { Result: { } } doubled)
+            return doubled.Result;
+
+        // 8. Two (or more) candidates can each independently complete the whole chain through
+        //    DIFFERENT triggers, every one built exactly once, so InitCalledTwice above never trips
+        //    on either. That is not a single healthy path, the ability still fires once per trigger
+        //    per cast. Scoped to distinct TRIGGERS, not distinct dispatch functions, because a
+        //    condition and an action attached to the very same trigger complete as two candidates but
+        //    describe one firing, not two (see the "stub" test this file already covers).
+        //
+        //    Also scoped to the SAME event VERB. A real map keys a "_Channel" trigger to
+        //    EVENT_UNIT_SPELL_CHANNEL (fires when the cast starts, often to validate it) alongside a
+        //    plain trigger on EVENT_..._SPELL_EFFECT (fires when the cast actually resolves, the real
+        //    payload), and that pair is a completely normal GUI pattern, not a duplicate. Measured on
+        //    a real GGGA port, Tohno's own "#Toono"/"#Public" abilities are wired exactly that way and
+        //    grouping by trigger alone read them as firing 2-3 times, a false alarm. Only triggers that
+        //    share the SAME verb (two independently live EFFECT triggers, deliverable 1's real bug)
+        //    genuinely run the same payload twice for the same cast.
+        //
+        //    Also excludes a candidate whose condition tests a FOREIGN ability (one not in
+        //    heroAbilities), a shared roster-wide condition (an ability-mimicry system, a class-change
+        //    trigger) that merely happens to also test our ability, not our hero's own dedicated
+        //    dispatcher. Measured on the same GGGA map, Trig_Battle_Mage_Spell_start (a different
+        //    hero's ability-copy system, also tests bm81/bm03/bm18/bm12/bm74 alongside Tohno's A01F)
+        //    independently completes the chain on EFFECT too, and without this the verb filter alone
+        //    misread it as A01F firing twice.
+        //
+        //    Finally, scoped to groups where at least one live trigger is THIS PROJECT'S OWN porting
+        //    artifact, a synthesized --synth-dispatch trigger (named wc3ctl_SynthCast_<rawcode>), not
+        //    a native multi-trigger design the SOURCE map's own author already wrote and shipped
+        //    working. Measured on the same GGGA map, Trig_ChangeWay2 and Trig_TONA_Alternate_Start are
+        //    both genuinely Tohno's OWN complementary "Change Way" triggers for A04Z (one a plain
+        //    ability swap, one an elaborate cinematic), present since before any porting touched this
+        //    map, so a user playing the unported source sees the exact same two firings. Deliverable
+        //    1's real bug always has a wc3ctl_SynthCast_* dispatcher on one side of the pair, since
+        //    that mechanism is what stacked a second live registration onto the source's own existing
+        //    one, so requiring it here catches the genuine port-introduced double-fire without
+        //    flagging a map's own pre-existing, working design.
+        var okCandidates = evaluated.Where(e => e.Result.Status == WiringStatus.Ok).ToList();
+        var liveTriggers = okCandidates
+            .Where(e => !ctx.TestsForeignAbility(e.Dispatch, heroAbilities))
+            .Select(e => ctx.ResolveTrigger(e.Dispatch).Trigger)
+            .Where(t => t is not null).Select(t => t!)
+            .Distinct(StringComparer.Ordinal).ToList();
+        var duplicateVerb = liveTriggers.GroupBy(t => ctx.EventVerb(t) ?? "")
+            .Where(g => g.Key.Length > 0 && g.Count() > 1)
+            .Where(g => g.Any(t => t.Contains("wc3ctl_SynthCast_", StringComparison.Ordinal)))
+            .OrderByDescending(g => g.Count()).FirstOrDefault();
+        if (duplicateVerb is not null)
+            return Fail(WiringStatus.MultipleLiveDispatchers,
+                $"reached by {duplicateVerb.Count()} independently wired triggers all on "
+                + $"EVENT_..._SPELL_{duplicateVerb.Key} ({string.Join(", ", duplicateVerb)}), "
+                + $"so this ability fires {duplicateVerb.Count()} times per cast");
+
+        if (okCandidates.FirstOrDefault().Result is { } wired)
             return wired;
 
         // Nothing completed. Report the candidate that got furthest along the chain, the most
         // informative failure, rather than an arbitrary one.
-        return evaluated.OrderByDescending(e => ChainProgress(e.Status)).First();
+        return evaluated.Select(e => e.Result).OrderByDescending(e => ChainProgress(e.Status)).First();
     }
 
     /// <summary>Runs the attach-through-init chain for one dispatch candidate. Broken out so an
@@ -576,6 +638,61 @@ public static class HeroWiringAudit
             bool covered = perPlayer.Cast<Match>().Any(m =>
                 Regex.IsMatch(m.Groups[1].Value, @"\bPlayer\s*\(\s*" + OwnerId + @"\s*\)"));
             return (true, covered, $"{perPlayer.Count} per-player registration(s)");
+        }
+
+        /// <summary>The spell-lifecycle verb (EFFECT, CHANNEL, CAST, ENDCAST, FINISH, ...) the
+        /// trigger's own spell event registers, the suffix of EVENT_(PLAYER_)UNIT_SPELL_&lt;verb&gt;.
+        /// Null when no such event is registered at all. Two triggers on the SAME verb for the same
+        /// ability genuinely run its payload twice (deliverable 1's real double registration, both on
+        /// EFFECT); a CHANNEL trigger and an EFFECT trigger legitimately coexist for one ability, one
+        /// validates the cast when it starts, the other applies it when it resolves, and the two must
+        /// never be confused for a duplicate (see <see cref="WiringStatus.MultipleLiveDispatchers"/>'s
+        /// only caller for the real map this was measured against).</summary>
+        public string? EventVerb(string trigger)
+        {
+            string esc = Regex.Escape(trigger);
+            var any = Regex.Match(CodeText,
+                @"TriggerRegisterAnyUnitEventBJ\s*\(\s*" + esc + @"\s*,\s*EVENT_(?:PLAYER_)?UNIT_SPELL_([A-Z]+)");
+            if (any.Success) return any.Groups[1].Value;
+
+            var perUnit = Regex.Match(CodeText,
+                @"TriggerRegisterUnitEvent\s*\(\s*" + esc + @"\s*,\s*[^,]+,\s*EVENT_UNIT_SPELL_([A-Z]+)");
+            if (perUnit.Success) return perUnit.Groups[1].Value;
+
+            var perPlayer = Regex.Match(CodeText,
+                @"TriggerRegisterPlayerUnitEvent\s*\(\s*" + esc + @"\s*,\s*[^,]+,\s*EVENT_PLAYER_UNIT_SPELL_([A-Z]+)");
+            return perPlayer.Success ? perPlayer.Groups[1].Value : null;
+        }
+
+        private static readonly Regex AbilityIdCheck = new(
+            @"GetSpellAbilityId\s*\(\s*\)\s*==\s*(?:'([^']{4})'|([A-Za-z_][A-Za-z0-9_]*))", RegexOptions.Compiled);
+
+        /// <summary>True when <paramref name="function"/>'s own id-check, or a one-hop inline
+        /// condition helper it plainly calls (the "Trig_X_Func001C" shape GUI compiles for a
+        /// multi-branch OR), tests an ability rawcode that is NOT one of
+        /// <paramref name="heroAbilities"/>. That is the signature of a shared, roster-wide condition
+        /// (an ability-mimicry system, a class-change/stance-swap trigger) that merely happens to
+        /// also test our hero's ability, not our hero's own dedicated dispatcher, so its Ok verdict
+        /// must never count as a genuinely separate live path for
+        /// <see cref="WiringStatus.MultipleLiveDispatchers"/>.</summary>
+        public bool TestsForeignAbility(string function, IReadOnlySet<string> heroAbilities)
+        {
+            var toScan = new List<string> { function };
+            if (_bodies.TryGetValue(function, out var ownBody))
+                foreach (Match m in Regex.Matches(ownBody, @"\b([A-Za-z_][A-Za-z0-9_]*)\s*\("))
+                    if (m.Groups[1].Value != function && _bodies.ContainsKey(m.Groups[1].Value))
+                        toScan.Add(m.Groups[1].Value);
+
+            foreach (var fn in toScan)
+            {
+                if (!_bodies.TryGetValue(fn, out var body)) continue;
+                foreach (Match m in AbilityIdCheck.Matches(body))
+                {
+                    string? id = m.Groups[1].Success ? m.Groups[1].Value : Aliases.GetValueOrDefault(m.Groups[2].Value);
+                    if (id is not null && !heroAbilities.Contains(id)) return true;
+                }
+            }
+            return false;
         }
 
         /// <summary>True when something behind the trigger still has executable statements. A ported

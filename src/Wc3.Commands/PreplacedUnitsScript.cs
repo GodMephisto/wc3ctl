@@ -40,9 +40,13 @@ public static class PreplacedUnitsScript
     /// (both 0-based and 1-based) rather than only the most-used one, 5 calls the map own
     /// per-hero setup routine when it has one, 6 also calls the map own per-player doer-dummy setup
     /// routine (the one that populates a per-player unit array from a CreateUnit, e.g. the stun and
-    /// damage-source dummies a hero's spells route through) under a null guard so it runs once.
+    /// damage-source dummies a hero's spells route through) under a null guard so it runs once, 7
+    /// resolves a doer-dummy slot computed through a local rather than only a direct index, 8 stops
+    /// registering a placed hero's owner on the source's shared cast dispatcher when a --synth-dispatch
+    /// dispatcher already covers that hero (an older build re-registers it and every one of that
+    /// hero's spells fires twice, once through each path).
     /// </summary>
-    public const int GeneratorVersion = 7;
+    public const int GeneratorVersion = 8;
 
     // The begin marker carries the generator version. Detection keys off the PREFIX so blocks
     // written before versioning existed (no "[gen vN]") are still recognised, and read as version 0.
@@ -185,11 +189,15 @@ public static class PreplacedUnitsScript
         var (doerDummy, doerCandidates) = heroSetup is not null && placedHeroes.Count > 0
             ? DetectDoerDummyAssigner(jass)
             : (null, 0);
+        // Heroes already covered by their own --synth-dispatch dispatcher, see DetectSynthDispatchedHeroes,
+        // must not also be registered on the shared dispatcher below or their spells fire twice.
+        var synthDispatchedHeroes = DetectSynthDispatchedHeroes(jass, placedHeroes.Select(h => h.Rawcode).Distinct().ToList());
 
         jass = RemoveBlock(jass, nl);
         if (spawnable.Count > 0 || items.Count > 0)
         {
-            string block = BuildBlock(spawnable, items, nl, heroArrays, spellTriggers, heroSetup, placedHeroes, doerDummy);
+            string block = BuildBlock(spawnable, items, nl, heroArrays, spellTriggers, heroSetup, placedHeroes,
+                doerDummy, synthDispatchedHeroes);
             jass = InsertBefore(jass, "function main takes nothing returns nothing", block + nl, nl);
         }
 
@@ -300,6 +308,28 @@ public static class PreplacedUnitsScript
             @"TriggerRegisterPlayerUnitEvent\s*\(\s*(gg_trg_[A-Za-z0-9_]+)\s*,[^,]+,\s*EVENT_PLAYER_UNIT_SPELL_EFFECT"))
             set.Add(m.Groups[1].Value);
         return set.ToList();
+    }
+
+    /// <summary>
+    /// Which of <paramref name="heroRawcodes"/> already have their OWN self-contained --synth-dispatch
+    /// cast dispatcher in <paramref name="jass"/> (see <see cref="SynthDispatchBuilder"/>), an any-unit
+    /// spell-effect trigger named <c>wc3ctl_SynthCast_&lt;rawcode&gt;</c> that fires for that hero
+    /// unconditionally, on every player. Registering that hero's owner on the source's shared cast
+    /// dispatcher too (the ordinary wiring below) would fire every one of its spells TWICE, once
+    /// through each path, the exact double-damage and permanent-pause bug this got measured against.
+    /// A plain port (no --synth-dispatch) never has one of these functions, so this always returns
+    /// empty for it and its output is unaffected.
+    /// </summary>
+    private static HashSet<string> DetectSynthDispatchedHeroes(string jass, IReadOnlyCollection<string> heroRawcodes)
+    {
+        var set = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var rc in heroRawcodes)
+        {
+            string fn = "wc3ctl_SynthCast_" + SynthDispatchBuilder.SanitizeIdentifier(rc);
+            if (Regex.IsMatch(jass, @"\bfunction\s+" + Regex.Escape(fn) + @"\b"))
+                set.Add(rc);
+        }
+        return set;
     }
 
     /// <summary>
@@ -475,11 +505,12 @@ public static class PreplacedUnitsScript
     private static string BuildBlock(List<UnitData> units, List<UnitData> items, string nl,
         IReadOnlyList<HeroArray>? heroArraysOrNull = null, IReadOnlyList<string>? spellTriggersOrNull = null,
         HeroSetup? heroSetup = null, IReadOnlyList<(string Rawcode, int OwnerId)>? placedHeroes = null,
-        DoerDummyAssigner? doerDummy = null)
+        DoerDummyAssigner? doerDummy = null, IReadOnlySet<string>? synthDispatchedHeroesOrNull = null)
     {
         var heroArrays = heroArraysOrNull ?? Array.Empty<HeroArray>();
         var heroes = placedHeroes ?? Array.Empty<(string Rawcode, int OwnerId)>();
         var spellTriggers = spellTriggersOrNull ?? Array.Empty<string>();
+        var synthDispatchedHeroes = synthDispatchedHeroesOrNull ?? new HashSet<string>(StringComparer.Ordinal);
         // Players that own a placed unit (a placed hero's owner is among them, neutral slots excluded).
         // The arena's spell-dispatch triggers get their spell-effect event registered for these players
         // so a placed hero's casts reach the handlers. This is deferred, not done in CreateAllUnits,
@@ -488,6 +519,15 @@ public static class PreplacedUnitsScript
         var heroOwners = units.Select(u => u.OwnerId)
             .Where(o => o >= 0 && o < PlayerColors.NeutralHostileId)
             .Distinct().OrderBy(o => o).ToList();
+        // Owners whose EVERY placed hero already has its own --synth-dispatch dispatcher wired (see
+        // DetectSynthDispatchedHeroes) are excluded from the shared-dispatcher registration below, or
+        // that hero's spells would run twice, once through each path. An arena places one hero per
+        // player, so this is the whole story in practice; a player who somehow owns a mix (one hero
+        // ported plain, another with --synth-dispatch) still needs the shared dispatcher for the
+        // plain one, so it stays registered there, the safer of the two imperfect choices.
+        var fullySynthDispatchedOwners = heroes.Select(h => h.OwnerId).Distinct()
+            .Where(o => heroes.Where(h => h.OwnerId == o).All(h => synthDispatchedHeroes.Contains(h.Rawcode)))
+            .ToHashSet();
         bool wireSpells = (spellTriggers.Count > 0 || (heroSetup is not null && heroes.Count > 0))
             && heroOwners.Count > 0;
 
@@ -509,8 +549,11 @@ public static class PreplacedUnitsScript
                 }
                 foreach (var trg in spellTriggers)
                     foreach (var owner in heroOwners)
+                    {
+                        if (fullySynthDispatchedOwners.Contains(owner)) continue;
                         sb.Append("    call TriggerRegisterPlayerUnitEvent(").Append(trg)
                           .Append(", Player(").Append(owner).Append("), EVENT_PLAYER_UNIT_SPELL_EFFECT, null)").Append(nl);
+                    }
                 // Run the map own per-hero setup for each placed hero. That routine binds the
                 // hero caster globals and registers its per-unit spell events, which is how the
                 // arena makes a picked hero castable, so this replaces guessing prerequisite by

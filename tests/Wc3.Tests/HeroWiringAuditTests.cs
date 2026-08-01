@@ -235,6 +235,158 @@ endfunction
     }
 
     [Fact]
+    public void Two_different_triggers_each_fully_wired_reports_MultipleLiveDispatchers()
+    {
+        // gg_trg_Old and gg_trg_wc3ctl_SynthCast_H000 each independently complete the WHOLE chain,
+        // own trigger, own event, own init called exactly once, so InitCalledTwice (one trigger built
+        // twice) never trips on either. This is the real shape deliverable 1 fixed, a --synth-dispatch
+        // hero's own synthesized dispatcher AND the source's shared dispatcher both being live for the
+        // same hero, every affected spell fires once per trigger, doubled damage and a caster left
+        // permanently paused. A per-candidate "does this ONE chain complete" check reports Ok on the
+        // first one it tries and never notices the second, live, path, exactly the blind spot this
+        // status exists to close. The synth-named trigger is load-bearing here, this status is scoped
+        // to require one (see the guard comment above), a source map's own two native triggers on the
+        // same ability are a different, legitimate shape covered by the ChangeWay2-style test below.
+        const string jass = @"globals
+    trigger gg_trg_Old= null
+    trigger gg_trg_wc3ctl_SynthCast_H000= null
+endglobals
+function Trig_Old_Actions takes nothing returns nothing
+    if GetSpellAbilityId() == 'A000' then
+        call KillUnit(GetTriggerUnit())
+    endif
+endfunction
+function InitTrig_Old takes nothing returns nothing
+    set gg_trg_Old= CreateTrigger()
+    call TriggerRegisterAnyUnitEventBJ( gg_trg_Old, EVENT_PLAYER_UNIT_SPELL_EFFECT )
+    call TriggerAddAction( gg_trg_Old, function Trig_Old_Actions )
+endfunction
+function Trig_wc3ctl_SynthCast_H000_Actions takes nothing returns nothing
+    if GetSpellAbilityId() == 'A000' then
+        call KillUnit(GetTriggerUnit())
+    endif
+endfunction
+function InitTrig_wc3ctl_SynthCast_H000 takes nothing returns nothing
+    set gg_trg_wc3ctl_SynthCast_H000= CreateTrigger()
+    call TriggerRegisterAnyUnitEventBJ( gg_trg_wc3ctl_SynthCast_H000, EVENT_PLAYER_UNIT_SPELL_EFFECT )
+    call TriggerAddAction( gg_trg_wc3ctl_SynthCast_H000, function Trig_wc3ctl_SynthCast_H000_Actions )
+endfunction
+function main takes nothing returns nothing
+    call InitTrig_Old()
+    call InitTrig_wc3ctl_SynthCast_H000()
+endfunction
+";
+        var doc = BuildMap("A000", jass, new AbilitySpec("A000", "ANcl"));
+
+        var result = HeroWiringAudit.Audit(doc, "H000", ownerId: 0);
+        var a000 = result.Abilities.Single(a => a.Ability == "A000");
+
+        Assert.Equal(WiringStatus.MultipleLiveDispatchers, a000.Status);
+        Assert.Contains("gg_trg_Old", a000.Detail);
+        Assert.Contains("gg_trg_wc3ctl_SynthCast_H000", a000.Detail);
+        Assert.Contains(result.Problems, p => p.Ability == "A000");
+    }
+
+    [Fact]
+    public void Two_native_triggers_on_the_same_ability_with_no_synth_dispatcher_is_not_flagged()
+    {
+        // Trig_ChangeWay2 and Trig_Alternate_Start both independently complete the whole chain for
+        // A04Z, same event verb, neither testing a foreign ability, exactly the shape the guard above
+        // used to misread as a double dispatch. Measured on a real GGGA map, this is Tohno's OWN two
+        // complementary "Change Way" triggers (one a plain ability swap, one an elaborate cinematic),
+        // present since before any porting touched the map, so a user playing the unported source sees
+        // the exact same two firings. Neither trigger is a wc3ctl_SynthCast_* dispatcher, so this must
+        // stay Ok, not MultipleLiveDispatchers, a source map's own pre-existing design is not a fault
+        // porting introduced.
+        const string jass = @"globals
+    trigger gg_trg_ChangeWay2= null
+    trigger gg_trg_Alternate_Start= null
+endglobals
+function Trig_ChangeWay2_Actions takes nothing returns nothing
+    if GetSpellAbilityId() == 'A04Z' then
+        call KillUnit(GetTriggerUnit())
+    endif
+endfunction
+function InitTrig_ChangeWay2 takes nothing returns nothing
+    set gg_trg_ChangeWay2= CreateTrigger()
+    call TriggerRegisterAnyUnitEventBJ( gg_trg_ChangeWay2, EVENT_PLAYER_UNIT_SPELL_EFFECT )
+    call TriggerAddAction( gg_trg_ChangeWay2, function Trig_ChangeWay2_Actions )
+endfunction
+function Trig_Alternate_Start_Actions takes nothing returns nothing
+    if GetSpellAbilityId() == 'A04Z' then
+        call KillUnit(GetTriggerUnit())
+    endif
+endfunction
+function InitTrig_Alternate_Start takes nothing returns nothing
+    set gg_trg_Alternate_Start= CreateTrigger()
+    call TriggerRegisterAnyUnitEventBJ( gg_trg_Alternate_Start, EVENT_PLAYER_UNIT_SPELL_EFFECT )
+    call TriggerAddAction( gg_trg_Alternate_Start, function Trig_Alternate_Start_Actions )
+endfunction
+function main takes nothing returns nothing
+    call InitTrig_ChangeWay2()
+    call InitTrig_Alternate_Start()
+endfunction
+";
+        var doc = BuildMap("A04Z", jass, new AbilitySpec("A04Z", "ANcl"));
+
+        var result = HeroWiringAudit.Audit(doc, "H000", ownerId: 0);
+        var a04z = result.Abilities.Single(a => a.Ability == "A04Z");
+
+        Assert.Equal(WiringStatus.Ok, a04z.Status);
+        Assert.DoesNotContain(result.Problems, p => p.Ability == "A04Z");
+    }
+
+    [Fact]
+    public void A_shared_condition_that_also_tests_a_foreign_ability_is_not_a_double_dispatch()
+    {
+        // Trig_Shared tests OUR ability (A000) alongside a FOREIGN one (B999, not in this hero's own
+        // ability set), the signature of a different hero's ability-mimicry or class-change system
+        // that merely happens to also test our id, not a genuine second live path for our own cast.
+        // Measured on a real GGGA port, Trig_Battle_Mage_Spell_start (a different hero's ability-copy
+        // system) and Trig_ChangeWay2 (a shared stance-swap trigger) both looked like Tohno's OWN
+        // A01F/A04Z firing twice until this guard, a false alarm the event-verb check alone did not
+        // catch (both were genuinely registered on EVENT_..._SPELL_EFFECT).
+        const string jass = @"globals
+    trigger gg_trg_Own= null
+    trigger gg_trg_Shared= null
+endglobals
+function Trig_Own_Actions takes nothing returns nothing
+    if GetSpellAbilityId() == 'A000' then
+        call KillUnit(GetTriggerUnit())
+    endif
+endfunction
+function InitTrig_Own takes nothing returns nothing
+    set gg_trg_Own= CreateTrigger()
+    call TriggerRegisterAnyUnitEventBJ( gg_trg_Own, EVENT_PLAYER_UNIT_SPELL_EFFECT )
+    call TriggerAddAction( gg_trg_Own, function Trig_Own_Actions )
+endfunction
+function Trig_Shared_Conditions takes nothing returns boolean
+    return ( GetSpellAbilityId() == 'A000' ) or ( GetSpellAbilityId() == 'B999' )
+endfunction
+function Trig_Shared_Actions takes nothing returns nothing
+    call KillUnit(GetTriggerUnit())
+endfunction
+function InitTrig_Shared takes nothing returns nothing
+    set gg_trg_Shared= CreateTrigger()
+    call TriggerRegisterAnyUnitEventBJ( gg_trg_Shared, EVENT_PLAYER_UNIT_SPELL_EFFECT )
+    call TriggerAddCondition( gg_trg_Shared, Condition( function Trig_Shared_Conditions ) )
+    call TriggerAddAction( gg_trg_Shared, function Trig_Shared_Actions )
+endfunction
+function main takes nothing returns nothing
+    call InitTrig_Own()
+    call InitTrig_Shared()
+endfunction
+";
+        var doc = BuildMap("A000", jass, new AbilitySpec("A000", "ANcl"));
+
+        var result = HeroWiringAudit.Audit(doc, "H000", ownerId: 0);
+        var a000 = result.Abilities.Single(a => a.Ability == "A000");
+
+        Assert.Equal(WiringStatus.Ok, a000.Status);
+        Assert.Empty(result.Problems);
+    }
+
+    [Fact]
     public void Assign_then_compare_with_a_spell_id_local_reads_as_wired()
     {
         const string jass = @"globals

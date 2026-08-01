@@ -197,6 +197,19 @@ public static class Wc3Tools
                 : new[] { RuntimeReadinessCommand.Check(doc, hero, ownerId: 0) };
         });
 
+    [McpServerTool(Name = "audit_ability", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Tells you, per ability, PASS or the exact broken link across a placed hero's whole runtime chain, far deeper than audit_hero, which only proves a cast reaches a live trigger. Checks whether the dispatch is reached exactly once (two independently live triggers for the same ability is the double-registration bug that makes every affected spell fire twice), whether its handler is carried and not gutted by porting, whether a follow-up ability's TimerStart loop actually starts and its callback is declared, whether anything in its closure deals damage and names the call, whether every StartSpellUnit pause is matched by a live StopSpellUnit (an imbalance can leave the caster paused forever), whether a timer or trigger callback still points at a declared, live function, whether a global it reads is ever really assigned, and whether a special-effect asset it names still exists in the map. A hero can read '8 of 8 wired' on audit_hero and still be unplayable, this is built to catch exactly that gap. Omit hero to audit every hero placed on the map.")]
+    public static IReadOnlyList<AbilityAuditResult> AuditAbility(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Hero rawcode to audit, e.g. 'H001'. Omit to audit every hero placed on the map.")] string? hero = null)
+        => Run(() =>
+        {
+            var doc = LoadMap(map);
+            return hero is null
+                ? AbilityAuditCommand.AuditPlacedHeroes(doc)
+                : new[] { AbilityAuditCommand.Audit(doc, hero, ownerId: 0) };
+        });
+
     [McpServerTool(Name = "palette_doodad", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("List the doodad types placeable on a map - the palette to consult before place_doodad. Unions the base-game doodad catalog (installed GameData) with the map's own object-data: custom New* doodads and modified Base* doodads. Each entry carries its four-char rawcode, a resolved display name (null when unresolvable), its source (base|map-custom|map-modified) and the base it derives from. Without a WC3 install the palette is map-only. The map is never modified.")]
     public static DoodadPaletteResult PaletteDoodad(
