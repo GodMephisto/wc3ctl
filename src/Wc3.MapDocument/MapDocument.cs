@@ -1,4 +1,5 @@
 // src/Wc3.MapDocument/MapDocument.cs
+using System.Buffers.Binary;
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -240,15 +241,105 @@ public sealed class MapDocument
         foreach (var entry in _files.Where(f => f.IsDirty && f.FileName is not null))
             builder.AddFile(MpqFile.New(new MemoryStream(SerializeEntry(entry)), entry.FileName!));
 
+        var grown = GrownHashTableSize(OriginalHashTableSize(), _files.Count);
+
         using var mpq = new MemoryStream();
         // SaveTo disposes the target stream unless leaveOpen — we still need to read it back.
-        builder.SaveTo(mpq, leaveOpen: true);
+        // The two overloads do NOT agree on their bookkeeping defaults: passing an options
+        // object changes the emitted (listfile)/(attributes) even when only HashTableSize
+        // is set on it. So take the plain overload untouched whenever the inherited table
+        // is safe, which keeps every already-working map byte-for-byte as it was.
+        if (grown is null)
+            builder.SaveTo(mpq, leaveOpen: true);
+        else
+            builder.SaveTo(mpq, new MpqArchiveCreateOptions { HashTableSize = grown }, leaveOpen: true);
 
         using var outStream = new MemoryStream();
         outStream.Write(PreArchiveData, 0, PreArchiveData.Length);
         mpq.Position = 0;
         mpq.CopyTo(outStream);
         return outStream.ToArray();
+    }
+
+    // MPQ hash tables are power-of-two sized and resolve names by linear probing, so a
+    // nearly-full table makes every lookup miss walk a long chain of occupied slots.
+    // Inheriting the source archive's size is the trap: a big map can ship at ~96%
+    // occupancy and still work, because its entries were placed by whatever tool built
+    // it, but a rebuild re-places all of them and the new chains can be catastrophic.
+    // The symptom is specific and was hard to find - the map hosts fine (the lobby reads
+    // only a handful of files) and then stalls forever on the loading screen, while every
+    // content-level check passes because no file's bytes changed. Keeping the table at
+    // most half full means a rebuild can never inherit that failure mode.
+    // 32768 is the ceiling here, not a judgement call. War3Net types HashTableSize as
+    // ushort, so 65536 is unrepresentable and 2^15 is the largest valid power of two.
+    const ushort MaxHashTableSize = 32768;
+
+    // Above this occupancy a rebuild is unsafe (3/4, expressed as a ratio to stay integer).
+    const int OccupancyNumerator = 3;
+    const int OccupancyDenominator = 4;
+
+    /// <summary>
+    /// The source archive's hash table capacity (slot count), or 0 if it cannot be read.
+    /// </summary>
+    /// <remarks>
+    /// Read straight from the MPQ header rather than via <c>EnumerateHashes</c>, which
+    /// yields the occupied entries and so reports occupancy, not capacity. The archive
+    /// begins immediately after <see cref="PreArchiveData"/>, and the header lays out
+    /// hash table size as a little-endian uint32 at offset 0x18.
+    /// </remarks>
+    uint OriginalHashTableSize()
+    {
+        const int HashTableSizeOffset = 0x18;
+        var start = PreArchiveData.Length;
+        if (start + HashTableSizeOffset + sizeof(uint) > _originalBytes.Length)
+            return 0;
+        if (BinaryPrimitives.ReadUInt32LittleEndian(_originalBytes.AsSpan(start, 4)) != MpqSignature)
+            return 0;
+        return BinaryPrimitives.ReadUInt32LittleEndian(
+            _originalBytes.AsSpan(start + HashTableSizeOffset, sizeof(uint)));
+    }
+
+    // 'MPQ\x1A', the archive header magic.
+    const uint MpqSignature = 0x1A51504D;
+
+    /// <summary>
+    /// The hash table size a rebuild should use, or <c>null</c> to keep the source's own.
+    /// </summary>
+    /// <remarks>
+    /// MPQ resolves names by linear probing a power-of-two hash table, so a nearly-full
+    /// table makes every lookup miss walk a long chain of occupied slots. Inheriting the
+    /// source archive's size is the trap. A big map can ship at ~96% occupancy and still
+    /// work, because its entries were placed by whatever tool built it, but a rebuild
+    /// re-places all of them and the new chains can be catastrophic. The symptom is
+    /// specific and was expensive to find. The map hosts fine (a lobby reads only a
+    /// handful of files) and then stalls forever on the loading screen, while every
+    /// content-level check passes because no file's bytes changed.
+    /// <para>
+    /// Returning null below the threshold is deliberate. Resizing every archive would
+    /// change the bytes of maps that were never at risk and cost the byte-faithful
+    /// guarantee for nothing, so this only intervenes where a rebuild would be unsafe.
+    /// </para>
+    /// </remarks>
+    internal static ushort? GrownHashTableSize(uint originalSize, int fileCount)
+    {
+        if (originalSize == 0)
+            return null;
+
+        static bool Fits(long entries, long slots) =>
+            entries * OccupancyDenominator <= slots * OccupancyNumerator;
+
+        if (Fits(fileCount, originalSize))
+            return null;
+
+        // Already at the format ceiling: nothing to grow into, so leave it untouched
+        // rather than emit a size the writer cannot represent.
+        if (originalSize >= MaxHashTableSize)
+            return null;
+
+        var size = (ushort)originalSize;
+        while (size < MaxHashTableSize && !Fits(fileCount, size))
+            size <<= 1;
+        return size;
     }
 
     /// <summary>
