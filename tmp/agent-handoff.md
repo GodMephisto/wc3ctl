@@ -775,3 +775,53 @@ new `ScriptPortTests`, 3 pre-existing files unchanged in count). Corpus 44 (32 `
 `H001` (`GGGA_V0.02d.w3x`, untouched) all validate 0 errors with flags off. The delivered map itself,
 `validate --deep` 0 errors 13 warnings (all pre-existing advisory categories, `UnitAlive` undeclared
 and uninitialized-variable notices), `roundtrip` byte faithful.
+
+### Then, matching GGGA's own storage conventions for a hero, no code change needed
+
+User's follow up ask, make the ported hero follow how GGGA stores its OWN heroes, not just play
+correctly. Diffed `H0DA`'s full field list against all three native heroes with cast dispatch,
+`H001`, `H05Y`, `H006` (`object get`, no `--field`, every field not just the ones already compared).
+Three real, three-for-three house conventions found, none of them gameplay.
+- `Placeable In Editor (uine)`, all three natives `0`, `H0DA` was `1` (base default). The one the
+  user already measured.
+- `Hero - Hide Hero Death Message (uhhd)`, all three natives `1`, `H0DA` was `0` (base default).
+- `Stock Replenish Interval (usrg)` and `Stock Start Delay (usst)`, all three natives `3600` and `10`,
+  `H0DA` was `100000` and `0`. This one directly answers the tavern question, it is the shop
+  restocking behaviour, not a hero stat.
+
+Applied all three with plain `object set` calls, no CLI change needed, `uine`, `uhhd`, `usrg`, `usst`
+on `H0DA`. Re-ran `validate --deep` (still 0 errors 13 warnings), `roundtrip` (still byte faithful),
+`audit ability` on both `H0DA` and `H001` (identical to before, these are unit level fields, not
+script, nothing to regress). No source change, nothing to test-suite-regress, hermetic/corpus gates
+from the prior entry stand unchanged.
+
+**Left alone and reported, not applied, each one ambiguous between presentation and gameplay.**
+- `Upgrades Used (upgr)`, all three natives list the identical `R001,R000,R002,R003,Reuv`, `H0DA` has
+  none. Checked what these are, `R000` "defense", `R001` "speed of attack", `R002` "Body meeting",
+  `R003` "Horseman", real player purchasable STAT upgrades. Whether a hero is wired to receive them
+  affects its actual power level against other heroes, so this is gameplay adjacent despite being
+  identical across all three natives, the user's own rule says leave gameplay to ACA, flagged instead
+  of guessed.
+- `Formation Rank (ufor)`, natives `2`, `H0DA` `0`. Movement group behaviour, borderline.
+- `Death Type (udea)`, natives `2`, `H0DA` `0`. Corpse and death animation behaviour, arguably tied to
+  the model, which the user said must stay ACA's.
+- `Tooltip - Awaken (uawt)` and `Tooltip - Revive (utpr)`, all three natives have both set, `H0DA` has
+  neither field at all. Purely display text, but there is no source text to copy, inventing lore
+  appropriate wording is a content decision, not a storage convention, flagged rather than guessed.
+- `Scaling Value (usca)` and `Selection Scale (ussc)` differ too but are model size tied, expected to
+  differ, not touched, matches the user's own explicit model exclusion.
+
+**Checked and NOT a convention.** `Button Position (ubpx/ubpy)`, `H001` and `H05Y` both `(2,0)`, but
+`H006` is `(1,0)`, not consistent across the three natives, so not a real rule, left alone. Also
+noticed all three natives store `Name`/`Proper Names`/every `Tooltip -` field as a `TRIGSTR_` mapwide
+string table reference, `H0DA` stores the same content as a literal inline string instead. Zero
+functional difference in game either way, purely a storage detail, and converting it would mean
+inventing new WTS string table entries, out of scope for what was asked, reported not changed.
+
+**Tavern list order.** The `n00I` `useu` list (`H05U,H006,H001,H04G,H01U,H016,H027,H00K,H02Z,H05Z,
+H01K,H028`) is not alphabetical or grouped by rawcode or by anime series, it reads as historical add
+order, oldest first. Appending `H0DA` at the end already matches that, nothing else to change there.
+
+Delivered map path unchanged, `Download/1/1/1/GGGA Shadow Nanaya.w3x`, overwritten in place with the
+four field fixes, same job, no new commit needed in this repo since nothing in `src/` or `tests/`
+changed for this part.
