@@ -650,3 +650,128 @@ job.
 Gates. Hermetic 942 (938 `Wc3.Tests`, 4 `Wc3.Studio.Tests`), 8 new (5 `SynthDispatchLevelUpGrantTests`,
 3 `PreplacedUnitsScriptTests`). Corpus 44 (32 `Wc3.Tests`, 12 `Wc3.Studio.Tests`). `H028`, `H0DA`
 (`Anime Choice Arena V0.31C.w3x`), `H001` (`GGGA_V0.02d.w3x`) all validate 0 errors with flags off.
+
+---
+
+## Claude, 2026-08-02, later still. Porting H0DA into GGGA and the tavern, two new porter bugs found
+
+Job, port `H0DA` Shadow Nanaya from `Anime Choice Arena V0.31C.w3x` into `GGGA_V0.02d.w3x` and make it
+selectable from tavern `n00I`. Delivered
+`C:/Users/GodMephisto/Documents/Warcraft III/Maps/Download/1/1/1/GGGA Shadow Nanaya.w3x`.
+
+### Tavern append needed no CLI change
+
+`object get <map> n00I` shows the sold-units field is `useu` "Units Sold", a plain String field
+holding a comma separated rawcode list. `object set` already writes a String field verbatim, commas
+included, so appending a rawcode is just reading the current value and writing it back with the new
+one appended. Verified round trip on a scratch copy before touching the real port. No CLI work
+needed here, the concern in the job description did not apply.
+
+### Bug 1, `--synth-dispatch` silently no-opped on Anime Choice Arena's own dispatcher shape
+
+`SynthDispatchBuilder`'s hero-guard and ability-guard matching (`HeroGuardEq`/`TokenEq`, both plain
+regexes assuming a BARE token or local on each side of `==`) was built and tested only against
+Anime_WOS2's shape, which caches the caster and the ability id into locals once
+(`local unit c= GetSpellAbilityUnit()`, then `GetUnitTypeId(c) == Hero_ID`, then `id == HeroQ_ID`).
+Anime Choice Arena's own dispatcher calls the accessor natives INLINE at every comparison, no caching
+local at all (`GetUnitTypeId(GetSpellAbilityUnit()) == DarkShiki_ID`, `GetSpellAbilityId() ==
+DarkShikiQ_ID`). The nested parens in the first one and the bare call in the second both broke the
+old regexes, so `ExtractHeroCastBranches` returned null for every ACA hero, `--synth-dispatch`
+degraded silently to "no per-hero cast branch found", and the ordinary carried closure took over,
+which meant carrying ACA's WHOLE shared dispatcher and framework (397 InitTrig_* would have gone in
+uncontrolled) into GGGA. Exactly the "map boots as a partial source game" failure mode from the Asta
+job, this time for the reason the flag exists to prevent.
+
+Fixed by replacing both regexes with `SplitTopLevelEquality`, a depth-tracking scan that finds the
+first `==` NOT inside any parens and returns each side as a whole, self-contained expression, then
+classifying each side by substring (`Contains("GetUnitTypeId")`) or by alias/literal resolution,
+never by a fixed-shape regex. Both idioms now resolve, and the old literal-local shape still does too
+(pinned by a test). New tests, `SynthDispatchInlineAccessorTests.cs`, 4 cases (inline hero guard
+resolves, a foreign hero's inline branch is not picked up, a MIXED script where one hero caches
+locals and another inlines the accessor both resolve independently).
+
+After the fix, the real port on H0DA correctly synthesizes `wc3ctl_SynthCast_H0DA` covering 6 ability
+branches and skips 397 of ACA's own `InitTrig_*` as not hero-reachable, framework pruning back to
+doing its job.
+
+### Bug 2, a carried global or a carried local can collide with the TARGET's own BURIED name, in
+either direction, and neither was checked before this
+
+`validate --deep` on the actual port gave 2 pjass errors, `Symbol s already defined as global
+variable` and `Symbol txt already defined as global variable`. Root cause, JASS forbids a local
+sharing a name with any global, and that is checked in this codebase only against TOP LEVEL names
+(`JassFunctionIndex`/`JassGlobals`, functions and globals), never against a name some UNRELATED
+function uses only as its own local. Two real, independent, and OPPOSITE-direction instances landed
+in the same port:
+- ACA's own `string s=null` / `texttag txt=null` (globals behind a shared tooltip helper), carried
+  into GGGA. GGGA never declares a top level `s` or `txt`, so the ordinary collision check saw
+  nothing wrong, yet GGGA's OWN untouched `ShieldDeduction` has `local integer array s` and
+  `RPB_CreateClassHelp` has `local string array txt`, three hundred thousand lines apart from H0DA,
+  entirely unrelated to this hero. The carried globals landed right on top of both.
+- The reverse also happens on other carried bodies, a carried function's OWN local sharing a name
+  with a TARGET's real global.
+
+Fixed with two additions to `ScriptPorter.cs`, both covered by new tests in `ScriptPortTests.cs`
+(`A_carried_globals_name_that_collides_with_the_targets_own_buried_local_is_renamed` and
+`A_carried_locals_name_that_collides_with_the_targets_own_global_is_renamed`).
+1. `AllLocalAndParamNames(jass)` scans a WHOLE script (not one function) for every local/parameter
+   name declared anywhere, fed into `taken`, the set a freshly carried GLOBAL or FUNCTION must avoid.
+2. `RenameLocalsCollidingWithGlobalScope(functionText, targetGlobalScope)` renames a carried
+   function's OWN local (or parameter) when it collides, per function scope, `_l`/`_l1`/... suffix.
+
+Deliberately kept as TWO separate sets, `taken` (broad, includes the target's buried locals, used
+only for the ordinary carried-symbol rename) vs `targetGlobalScope` (narrow, real global/function
+names only, used for the carried-local rename). Two different carried FUNCTIONS' own locals never
+actually collide with each other in real JASS (locals are function scoped), only with something
+genuinely global, conflating the two sets first produced correct but needlessly noisy output
+(`id_l1` through `id_l714` as the SAME "id" local in unrelated functions kept fighting over one
+shared counter). Splitting them fixed both correctness and the noise.
+
+### GGGA's own heroes, traced not assumed
+
+`audit ability` on GGGA's own `H001` regressed 11/11 to 10/11 after the port, ability `A08A` DISP
+went from PASS (untested, GGGA's A08A has no cast-dispatch condition of its own, it is an
+ability-availability toggle not a spell) to FAIL, "neither handler 'Trig_Sun_Shot_Conditions' nor
+anything that calls it is attached to a trigger". Traced fully rather than assumed broken:
+`Trig_Sun_Shot_Conditions` (`return GetSpellAbilityId() == 'A08A'`) is ACA's OWN function, an
+entirely different, unrelated hero's ability that happens to share the literal 4 character rawcode
+`'A08A'` with GGGA's own Tohno ability of the same code (rawcodes are per map, coincidence is
+expected at this volume). It is carried (inside ACA's own `PickPreloadSystem`, a giant per-hero-type
+elseif dispatcher, itself only called from ACA's own `Trig_MoveHeroes_Actions`/`InitTrig_MoveHeroes`)
+but confirmed, by reading `InitCustomTriggers`, `main`, and `config` in the FULLY merged script end to
+end, that NOTHING calls `PickPreloadSystem`, `InitTrig_MoveHeroes`, or their callers anywhere
+reachable. Dead code, present so the script compiles, never runs. GGGA's `H001` is functionally
+untouched. The audit tool's own ability-to-handler matching is not scoped to a hero's own reachable
+code (unlike the porter's `heroReachable`), so it found a foreign, dead, coincidentally-rawcode-
+matching function and reported on ITS attachment, mislabeling a false positive as a regression. Real
+bug, in `AbilityAuditCommand`, not fixed this session, flagged for whoever picks this up next, since
+it will keep producing misleading diffs on any future port into a large, tightly coupled target.
+
+### Known gap, not fixed, scoped precisely
+
+4 of H0DA's 6 cast abilities (`A1R1`, `A1R2`, `A1R3`, `A1R4`) pass every audit column except FX,
+their effect assets (`Gear_HakkeStart.mdx`, `Gear_Satsu-WSFX-1.mdl`, `Gear_mh_nanaya_xd.mdl`) are
+absent from the ported map. Cause, these paths live inside ACA's own shared asset-bank function
+(over the 24-distinct-assets-in-one-body threshold that marks a function as "belongs to the whole
+roster, not this unit"), an existing, deliberate porter heuristic, not new. Damage and dispatch are
+unaffected (both PASS), this is cosmetic only, casts will do damage with no visual effect. Fix is
+narrow (3 named files) if the user wants it, out of scope tonight, no "add a file to a map" CLI
+capability exists yet to do it cleanly.
+
+### Object count
+
+Port command's own report, 13 direct objects (`H0DA` itself, `A00a`/`A00b` poison sub-abilities,
+`A1QZ`/`A1R1`/`A1R2`/`A1R3`/`A1R4`/`A1R5` the six kit abilities, `Broa`/`B00a`/`B00b`/`B09K` buffs)
+plus 25 carried by the script closure (runtime-granted sub-abilities and dummies its handlers spawn).
+11 rawcode collisions auto-remapped (3 unit, 5 ability, 3 buff). 12 files copied directly plus 175
+carried by the script closure (the 481-foreign-files question from the earlier session is still the
+user's open call, unchanged by this job).
+
+### Gates
+
+Hermetic 947 (943 `Wc3.Tests`, 4 `Wc3.Studio.Tests`), 9 new (4 `SynthDispatchInlineAccessorTests`, 2
+new `ScriptPortTests`, 3 pre-existing files unchanged in count). Corpus 44 (32 `Wc3.Tests`, 12
+`Wc3.Studio.Tests`). `H028` (`Anime_WOS2_0.28a2.w3x`), `H0DA` (`Anime Choice Arena V0.31C.w3x`),
+`H001` (`GGGA_V0.02d.w3x`, untouched) all validate 0 errors with flags off. The delivered map itself,
+`validate --deep` 0 errors 13 warnings (all pre-existing advisory categories, `UnitAlive` undeclared
+and uninitialized-variable notices), `roundtrip` byte faithful.
