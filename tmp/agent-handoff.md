@@ -597,3 +597,56 @@ dispatcher registration is still absent so `9abe916` does not regress. Hermetic 
 corpus 44, three reference heroes at 0 errors with flags off.
 
 **Today's workaround for the user.** Level once and the full kit appears.
+
+---
+
+## Claude, 2026-08-02, later. Level up grant job, DONE, commit `ec2caec`
+
+Fixed. `A0DQ`, `A0DR`, `A0DW` now grant at spawn, no level up needed, in all three configurations
+(flags off, `--synth-dispatch --bootstrap-state`, placed into an untouched WOS2 copy). Generated
+lines, flags off.
+```
+if GetUnitAbilityLevel(u, AstaG_ID) == 0 then
+    call UnitAddAbility(u, AstaG_ID)
+    call UnitMakeAbilityPermanent(u, true, AstaG_ID)
+    call UnitAddAbility(u, AstaSword_ID)
+endif
+if GetUnitAbilityLevel(u, AstaF_ID) == 0 then
+    call UnitAddAbility(u, AstaF_ID)
+    call UnitMakeAbilityPermanent(u, true, AstaF_ID)
+endif
+```
+
+The blocker was exactly as recorded, `TryFindHeroBranch` required the guard's own condition to
+contain the literal text `GetUnitTypeId`. Relaxed it to also resolve a hero alias compared against a
+LOCAL, by scanning the enclosing function for that local's own assignment and checking whether ITS
+right side names `GetUnitTypeId`. Added `SynthDispatchBuilder.ExtractHeroLevelUpGrants`, which reuses
+that same relaxed hero branch match (factored the function walk both readers use into one
+`ForEachHeroBranch`) and then, inside the hero's own branch only, pulls out every depth 0
+`if GetUnitAbilityLevel(unit, X) == 0 then ... endif` block verbatim. Deliberately narrow, a level
+threshold or a saved flag block in the same branch is left alone, there is no idempotent guard on
+those to replay safely at spawn. `PreplacedUnitsScript.DetectLevelUpGrants` runs this against the
+TARGET's own script (same as every other detector in that file), so it works whether the map is
+untouched, plainly ported, or `--synth-dispatch` ported. `GeneratorVersion` 9 to 10.
+
+**The trap held.** Grepped the generated block on all three maps, only `AstaG_ID`, `AstaSword_ID`,
+`AstaF_ID` ever appear, nothing from Natsu, Mahoraga, Laxus, or any of the other dozen heroes whose
+grant code shares the same `Trig_LvlUpCheck_Actions` function. Placement into the untouched WOS2 copy
+still shows exactly one `TriggerRegisterPlayerUnitEvent(gg_trg_CastCheck, ...)`, the map's own, ours
+absent, `9abe916` does not regress.
+
+**One pre-existing finding surfaced, not caused by this change, not fixed.** `validate --deep` on the
+untouched-map placement reports `INVALID, 1 error, [runtime-readiness] no RunInitializationTriggers
+function at all`. Confirmed unrelated, `PreplacedUnitsScript.cs` never mentions that identifier at all
+(grepped), and the TRULY untouched map (no placement at all) validates 0 errors 0 warnings, because
+`RuntimeReadinessCommand.CheckPlacedHeroes` has nothing to check until a player owned hero exists on
+the map. The check fires only once MY test placement gave it one, and would fire identically under
+`GeneratorVersion` 9. Likely cause, `RuntimeReadinessCommand` assumes any map with an `InitTrig_*`
+function must also define `RunInitializationTriggers`, but that function only exists when a map has a
+GUI trigger whose sole event is Map Initialization, which WOS2 may simply not have. Same shape as the
+already-known "readiness severity mis-calibration" bugs. Flagged, not chased, out of scope for this
+job.
+
+Gates. Hermetic 942 (938 `Wc3.Tests`, 4 `Wc3.Studio.Tests`), 8 new (5 `SynthDispatchLevelUpGrantTests`,
+3 `PreplacedUnitsScriptTests`). Corpus 44 (32 `Wc3.Tests`, 12 `Wc3.Studio.Tests`). `H028`, `H0DA`
+(`Anime Choice Arena V0.31C.w3x`), `H001` (`GGGA_V0.02d.w3x`) all validate 0 errors with flags off.
