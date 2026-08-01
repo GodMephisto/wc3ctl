@@ -507,6 +507,90 @@ public class PreplacedUnitsScriptTests
         Assert.DoesNotContain("call MakeDoer", block);
     }
 
+    // A level up handler shaped like Anime_WOS2's real Trig_LvlUpCheck_Actions: the caster and its
+    // type id are read into locals ONCE near the top, and every hero's own branch compares that
+    // local against its id constant rather than calling GetUnitTypeId again inline. This is exactly
+    // the shape the hero guard matcher had to be relaxed for (see SynthDispatchLevelUpGrantTests
+    // for the extractor itself), two heroes share the one function the way a real arena's does.
+    private const string LevelUpHandlerJass =
+        "globals\n" +
+        "    integer Hpal_ID= 'Hpal'\n" +
+        "    integer HpalG_ID= 'A0AA'\n" +
+        "    integer Hkot_ID= 'Hkot'\n" +
+        "    integer HkotQ_ID= 'A0BB'\n" +
+        "endglobals\n" +
+        "function Trig_LvlUpCheck_Actions takes nothing returns nothing\n" +
+        "    local unit c= GetTriggerUnit()\n" +
+        "    local integer id= GetUnitTypeId(c)\n" +
+        "    if Hpal_ID == id then\n" +
+        "        if GetUnitAbilityLevel(c, HpalG_ID) == 0 then\n" +
+        "            call UnitAddAbility(c, HpalG_ID)\n" +
+        "            call UnitMakeAbilityPermanent(c, true, HpalG_ID)\n" +
+        "        endif\n" +
+        "    endif\n" +
+        "    if Hkot_ID == id then\n" +
+        "        if GetUnitAbilityLevel(c, HkotQ_ID) == 0 then\n" +
+        "            call UnitAddAbility(c, HkotQ_ID)\n" +
+        "        endif\n" +
+        "    endif\n" +
+        "endfunction\n";
+
+    [Fact]
+    public void GrantsALevelUpAbility_AtSpawnForAPreplacedHero()
+    {
+        // A preplaced hero is created and levelled in one shot, so the level up event this handler
+        // waits on never fires for it. The generated block must grant it the ability at spawn
+        // instead, keeping the source's own idempotent guard and permanence call verbatim.
+        string block = GeneratedBlock(ScriptOf(MapWithScript(LevelUpHandlerJass)));
+
+        Assert.Contains("if GetUnitAbilityLevel(u, HpalG_ID) == 0 then", block);
+        Assert.Contains("call UnitAddAbility(u, HpalG_ID)", block);
+        Assert.Contains("call UnitMakeAbilityPermanent(u, true, HpalG_ID)", block);
+        // MapWithScript places only 'Hpal', so Hkot's own branch must never leak onto it.
+        Assert.DoesNotContain("HkotQ_ID", block);
+    }
+
+    [Fact]
+    public void LevelUpGrant_ScopesToEachPlacedHerosOwnBranchOnly()
+    {
+        // Two different heroes placed by two different players, sharing the one handler function
+        // above. Each must receive exactly its own grant, never the other's and never doubled.
+        var doc = BlankMap.Create();
+        var entry = doc.GetFile(PreplacedUnitsScript.ScriptFile)!;
+        string orig = Encoding.Latin1.GetString(entry.RawBytes);
+        doc.AddOrReplaceRawFile(PreplacedUnitsScript.ScriptFile, Encoding.Latin1.GetBytes(
+            orig.Replace("function main takes nothing returns nothing",
+                LevelUpHandlerJass + "function main takes nothing returns nothing")));
+
+        PlacementCommand.PlaceUnit(doc, "Hpal", ownerId: 0, x: 0f, y: 0f);
+        PlacementCommand.PlaceUnit(doc, "Hkot", ownerId: 1, x: 64f, y: 0f);
+
+        string block = GeneratedBlock(ScriptOf(doc));
+
+        Assert.Equal(1, Count(block, "call UnitAddAbility(u, HpalG_ID)"));
+        Assert.Equal(1, Count(block, "call UnitAddAbility(u, HkotQ_ID)"));
+    }
+
+    [Fact]
+    public void AHeroWithNoLevelUpBranch_GetsNoGrantLinesAtAll()
+    {
+        // A handler that only ever mentions ANOTHER hero must add nothing for the placed one, not
+        // even the guard, rather than guess.
+        string otherHeroOnly =
+            "globals\n    integer Hkot_ID= 'Hkot'\n    integer HkotQ_ID= 'A0BB'\nendglobals\n" +
+            "function Trig_LvlUpCheck_Actions takes nothing returns nothing\n" +
+            "    local unit c= GetTriggerUnit()\n" +
+            "    local integer id= GetUnitTypeId(c)\n" +
+            "    if Hkot_ID == id and GetUnitAbilityLevel(c, HkotQ_ID) == 0 then\n" +
+            "        call UnitAddAbility(c, HkotQ_ID)\n" +
+            "    endif\n" +
+            "endfunction\n";
+
+        string block = GeneratedBlock(ScriptOf(MapWithScript(otherHeroOnly)));
+        Assert.DoesNotContain("GetUnitAbilityLevel(u,", block);
+        Assert.DoesNotContain("UnitAddAbility(u,", block);
+    }
+
     [Fact]
     public void SyncWithNoPlacements_LeavesTheScriptUnchanged()
     {

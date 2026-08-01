@@ -43,6 +43,10 @@ internal static class SynthDispatchBuilder
     private static readonly Regex CalleeName = new(
         @"^call\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(", RegexOptions.Compiled);
 
+    private static readonly Regex AbilityLevelZeroGuard = new(
+        @"GetUnitAbilityLevel\s*\(\s*(?<unit>[A-Za-z_][A-Za-z0-9_]*)\s*,\s*(?<ability>'[^']{4}'|[A-Za-z_][A-Za-z0-9_]*)\s*\)\s*==\s*0",
+        RegexOptions.Compiled);
+
     /// <summary>
     /// Every ability branch found under <paramref name="heroRawcode"/>'s own
     /// "GetUnitTypeId(...) == HeroId" guard(s), anywhere in <paramref name="sourceJass"/>, merged
@@ -62,37 +66,64 @@ internal static class SynthDispatchBuilder
 
         var result = new List<CastBranch>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
-
-        foreach (var f in functions)
+        ForEachHeroBranch(functions, lines, heroRawcode, aliases, branch =>
         {
-            int start = f.StartLine - 1, end = Math.Min(f.EndLine, lines.Length);
-            var openIfs = new Stack<int>(); // line index of each currently-open "if", for "elseif"
-
-            for (int i = start; i < end; i++)
-            {
-                var head = lines[i].TrimStart();
-                if (StartsWithWord(head, "if"))
-                {
-                    openIfs.Push(i);
-                    if (TryFindHeroBranch(lines, i, i, heroRawcode, aliases) is { } branch)
-                        foreach (var cb in ExtractAbilityBranches(lines, branch.BodyStart, branch.BodyEnd, aliases))
-                            if (seen.Add(cb.AbilityRawcode)) result.Add(cb);
-                }
-                else if (StartsWithWord(head, "elseif"))
-                {
-                    if (openIfs.Count > 0
-                        && TryFindHeroBranch(lines, openIfs.Peek(), i, heroRawcode, aliases) is { } branch)
-                        foreach (var cb in ExtractAbilityBranches(lines, branch.BodyStart, branch.BodyEnd, aliases))
-                            if (seen.Add(cb.AbilityRawcode)) result.Add(cb);
-                }
-                else if (StartsWithWord(head, "endif"))
-                {
-                    if (openIfs.Count > 0) openIfs.Pop();
-                }
-            }
-        }
+            foreach (var cb in ExtractAbilityBranches(lines, branch.BodyStart, branch.BodyEnd, aliases))
+                if (seen.Add(cb.AbilityRawcode)) result.Add(cb);
+        });
         return result.Count > 0 ? result : null;
     }
+
+    /// <summary>One ability a hero grants itself on level up, guarded the idempotent way the source
+    /// arena already writes it (<c>if GetUnitAbilityLevel(unit, X) == 0 then ...</c>), so re-emitting
+    /// this at spawn is safe even if the hero later actually does level up too. <see cref="Condition"/>
+    /// and <see cref="Calls"/> are copied verbatim from the source, <see cref="UnitParam"/> names which
+    /// identifier in them stands for the hero unit, so the caller can substitute its own local for it
+    /// (a preplaced hero has no <c>GetTriggerUnit()</c> to read one from).</summary>
+    public sealed record AbilityGrant(string AbilityRawcode, string UnitParam, string Condition, IReadOnlyList<string> Calls);
+
+    /// <summary>
+    /// Every ability <paramref name="heroRawcode"/> grants itself inside its own top level guard in a
+    /// level up (or similar "run this once a condition becomes true") handler, anywhere in
+    /// <paramref name="sourceJass"/>. Reuses the exact same hero guard recognised for a cast dispatcher
+    /// (<see cref="ForEachHeroBranch"/>), since a level up handler is written the same way, one shared
+    /// function dispatching every hero's own branch off a single "if HeroId == id then" guard.
+    ///
+    /// Only the idempotent-guarded shape qualifies, a depth-0 <c>if GetUnitAbilityLevel(unit, X) == 0
+    /// then ... endif</c> nested directly inside the hero's own branch, unit a bare local (never a call
+    /// expression, there would be nothing to rename it to for a freshly created unit). Anything else in
+    /// the branch (a level threshold, a saved flag, a one-shot ability-tier upgrade) is left alone, not
+    /// because it is unsafe in principle but because there is no guard here that makes replaying it at
+    /// spawn idempotent the way GetUnitAbilityLevel(...) == 0 is, and guessing would risk carrying
+    /// another hero's side effect the way an unscoped UnitAddAbility scan would. Null when the hero has
+    /// no such branch at all, or the branch grants nothing in this shape, the caller must emit nothing
+    /// in that case rather than guess.
+    /// </summary>
+    public static IReadOnlyList<AbilityGrant>? ExtractHeroLevelUpGrants(string sourceJass, string heroRawcode)
+    {
+        if (string.IsNullOrEmpty(sourceJass)) return null;
+
+        var aliases = JassRawcodeAliases.Parse(sourceJass);
+        var lines = sourceJass.Replace("\r\n", "\n").Split('\n');
+        var functions = JassFunctionIndex.Parse(sourceJass);
+
+        var result = new List<AbilityGrant>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        ForEachHeroBranch(functions, lines, heroRawcode, aliases, branch =>
+        {
+            foreach (var g in ExtractAbilityGrants(lines, branch.BodyStart, branch.BodyEnd, aliases))
+                if (seen.Add(g.AbilityRawcode)) result.Add(g);
+        });
+        return result.Count > 0 ? result : null;
+    }
+
+    /// <summary>A safe textual rename of a bare JASS identifier, every whole-token occurrence of
+    /// <paramref name="oldName"/> in <paramref name="text"/> becomes <paramref name="newName"/>, an
+    /// occurrence embedded in a longer identifier (the "G" inside "AstaG_ID") is left alone. Used to
+    /// retarget an extracted grant's unit local onto whatever local the caller's own generated code
+    /// created the hero into.</summary>
+    public static string ReplaceIdentifier(string text, string oldName, string newName) =>
+        oldName == newName ? text : Regex.Replace(text, @"\b" + Regex.Escape(oldName) + @"\b", newName);
 
     /// <summary>
     /// Every ability branch inside <paramref name="functionName"/>'s OWN body directly, no enclosing
@@ -203,24 +234,107 @@ internal static class SynthDispatchBuilder
 
     private sealed record HeroBranch(int BodyStart, int BodyEnd);
 
+    /// <summary>Walks every function in <paramref name="lines"/>, and invokes
+    /// <paramref name="onBranchFound"/> once for each occurrence of <paramref name="heroRawcode"/>'s
+    /// own top level if/elseif guard, wherever that shape recurs (a cast dispatcher, a level up
+    /// handler, anything else an arena writes as one shared function branching on the hero's id).
+    /// Shared so every caller of <see cref="TryFindHeroBranch"/> agrees on what counts as the hero's
+    /// own branch, one open-ifs walk instead of a second copy of it per caller.</summary>
+    private static void ForEachHeroBranch(
+        IReadOnlyList<JassFunction> functions, IReadOnlyList<string> lines, string heroRawcode,
+        IReadOnlyDictionary<string, string> aliases, Action<HeroBranch> onBranchFound)
+    {
+        foreach (var f in functions)
+        {
+            int start = f.StartLine - 1, end = Math.Min(f.EndLine, lines.Count);
+            var openIfs = new Stack<int>(); // line index of each currently-open "if", for "elseif"
+
+            for (int i = start; i < end; i++)
+            {
+                var head = lines[i].TrimStart();
+                if (StartsWithWord(head, "if"))
+                {
+                    openIfs.Push(i);
+                    if (TryFindHeroBranch(lines, i, i, start, end, heroRawcode, aliases) is { } branch)
+                        onBranchFound(branch);
+                }
+                else if (StartsWithWord(head, "elseif"))
+                {
+                    if (openIfs.Count > 0
+                        && TryFindHeroBranch(lines, openIfs.Peek(), i, start, end, heroRawcode, aliases) is { } branch)
+                        onBranchFound(branch);
+                }
+                else if (StartsWithWord(head, "endif"))
+                {
+                    if (openIfs.Count > 0) openIfs.Pop();
+                }
+            }
+        }
+    }
+
     /// <summary>When the "if"/"elseif" at <paramref name="conditionLine"/> guards on
     /// <paramref name="heroRawcode"/>, splits the chain it opens (starting at
     /// <paramref name="chainStart"/>) and returns that one branch's body range. Null otherwise, or
-    /// when the chain never closes (malformed input).</summary>
+    /// when the chain never closes (malformed input). <paramref name="funcStart"/>/<paramref name="funcEnd"/>
+    /// bound the enclosing function, needed only for the relaxed guard shape below.</summary>
     private static HeroBranch? TryFindHeroBranch(
-        IReadOnlyList<string> lines, int chainStart, int conditionLine, string heroRawcode,
-        IReadOnlyDictionary<string, string> aliases)
+        IReadOnlyList<string> lines, int chainStart, int conditionLine, int funcStart, int funcEnd,
+        string heroRawcode, IReadOnlyDictionary<string, string> aliases)
     {
         var condition = ConditionOf(lines[conditionLine]);
-        if (!condition.Contains("GetUnitTypeId", StringComparison.Ordinal)) return null;
-        var m = HeroGuardEq.Match(condition);
-        if (!m.Success) return null;
-        var tok = m.Groups["tokA"].Success ? m.Groups["tokA"].Value : m.Groups["tokB"].Value;
-        if (!string.Equals(Resolve(tok, aliases), heroRawcode, StringComparison.Ordinal)) return null;
+        if (!ConditionNamesHero(condition, heroRawcode, aliases, lines, funcStart, funcEnd)) return null;
 
         if (SplitIfChain(lines, chainStart) is not { } chain) return null;
         var mine = chain.Branches.FirstOrDefault(b => b.ConditionLine == conditionLine);
         return mine is null ? null : new HeroBranch(mine.BodyStart, mine.BodyEnd);
+    }
+
+    /// <summary>Whether <paramref name="condition"/> is <paramref name="heroRawcode"/>'s own hero
+    /// check, either the literal shape a cast dispatcher's guard usually compiles to
+    /// (<c>GetUnitTypeId(...) == HeroId</c>), or <c>HeroId == id</c> where <c>id</c> is a LOCAL the
+    /// enclosing function assigned from <c>GetUnitTypeId</c> earlier (the shape a handler that already
+    /// holds the unit type in a local compiles to, since it has no reason to call GetUnitTypeId a
+    /// second time inline, a level up handler being the case this was written for).</summary>
+    private static bool ConditionNamesHero(
+        string condition, string heroRawcode, IReadOnlyDictionary<string, string> aliases,
+        IReadOnlyList<string> lines, int funcStart, int funcEnd)
+    {
+        if (condition.Contains("GetUnitTypeId", StringComparison.Ordinal))
+        {
+            var m = HeroGuardEq.Match(condition);
+            if (m.Success)
+            {
+                var tok = m.Groups["tokA"].Success ? m.Groups["tokA"].Value : m.Groups["tokB"].Value;
+                if (string.Equals(Resolve(tok, aliases), heroRawcode, StringComparison.Ordinal)) return true;
+            }
+        }
+
+        foreach (Match m in TokenEq.Matches(condition))
+        {
+            string a = m.Groups["a"].Value, b = m.Groups["b"].Value;
+            string? other = string.Equals(Resolve(a, aliases), heroRawcode, StringComparison.Ordinal) ? b
+                : string.Equals(Resolve(b, aliases), heroRawcode, StringComparison.Ordinal) ? a : null;
+            if (other is not null && IsLocalFromGetUnitTypeId(other, lines, funcStart, funcEnd)) return true;
+        }
+        return false;
+    }
+
+    /// <summary>Whether <paramref name="name"/> is a local in [<paramref name="funcStart"/>,
+    /// <paramref name="funcEnd"/>) assigned (anywhere, a declaration's own initializer or a later
+    /// "set") from an expression naming <c>GetUnitTypeId</c>. Every assignment is checked, not just the
+    /// first, the same caution <c>PreplacedUnitsScript.ResolveIndexToPlayer</c> uses for a comparable
+    /// shape, a placeholder declaration followed by the real assignment is common in this codebase's
+    /// source maps.</summary>
+    private static bool IsLocalFromGetUnitTypeId(string name, IReadOnlyList<string> lines, int funcStart, int funcEnd)
+    {
+        if (!Regex.IsMatch(name, @"^[A-Za-z_][A-Za-z0-9_]*$")) return false;
+        var assign = new Regex(@"^\s*(?:local\s+integer\s+|set\s+)" + Regex.Escape(name) + @"\s*=\s*(.+)$");
+        for (int i = funcStart; i < funcEnd && i < lines.Count; i++)
+        {
+            var m = assign.Match(lines[i]);
+            if (m.Success && m.Groups[1].Value.Contains("GetUnitTypeId", StringComparison.Ordinal)) return true;
+        }
+        return false;
     }
 
     /// <summary>Every ability sub-branch inside a hero's own guard body: every depth-0 if/elseif
@@ -264,9 +378,45 @@ internal static class SynthDispatchBuilder
             if (rawcode is null) continue;
             var calls = ExtractCalls(lines, b.BodyStart, b.BodyEnd);
             if (calls.Count == 0) continue; // nothing to synthesize (e.g. bookkeeping only)
-            var callees = calls.Select(CalleeOf).Where(c => c is not null).Select(c => c!)
-                .Distinct(StringComparer.Ordinal).ToList();
-            result.Add(new CastBranch(rawcode, calls, callees));
+            result.Add(new CastBranch(rawcode, calls, CalleesOf(calls)));
+        }
+        return result;
+    }
+
+    /// <summary>Every depth-0 <c>if GetUnitAbilityLevel(unit, X) == 0 then ... endif</c> block inside a
+    /// hero's own level up branch, one <see cref="AbilityGrant"/> per distinct ability. A block nested
+    /// one level deeper (an ability's own grant testing something else) is not split further, matching
+    /// <see cref="ExtractAbilityBranches"/>'s same depth-0 convention.</summary>
+    private static List<AbilityGrant> ExtractAbilityGrants(
+        IReadOnlyList<string> lines, int bodyStart, int bodyEnd, IReadOnlyDictionary<string, string> aliases)
+    {
+        var result = new List<AbilityGrant>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        int depth = 0;
+        for (int i = bodyStart; i < bodyEnd; i++)
+        {
+            var head = lines[i].TrimStart();
+            if (StartsWithWord(head, "if"))
+            {
+                if (depth == 0)
+                {
+                    var condition = ConditionOf(lines[i]);
+                    var m = AbilityLevelZeroGuard.Match(condition);
+                    if (m.Success && SplitIfChain(lines, i) is { } chain
+                        && chain.Branches.FirstOrDefault(br => br.ConditionLine == i) is { } mine)
+                    {
+                        var rawcode = Resolve(m.Groups["ability"].Value, aliases);
+                        var calls = ExtractCalls(lines, mine.BodyStart, mine.BodyEnd);
+                        if (rawcode is not null && calls.Count > 0 && seen.Add(rawcode))
+                            result.Add(new AbilityGrant(rawcode, m.Groups["unit"].Value, condition, calls));
+                    }
+                }
+                depth++;
+            }
+            else if (StartsWithWord(head, "endif"))
+            {
+                depth--;
+            }
         }
         return result;
     }
@@ -318,6 +468,9 @@ internal static class SynthDispatchBuilder
 
     private static string? CalleeOf(string callStatement) =>
         CalleeName.Match(callStatement) is { Success: true } m ? m.Groups[1].Value : null;
+
+    private static List<string> CalleesOf(IReadOnlyList<string> calls) =>
+        calls.Select(CalleeOf).Where(c => c is not null).Select(c => c!).Distinct(StringComparer.Ordinal).ToList();
 
     private static string? ResolveAbilityRawcode(string condition, IReadOnlyDictionary<string, string> aliases)
     {

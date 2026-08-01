@@ -47,9 +47,13 @@ public static class PreplacedUnitsScript
     /// hero's spells fires twice, once through each path), 9 also stops registering a dispatcher
     /// trigger the target's OWN script already reachably registers for the same event (an arena's
     /// per-player pick-hero flow, a level-up gate), an older build re-registers it too and every
-    /// ability that player casts through it, including a hero we never touched, fires twice.
+    /// ability that player casts through it, including a hero we never touched, fires twice, 10 also
+    /// grants a placed hero its own level up abilities at spawn, the ones an arena's level up handler
+    /// would otherwise only add the first time that hero actually levels up in game, an event a hero
+    /// created and levelled in one shot never fires for, an older build leaves a placed hero missing
+    /// whatever abilities its kit only grants that way.
     /// </summary>
-    public const int GeneratorVersion = 9;
+    public const int GeneratorVersion = 10;
 
     // The begin marker carries the generator version. Detection keys off the PREFIX so blocks
     // written before versioning existed (no "[gen vN]") are still recognised, and read as version 0.
@@ -209,11 +213,15 @@ public static class PreplacedUnitsScript
         // DetectAlreadyLiveSpellTriggers, or WC3 fires it twice for whichever player the map's own
         // path eventually covers, including a hero we never touched.
         var alreadyLiveSpellTriggers = DetectAlreadyLiveSpellTriggers(jass, spellTriggers);
+        // An ability an arena grants only once a hero actually levels up in game (see
+        // SynthDispatchBuilder.ExtractHeroLevelUpGrants) never reaches a PREPLACED hero, CreateAllUnits
+        // creates and levels it in one shot so that event never fires. Grant those at spawn instead.
+        var levelUpGrants = DetectLevelUpGrants(jass, placedHeroes.Select(h => h.Rawcode).Distinct().ToList());
 
         if (spawnable.Count > 0 || items.Count > 0)
         {
             string block = BuildBlock(spawnable, items, nl, heroArrays, spellTriggers, heroSetup, placedHeroes,
-                doerDummy, synthDispatchedHeroes, alreadyLiveSpellTriggers);
+                doerDummy, synthDispatchedHeroes, alreadyLiveSpellTriggers, levelUpGrants);
             jass = InsertBefore(jass, "function main takes nothing returns nothing", block + nl, nl);
         }
 
@@ -233,6 +241,9 @@ public static class PreplacedUnitsScript
             else
                 message += $", declined doer-dummy wiring ({doerCandidates} candidate routines, ambiguous)";
         }
+        int grantedAbilities = levelUpGrants.Values.Sum(g => g.Count);
+        if (grantedAbilities > 0)
+            message += $", plus {grantedAbilities} level up ability grant(s) for {levelUpGrants.Count} hero(es) at spawn";
         return new(true, message, spawnable.Count, items.Count);
     }
 
@@ -420,6 +431,26 @@ public static class PreplacedUnitsScript
     }
 
     /// <summary>
+    /// Every ability each of <paramref name="heroRawcodes"/> grants itself inside its own level up
+    /// guard, see <see cref="SynthDispatchBuilder.ExtractHeroLevelUpGrants"/> for the shape recognised
+    /// and why an unscoped scan for every UnitAddAbility in the script would wrongly hand a hero
+    /// another hero's passive. Reads the TARGET's OWN script, whatever it currently is (an untouched
+    /// map with nothing ported at all, a plain port, or a --synth-dispatch one), the same source every
+    /// other detector in this file reads, so a placed hero gets its own kit's grants regardless of how
+    /// it got onto the map. A hero with no such branch, or whose branch grants nothing in the
+    /// recognised shape, is simply absent from the result, CreateAllUnits emits nothing extra for it.
+    /// </summary>
+    private static Dictionary<string, IReadOnlyList<SynthDispatchBuilder.AbilityGrant>> DetectLevelUpGrants(
+        string jass, IReadOnlyCollection<string> heroRawcodes)
+    {
+        var map = new Dictionary<string, IReadOnlyList<SynthDispatchBuilder.AbilityGrant>>(StringComparer.Ordinal);
+        foreach (var rc in heroRawcodes)
+            if (SynthDispatchBuilder.ExtractHeroLevelUpGrants(jass, rc) is { } grants)
+                map[rc] = grants;
+        return map;
+    }
+
+    /// <summary>
     /// The map's own per-hero setup routine, if it has one. These scripts often carry a single
     /// function shaped <c>takes player p, unit u, integer heroCode</c> that dispatches on the code
     /// (<c>if heroCode == 'H000' then ... elseif ...</c>) and wires that hero up completely, binding
@@ -593,13 +624,16 @@ public static class PreplacedUnitsScript
         IReadOnlyList<HeroArray>? heroArraysOrNull = null, IReadOnlyList<string>? spellTriggersOrNull = null,
         HeroSetup? heroSetup = null, IReadOnlyList<(string Rawcode, int OwnerId)>? placedHeroes = null,
         DoerDummyAssigner? doerDummy = null, IReadOnlySet<string>? synthDispatchedHeroesOrNull = null,
-        IReadOnlySet<string>? alreadyLiveSpellTriggersOrNull = null)
+        IReadOnlySet<string>? alreadyLiveSpellTriggersOrNull = null,
+        IReadOnlyDictionary<string, IReadOnlyList<SynthDispatchBuilder.AbilityGrant>>? levelUpGrantsOrNull = null)
     {
         var heroArrays = heroArraysOrNull ?? Array.Empty<HeroArray>();
         var heroes = placedHeroes ?? Array.Empty<(string Rawcode, int OwnerId)>();
         var spellTriggers = spellTriggersOrNull ?? Array.Empty<string>();
         var alreadyLiveSpellTriggers = alreadyLiveSpellTriggersOrNull ?? new HashSet<string>(StringComparer.Ordinal);
         var synthDispatchedHeroes = synthDispatchedHeroesOrNull ?? new HashSet<string>(StringComparer.Ordinal);
+        var levelUpGrants = levelUpGrantsOrNull
+            ?? new Dictionary<string, IReadOnlyList<SynthDispatchBuilder.AbilityGrant>>(StringComparer.Ordinal);
         // Players that own a placed unit (a placed hero's owner is among them, neutral slots excluded).
         // The arena's spell-dispatch triggers get their spell-effect event registered for these players
         // so a placed hero's casts reach the handlers. This is deferred, not done in CreateAllUnits,
@@ -729,6 +763,20 @@ public static class PreplacedUnitsScript
                 if (u.MP is >= 0 and <= 100)
                     sb.Append("    call SetUnitState(u, UNIT_STATE_MANA, GetUnitState(u, UNIT_STATE_MAX_MANA) * ")
                       .Append(Real(u.MP / 100f)).Append(')').Append(nl);
+                // Abilities this hero's kit only ever grants through a level up event (see Sync and
+                // DetectLevelUpGrants). A preplaced hero is created and levelled in one shot, so that
+                // event never fires for it, grant them here instead. The source's own idempotent guard
+                // is kept verbatim (safe even if the hero also genuinely levels up later), only the
+                // local naming the hero unit is retargeted from the source's onto ours.
+                if (levelUpGrants.TryGetValue(Rawcode(u.TypeId), out var grants))
+                    foreach (var g in grants)
+                    {
+                        sb.Append("    if ").Append(SynthDispatchBuilder.ReplaceIdentifier(g.Condition, g.UnitParam, "u"))
+                          .Append(" then").Append(nl);
+                        foreach (var call in g.Calls)
+                            sb.Append("        ").Append(SynthDispatchBuilder.ReplaceIdentifier(call, g.UnitParam, "u")).Append(nl);
+                        sb.Append("    endif").Append(nl);
+                    }
                 // Best-effort arena integration for a placed hero (see Sync): register it into the
                 // per-player hero array so handlers that test Hero[pid] recognise it. Safe here because
                 // it is a plain global-array write (the array exists from map load), unlike the spell
