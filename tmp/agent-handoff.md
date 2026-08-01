@@ -446,3 +446,48 @@ symptom. Carry that loop function and replay the assignment, same mechanism.
 
 ### Corpus count note
 `Category=Corpus` is 32 in `Wc3.Tests` plus 12 in `Wc3.Studio.Tests`, 44 total. Run both projects.
+
+### NEXT CHANGE, placement double registration, confirmed in game by the user
+
+Published state fixes only HALF of this. `bd44a63` stops a `--synth-dispatch` hero from also
+registering the shared dispatcher. The other half is unfixed and it breaks an UNTOUCHED map.
+
+**Reproduce.** Copy `Anime_WOS2_0.28a2.w3x`, `place unit H028 0 <x> <y>` into it, no porting, no
+flags. Launch. **Every ability player 0 casts fires TWICE, including a hero picked through the map's
+own pick screen that we never touched.** User's words, "it broke the map, like abilities of even
+original wos has 2x cast".
+
+**Cause.** `PreplacedUnitsScript` emits, inside the generated block,
+`TriggerRegisterPlayerUnitEvent(gg_trg_CastCheck, Player(0), EVENT_PLAYER_UNIT_SPELL_EFFECT, null)`.
+Keyed on the PLAYER, not the hero. WOS2 already registers that same trigger for a player inside
+`Trig_LvlUpCheck_Actions`, which runs on every hero level up. Two registrations on one trigger means
+the condition runs twice per cast, so `_Start` runs twice, so each `_Loop` is started twice.
+That is the double damage on R and the leftover pause on T then Q.
+
+**The assumption that is wrong** is written in `DetectPerPlayerSpellTriggers`' own doc comment, "A
+placed hero never triggers that registration" and "Registering an unrelated dispatcher is harmless".
+Neither holds when the target map still has its own live hero flow for that same player.
+
+**Fix shape.** Do not register when the target map ALREADY registers that trigger for that event and
+that player. `TriggerRegisterAnyUnitEventBJ` on the trigger makes ours always redundant. Keep the
+registration for a BLANK target, where nothing else registers it, that is why this wiring exists.
+
+**Verification.** Place into an untouched WOS2 copy with no flags, grep every registration on
+`gg_trg_CastCheck`, ours must be ABSENT and the map's own present. Then port H028 into a fresh 96
+tile map with no flags, ours must be PRESENT. Paste both. Hermetic at or above 930, corpus 44, three
+reference heroes at 0 errors.
+
+### Also open
+- `audit ability` reports 3 of 11 verified on an Asta port where `audit hero` said 8 of 8 ok, so the
+  new command works. Its STATE column flags `gg_rct_Arena`, `gg_rct_Base` and `gg_rct_Caster` as
+  unassigned on every ability, but that run may not have had `--bootstrap-state` on, which assigns
+  exactly those. RERUN the audit with `--synth-dispatch --bootstrap-state` before treating those as
+  real, and if they survive it is a genuine gap in bootstrap-state.
+- `A0DU` and `A0DV` each have an unpause with no matching live pause, a second independent route to a
+  stuck paused hero, separate from the double registration.
+- Asta's F, `A0DR`, still has 2 trimmed lines, no reachable damage call, and its effect asset
+  `wos_krk (1971).mdl` absent from the map.
+- The maps at `Download/1/1`, `Asta WOSBASE.w3x` and `Asta WOSBASE LVL1.w3x`, BOTH carry the
+  duplicate registration, so they double cast regardless of hero level. The level 1 control built to
+  test a SetHeroLevel hypothesis is therefore invalid, and that hypothesis is superseded by this
+  simpler cause.
