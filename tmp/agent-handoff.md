@@ -878,3 +878,41 @@ with `--synth-dispatch --bootstrap-state`, still exactly 127 files copied, the a
 unmoved. `H028`, `H0DA` (`Anime Choice Arena V0.31C.w3x`), `H001` (`GGGA_V0.02d.w3x`, untouched) all
 validate 0 errors with flags off. The delivered map itself, untouched by this fix, still `validate
 --deep` 0 errors 13 warnings and round trips byte faithful.
+
+### New defect found by the supervisor, recorded here per instruction, NOT fixed, code left alone
+
+Diffing the untouched `GGGA_V0.02d.w3x` against the delivered `GGGA Shadow Nanaya.w3x` surfaced a
+class of bug neither this job nor the earlier Nanaya port job flagged.
+
+**Asset collision overwrites the target's own file instead of renaming.** `PortCommand`'s file copy
+step (`PortUnit`, around line 305) only ever warns on a name collision, `"{f.Path} already exists in
+target with different bytes, overwritten"`, then unconditionally calls `target.AddOrReplaceRawFile`
+with the SOURCE's bytes. Six of GGGA's own pre-existing assets got overwritten by ACA's same-named
+versions this way, `Textures\CloudSingle.blp`, `Textures\Clouds8x8Fire.blp`, `Textures\Flare.blp`,
+`Textures\RibbonNE1_White.blp`, `ice-02.blp` and `war3mapImported\Effect-02.mdl`. These are shared
+textures other GGGA heroes render with, so porting one hero into a populated target silently alters
+the visuals of unrelated heroes already on that map. Not silent in the sense of unreported, the
+warning is real and was in the port output, but overwrite is the wrong default behaviour to warn
+about rather than avoid.
+
+The porter already has the right shape for this, just not applied to files. A rawcode collision does
+NOT overwrite the target's existing object, `PortUnit`'s rawcode remap (around line 161) assigns the
+incoming object a fresh id instead and rewrites every in-bundle reference to match. The almost
+certainly correct fix for files is the same move, rename-on-collision (`Foo.blp` becomes something
+like `Foo_ported.blp` or a numbered sibling) when the target already has a same-named file with
+different bytes, rewriting every reference to the renamed path the same way a remapped rawcode
+rewrites its references, rather than overwriting or skipping. Left entirely unfixed and the code
+untouched, this needs its own design and test pass, not a rushed edit riding on an unrelated job.
+
+**Same class, already known and already warned, worth relinking here.** Three buffs, `Broa`, `Bcyc`,
+`BIil`, modify a standard object rather than a custom one, `PortCommand` already emits `"{kind} {id}
+modifies a standard object, it will change that object in the target too"` for each. Same asymmetry,
+an object rawcode collision remaps, a standard-object modification does not and cannot (there is only
+one `Broa` in the whole game), so the warning is the only available mitigation today.
+
+**Over-carry, now confirmed on a real delivery rather than theorised.** The port carried six unrelated
+heroes' icons into GGGA, `BTNMadara`, `BTNNarutoSage`, `BTNGoku_Ssj_2_by_imran_ryo`, `BTNSoulEater`,
+`BTNTrafalgar_Law`, `BTNSogiitaGunha`. This is the already-known over-carry tradeoff recorded earlier
+in this doc (an under-carried file is cosmetic, an under-carried object is broken, so the porter
+deliberately over-carries files and reports it), not a new mechanism, just the first time it was
+actually observed on a map delivered to the user rather than reasoned about from a diagnostic count.
