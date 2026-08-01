@@ -170,6 +170,22 @@ internal static class ScriptPorter
         // trimmed by the loop below, so carrying it can never leave a dangling reference.
         CarryCallbackReferences(carried, allByName, srcLines);
 
+        // Carry the handler behind a plain callback ASSIGNMENT, "set SomeCallback = function X", when
+        // the global being assigned is one the carried script reads. Same-trigger scoping above only
+        // follows a callback handed straight to ForGroupBJ and friends, and a bare assignment is
+        // neither that nor a call, so nothing pulled X in and the whole line got trimmed as a
+        // dropped reference.
+        //
+        // Measured on Anime WOS2 porting Asta. GearSystems' Init does
+        // "set GearTimer03Callback = function GearSystems__GearTimer03Loop" for three timers, and
+        // those Loop functions were referenced NOWHERE else in the map, so all three assignments were
+        // trimmed and the callbacks stayed null. The timers were then created but ticked nothing, and
+        // since the only code that ever calls PauseUnit(u, false) lives in that system (5 pauses, 2
+        // unpauses in a ported script, the unpause inside GearTimer10Acquire), a spell that paused the
+        // caster left it paused forever. That is the "pause bug" the user reported, and it is the same
+        // Shape B family, an assignment present in the text but dead at runtime.
+        CarryCallbackAssignmentTargets(carried, allByName, srcLines);
+
         var residual = new HashSet<string>(StringComparer.Ordinal);
         Dictionary<string, string> bodies;
         for (int guard = 0; ; guard++)
@@ -847,6 +863,47 @@ internal static class ScriptPorter
     /// and why the same-trigger scope is required (an unscoped walk follows shared event systems into
     /// every other hero's callbacks).
     /// </summary>
+    /// <summary>
+    /// Carries the handler behind a plain callback ASSIGNMENT, <c>set SomeCallback = function X</c>,
+    /// whenever the assigned global is one the carried script actually reads. A bare assignment is
+    /// neither a call nor a callback handed to a native, so
+    /// <see cref="CarryCallbackReferences"/>'s same-trigger walk cannot see it, and if X is named
+    /// nowhere else the whole line gets trimmed and the global stays null.
+    ///
+    /// Scoped by the ASSIGNED GLOBAL being read by carried code, which is what keeps this from
+    /// becoming the unscoped "follow every function reference" walk that dragged 2446 foreign
+    /// functions in when it was tried. A callback nobody reads is still ignored.
+    /// </summary>
+    private static void CarryCallbackAssignmentTargets(
+        HashSet<string> carried, IReadOnlyDictionary<string, JassFunction> allByName, string[] srcLines)
+    {
+        var assign = new Regex(
+            @"^\s*set\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*function\s+([A-Za-z_][A-Za-z0-9_]*)\s*$",
+            RegexOptions.Compiled);
+
+        for (int guard = 0; guard <= allByName.Count; guard++)
+        {
+            // Globals the carried bodies mention, recomputed each pass because carrying a handler can
+            // introduce reads of further callback globals.
+            var readNames = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var name in carried.Where(allByName.ContainsKey))
+                foreach (Match m in Ident.Matches(BodyText(srcLines, allByName[name])))
+                    readNames.Add(m.Value);
+
+            bool grew = false;
+            foreach (var f in allByName.Values)
+                foreach (var line in BodyText(srcLines, f).Split('\n'))
+                {
+                    var m = assign.Match(StripComment(line));
+                    if (!m.Success) continue;
+                    if (!readNames.Contains(m.Groups[1].Value)) continue;   // nobody reads it, skip
+                    var handler = m.Groups[2].Value;
+                    if (allByName.ContainsKey(handler) && carried.Add(handler)) grew = true;
+                }
+            if (!grew) return;
+        }
+    }
+
     private static void CarryCallbackReferences(
         HashSet<string> carried, IReadOnlyDictionary<string, JassFunction> allByName, string[] srcLines)
     {
