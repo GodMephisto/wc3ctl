@@ -874,6 +874,24 @@ internal static class ScriptPorter
     /// becoming the unscoped "follow every function reference" walk that dragged 2446 foreign
     /// functions in when it was tried. A callback nobody reads is still ignored.
     /// </summary>
+    /// <summary><paramref name="root"/> plus every script-declared function reachable from it by a
+    /// call or a callback reference. Used only for an engine invoked entry point, where an un-carried
+    /// callee would be trimmed out of the body and silently gut it.</summary>
+    private static IEnumerable<string> CallClosure(
+        string root, IReadOnlyDictionary<string, JassFunction> allByName, string[] srcLines)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal) { root };
+        var queue = new Queue<string>();
+        queue.Enqueue(root);
+        while (queue.Count > 0)
+        {
+            if (!allByName.TryGetValue(queue.Dequeue(), out var fn)) continue;
+            foreach (var name in ReferencedNames(BodyText(srcLines, fn)))
+                if (allByName.ContainsKey(name) && seen.Add(name)) queue.Enqueue(name);
+        }
+        return seen;
+    }
+
     private static void CarryCallbackAssignmentTargets(
         HashSet<string> carried, IReadOnlyDictionary<string, JassFunction> allByName, string[] srcLines)
     {
@@ -898,7 +916,17 @@ internal static class ScriptPorter
                     if (!m.Success) continue;
                     if (!readNames.Contains(m.Groups[1].Value)) continue;   // nobody reads it, skip
                     var handler = m.Groups[2].Value;
-                    if (allByName.ContainsKey(handler) && carried.Add(handler)) grew = true;
+                    if (!allByName.ContainsKey(handler)) continue;
+                    // The handler AND everything it calls, transitively. A callback is an entry point
+                    // the ENGINE invokes, so unlike an ordinary carried body there is no caller whose
+                    // trimmed line would harmlessly skip it. Carrying the entry point alone let the
+                    // trim comment out its whole body, measured on Anime WOS2 where
+                    // GearSystems__GearTimer03Loop arrived with all 20 of its
+                    // "call s__GearSystems__KS_*_Loop*()" statements trimmed, including the knockback
+                    // position write, the effect travel, and the scale and colour animations. The timer
+                    // then ticked and did nothing, which is indistinguishable from never ticking.
+                    foreach (var n in CallClosure(handler, allByName, srcLines))
+                        if (carried.Add(n)) grew = true;
                 }
             if (!grew) return;
         }

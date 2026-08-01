@@ -28,6 +28,23 @@ public sealed record PjassResult(
 /// </summary>
 public static class PjassGate
 {
+    /// <summary>
+    /// Natives that genuinely exist in the running game but are missing from the <c>common.j</c>
+    /// pjass validates against, so pjass reports "Undeclared function" for code that runs fine.
+    /// <c>UnitAlive</c> is the canonical case, present since 1.24 and in Reforged, absent from the
+    /// shipped declarations. Treating these as fatal would fail a map the game loads happily, and it
+    /// blocked a real fix, carrying a timer loop's callees pulled in a function using UnitAlive and
+    /// turned a working hero's port INVALID over a native that is not actually missing.
+    ///
+    /// Deliberately a tiny, named list. Anything not on it stays fatal, because a genuinely
+    /// undeclared function IS a compile error and that is the whole point of this gate.
+    /// </summary>
+    private static readonly string[] KnownRealNatives = { "UnitAlive", "BlzGetUnitZ" };
+
+    private static bool RealButUndeclaredNative(string line) =>
+        line.Contains("Undeclared function", StringComparison.OrdinalIgnoreCase)
+        && KnownRealNatives.Any(n => line.Contains(n, StringComparison.Ordinal));
+
     /// <summary>Where the toolchain sits, relative to the install root, newest layout first.</summary>
     private static readonly string[] PjassRelativePaths =
     {
@@ -115,7 +132,8 @@ public static class PjassGate
             // at its type default. Only the genuinely fatal diagnostics decide the verdict.
             bool IsAdvisory(string line) =>
                 line.Contains("is uninitialized", StringComparison.OrdinalIgnoreCase)
-                || line.Contains("failed with", StringComparison.OrdinalIgnoreCase);
+                || line.Contains("failed with", StringComparison.OrdinalIgnoreCase)
+                || RealButUndeclaredNative(line);
 
             var errors = mine.Where(l => !IsAdvisory(l)).Take(50).ToList();
             var warnings = mine.Where(IsAdvisory)
