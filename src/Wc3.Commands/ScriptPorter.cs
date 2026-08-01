@@ -29,6 +29,47 @@ internal static class ScriptPorter
         new(@"ExecuteFunc\s*\(\s*""([A-Za-z_][A-Za-z0-9_]*)""\s*\)", RegexOptions.Compiled);
     private static readonly Regex Rawcode = new(@"'(\\?.|[^'\\]{1,4})'", RegexOptions.Compiled);
 
+    /// <summary>A JASS local declaration, "local &lt;type&gt; [array] &lt;name&gt;[= expr]", the name
+    /// captured for <see cref="RenameLocalsCollidingWithGlobalScope"/>.</summary>
+    private static readonly Regex LocalDeclLine = new(
+        @"^\s*local\s+[A-Za-z_][A-Za-z0-9_]*\s+(?:array\s+)?(?<name>[A-Za-z_][A-Za-z0-9_]*)\b",
+        RegexOptions.Compiled | RegexOptions.Multiline);
+
+    /// <summary>A function signature's parameter list, "takes T1 n1, T2 n2, ... returns X" (or
+    /// "takes nothing"), for the same rename pass. Multiline so it also finds every signature line
+    /// anywhere in a WHOLE script's text (<see cref="AllLocalAndParamNames"/>), not only one
+    /// anchored at the very start of a single function's own extracted text.</summary>
+    private static readonly Regex ParamList = new(
+        @"^\s*(?:constant\s+)?function\s+\S+\s+takes\s+(?<params>.*?)\s+returns\b",
+        RegexOptions.Compiled | RegexOptions.Multiline);
+
+    /// <summary>Every parameter name in a "T1 n1, T2 n2, ..." list (as captured by
+    /// <see cref="ParamList"/>'s "params" group), empty for a bare "nothing".</summary>
+    private static IEnumerable<string> ParamNames(string paramList)
+    {
+        paramList = paramList.Trim();
+        if (string.Equals(paramList, "nothing", StringComparison.Ordinal)) yield break;
+        foreach (var p in paramList.Split(','))
+        {
+            var tokens = p.Trim().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+            if (tokens.Length > 0) yield return tokens[^1];
+        }
+    }
+
+    /// <summary>Every local (or function parameter) name declared ANYWHERE in <paramref name="jass"/>.
+    /// A function's own locals are otherwise invisible to a top-level symbol scan (<see
+    /// cref="JassFunctionIndex"/>/<see cref="JassGlobals"/> only see globals and function NAMES),
+    /// yet a JASS local may not share a name with a global, so a carried global whose name happens
+    /// to already be some unrelated function's local in a large existing script must still count as
+    /// taken. See the doc comment where this feeds into <c>taken</c> (the ordinary carried
+    /// global/function rename pass) for the real case this was written for.</summary>
+    private static IEnumerable<string> AllLocalAndParamNames(string jass)
+    {
+        foreach (Match m in LocalDeclLine.Matches(jass)) yield return m.Groups["name"].Value;
+        foreach (Match m in ParamList.Matches(jass))
+            foreach (var name in ParamNames(m.Groups["params"].Value)) yield return name;
+    }
+
     /// <summary>Byte-faithful codec (Latin1 is a bijection on all 256 byte values), so decoding
     /// then re-encoding war3map.j preserves a legacy-codepage target's bytes exactly.</summary>
     private static readonly Encoding ByteText = Encoding.Latin1;
@@ -283,24 +324,65 @@ internal static class ScriptPorter
                 + "condition or return inside the map's own global initializer and were left in "
                 + $"place, verify the ported map ({string.Join(", ", residualGlobalRefs.Take(8))}).");
 
-        // Symbols the target already defines (functions + its own globals).
+        // Symbols the target already defines (functions + its own globals), PLUS every local (or
+        // parameter) name declared ANYWHERE in the target's own existing functions. A JASS local
+        // may not share a name with any global, and that rule runs in both directions: a carried
+        // GLOBAL whose name happens to already be some unrelated TARGET function's own local is
+        // just as fatal as the reverse (see RenameLocalsCollidingWithGlobalScope below), but the
+        // target's own locals are otherwise invisible here, JassFunctionIndex/JassGlobals only see
+        // top-level globals and function NAMES, never what a function declares inside itself. Real
+        // case: Anime Choice Arena's own "string s=null" / "texttag txt=null" (a shared tooltip
+        // helper's globals) carried as-is into GGGA, which never declares a top-level "s" or "txt"
+        // itself, so the ordinary collision check below saw no problem, yet GGGA's OWN (untouched)
+        // ShieldDeduction has "local integer array s" and RPB_CreateClassHelp has "local string
+        // array txt", so the carried globals landed right on top of two unrelated locals anyway.
         var targetSymbols = JassFunctionIndex.Parse(tgtJ).Select(f => f.Name).ToHashSet(StringComparer.Ordinal);
         foreach (var g in ParseGlobals(tgtJ.Replace("\r\n", "\n").Split('\n')).Item1.Keys) targetSymbols.Add(g);
 
-        // Rename any carried symbol that collides with the target (or with common.j-ish
-        // reserved names we can't see); rewrite references within the ported block only.
+        // Rename any carried symbol that collides with the target (or with common.j-ish reserved
+        // names we can't see, OR with a name the target uses only as some unrelated function's own
+        // local, see the collision-avoidance set built just below); rewrite references within the
+        // ported block only.
         var rename = new Dictionary<string, string>(StringComparer.Ordinal);
         var carriedSymbols = srcFns.Select(f => f.Name).Concat(carriedGlobals)
             .Concat(globalInitBodies.Keys).ToList();
+
+        // What a freshly carried GLOBAL or FUNCTION must avoid: the target's own top-level names,
+        // PLUS every local (or parameter) name declared ANYWHERE in the target's own existing
+        // functions. A JASS local may not share a name with any global, so a carried global whose
+        // name happens to already be some unrelated TARGET function's own local is just as fatal as
+        // the reverse (see RenameLocalsCollidingWithGlobalScope below), but the target's own locals
+        // are otherwise invisible here, JassFunctionIndex/JassGlobals only see top-level globals and
+        // function NAMES, never what a function declares inside itself. Real case: Anime Choice
+        // Arena's own "string s=null" / "texttag txt=null" (a shared tooltip helper's globals)
+        // carried as-is into GGGA, which never declares a top-level "s" or "txt" itself, so the
+        // ordinary collision check here saw no problem before this was added, yet GGGA's OWN
+        // (untouched) ShieldDeduction has "local integer array s" and RPB_CreateClassHelp has
+        // "local string array txt", so the carried globals landed right on top of two unrelated
+        // locals anyway. Deliberately a SEPARATE, wider set from targetGlobalScope below: two
+        // different functions' own locals never actually collide with EACH OTHER in real JASS
+        // (locals are function scoped), only with something that is genuinely global, so this
+        // wider set decides what a fresh carried GLOBAL/FUNCTION name must avoid, never what a
+        // carried LOCAL must avoid, that would rename far more than necessary.
         var taken = new HashSet<string>(targetSymbols, StringComparer.Ordinal);
+        foreach (var n in AllLocalAndParamNames(tgtJ)) taken.Add(n);
+
+        // What a carried LOCAL must avoid: only names that are genuinely GLOBAL (or a function) in
+        // the FINAL merged script, the target's own top-level names, plus every carried symbol
+        // under its FINAL, post-rename name, built alongside the loop below. Unlike taken above,
+        // this deliberately excludes the target's buried locals, an unrelated function's own local
+        // sharing our carried local's name is not a conflict.
+        var targetGlobalScope = new HashSet<string>(targetSymbols, StringComparer.Ordinal);
+
         foreach (var name in carriedSymbols)
         {
-            if (!taken.Contains(name)) { taken.Add(name); continue; }
+            if (!taken.Contains(name)) { taken.Add(name); targetGlobalScope.Add(name); continue; }
             string fresh = name;
             int n = 1;
             while (taken.Contains(fresh)) fresh = $"{name}_p{n++}";
             rename[name] = fresh;
             taken.Add(fresh);
+            targetGlobalScope.Add(fresh);
         }
 
         string Rewrite(string code) => RewriteRawcodes(ApplyRenames(code, rename, carriedSymbols), codeRemap);
@@ -315,6 +397,11 @@ internal static class ScriptPorter
             synthDispatchFn = UniqueName(baseName, taken);
             synthInitFn = UniqueName(baseName + "Init", taken);
             synthTriggerGlobal = UniqueName("gg_trg_" + baseName, taken);
+            // Each is a genuine new global-scope name (a function or a trigger global), so a
+            // carried LOCAL must avoid it too, same as any other real symbol in the final script.
+            targetGlobalScope.Add(synthDispatchFn);
+            targetGlobalScope.Add(synthInitFn);
+            targetGlobalScope.Add(synthTriggerGlobal);
         }
 
         // Build the ported globals + functions text.
@@ -326,9 +413,9 @@ internal static class ScriptPorter
 
         var portedFns = new StringBuilder();
         foreach (var f in srcFns)
-            portedFns.Append(Rewrite(bodies[f.Name])).Append('\n');
+            portedFns.Append(Rewrite(RenameLocalsCollidingWithGlobalScope(bodies[f.Name], targetGlobalScope))).Append('\n');
         foreach (var name in globalInitBodies.Keys)
-            portedFns.Append(Rewrite(globalInitBodies[name])).Append('\n');
+            portedFns.Append(Rewrite(RenameLocalsCollidingWithGlobalScope(globalInitBodies[name], targetGlobalScope))).Append('\n');
 
         // The synthesized dispatcher's function bodies: built from the hero's own extracted
         // branches, run through the exact same Trim discipline as every other carried body (so a
@@ -343,7 +430,7 @@ internal static class ScriptPorter
             var synthResidual = new HashSet<string>(StringComparer.Ordinal);
             raw = Trim(raw, finalDropped, synthResidual);
             int synthTrimmed = CountTrimMarkers(raw);
-            portedFns.Append(Rewrite(raw)).Append('\n');
+            portedFns.Append(Rewrite(RenameLocalsCollidingWithGlobalScope(raw, targetGlobalScope))).Append('\n');
             notes.Add($"synthesized {synthDispatchFn}(), a fresh minimal cast dispatcher for {markerLabel} "
                 + $"covering {synthBranches.Count} ability branch(es) read from the source's own per-hero "
                 + "dispatch section, wired through its own trigger (any-unit spell-effect event) so it "
@@ -437,6 +524,7 @@ internal static class ScriptPorter
             {
                 string bootstrapFn = UniqueName(
                     "wc3ctl_BootstrapState_" + SynthDispatchBuilder.SanitizeIdentifier(markerLabel), taken);
+                targetGlobalScope.Add(bootstrapFn);
                 portedFns.Append(BootstrapStateBuilder.BuildRawText(bootstrapFn, constructible)).Append('\n');
                 bootstrapFnToHook = bootstrapFn;
                 notes.Add($"synthesized {bootstrapFn}(), constructing {constructible.Count} global(s) that "
@@ -1414,6 +1502,42 @@ internal static class ScriptPorter
     {
         if (rename.Count == 0) return code;
         return Ident.Replace(code, m => rename.TryGetValue(m.Value, out var r) ? r : m.Value);
+    }
+
+    /// <summary>A JASS local (or a function's own parameter) may not share a name with any global
+    /// variable or function already declared in the FINAL merged script — a plain language rule
+    /// that never bites on the source map itself (a local obviously never collides with its OWN
+    /// map's globals) but can bite the moment the same carried body lands next to an unrelated
+    /// target map's own, independently authored globals. Common short local names (s, txt, i, id)
+    /// are exactly the ones likely to coincide on a large, unrelated arena. <paramref name="taken"/>
+    /// is the same collision-avoidance set the ordinary symbol rename above finished with (the
+    /// target's own symbols, plus every carried symbol under its FINAL, post-rename name), so this
+    /// runs strictly after that pass, catching what it cannot see (a local is never a "carried
+    /// symbol", it does not appear in <c>srcFns</c>/<c>carriedGlobals</c> at all).
+    ///
+    /// Renamed per function: a local is function scoped, so two different carried functions that
+    /// each need the same fresh name never conflict with EACH OTHER, only with <paramref
+    /// name="taken"/>, which this also adds every fresh name to, so a later function's own
+    /// collision never picks a name an earlier function's rename already claimed.
+    /// </summary>
+    private static string RenameLocalsCollidingWithGlobalScope(string functionText, HashSet<string> taken)
+    {
+        var names = new List<string>();
+        foreach (Match m in LocalDeclLine.Matches(functionText)) names.Add(m.Groups["name"].Value);
+        var sig = ParamList.Match(functionText);
+        if (sig.Success) names.AddRange(ParamNames(sig.Groups["params"].Value));
+
+        string result = functionText;
+        foreach (var name in names.Distinct(StringComparer.Ordinal))
+        {
+            if (!taken.Contains(name)) continue;
+            string fresh = name + "_l";
+            int n = 1;
+            while (taken.Contains(fresh)) fresh = $"{name}_l{n++}";
+            taken.Add(fresh);
+            result = SynthDispatchBuilder.ReplaceIdentifier(result, name, fresh);
+        }
+        return result;
     }
 
     private static string RewriteRawcodes(string code, IReadOnlyDictionary<string, string> remap)

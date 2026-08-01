@@ -31,15 +31,6 @@ internal static class SynthDispatchBuilder
     /// (invisible to a plain call-graph walk) is still carried.</summary>
     public sealed record CastBranch(string AbilityRawcode, IReadOnlyList<string> Calls, IReadOnlyList<string> Callees);
 
-    private static readonly Regex HeroGuardEq = new(
-        @"GetUnitTypeId\s*\([^)]*\)\s*==\s*(?<tokA>'[^']{4}'|[A-Za-z_][A-Za-z0-9_]*)"
-        + @"|(?<tokB>'[^']{4}'|[A-Za-z_][A-Za-z0-9_]*)\s*==\s*GetUnitTypeId\s*\([^)]*\)",
-        RegexOptions.Compiled);
-
-    private static readonly Regex TokenEq = new(
-        @"(?<a>'[^']{4}'|[A-Za-z_][A-Za-z0-9_]*)\s*==\s*(?<b>'[^']{4}'|[A-Za-z_][A-Za-z0-9_]*)",
-        RegexOptions.Compiled);
-
     private static readonly Regex CalleeName = new(
         @"^call\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(", RegexOptions.Compiled);
 
@@ -290,33 +281,33 @@ internal static class SynthDispatchBuilder
     }
 
     /// <summary>Whether <paramref name="condition"/> is <paramref name="heroRawcode"/>'s own hero
-    /// check, either the literal shape a cast dispatcher's guard usually compiles to
-    /// (<c>GetUnitTypeId(...) == HeroId</c>), or <c>HeroId == id</c> where <c>id</c> is a LOCAL the
-    /// enclosing function assigned from <c>GetUnitTypeId</c> earlier (the shape a handler that already
-    /// holds the unit type in a local compiles to, since it has no reason to call GetUnitTypeId a
-    /// second time inline, a level up handler being the case this was written for).</summary>
+    /// check, either the shape a cast dispatcher's guard usually compiles to
+    /// (<c>GetUnitTypeId(...) == HeroId</c>, the "..." a bare local the map cached the caster into,
+    /// as Anime_WOS2 writes it, OR the accessor called inline with no caching local at all,
+    /// <c>GetUnitTypeId(GetSpellAbilityUnit()) == HeroId</c>, as Anime Choice Arena writes it), or
+    /// <c>HeroId == id</c> where <c>id</c> is a LOCAL the enclosing function assigned from
+    /// <c>GetUnitTypeId</c> earlier (the shape a handler that already holds the unit type in a local
+    /// compiles to, since it has no reason to call GetUnitTypeId a second time inline, a level up
+    /// handler being the case this was written for).</summary>
     private static bool ConditionNamesHero(
         string condition, string heroRawcode, IReadOnlyDictionary<string, string> aliases,
         IReadOnlyList<string> lines, int funcStart, int funcEnd)
     {
-        if (condition.Contains("GetUnitTypeId", StringComparison.Ordinal))
-        {
-            var m = HeroGuardEq.Match(condition);
-            if (m.Success)
-            {
-                var tok = m.Groups["tokA"].Success ? m.Groups["tokA"].Value : m.Groups["tokB"].Value;
-                if (string.Equals(Resolve(tok, aliases), heroRawcode, StringComparison.Ordinal)) return true;
-            }
-        }
+        if (SplitTopLevelEquality(condition) is not { } eq) return false;
 
-        foreach (Match m in TokenEq.Matches(condition))
-        {
-            string a = m.Groups["a"].Value, b = m.Groups["b"].Value;
-            string? other = string.Equals(Resolve(a, aliases), heroRawcode, StringComparison.Ordinal) ? b
-                : string.Equals(Resolve(b, aliases), heroRawcode, StringComparison.Ordinal) ? a : null;
-            if (other is not null && IsLocalFromGetUnitTypeId(other, lines, funcStart, funcEnd)) return true;
-        }
-        return false;
+        // Either side may itself be a call (GetUnitTypeId(...), or the inner accessor it wraps),
+        // never just a bare token, so this checks for the SUBSTRING rather than trying to resolve
+        // the operand as a whole the way the ability-rawcode and local-alias checks below do.
+        if (eq.Left.Contains("GetUnitTypeId", StringComparison.Ordinal)
+            && string.Equals(Resolve(eq.Right, aliases), heroRawcode, StringComparison.Ordinal))
+            return true;
+        if (eq.Right.Contains("GetUnitTypeId", StringComparison.Ordinal)
+            && string.Equals(Resolve(eq.Left, aliases), heroRawcode, StringComparison.Ordinal))
+            return true;
+
+        string? other = string.Equals(Resolve(eq.Left, aliases), heroRawcode, StringComparison.Ordinal) ? eq.Right
+            : string.Equals(Resolve(eq.Right, aliases), heroRawcode, StringComparison.Ordinal) ? eq.Left : null;
+        return other is not null && IsLocalFromGetUnitTypeId(other, lines, funcStart, funcEnd);
     }
 
     /// <summary>Whether <paramref name="name"/> is a local in [<paramref name="funcStart"/>,
@@ -474,13 +465,33 @@ internal static class SynthDispatchBuilder
 
     private static string? ResolveAbilityRawcode(string condition, IReadOnlyDictionary<string, string> aliases)
     {
-        var m = TokenEq.Match(condition);
-        if (!m.Success) return null;
-        return Resolve(m.Groups["a"].Value, aliases) ?? Resolve(m.Groups["b"].Value, aliases);
+        if (SplitTopLevelEquality(condition) is not { } eq) return null;
+        return Resolve(eq.Left, aliases) ?? Resolve(eq.Right, aliases);
     }
 
     private static string? Resolve(string token, IReadOnlyDictionary<string, string> aliases) =>
         token.Length == 6 && token[0] == '\'' ? token[1..^1] : aliases.GetValueOrDefault(token);
+
+    /// <summary>Splits <paramref name="condition"/> at the first "==" that sits OUTSIDE every pair
+    /// of parentheses (never inside one, however deeply nested), so a call-expression operand like
+    /// <c>GetUnitTypeId(GetSpellAbilityUnit())</c> is returned whole rather than being cut apart at
+    /// its own inner parens. Trimmed on both sides. Null when the condition has no top-level "=="
+    /// at all, a compound guard joining more than one comparison with "and"/"or" is a different
+    /// shape this deliberately does not resolve, same scope limit the codebase's callers already
+    /// document (see <see cref="ConditionNamesHero"/>).</summary>
+    private static (string Left, string Right)? SplitTopLevelEquality(string condition)
+    {
+        int depth = 0;
+        for (int i = 0; i < condition.Length - 1; i++)
+        {
+            char c = condition[i];
+            if (c == '(') depth++;
+            else if (c == ')') depth--;
+            else if (depth == 0 && c == '=' && condition[i + 1] == '=')
+                return (condition[..i].Trim(), condition[(i + 2)..].Trim());
+        }
+        return null;
+    }
 
     // ---- generic if/elseif/else/endif splitting ----------------------------------------------
 

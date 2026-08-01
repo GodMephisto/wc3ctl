@@ -437,6 +437,139 @@ endfunction
         Assert.False(HasActiveCall(j, "NatsuFn"), "the other hero's call must be commented out, not live");
     }
 
+    [Fact]
+    public void A_carried_locals_name_that_collides_with_the_targets_own_global_is_renamed()
+    {
+        // Real case found porting Anime Choice Arena's H0DA into GGGA: a carried handler declares
+        // "local integer array s", entirely fine on the SOURCE map, where nothing else is named
+        // "s". JASS forbids a local sharing a name with ANY global, and the ordinary symbol rename
+        // pass only ever renames a CARRIED symbol against a collision, a local is not one of those,
+        // it never appears in the carried function/global lists at all, so it was never considered.
+        // The target here independently declares its own unrelated global "s", exactly the shape
+        // that turned into "Symbol s already defined as global variable" on the real corpus map.
+        var w3u = new UnitObjectData(ObjectDataFormatVersion.v2);
+        var hero = new SimpleObjectModification { OldId = "Hpal".FromRawcode(), NewId = "H000".FromRawcode() };
+        hero.Modifications.Add(new SimpleObjectDataModification
+        { Id = "uhab".FromRawcode(), Type = ObjectDataType.String, Value = "A000" });
+        w3u.NewUnits.Add(hero);
+        var w3a = new AbilityObjectData(ObjectDataFormatVersion.v2);
+        w3a.NewAbilities.Add(new LevelObjectModification { OldId = "ANcl".FromRawcode(), NewId = "A000".FromRawcode() });
+
+        const string srcJass =
+            "function Trig_RaidenQ_Actions takes nothing returns nothing\n" +
+            "    local integer array s\n" +
+            "    set s[0]= 1\n" +
+            "    if GetSpellAbilityId() == 'A000' then\n" +
+            "        call KillUnit(GetTriggerUnit())\n" +
+            "    endif\n" +
+            "endfunction\n" +
+            "function InitTrig_RaidenQ takes nothing returns nothing\n" +
+            "    call TriggerAddAction(CreateTrigger(), function Trig_RaidenQ_Actions)\n" +
+            "endfunction\n";
+        var source = MapDocument.Load(SyntheticMap.Build(new Dictionary<string, byte[]>
+        {
+            ["war3map.w3u"] = Ser(w => w.Write(w3u)),
+            ["war3map.w3a"] = Ser(w => w.Write(w3a)),
+            ["war3map.j"] = Encoding.UTF8.GetBytes(srcJass),
+        }));
+
+        const string targetJass =
+            "globals\n" +
+            "    integer s= 0\n" +
+            "endglobals\n" +
+            "function InitCustomTriggers takes nothing returns nothing\n" +
+            "endfunction\n" +
+            "function main takes nothing returns nothing\n" +
+            "    call InitCustomTriggers()\n" +
+            "endfunction\n";
+        var target = MapDocument.Load(SyntheticMap.Build(new Dictionary<string, byte[]>
+        {
+            ["war3map.w3u"] = Ser(w => w.Write(new UnitObjectData(ObjectDataFormatVersion.v2))),
+            ["war3map.j"] = Encoding.UTF8.GetBytes(targetJass),
+        }));
+
+        var bundle = BundleCommand.ResolveUnit(source, "H000", gameDirOverride: null);
+        PortCommand.PortUnit(source, bundle, target);
+        var j = Encoding.Latin1.GetString(MapDocument.Load(target.SaveToBytes()).GetFile("war3map.j")!.RawBytes);
+
+        // The target's own global is untouched, ours (never theirs) gets renamed.
+        Assert.Contains("integer s= 0", j);
+        Assert.DoesNotContain("local integer array s\n", j);
+        Assert.Contains("local integer array s_l", j);
+        // Every reference to the carried local inside its own function follows the rename too.
+        Assert.Contains("set s_l[0]= 1", j);
+    }
+
+    [Fact]
+    public void A_carried_globals_name_that_collides_with_the_targets_own_buried_local_is_renamed()
+    {
+        // The opposite direction, and the one the real corpus map actually hit: Anime Choice
+        // Arena's own "string s=null" (a shared tooltip helper's global) carried as-is into GGGA.
+        // GGGA never declares a top-level "s" or "txt" itself, so the ordinary target-symbol scan
+        // (function names + globals only) saw no collision, yet GGGA's own UNTOUCHED
+        // ShieldDeduction has "local integer array s" three hundred thousand lines away, entirely
+        // unrelated to this hero. A function's own locals are invisible to a top-level symbol scan,
+        // so the carried global sailed through unrenamed and landed right on top of it, "Symbol s
+        // already defined as global variable" the moment pjass saw the whole merged script.
+        var w3u = new UnitObjectData(ObjectDataFormatVersion.v2);
+        var hero = new SimpleObjectModification { OldId = "Hpal".FromRawcode(), NewId = "H000".FromRawcode() };
+        hero.Modifications.Add(new SimpleObjectDataModification
+        { Id = "uhab".FromRawcode(), Type = ObjectDataType.String, Value = "A000" });
+        w3u.NewUnits.Add(hero);
+        var w3a = new AbilityObjectData(ObjectDataFormatVersion.v2);
+        w3a.NewAbilities.Add(new LevelObjectModification { OldId = "ANcl".FromRawcode(), NewId = "A000".FromRawcode() });
+
+        const string srcJass =
+            "globals\n" +
+            "    string s= null\n" +
+            "endglobals\n" +
+            "function Trig_RaidenQ_Actions takes nothing returns nothing\n" +
+            "    if GetSpellAbilityId() == 'A000' then\n" +
+            "        set s= \"hit\"\n" +
+            "        call BJDebugMsg(s)\n" +
+            "    endif\n" +
+            "endfunction\n" +
+            "function InitTrig_RaidenQ takes nothing returns nothing\n" +
+            "    call TriggerAddAction(CreateTrigger(), function Trig_RaidenQ_Actions)\n" +
+            "endfunction\n";
+        var source = MapDocument.Load(SyntheticMap.Build(new Dictionary<string, byte[]>
+        {
+            ["war3map.w3u"] = Ser(w => w.Write(w3u)),
+            ["war3map.w3a"] = Ser(w => w.Write(w3a)),
+            ["war3map.j"] = Encoding.UTF8.GetBytes(srcJass),
+        }));
+
+        // Target: an unrelated map with no top-level "s" at all, only a DIFFERENT, unrelated
+        // function that happens to use "s" as its own local.
+        const string targetJass =
+            "function ShieldDeduction takes nothing returns nothing\n" +
+            "    local integer array s\n" +
+            "    set s[0]= 1\n" +
+            "endfunction\n" +
+            "function InitCustomTriggers takes nothing returns nothing\n" +
+            "endfunction\n" +
+            "function main takes nothing returns nothing\n" +
+            "    call InitCustomTriggers()\n" +
+            "endfunction\n";
+        var target = MapDocument.Load(SyntheticMap.Build(new Dictionary<string, byte[]>
+        {
+            ["war3map.w3u"] = Ser(w => w.Write(new UnitObjectData(ObjectDataFormatVersion.v2))),
+            ["war3map.j"] = Encoding.UTF8.GetBytes(targetJass),
+        }));
+
+        var bundle = BundleCommand.ResolveUnit(source, "H000", gameDirOverride: null);
+        PortCommand.PortUnit(source, bundle, target);
+        var j = Encoding.Latin1.GetString(MapDocument.Load(target.SaveToBytes()).GetFile("war3map.j")!.RawBytes);
+
+        // The target's own local is untouched, ours (never theirs) gets renamed.
+        Assert.Contains("local integer array s\n", j);
+        Assert.Contains("set s[0]= 1", j);
+        Assert.DoesNotContain("string s= null", j);
+        Assert.Contains("string s_p1= null", j);
+        Assert.Contains("set s_p1= \"hit\"", j);
+        Assert.Contains("call BJDebugMsg(s_p1)", j);
+    }
+
     // Source whose spell handler reads only DPS. DPS's initializer reads TICK, so TICK must
     // be carried too or the ported war3map.j references an undeclared name and fails to
     // compile. udg_UnusedRate is referenced by nothing carried and must stay out.
