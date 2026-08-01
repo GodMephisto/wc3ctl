@@ -899,6 +899,17 @@ internal static class ScriptPorter
             @"^\s*set\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*function\s+([A-Za-z_][A-Za-z0-9_]*)\s*$",
             RegexOptions.Compiled);
 
+        // A periodic callback handed straight to TimerStart, the other way an engine invoked entry
+        // point is registered. Measured on Anime WOS2, every one of Asta's follow up abilities does
+        // TimerStart(t, 0.03, true, function ..._Loop_AstaQ2) inside its own _Start, and none of those
+        // Loop handlers was named anywhere else, so nothing carried them and the whole TimerStart line
+        // was trimmed. The follow up then unlocks (the ability grant is synchronous) while the loop
+        // that moves it, applies its damage and reverts it never runs. That is exactly the reported
+        // "some skills have another ability when cast, and those are bugged" plus the missing damage.
+        // Scoped to the hero's ALREADY CARRIED bodies, so this cannot wander into other heroes.
+        var timerCallback = new Regex(
+            @"\bTimerStart\s*\([^)]*?\bfunction\s+([A-Za-z_][A-Za-z0-9_]*)", RegexOptions.Compiled);
+
         for (int guard = 0; guard <= allByName.Count; guard++)
         {
             // Globals the carried bodies mention, recomputed each pass because carrying a handler can
@@ -909,6 +920,18 @@ internal static class ScriptPorter
                     readNames.Add(m.Value);
 
             bool grew = false;
+
+            // TimerStart callbacks, read only out of bodies ALREADY carried, so the scope stays this
+            // hero's own code rather than every timer in the map.
+            foreach (var name in carried.Where(allByName.ContainsKey).ToList())
+                foreach (Match m in timerCallback.Matches(BodyText(srcLines, allByName[name])))
+                {
+                    var cb = m.Groups[1].Value;
+                    if (!allByName.ContainsKey(cb)) continue;
+                    foreach (var n in CallClosure(cb, allByName, srcLines))
+                        if (carried.Add(n)) grew = true;
+                }
+
             foreach (var f in allByName.Values)
                 foreach (var line in BodyText(srcLines, f).Split('\n'))
                 {
