@@ -491,3 +491,51 @@ reference heroes at 0 errors.
   duplicate registration, so they double cast regardless of hero level. The level 1 control built to
   test a SetHeroLevel hypothesis is therefore invalid, and that hypothesis is superseded by this
   simpler cause.
+
+---
+
+## Claude, 2026-08-02
+
+### The untouched map double registration, fixed
+
+Added `PreplacedUnitsScript.DetectAlreadyLiveSpellTriggers`. Before emitting our own
+`TriggerRegisterPlayerUnitEvent(trg, Player(owner), ...)` for a candidate trigger, it builds the
+forward call graph closure from `main` and `config` (the same `ScriptPorter.ForwardClosure`
+`RuntimeReadinessCommand` already uses) and checks whether the trigger already has a reachable
+`TriggerRegisterPlayerUnitEvent` or `TriggerRegisterAnyUnitEventBJ` for the same spell effect event.
+If so, that trigger is skipped entirely, for every owner, not just the one the map's own code names.
+`GeneratorVersion` bumped 8 to 9.
+
+**Verified on the untouched map.** `place unit` into an untouched `Anime_WOS2_0.28a2.w3x`, no flags.
+Grep on `gg_trg_CastCheck` shows exactly one hit, WOS2's own `Trig_LvlUpCheck_Actions` line. Ours is
+absent.
+
+**The trap that almost shipped a regression.** First pass suppressed our registration on a PLAIN port
+into a fresh 96 tile blank map too, which is exactly the case this wiring exists for. Cause, a plain
+port (no `--synth-dispatch`) hooks every carried `InitTrig_*` not already called by a carried
+aggregator straight into `InitCustomTriggers` (`ScriptPorter.HookInit`), including a carried
+`InitTrig_LvlUpCheck`, so the reachability closure found it "already live" in the ported target too,
+even though nothing there registers the dispatcher until wc3ctl's own generated code does. Fixed by
+blanking every line marked `// wc3ctl ported: ...` before computing the closure, a wc3ctl-inserted
+call must never itself be the reason something reads as already reachable, only a call the target
+already had before wc3ctl touched it counts. Re-verified, the same plain port into blank96 now shows
+BOTH `Trig_LvlUpCheck_Actions` (still carried, still textually present) and our own
+`TriggerRegisterPlayerUnitEvent(gg_trg_CastCheck, Player(0), ...)` (ours, now correctly present).
+
+**Note for whoever answers "InitTrig_LvlUpCheck is genuinely UNKNOWN" above.** It is not fully
+resolved even now. A PLAIN port into a blank map carries AND WIRES `InitTrig_LvlUpCheck` (a plain
+port has no framework filter, unlike `--synth-dispatch`), so its own event registration
+(`TriggerRegisterAnyUnitEventBJ(gg_trg_LvlUpCheck, EVENT_PLAYER_HERO_LEVEL)`) and action
+(`Trig_LvlUpCheck_Actions`) really do run at game init in the ported target. Once the placed hero
+FIRST levels up in game (not immediately, but eventually, during ordinary play), that action may
+ALSO register `gg_trg_CastCheck` for that player a second time, on top of our own already-live one,
+a LATENT variant of the exact same double cast bug, confined to a plain port, surfacing later rather
+than immediately. Deliberately NOT fixed here, out of scope for the exact ask (which only covered the
+untouched map and the blank map cases, both verified above), and it needs its own design, most likely
+ScriptPorter itself should recognize a carried `InitTrig_*` whose own action re-registers a trigger
+our deferred wiring will already cover, and skip wiring THAT one specifically for a placed/ported
+hero, rather than PreplacedUnitsScript trying to reason about it after the fact. Flagged, not fixed.
+
+Gates. Hermetic 934 (930 Wc3.Tests, 4 Wc3.Studio.Tests). Corpus, see the commit this session lands
+on for the exact count, both projects re-run after this fix. Three reference heroes (H028, H0DA,
+H001) validate 0 errors with flags off.

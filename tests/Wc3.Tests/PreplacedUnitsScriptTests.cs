@@ -202,6 +202,139 @@ public class PreplacedUnitsScriptTests
             j);
     }
 
+    [Fact]
+    public void ATriggerTheMapAlreadyReachablyRegisters_IsNotAlsoRegisteredByUs()
+    {
+        // The field report this guards against, an UNTOUCHED map (no porting, no flags at all) with
+        // a hero simply PLACED into it. WOS2's own native script already registers gg_trg_CastCheck
+        // for a player, reached through main, InitCustomTriggers, InitTrig_LvlUpCheck, and its own
+        // trigger action, once that player passes a one-time gate. If our own deferred wiring ALSO
+        // registers that player unconditionally, every ability that player casts through it,
+        // including a hero we never touched, fires twice.
+        // Single-line anchors only, so this does not depend on which newline convention the fixture's
+        // own embedded script happens to use between the two lines of an empty function body.
+        var doc = BlankMap.Create();
+        var entry = doc.GetFile(PreplacedUnitsScript.ScriptFile)!;
+        string orig = Encoding.Latin1.GetString(entry.RawBytes);
+        string withNative = orig.Replace(
+            "function InitCustomTriggers takes nothing returns nothing",
+            "function Trig_LvlUpCheck_Actions takes nothing returns nothing\n"
+            + "    call TriggerRegisterPlayerUnitEvent(gg_trg_CastCheck, GetOwningPlayer(GetTriggerUnit()), EVENT_PLAYER_UNIT_SPELL_EFFECT, null)\n"
+            + "endfunction\n"
+            + "function InitTrig_LvlUpCheck takes nothing returns nothing\n"
+            + "    call TriggerAddAction(gg_trg_LvlUpCheck, function Trig_LvlUpCheck_Actions)\n"
+            + "endfunction\n"
+            + "function InitCustomTriggers takes nothing returns nothing\n"
+            + "    call InitTrig_LvlUpCheck()");
+        Assert.NotEqual(orig, withNative); // the replace must actually have matched something
+        doc.AddOrReplaceRawFile(PreplacedUnitsScript.ScriptFile, Encoding.Latin1.GetBytes(withNative));
+
+        PlacementCommand.PlaceUnit(doc, "Hpal", ownerId: 0, x: 0f, y: 0f);
+
+        string j = ScriptOf(doc);
+        Assert.DoesNotContain(
+            "TriggerRegisterPlayerUnitEvent(gg_trg_CastCheck, Player(0), EVENT_PLAYER_UNIT_SPELL_EFFECT",
+            j);
+    }
+
+    [Fact]
+    public void ATriggerRegisteredOnlyInsideAnUnreachableFunction_IsStillRegisteredByUs()
+    {
+        // The opposite, and equally important, case. A hero ported into a BLANK map carries the
+        // source's own pick-hero flow as TEXT, so DetectPerPlayerSpellTriggers still finds the
+        // trigger name in it, but nothing in a blank target ever CALLS that flow, so nothing else
+        // registers the dispatcher there. This is the wiring this whole file exists for, and it
+        // must not regress just because the new "already live" check exists.
+        var doc = BlankMap.Create();
+        var entry = doc.GetFile(PreplacedUnitsScript.ScriptFile)!;
+        string orig = Encoding.Latin1.GetString(entry.RawBytes);
+        string withUnreachable = orig.Replace(
+            "function main takes nothing returns nothing",
+            "function Trig_PickHero_Actions takes nothing returns nothing\n"
+            + "    call TriggerRegisterPlayerUnitEvent(gg_trg_CastCheck, GetOwningPlayer(GetTriggerUnit()), EVENT_PLAYER_UNIT_SPELL_EFFECT, null)\n"
+            + "endfunction\n"
+            + "function main takes nothing returns nothing");
+        doc.AddOrReplaceRawFile(PreplacedUnitsScript.ScriptFile, Encoding.Latin1.GetBytes(withUnreachable));
+
+        PlacementCommand.PlaceUnit(doc, "Hpal", ownerId: 0, x: 0f, y: 0f);
+
+        string j = ScriptOf(doc);
+        Assert.Contains(
+            "TriggerRegisterPlayerUnitEvent(gg_trg_CastCheck, Player(0), EVENT_PLAYER_UNIT_SPELL_EFFECT",
+            j);
+    }
+
+    [Fact]
+    public void AnAnyUnitRegistrationTheMapAlreadyReachablyHas_CoversEveryOwnerNotJustOne()
+    {
+        // The trigger only becomes a candidate at all through a TriggerRegisterPlayerUnitEvent
+        // occurrence somewhere in the text (an unreachable pick-hero stub here, mirroring the
+        // carried-but-dead source flow the blank-map case relies on), but the map ALSO reachably
+        // registers it through TriggerRegisterAnyUnitEventBJ, which covers every player outright.
+        // Once that form is live, no owner needs our own registration, not only the one whose hero
+        // we happened to place.
+        var doc = BlankMap.Create();
+        var entry = doc.GetFile(PreplacedUnitsScript.ScriptFile)!;
+        string orig = Encoding.Latin1.GetString(entry.RawBytes);
+        // Single-line anchors only, same reasoning as the test above.
+        string withNative = orig
+            .Replace(
+                "function InitCustomTriggers takes nothing returns nothing",
+                "function InitCustomTriggers takes nothing returns nothing\n"
+                + "    call TriggerRegisterAnyUnitEventBJ(gg_trg_CastCheck, EVENT_PLAYER_UNIT_SPELL_EFFECT)")
+            .Replace(
+                "function main takes nothing returns nothing",
+                "function Trig_PickHero_Actions takes nothing returns nothing\n"
+                + "    call TriggerRegisterPlayerUnitEvent(gg_trg_CastCheck, GetOwningPlayer(GetTriggerUnit()), EVENT_PLAYER_UNIT_SPELL_EFFECT, null)\n"
+                + "endfunction\n"
+                + "function main takes nothing returns nothing");
+        Assert.NotEqual(orig, withNative);
+        doc.AddOrReplaceRawFile(PreplacedUnitsScript.ScriptFile, Encoding.Latin1.GetBytes(withNative));
+
+        PlacementCommand.PlaceUnit(doc, "Hpal", ownerId: 0, x: 0f, y: 0f);
+        PlacementCommand.PlaceUnit(doc, "Hkot", ownerId: 1, x: 64f, y: 0f);
+
+        string j = ScriptOf(doc);
+        Assert.DoesNotContain("TriggerRegisterPlayerUnitEvent(gg_trg_CastCheck, Player(0)", j);
+        Assert.DoesNotContain("TriggerRegisterPlayerUnitEvent(gg_trg_CastCheck, Player(1)", j);
+    }
+
+    [Fact]
+    public void AWc3ctlWiredInitTrigCall_DoesNotCountAsTheTargetAlreadyHavingIt()
+    {
+        // A PLAIN port (no --synth-dispatch) hooks every carried InitTrig_* not already called by
+        // another carried aggregator straight into InitCustomTriggers, marking the call it inserts
+        // "// wc3ctl ported: ...", see ScriptPorter.HookInit. That includes a carried
+        // InitTrig_LvlUpCheck just as readily as any other, so measured on a real port this made a
+        // hero's OWN carried, merely-lazy, level-up-gated mechanism look "already reachable" in a
+        // freshly ported BLANK target, wrongly suppressing the very registration a placed hero needs
+        // to be immediately castable there. A wc3ctl-inserted call must never itself be the reason
+        // something reads as already live, only a call the target already had before wc3ctl touched
+        // it (the untouched-map case above) counts.
+        var doc = BlankMap.Create();
+        var entry = doc.GetFile(PreplacedUnitsScript.ScriptFile)!;
+        string orig = Encoding.Latin1.GetString(entry.RawBytes);
+        string withPortedInitTrig = orig.Replace(
+            "function InitCustomTriggers takes nothing returns nothing",
+            "function Trig_LvlUpCheck_Actions takes nothing returns nothing\n"
+            + "    call TriggerRegisterPlayerUnitEvent(gg_trg_CastCheck, GetOwningPlayer(GetTriggerUnit()), EVENT_PLAYER_UNIT_SPELL_EFFECT, null)\n"
+            + "endfunction\n"
+            + "function InitTrig_LvlUpCheck takes nothing returns nothing\n"
+            + "    call TriggerAddAction(gg_trg_LvlUpCheck, function Trig_LvlUpCheck_Actions)\n"
+            + "endfunction\n"
+            + "function InitCustomTriggers takes nothing returns nothing\n"
+            + "    call InitTrig_LvlUpCheck() // wc3ctl ported: Asta (H028)");
+        Assert.NotEqual(orig, withPortedInitTrig);
+        doc.AddOrReplaceRawFile(PreplacedUnitsScript.ScriptFile, Encoding.Latin1.GetBytes(withPortedInitTrig));
+
+        PlacementCommand.PlaceUnit(doc, "Hpal", ownerId: 0, x: 0f, y: 0f);
+
+        string j = ScriptOf(doc);
+        Assert.Contains(
+            "TriggerRegisterPlayerUnitEvent(gg_trg_CastCheck, Player(0), EVENT_PLAYER_UNIT_SPELL_EFFECT",
+            j);
+    }
+
     /// <summary>Only the generated block, so assertions cannot be satisfied (or broken) by the
     /// fixture's own script text that happens to mention the same array.</summary>
     private static string GeneratedBlock(string jass)

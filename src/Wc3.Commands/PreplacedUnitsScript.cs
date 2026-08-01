@@ -44,9 +44,12 @@ public static class PreplacedUnitsScript
     /// resolves a doer-dummy slot computed through a local rather than only a direct index, 8 stops
     /// registering a placed hero's owner on the source's shared cast dispatcher when a --synth-dispatch
     /// dispatcher already covers that hero (an older build re-registers it and every one of that
-    /// hero's spells fires twice, once through each path).
+    /// hero's spells fires twice, once through each path), 9 also stops registering a dispatcher
+    /// trigger the target's OWN script already reachably registers for the same event (an arena's
+    /// per-player pick-hero flow, a level-up gate), an older build re-registers it too and every
+    /// ability that player casts through it, including a hero we never touched, fires twice.
     /// </summary>
-    public const int GeneratorVersion = 8;
+    public const int GeneratorVersion = 9;
 
     // The begin marker carries the generator version. Detection keys off the PREFIX so blocks
     // written before versioning existed (no "[gen vN]") are still recognised, and read as version 0.
@@ -176,6 +179,15 @@ public static class PreplacedUnitsScript
         // its spell handlers only act on a unit that is in that array. A placed hero never runs the
         // arena's selection flow, so it is absent and its spells do nothing. Detecting that array lets
         // CreateAllUnits register the placed hero into it, a best-effort so a ported arena hero can cast.
+        //
+        // Our own earlier block, if any, is stripped BEFORE every detector below runs, or a re-sync
+        // would see its own previously emitted registration line and mistake it for something the map
+        // itself provides. None of the other detectors ever match text that lives only inside our own
+        // block (it declares no hero array, no per-hero setup, no doer-dummy assigner, no
+        // wc3ctl_SynthCast_ function, all of those come from the map's own script or a different
+        // generator entirely), so stripping first changes nothing else about their output.
+        jass = RemoveBlock(jass, nl);
+
         var heroArrays = DetectHeroArrays(jass);
         var spellTriggers = DetectPerPlayerSpellTriggers(jass);
         // Placed hero types per owner (uppercase first char is the World Editor hero convention).
@@ -192,12 +204,16 @@ public static class PreplacedUnitsScript
         // Heroes already covered by their own --synth-dispatch dispatcher, see DetectSynthDispatchedHeroes,
         // must not also be registered on the shared dispatcher below or their spells fire twice.
         var synthDispatchedHeroes = DetectSynthDispatchedHeroes(jass, placedHeroes.Select(h => h.Rawcode).Distinct().ToList());
+        // A trigger the map's OWN script already reachably registers for a spell-effect event (an
+        // arena's per-player pick-hero flow, a level-up gate) must not ALSO be registered by us, see
+        // DetectAlreadyLiveSpellTriggers, or WC3 fires it twice for whichever player the map's own
+        // path eventually covers, including a hero we never touched.
+        var alreadyLiveSpellTriggers = DetectAlreadyLiveSpellTriggers(jass, spellTriggers);
 
-        jass = RemoveBlock(jass, nl);
         if (spawnable.Count > 0 || items.Count > 0)
         {
             string block = BuildBlock(spawnable, items, nl, heroArrays, spellTriggers, heroSetup, placedHeroes,
-                doerDummy, synthDispatchedHeroes);
+                doerDummy, synthDispatchedHeroes, alreadyLiveSpellTriggers);
             jass = InsertBefore(jass, "function main takes nothing returns nothing", block + nl, nl);
         }
 
@@ -330,6 +346,77 @@ public static class PreplacedUnitsScript
                 set.Add(rc);
         }
         return set;
+    }
+
+    /// <summary>
+    /// Which of <paramref name="candidateTriggers"/> already have a LIVE spell-effect registration in
+    /// <paramref name="jass"/>, reachable from the map's own entry points (<c>main</c>, <c>config</c>),
+    /// independent of anything wc3ctl itself would generate. WC3 fires a trigger once per live
+    /// registration on the same player and event, so a map whose own native script already registers
+    /// a dispatcher this way, an arena's per-player pick-hero flow, a level-up gate like a real WOS2
+    /// map's own <c>Trig_LvlUpCheck_Actions</c> (<c>TriggerRegisterPlayerUnitEvent(gg_trg_CastCheck,
+    /// GetOwningPlayer(GetTriggerUnit()), EVENT_PLAYER_UNIT_SPELL_EFFECT, null)</c>, gated behind a
+    /// once-per-player flag), does not need OUR registration too. An untouched map with a hero simply
+    /// PLACED into it (no porting at all) hits exactly this, our own unconditional registration ran
+    /// on top of the map's own lazy one, so every ability that player cast, including a hero we never
+    /// touched, fired twice. <c>TriggerRegisterAnyUnitEventBJ</c> covers every player outright, a
+    /// <c>TriggerRegisterPlayerUnitEvent</c> reachable through a per-unit-triggered path like a level
+    /// up check practically does too (whichever player's unit trips that event), so either form found
+    /// live for a trigger is enough to skip our own registration of it, for every owner, not only the
+    /// specific player expression the map's own code happens to spell out.
+    ///
+    /// The reverse case, a hero ported into a BLANK map, must still get our registration. The source's
+    /// own pick-hero flow is carried as TEXT (so it matches this same pattern) but nothing in a blank
+    /// target ever calls it, so it is correctly absent from the reachable set and this returns empty
+    /// for it, exactly the case this wiring exists for in the first place.
+    ///
+    /// A PLAIN port (no --synth-dispatch) complicates that, unlike synth-dispatch's own framework
+    /// filter, an ordinary port hooks every carried InitTrig_* not already called by another carried
+    /// aggregator straight into InitCustomTriggers (see ScriptPorter.HookInit), which includes a
+    /// carried InitTrig_LvlUpCheck just as readily as any other, marking the call it inserts
+    /// <c>// wc3ctl ported: ...</c>. Left alone, that makes a hero's OWN carried, merely-lazy,
+    /// gated-behind-a-level-up per-player mechanism look "already reachable" in a freshly ported blank
+    /// target too, exactly the case above that must still get our registration, since nothing else
+    /// there promptly registers the dispatcher for an immediately castable placed hero. Every line
+    /// carrying that marker is blanked out before computing reachability, so a wc3ctl-inserted call is
+    /// never itself the reason something reads as already live, only a call the TARGET already had
+    /// before wc3ctl touched it (the untouched-map case) counts.
+    /// </summary>
+    private static HashSet<string> DetectAlreadyLiveSpellTriggers(string jass, IReadOnlyCollection<string> candidateTriggers)
+    {
+        var live = new HashSet<string>(StringComparer.Ordinal);
+        if (candidateTriggers.Count == 0) return live;
+
+        var lines = jass.Replace("\r\n", "\n").Split('\n');
+        var withoutWc3ctlWiring = lines
+            .Select(l => l.Contains("// wc3ctl ported:", StringComparison.Ordinal) ? "" : l).ToArray();
+        var code = JassComments.Strip(withoutWc3ctlWiring);
+        var functions = JassFunctionIndex.Parse(jass);
+        var allByName = new Dictionary<string, JassFunction>(StringComparer.Ordinal);
+        foreach (var f in functions) allByName.TryAdd(f.Name, f);
+        var bodies = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var f in allByName.Values)
+        {
+            int end = Math.Min(f.EndLine, code.Length);
+            bodies[f.Name] = string.Join('\n', code[(f.StartLine - 1)..end]);
+        }
+        // Same forward call-graph closure RuntimeReadinessCommand and ScriptPorter's synth-dispatch
+        // prune already use for "is this reachable from the map's real entry points", shared so all
+        // three can never disagree about what "reachable" means.
+        var reachable = ScriptPorter.ForwardClosure(new[] { "main", "config" }, bodies, allByName);
+
+        foreach (var trg in candidateTriggers)
+        {
+            string esc = Regex.Escape(trg);
+            var anyUnit = new Regex(@"TriggerRegisterAnyUnitEventBJ\s*\(\s*" + esc
+                + @"\s*,\s*EVENT_PLAYER_UNIT_SPELL_EFFECT");
+            var perPlayer = new Regex(@"TriggerRegisterPlayerUnitEvent\s*\(\s*" + esc
+                + @"\s*,[^,]+,\s*EVENT_PLAYER_UNIT_SPELL_EFFECT");
+            bool liveHere = reachable.Any(name =>
+                bodies.TryGetValue(name, out var b) && (anyUnit.IsMatch(b) || perPlayer.IsMatch(b)));
+            if (liveHere) live.Add(trg);
+        }
+        return live;
     }
 
     /// <summary>
@@ -505,11 +592,13 @@ public static class PreplacedUnitsScript
     private static string BuildBlock(List<UnitData> units, List<UnitData> items, string nl,
         IReadOnlyList<HeroArray>? heroArraysOrNull = null, IReadOnlyList<string>? spellTriggersOrNull = null,
         HeroSetup? heroSetup = null, IReadOnlyList<(string Rawcode, int OwnerId)>? placedHeroes = null,
-        DoerDummyAssigner? doerDummy = null, IReadOnlySet<string>? synthDispatchedHeroesOrNull = null)
+        DoerDummyAssigner? doerDummy = null, IReadOnlySet<string>? synthDispatchedHeroesOrNull = null,
+        IReadOnlySet<string>? alreadyLiveSpellTriggersOrNull = null)
     {
         var heroArrays = heroArraysOrNull ?? Array.Empty<HeroArray>();
         var heroes = placedHeroes ?? Array.Empty<(string Rawcode, int OwnerId)>();
         var spellTriggers = spellTriggersOrNull ?? Array.Empty<string>();
+        var alreadyLiveSpellTriggers = alreadyLiveSpellTriggersOrNull ?? new HashSet<string>(StringComparer.Ordinal);
         var synthDispatchedHeroes = synthDispatchedHeroesOrNull ?? new HashSet<string>(StringComparer.Ordinal);
         // Players that own a placed unit (a placed hero's owner is among them, neutral slots excluded).
         // The arena's spell-dispatch triggers get their spell-effect event registered for these players
@@ -547,7 +636,11 @@ public static class PreplacedUnitsScript
                     sb.Append("    local unit hu").Append(nl);
                     if (heroSetup.ReturnsValue) sb.Append("    local boolean ok").Append(nl);
                 }
-                foreach (var trg in spellTriggers)
+                // A trigger the map's own script already reachably registers for this event (see
+                // DetectAlreadyLiveSpellTriggers) is skipped outright, for every owner, not only the
+                // specific player its own code names, registering it again doubles every ability that
+                // player, including a hero we never touched, casts through it.
+                foreach (var trg in spellTriggers.Where(t => !alreadyLiveSpellTriggers.Contains(t)))
                     foreach (var owner in heroOwners)
                     {
                         if (fullySynthDispatchedOwners.Contains(owner)) continue;
