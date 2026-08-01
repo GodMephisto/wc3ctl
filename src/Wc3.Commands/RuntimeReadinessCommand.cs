@@ -183,6 +183,68 @@ public static class RuntimeReadinessCommand
                     + "not proven to be this hero's own bug) and is assigned nowhere in the whole "
                     + "script, so it can only ever hold its type default (0, false or null), worth "
                     + "checking rather than a confirmed problem"));
+
+            // A second, subtler shape of the same problem. A "set NAME=" statement DOES appear
+            // somewhere in the script (so the scan above found it and stayed silent), but its
+            // ENCLOSING FUNCTION is never called anywhere, not from main, not from config, not
+            // through any chain of calls or callback registrations reachable from either. The
+            // assignment is live in the TEXT and dead at RUNTIME, a plain "is this assigned
+            // anywhere" scan cannot tell the two apart, it only sees the statement, never whether
+            // the function around it ever runs. Measured on the Asta corpus port, this hid three
+            // real bugs the whole-script scan missed entirely. GearSystems' own hand-written Init
+            // (the only thing that ever assigns GearTimer03/05/10) is reached solely through
+            // ExecuteFunc("Init") in the source's main, never carried into the target's own entry
+            // points by a synth-dispatch framework prune that correctly judged Init wires nothing
+            // the hero calls. NoDecor_Cond, a filter several heroes' own AoE abilities read
+            // directly, is assigned only inside the map's mode-selection dialog setup, itself
+            // reached only through an 8 second timer a different, equally unwired initializer
+            // registers.
+            //
+            // Reachability is rooted at the script's two fixed World Editor entry points, main and
+            // config, the same forward call-graph closure ScriptPorter's synth-dispatch prune uses
+            // to decide what the HERO reaches, shared here (ForwardClosure) so the two can never
+            // disagree about what "reachable" means. This is a whole-script fact, independent of
+            // which hero is being checked, unlike the closure-scoped check above it stays exact,
+            // main and config either call something or they do not.
+            var allByNameWhole = new Dictionary<string, JassFunction>(StringComparer.Ordinal);
+            foreach (var f in functions) allByNameWhole.TryAdd(f.Name, f);
+            var bodiesWhole = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var f in allByNameWhole.Values)
+            {
+                int end = Math.Min(f.EndLine, code.Length);
+                bodiesWhole[f.Name] = string.Join('\n', code[(f.StartLine - 1)..end]);
+            }
+            var reachableFromMain = ScriptPorter.ForwardClosure(
+                new[] { "main", "config" }, bodiesWhole, allByNameWhole);
+
+            // One pass over every function's body, not one pass per candidate global, so this
+            // stays linear in script size regardless of how many globals need checking.
+            var assigningFunctions = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+            foreach (var f in allByNameWhole.Values)
+                foreach (var line in bodiesWhole[f.Name].Split('\n'))
+                {
+                    var m = Regex.Match(line.TrimStart(), @"^set\s+([A-Za-z_][A-Za-z0-9_]*)\b");
+                    if (!m.Success || !globalsByName.ContainsKey(m.Groups[1].Value)) continue;
+                    if (!assigningFunctions.TryGetValue(m.Groups[1].Value, out var list))
+                        assigningFunctions[m.Groups[1].Value] = list = new List<string>();
+                    list.Add(f.Name);
+                }
+
+            foreach (var g in usedByHero.Where(g => assigned.Contains(g))
+                .OrderBy(g => g, StringComparer.Ordinal))
+            {
+                // A real declaration initializer ("hashtable hs= InitHashtable()") always runs, it
+                // is not inside any function to be unreachable, nothing further to check.
+                if (JassGlobals.HasRealInitializer(globalsByName[g])) continue;
+                if (!assigningFunctions.TryGetValue(g, out var fns) || fns.Count == 0) continue;
+                if (fns.Any(reachableFromMain.Contains)) continue; // at least one assignment is live
+                findings.Add(new(ReadinessIssue.GlobalNeverAssigned, DiagnosticSeverity.Warning, g,
+                    $"'{g}' is assigned only inside {string.Join(", ", fns.Distinct(StringComparer.Ordinal))}, "
+                    + "which this script never calls (not from main, not from config, not through any "
+                    + "chain of calls or callback registrations reachable from either), so the "
+                    + "assignment never runs and it can only ever hold its type default (0, false or "
+                    + "null), worth checking rather than a confirmed problem"));
+            }
         }
 
         return new(heroRawcode, heroName, ownerId, findings, diagnostics);

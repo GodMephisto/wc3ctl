@@ -1,6 +1,8 @@
 // src/Wc3.Commands/ScriptPorter.cs
+using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
+using War3Net.Build.Info;
 using War3Net.Common.Extensions;
 using Wc3.Model;
 
@@ -338,6 +340,28 @@ internal static class ScriptPorter
             synthInitToHook = synthInitFn;
         }
 
+        // Opt-in (only once the synthesized dispatcher above actually found branches). The hero's
+        // own code, defined as the forward call closure starting at the branches' own callees, the
+        // functions the dispatcher hands off to. The init-wiring filters below (and the bootstrap
+        // rect refinement further down) judge every carried InitTrig_*, global-initializer helper,
+        // and rect against this set, so a source map's OWN framework (a mode-selection screen, a
+        // shop registry, a music player, a chat overlay, none of it this hero) stays carried, so the
+        // script still compiles, but is no longer CALLED or treated as this hero's own dependency.
+        // See ReachableFromHeroCode and WiresReachableCode for the mechanics.
+        var heroReachable = synthBranches is { Count: > 0 } ? ReachableFromHeroCode(synthBranches, bodies, allByName) : null;
+
+        // Every global the hero's own REACHABLE code mentions, not every global the wider carried
+        // set mentions (that would be "used" below, a much broader set on a tightly-coupled arena,
+        // it includes the map's own framework whenever that framework happens to be carried for an
+        // unrelated reason, a shared GUI callback, a combo-ability rawcode match). Scoping to
+        // heroReachable is what stops a framework initializer from justifying its OWN wiring by
+        // reading a global only ITSELF assigns and reads, see AssignsUsedGlobal's call sites below.
+        var heroOwnGlobals = heroReachable is null ? null : new HashSet<string>(
+            heroReachable.Where(bodies.ContainsKey)
+                .SelectMany(n => Ident.Matches(bodies[n]).Select(m => m.Value))
+                .Where(srcGlobals.ContainsKey),
+            StringComparer.Ordinal);
+
         // Opt-in: find every carried global this port's own spliced-in text reads but never
         // assigns anywhere, and construct the ones whose type has a safe, universal constructor.
         // See BootstrapStateBuilder for the full reasoning and the type-to-constructor mapping.
@@ -348,8 +372,13 @@ internal static class ScriptPorter
         if (bootstrapState)
         {
             var declaredByFinalName = new Dictionary<string, string>(StringComparer.Ordinal);
+            var originalNameByFinal = new Dictionary<string, string>(StringComparer.Ordinal);
             foreach (var g in carriedGlobals)
-                declaredByFinalName[rename.GetValueOrDefault(g, g)] = srcGlobals[g];
+            {
+                string final = rename.GetValueOrDefault(g, g);
+                declaredByFinalName[final] = srcGlobals[g];
+                originalNameByFinal[final] = g;
+            }
             if (synthTriggerGlobal is not null)
                 declaredByFinalName[synthTriggerGlobal] =
                     SynthDispatchBuilder.BuildGlobalDeclaration(synthTriggerGlobal);
@@ -357,6 +386,36 @@ internal static class ScriptPorter
             var candidates = BootstrapStateBuilder.FindUnassigned(declaredByFinalName, portedFns.ToString());
             var constructible = candidates.Where(c => c.Constructor is not null).ToList();
             var left = candidates.Where(c => c.Constructor is null).ToList();
+
+            // Refine an empty-rect default to the TARGET map's own playable terrain bounds, but only
+            // for a rect this hero's own closure reaches SOLELY through a CheckCoordsInRect-style
+            // bounds helper (min/max containment test), see RectOnlyUsedAsBoundsCheck. An empty rect
+            // degenerates "is this point inside" into "is this point exactly the origin", worse than
+            // either extreme for that one usage, measured on the Asta corpus port, gg_rct_Arena gates
+            // MoveEff/MoveUnit (the hero's own effect and unit movement) on exactly this shape, so
+            // every move freezes after its first tick. Scoped narrowly on purpose, a rect ALSO read as
+            // a spawn point (GetRectCenterX/Y) or handed to an enumeration native keeps the safe empty
+            // default, widening it there would turn a small trigger zone into the whole map (a "unit
+            // entered the base" check would then fire on every unit everywhere), a different, and not
+            // obviously better, failure.
+            var rectRefinements = new List<(string FinalName, string OriginalName)>();
+            if (heroReachable is not null && constructible.Any(c => c.Type == "rect" && !c.IsArray))
+            {
+                string? playableBounds = PlayableBoundsRectText(target);
+                if (playableBounds is not null)
+                {
+                    var boundsHelpers = FindBoundsHelperFunctions(bodies);
+                    for (int i = 0; i < constructible.Count; i++)
+                    {
+                        var c = constructible[i];
+                        if (c.Type != "rect" || c.IsArray) continue;
+                        if (!originalNameByFinal.TryGetValue(c.Name, out var original)) continue;
+                        if (!RectOnlyUsedAsBoundsCheck(original, heroReachable, bodies, boundsHelpers)) continue;
+                        constructible[i] = c with { Constructor = playableBounds };
+                        rectRefinements.Add((c.Name, original));
+                    }
+                }
+            }
 
             if (constructible.Count > 0)
             {
@@ -368,11 +427,23 @@ internal static class ScriptPorter
                     + "this hero's own carried code reads but nothing in the port ever assigns "
                     + $"({string.Join(", ", constructible.Select(c => $"{c.Name} ({c.Type})"))}), so each "
                     + "reads as a fresh, real handle instead of null.");
-                if (constructible.Any(c => c.Type == "rect"))
+                var emptyRects = constructible
+                    .Where(c => c.Type == "rect" && rectRefinements.All(r => r.FinalName != c.Name)).ToList();
+                if (emptyRects.Count > 0)
                     notes.Add("a bootstrapped rect is built EMPTY, bounds (0,0) to (0,0), never a guess "
                         + "at the source's real region, for a GATE that is strictly safer (it can never "
                         + "falsely block). The tradeoff, a handler that used the rect to pick a location "
-                        + "now reads (0,0), verify the ported map.");
+                        + "now reads (0,0), verify the ported map "
+                        + $"({string.Join(", ", emptyRects.Select(c => c.Name))}).");
+                if (rectRefinements.Count > 0)
+                    notes.Add($"{rectRefinements.Count} bootstrapped rect(s) were built to the target map's "
+                        + "own playable terrain bounds instead of empty, because this hero's own closure "
+                        + "reaches each one only through a bounds-test helper, where an empty rect would "
+                        + "wrongly shrink the whole map down to a single point at the origin "
+                        + $"({string.Join(", ", rectRefinements.Select(r => r.FinalName))}). The tradeoff, "
+                        + "if the same rect was also meant as an exclusion zone elsewhere in the source "
+                        + "map (a you are standing in your base, no casting here style gate), that "
+                        + "exclusion is now permissive instead of restrictive, verify the ported map.");
             }
             if (left.Count > 0)
             {
@@ -391,15 +462,6 @@ internal static class ScriptPorter
 
         // Splice into the target: globals into its globals block, functions after endglobals.
         string merged = Splice(tgtJ, portedGlobals.ToString(), portedFns.ToString(), marker, notes);
-
-        // Opt-in (only once the synthesized dispatcher above actually found branches). The hero's
-        // own code, defined as the forward call closure starting at the branches' own callees, the
-        // functions the dispatcher hands off to. The init-wiring filters below judge every carried
-        // InitTrig_* and global-initializer helper against this set, so a source map's OWN framework
-        // (a mode-selection screen, a shop registry, a music player, a chat overlay, none of it this
-        // hero) stays carried, so the script still compiles, but is no longer CALLED. See
-        // ReachableFromHeroCode and WiresReachableCode for the mechanics.
-        var heroReachable = synthBranches is { Count: > 0 } ? ReachableFromHeroCode(synthBranches, bodies, allByName) : null;
 
         // Best-effort init hook: call carried InitTrig_* functions from InitCustomTriggers.
         //
@@ -420,11 +482,16 @@ internal static class ScriptPorter
         var initTrigCandidates = srcFns.Select(f => f.Name)
             .Where(nm => nm.StartsWith("InitTrig_", StringComparison.Ordinal))
             .Where(nm => !hookedByAggregator.Contains(nm)).ToList();
-        // --synth-dispatch's own filter, see the heroReachable comment above. A candidate that wires
-        // nothing the hero's own code reaches is the source map's framework, not this hero, and is
-        // dropped from the WIRING only, its body stays carried above so nothing dangles.
+        // --synth-dispatch's own filter, see the heroReachable comment above. A candidate counts as
+        // the hero's own two ways, it wires something the hero's own code reaches (WiresReachableCode),
+        // OR it assigns a global the hero's own REACHABLE code reads without wiring anything itself
+        // (AssignsUsedGlobal against heroOwnGlobals, never the broader "used", see the doc comment
+        // on heroOwnGlobals for why that scoping matters, an initializer can matter purely through
+        // shared state). A candidate that does neither is the source map's framework, not this hero,
+        // and is dropped from the WIRING only, its body stays carried above so nothing dangles.
         var frameworkInitTrigs = heroReachable is null ? new List<string>()
-            : initTrigCandidates.Where(nm => !WiresReachableCode(bodies[nm], heroReachable)).ToList();
+            : initTrigCandidates.Where(nm => !WiresReachableCode(bodies[nm], heroReachable)
+                && !AssignsUsedGlobal(bodies[nm], heroOwnGlobals!)).ToList();
         var initFns = initTrigCandidates.Except(frameworkInitTrigs, StringComparer.Ordinal)
             .Select(nm => rename.GetValueOrDefault(nm, nm)).ToList();
         if (hookedByAggregator.Count > 0)
@@ -433,9 +500,10 @@ internal static class ScriptPorter
                 + "registration makes every affected spell fire twice).");
         if (frameworkInitTrigs.Count > 0)
             notes.Add($"--synth-dispatch also skipped hooking {frameworkInitTrigs.Count} InitTrig_* "
-                + "function(s) that wire nothing reachable from the hero's own ability handlers, the "
-                + "source map's own framework, not this hero, still carried so the script compiles, "
-                + $"just not called ({string.Join(", ", frameworkInitTrigs.Take(8))}).");
+                + "function(s) that wire nothing reachable from the hero's own ability handlers and "
+                + "assign no global the hero's own carried code reads, the source map's own framework, "
+                + "not this hero, still carried so the script compiles, just not called "
+                + $"({string.Join(", ", frameworkInitTrigs.Take(8))}).");
         bool hooked = false;
         if (initFns.Count > 0)
         {
@@ -479,18 +547,20 @@ internal static class ScriptPorter
                 : "carried InitGlobals but could not find the target's main — call it manually.");
         }
         var otherInitHelperCandidates = globalInitBodies.Keys.Where(nm => nm != "InitGlobals").ToList();
-        // Same --synth-dispatch filter as the InitTrig_* one above, applied to a differently named
-        // global-initializer helper (InitGlobals itself stays exempt, the map's own convention entry
-        // point, not framework this feature exists to prune).
+        // Same --synth-dispatch filter as the InitTrig_* one above (wires something reachable, OR
+        // assigns a global the hero's own REACHABLE code reads, see heroOwnGlobals), applied to a
+        // differently named global-initializer helper (InitGlobals itself stays exempt, the map's
+        // own convention entry point, not framework this feature exists to prune).
         var frameworkInitHelpers = heroReachable is null ? new List<string>()
-            : otherInitHelperCandidates.Where(nm => !WiresReachableCode(globalInitBodies[nm], heroReachable)).ToList();
+            : otherInitHelperCandidates.Where(nm => !WiresReachableCode(globalInitBodies[nm], heroReachable)
+                && !AssignsUsedGlobal(globalInitBodies[nm], heroOwnGlobals!)).ToList();
         var otherInitHelpers = otherInitHelperCandidates.Except(frameworkInitHelpers, StringComparer.Ordinal)
             .Select(nm => rename.GetValueOrDefault(nm, nm)).ToList();
         if (frameworkInitHelpers.Count > 0)
             notes.Add($"--synth-dispatch also skipped hooking {frameworkInitHelpers.Count} "
                 + "global-initializer helper(s) that wire nothing reachable from the hero's own ability "
-                + "handlers, still carried so the script compiles, just not called "
-                + $"({string.Join(", ", frameworkInitHelpers.Take(8))}).");
+                + "handlers and assign no global the hero's own carried code reads, still carried so the "
+                + $"script compiles, just not called ({string.Join(", ", frameworkInitHelpers.Take(8))}).");
         if (otherInitHelpers.Count > 0)
         {
             merged = HookInit(merged, otherInitHelpers, marker, out bool hookedHelpers, atFront: true);
@@ -808,12 +878,27 @@ internal static class ScriptPorter
     /// </summary>
     private static HashSet<string> ReachableFromHeroCode(
         IReadOnlyList<SynthDispatchBuilder.CastBranch> branches, IReadOnlyDictionary<string, string> bodies,
+        IReadOnlyDictionary<string, JassFunction> allByName) =>
+        ForwardClosure(branches.SelectMany(b => b.Callees), bodies, allByName);
+
+    /// <summary>The general form of <see cref="ReachableFromHeroCode"/>: the forward call-graph
+    /// closure starting at <paramref name="seeds"/>, following <see cref="ReferencedNames"/> through
+    /// each further function's own body in <paramref name="bodies"/>, restricted to names
+    /// <paramref name="allByName"/> actually declares. See <see cref="ReachableFromHeroCode"/>'s doc
+    /// comment for why both restrictions matter, this is the exact same algorithm, generalized so
+    /// <see cref="RuntimeReadinessCommand"/> can compute reachability from the map's real entry
+    /// points (<c>main</c>, <c>config</c>) instead of a synthesized dispatcher's branches, the
+    /// question "is the function assigning this global ever actually called" needs the same closure,
+    /// just rooted somewhere else. Internal, not private, for exactly that reuse, both callers live in
+    /// this project and must never compute this two different ways.</summary>
+    internal static HashSet<string> ForwardClosure(
+        IEnumerable<string> seeds, IReadOnlyDictionary<string, string> bodies,
         IReadOnlyDictionary<string, JassFunction> allByName)
     {
         var reachable = new HashSet<string>(StringComparer.Ordinal);
         var frontier = new Queue<string>();
-        foreach (var callee in branches.SelectMany(b => b.Callees).Where(allByName.ContainsKey))
-            if (reachable.Add(callee)) frontier.Enqueue(callee);
+        foreach (var seed in seeds.Where(allByName.ContainsKey))
+            if (reachable.Add(seed)) frontier.Enqueue(seed);
 
         while (frontier.Count > 0)
         {
@@ -875,6 +960,142 @@ internal static class ScriptPorter
             }
         }
         return false;
+    }
+
+    /// <summary>True when a LIVE "set NAME=" (or "set NAME[i]=") statement in <paramref name="body"/>
+    /// assigns a global in <paramref name="usedGlobals"/>. The caller passes heroOwnGlobals, every
+    /// global the hero's own REACHABLE code mentions, never the broader "used" (see heroOwnGlobals'
+    /// doc comment for why that scoping matters, a framework initializer must not be able to justify
+    /// its own wiring by reading a global only itself assigns and reads). This is the OTHER half of
+    /// what makes an initializer the hero's own, alongside <see cref="WiresReachableCode"/>, and it
+    /// is not redundant with it, an initializer can matter to a hero purely through shared STATE,
+    /// without itself wiring anything the hero's dispatcher calls.
+    ///
+    /// Measured on the Asta corpus port. GearSystems' own hand written Init assigns GearTimer03,
+    /// GearTimer05, GearTimer10 and their Callback globals, nothing more, no TriggerAddAction, no
+    /// TriggerAddCondition, no TimerStart registering a callback, no direct call to anything the
+    /// hero reaches. WiresReachableCode correctly says no to it, a plain value assignment is not a
+    /// wiring form. Yet Asta's own spell handlers read GearTimer03 and GearTimer03Callback through
+    /// GearTimer03Acquire, a function the hero's code genuinely calls. Without this second test,
+    /// Init is pruned as framework, never called, and every carried caller of GearTimer03Acquire
+    /// ends up starting a timer with a callback that was never constructed, so a spell casts but its
+    /// timed half silently does nothing. The same shape also caught NoDecor_Cond, a filter Asta's
+    /// own AoE abilities read directly, built only inside the map's mode-selection initializer.
+    ///
+    /// Only the assignment TARGET is checked (the identifier right after "set", stopping at a "["
+    /// for an array element), never the right hand side, so an initializer that merely REFERENCES a
+    /// used global on the right of some other assignment does not count, only one that WRITES it
+    /// does.</summary>
+    private static bool AssignsUsedGlobal(string body, IReadOnlySet<string> usedGlobals)
+    {
+        foreach (var code in LiveCode(body))
+        {
+            var head = code.TrimStart();
+            if (!head.StartsWith("set ", StringComparison.Ordinal)) continue;
+            var target = head[4..].TrimStart();
+            var m = Ident.Match(target);
+            if (m.Success && m.Index == 0 && usedGlobals.Contains(m.Value)) return true;
+        }
+        return false;
+    }
+
+    /// <summary>The four rect min/max natives a hand-written "is this point inside this rect"
+    /// bounds test is built from (<c>CheckCoordsInRect</c> on the Asta corpus map calls all four).
+    /// A rect passed only to one of these, or to a function that itself calls one of these, is
+    /// being used as a bounds test, not a spawn point or an enumeration.</summary>
+    private static readonly string[] RectBoundsNatives =
+        { "GetRectMinX", "GetRectMaxX", "GetRectMinY", "GetRectMaxY" };
+
+    /// <summary>Every function in <paramref name="bodies"/> whose own live code calls one of
+    /// <see cref="RectBoundsNatives"/>, the shape of a small hand-written bounds-test helper
+    /// (<c>CheckCoordsInRect</c>, or a project-specific equivalent like <c>PathableCheck</c>).
+    /// Computed once over every carried body, independent of hero-reachability, being a
+    /// bounds-test helper is a property of the function itself, not of who happens to call it.
+    /// </summary>
+    private static HashSet<string> FindBoundsHelperFunctions(IReadOnlyDictionary<string, string> bodies)
+    {
+        var result = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var (name, body) in bodies)
+            foreach (var code in LiveCode(body))
+                if (RectBoundsNatives.Any(n => code.Contains(n + "(", StringComparison.Ordinal)))
+                {
+                    result.Add(name);
+                    break;
+                }
+        return result;
+    }
+
+    /// <summary>True when every LIVE occurrence of <paramref name="rectName"/> across
+    /// <paramref name="scopeFunctions"/>' own bodies (the hero's own closure, see
+    /// <see cref="ReachableFromHeroCode"/>) passes it as an argument to a rect min/max native or a
+    /// function <paramref name="boundsHelpers"/> already classified as one (see
+    /// <see cref="FindBoundsHelperFunctions"/>), and there is at least one such occurrence. A rect
+    /// ALSO handed to anything else (a spawn point via GetRectCenterX/Y, an enumeration native, an
+    /// unrecognized helper) is a mixed use and returns false, so <see cref="PortScript"/>'s bootstrap
+    /// step keeps the safe empty default for it rather than guessing a single usage matters more
+    /// than another. An occurrence this method cannot attribute to an enclosing call at all (no
+    /// "(" found scanning backward on its line) is treated the same as a disqualifying use, refusing
+    /// to guess is the safer failure mode here.</summary>
+    private static bool RectOnlyUsedAsBoundsCheck(
+        string rectName, IReadOnlySet<string> scopeFunctions, IReadOnlyDictionary<string, string> bodies,
+        IReadOnlySet<string> boundsHelpers)
+    {
+        var nameRegex = new Regex(@"\b" + Regex.Escape(rectName) + @"\b");
+        bool sawAny = false;
+        foreach (var fn in scopeFunctions)
+        {
+            if (!bodies.TryGetValue(fn, out var body)) continue;
+            foreach (var code in LiveCode(body))
+            {
+                foreach (Match m in nameRegex.Matches(code))
+                {
+                    string? callee = EnclosingCallName(code, m.Index);
+                    bool qualifies = callee is not null
+                        && (RectBoundsNatives.Contains(callee) || boundsHelpers.Contains(callee));
+                    if (!qualifies) return false;
+                    sawAny = true;
+                }
+            }
+        }
+        return sawAny;
+    }
+
+    /// <summary>The identifier immediately before the nearest enclosing, unmatched "(" scanning
+    /// backward from <paramref name="index"/> in <paramref name="code"/>, the function this
+    /// position is being passed INTO as an argument. Null when no enclosing call is found (the
+    /// identifier at <paramref name="index"/> is not inside any call on this line, or the code
+    /// shape is something this simple scan cannot attribute).</summary>
+    private static string? EnclosingCallName(string code, int index)
+    {
+        int depth = 0;
+        for (int i = index - 1; i >= 0; i--)
+        {
+            char ch = code[i];
+            if (ch == ')') depth++;
+            else if (ch == '(')
+            {
+                if (depth > 0) { depth--; continue; }
+                int end = i;
+                while (end > 0 && char.IsWhiteSpace(code[end - 1])) end--;
+                int start = end;
+                while (start > 0 && (char.IsLetterOrDigit(code[start - 1]) || code[start - 1] == '_')) start--;
+                return start < end ? code[start..end] : null;
+            }
+        }
+        return null;
+    }
+
+    /// <summary>The target map's own playable terrain bounds as a "Rect(minX, minY, maxX, maxY)"
+    /// literal, ready to splice as a bootstrap assignment, read from its war3map.w3i CameraBounds
+    /// (the same values a World Editor map's own generated main() passes to SetCameraBounds). Null
+    /// when the target has no parsed MapInfo or no camera bounds recorded (a very old format), the
+    /// caller falls back to the empty-rect default in that case, never a guess.</summary>
+    private static string? PlayableBoundsRectText(MapDocument target)
+    {
+        if (target.GetFile(MapInfoCommand.FileName)?.Model is not MapInfo info || info.CameraBounds is not { } q)
+            return null;
+        string Real(float v) => v.ToString("0.0", CultureInfo.InvariantCulture);
+        return $"Rect({Real(q.BottomLeft.X)}, {Real(q.BottomLeft.Y)}, {Real(q.TopRight.X)}, {Real(q.TopRight.Y)})";
     }
 
     /// <summary>Every line of <paramref name="body"/> with any comment stripped (this port's own

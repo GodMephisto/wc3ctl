@@ -177,6 +177,8 @@ endfunction
     {
         // The assignment lives in a completely different function than the one that reads it,
         // "assigned nowhere in the WHOLE script" is the bar, not "assigned in the same function".
+        // main calls SomeOtherSetup so the assignment is LIVE, not merely present in the text, see
+        // GlobalNeverAssigned_fires_when_the_assigning_function_is_never_called for the other half.
         const string jass = @"globals
     unit array udg_TestVar
 endglobals
@@ -189,6 +191,7 @@ function SomeOtherSetup takes nothing returns nothing
     set udg_TestVar[0]=null
 endfunction
 function main takes nothing returns nothing
+    call SomeOtherSetup()
 endfunction
 ";
         var doc = BuildMap(jass);
@@ -253,7 +256,11 @@ endfunction
     public void GlobalNeverAssigned_stays_quiet_for_a_non_udg_global_assigned_elsewhere()
     {
         // Same shape as GearTimer05 on a real map: a hand-written system's own timer, assigned in
-        // its own Init function rather than the conventional InitGlobals.
+        // its own Init function rather than the conventional InitGlobals. main calls Init, so the
+        // assignment is LIVE, not merely present in the text, see
+        // GlobalNeverAssigned_fires_when_the_assigning_function_is_never_called for the other half,
+        // the shape that actually broke GearTimer03/05/10 once a framework prune stopped calling
+        // Init at all.
         const string jass = @"globals
     timer GearTimer05
 endglobals
@@ -266,6 +273,76 @@ function Init takes nothing returns nothing
     set GearTimer05=CreateTimer()
 endfunction
 function main takes nothing returns nothing
+    call Init()
+endfunction
+";
+        var doc = BuildMap(jass);
+
+        var result = RuntimeReadinessCommand.Check(doc, "H000", ownerId: 0);
+
+        Assert.DoesNotContain(result.Findings, f => f.Issue == ReadinessIssue.GlobalNeverAssigned);
+    }
+
+    [Fact]
+    public void GlobalNeverAssigned_fires_when_the_assigning_function_is_never_called()
+    {
+        // The exact shape that hid GearTimer03/05/10 and NoDecor_Cond on the Asta corpus port. A
+        // "set GearTimer05=CreateTimer()" statement DOES appear in the script text (so the plain
+        // "assigned anywhere" scan above stays quiet), but Init, the only function that contains
+        // it, is never called, not from main, not from anywhere. The assignment is live in the TEXT
+        // and dead at RUNTIME, and this is the check built to tell the two apart.
+        const string jass = @"globals
+    timer GearTimer05
+endglobals
+function TestHandler takes nothing returns nothing
+    if ( GetUnitTypeId(GetTriggerUnit()) == 'H000' ) then
+        call TimerStart(GearTimer05, 1.0, true, null)
+    endif
+endfunction
+function Init takes nothing returns nothing
+    set GearTimer05=CreateTimer()
+endfunction
+function main takes nothing returns nothing
+endfunction
+";
+        var doc = BuildMap(jass);
+
+        var result = RuntimeReadinessCommand.Check(doc, "H000", ownerId: 0);
+
+        var f = Assert.Single(result.Findings, f => f.Issue == ReadinessIssue.GlobalNeverAssigned);
+        Assert.Equal("GearTimer05", f.Global);
+        Assert.Contains("Init", f.Detail, StringComparison.Ordinal);
+        Assert.Contains("never calls", f.Detail, StringComparison.Ordinal);
+        // Still a Warning, the same severity rule as every other GlobalNeverAssigned finding.
+        Assert.Equal(DiagnosticSeverity.Warning, f.Severity);
+        Assert.True(result.Ready, "a Warning-only finding must not flip the verdict to not-ready");
+    }
+
+    [Fact]
+    public void GlobalNeverAssigned_stays_quiet_when_the_assigning_function_is_reached_through_a_callback()
+    {
+        // The dead-function check must follow the SAME wiring forms the reachability closure
+        // elsewhere in this codebase already recognizes, a TriggerAddAction registering "function
+        // Setup" as a callback is just as live as a direct call, once InitCustomTriggers (which
+        // main calls) creates the trigger that will eventually run it.
+        const string jass = @"globals
+    timer GearTimer05
+    trigger gg_trg_Setup
+endglobals
+function TestHandler takes nothing returns nothing
+    if ( GetUnitTypeId(GetTriggerUnit()) == 'H000' ) then
+        call TimerStart(GearTimer05, 1.0, true, null)
+    endif
+endfunction
+function Setup takes nothing returns nothing
+    set GearTimer05=CreateTimer()
+endfunction
+function InitCustomTriggers takes nothing returns nothing
+    set gg_trg_Setup = CreateTrigger()
+    call TriggerAddAction(gg_trg_Setup, function Setup)
+endfunction
+function main takes nothing returns nothing
+    call InitCustomTriggers()
 endfunction
 ";
         var doc = BuildMap(jass);
