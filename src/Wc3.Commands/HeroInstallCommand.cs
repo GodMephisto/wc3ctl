@@ -101,9 +101,12 @@ public static class HeroInstallCommand
                     fields++;
         }
 
-        // 3. Assets, now that nothing has been refused.
+        // 3. Assets, now that nothing has been refused. Each one also gets a war3map.imp entry:
+        // an archive file the import table does not declare is a real inconsistency, and 'lint'
+        // reports it, so writing the bytes without the entry only moves the bug.
         foreach (var (path, bytes) in pending)
             FileEditCommand.AddOrReplace(target, path, bytes);
+        if (pending.Count > 0) AddImportEntries(target, pending.Select(p => p.path));
 
         // 4. Script, rewritten through the remap so no carried code depends on an original code.
         if (def.ScriptFile is not null)
@@ -117,6 +120,9 @@ public static class HeroInstallCommand
                 var existing = target.GetFile("war3map.j");
                 var head = existing is null ? "" :
                     Encoding.UTF8.GetString(existing.OverrideBytes ?? existing.RawBytes);
+                // Globals must land INSIDE the target's own globals block; appended after it they
+                // are a syntax error, and the carried functions that read them will not compile.
+                head = InsertGlobals(head, def.Globals, remap);
                 FileEditCommand.WriteText(target, "war3map.j",
                     head + "\n\n// ==== wc3ctl hero: " + def.Name + " (" + def.Id + ") ====\n" + body);
             }
@@ -240,6 +246,79 @@ public static class HeroInstallCommand
         lines.Insert(last + 1, call);
         FileEditCommand.WriteText(target, entry.FileName!, string.Join("\n", lines));
         return true;
+    }
+
+    /// <summary>
+    /// Appends paths to <c>war3map.imp</c>, bumping its declared count. The table is a version and
+    /// a count followed by (flag byte, NUL-terminated path) records; the flag is copied from the
+    /// map's own first entry rather than guessed.
+    /// </summary>
+    private static void AddImportEntries(MapDocument target, IEnumerable<string> paths)
+    {
+        var entry = target.GetFile("war3map.imp");
+        var existing = entry is null ? Array.Empty<byte>() : (entry.OverrideBytes ?? entry.RawBytes);
+        byte flag = existing.Length > 8 ? existing[8] : (byte)0x0D;
+
+        uint version = 1, count = 0;
+        var body = new List<byte>();
+        if (existing.Length >= 8)
+        {
+            version = BitConverter.ToUInt32(existing, 0);
+            count = BitConverter.ToUInt32(existing, 4);
+            body.AddRange(existing.Skip(8));
+        }
+
+        foreach (var p in paths)
+        {
+            body.Add(flag);
+            body.AddRange(Encoding.UTF8.GetBytes(p));
+            body.Add(0);
+            count++;
+        }
+
+        var rebuilt = new List<byte>();
+        rebuilt.AddRange(BitConverter.GetBytes(version));
+        rebuilt.AddRange(BitConverter.GetBytes(count));
+        rebuilt.AddRange(body);
+        FileEditCommand.AddOrReplace(target, "war3map.imp", rebuilt.ToArray());
+    }
+
+    /// <summary>
+    /// Splices the definition's globals in just before the target's <c>endglobals</c>, rewriting
+    /// rawcode literals through the install remap so a carried declaration cannot reference a code
+    /// that was renamed. A name the target already declares is skipped rather than duplicated.
+    /// </summary>
+    private static string InsertGlobals(string script, IReadOnlyList<string> globals,
+        IReadOnlyDictionary<string, string> remap)
+    {
+        if (globals.Count == 0) return script;
+        var lines = script.Split('\n').ToList();
+        int end = lines.FindIndex(l => l.Trim() == "endglobals");
+        if (end < 0) return script;
+
+        var already = new HashSet<string>(StringComparer.Ordinal);
+        var name = new System.Text.RegularExpressions.Regex(
+            @"^\s*(?:constant\s+)?[A-Za-z_][A-Za-z0-9_]*\s+(?:array\s+)?([A-Za-z_][A-Za-z0-9_]*)");
+        for (int i = 0; i < end; i++)
+        {
+            var m = name.Match(lines[i]);
+            if (m.Success) already.Add(m.Groups[1].Value);
+        }
+
+        var add = new List<string>();
+        foreach (var g in globals)
+        {
+            var m = name.Match(g);
+            if (m.Success && already.Contains(m.Groups[1].Value)) continue;
+            var line = g;
+            foreach (var (from, to) in remap)
+                line = line.Replace($"'{from}'", $"'{to}'", StringComparison.Ordinal);
+            add.Add(line);
+        }
+        if (add.Count == 0) return script;
+
+        lines.InsertRange(end, add);
+        return string.Join("\n", lines);
     }
 
     private static InstallResult Fail(string message) =>

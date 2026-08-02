@@ -26,6 +26,7 @@ public class HeroDefinitionTests
         new[] { "Shadow Nanaya" },
         "script.j",
         new[] { "DarkShikiW_Start" },
+        new[] { "integer si__DarkShikiSpells_F= 0" },
         new[] { new DefinitionRequirement("roster-registration", "target must register this", false) },
         new[] { "66 objects excluded" });
 

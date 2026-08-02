@@ -66,6 +66,13 @@ public sealed record HeroDefinition(
     IReadOnlyList<string> Strings,
     string? ScriptFile,
     IReadOnlyList<string> ScriptEntryPoints,
+    /// <summary>
+    /// Global declarations the carried functions read, verbatim. Without these the script
+    /// does not compile: carrying functions alone produced 50 'undeclared variable' errors,
+    /// which is the same fatal outcome as a missing callee, and an un-compilable war3map.j
+    /// means a hosted map shows no player slots.
+    /// </summary>
+    IReadOnlyList<string> Globals,
     IReadOnlyList<DefinitionRequirement> Requires,
     IReadOnlyList<string> ReviewNotes)
 {
