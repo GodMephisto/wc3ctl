@@ -96,6 +96,21 @@ public class HeroSystemAuditTests
         Assert.Equal(29, missing[0].HeroCount);
     }
 
+    /// <summary>
+    /// A generated map comments retired lines out rather than deleting them, and a porter writes
+    /// provenance comments naming the rawcodes it carried. Counting those charged a hero to a table
+    /// whose live code never mentions her.
+    /// </summary>
+    [Fact]
+    public void IgnoresRawcodesThatAppearOnlyInComments()
+    {
+        var script = "function Registry takes nothing returns nothing\n"
+                     + string.Concat(Natives.Select(c => $"    // retired: call Register('{c}')\n"))
+                     + "endfunction\n";
+
+        Assert.Empty(HeroSystemAudit.Run(script, Roster(), "H0ZZ"));
+    }
+
     [Fact]
     public void AMapWithNoRosterIsNotAudited()
     {

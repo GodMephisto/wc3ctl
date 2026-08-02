@@ -102,8 +102,17 @@ public static class ContractCommand
 
     private static readonly Regex RawcodeCall =
         new(@"\bcall\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(\s*'([^']{4})'", RegexOptions.Compiled);
+    /// <summary>
+    /// Leading whitespace and "constant" are both allowed, because a real map indents some of its
+    /// declarations and this pattern also ENDS a function for the dispatch scan. Anchored at column
+    /// zero it never closed an indented function, so every rawcode in the functions that followed
+    /// was charged to the last one that happened to start flush left. On GGGA that invented four
+    /// hero-kit ladders of 145, 109, 104 and 67 branches out of functions whose real bodies contain
+    /// no rawcode at all, and the tool told a human to hand-write branches into every one of them.
+    /// </summary>
     private static readonly Regex Declaration =
-        new(@"^function\s+([A-Za-z_][A-Za-z0-9_]*)\s+takes\s+(.*?)\s+returns", RegexOptions.Compiled);
+        new(@"^\s*(?:constant\s+)?function\s+([A-Za-z_][A-Za-z0-9_]*)\s+takes\s+(.*?)\s+returns",
+            RegexOptions.Compiled);
     private static readonly Regex GlobalArray =
         new(@"^\s*(unit|integer|player)\s+array\s+([A-Za-z_][A-Za-z0-9_]*)", RegexOptions.Compiled);
 
