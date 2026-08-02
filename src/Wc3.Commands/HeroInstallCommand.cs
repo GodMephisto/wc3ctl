@@ -131,6 +131,7 @@ public static class HeroInstallCommand
         // 4. Script, rewritten through the remap so no carried code depends on an original code.
         var bindings = new List<string>();
         var stubUnmet = new List<string>();
+        var castDispatchWired = new List<string>();
         if (def.ScriptFile is not null)
         {
             var scriptDisk = Path.Combine(definitionDirectory, def.ScriptFile);
@@ -153,6 +154,20 @@ public static class HeroInstallCommand
                 // Globals must land INSIDE the target's own globals block; appended after it they
                 // are a syntax error, and the carried functions that read them will not compile.
                 head = InsertGlobals(head, def.Globals, remap);
+
+                // The closure brings the source map's cast dispatcher but not the trigger that
+                // drove it, because a trigger is a runtime handle and not a function. Measured on
+                // GGGA: the carried dispatcher was declared, referenced nowhere, and every one of
+                // the hero's spell-start functions was unreachable. Wire it, gated to this hero.
+                string installedForDispatch = remap.TryGetValue(def.Id, out var dispatchCode) ? dispatchCode : def.Id;
+                var wirings = CarriedCastDispatch.Wire(head, body, installedForDispatch);
+                if (wirings.Count > 0)
+                {
+                    body += string.Concat(wirings.Select(w => w.GeneratedScript));
+                    head = CarriedCastDispatch.InsertIntoMain(head, wirings.Select(w => w.InitCall));
+                    foreach (var w in wirings)
+                        castDispatchWired.Add(w.ConditionFunction);
+                }
                 // Latin-1 out, not FileEditCommand.WriteText, which is UTF-8. The head was DECODED
                 // as Latin-1, so re-encoding it as UTF-8 turns each of the target's 51,779
                 // non-ASCII bytes into two, silently mangling every localised string and author
@@ -265,7 +280,12 @@ public static class HeroInstallCommand
                      + "hero keeps the source map's attributes and pools, which is only right when "
                      + "both maps model heroes the same way.");
 
-        if (contract.SpellDispatchers.Count == 0)
+        foreach (var fn in castDispatchWired)
+            next.Add($"cast dispatch wired: the port carried '{fn}' and nothing drove it, so the "
+                     + "hero's spells were unreachable. A trigger now runs it on spell effect, gated "
+                     + $"to '{installedRoot}' so no other unit's cast can enter carried code.");
+
+        if (contract.SpellDispatchers.Count == 0 && castDispatchWired.Count == 0)
             unmet.Add("spell-dispatch: no cast dispatcher detected; the hero's abilities may exist "
                       + "but do nothing.");
 
