@@ -61,7 +61,12 @@ public static class HeroSystemAudit
         if (members.Count <= MinRosterHeroes) return Array.Empty<HeroSystem>();
         int floor = Math.Max(MinRosterHeroes, (members.Count + RosterShareDivisor - 1) / RosterShareDivisor);
 
-        var lines = script.Split('\n');
+        // Comments are blanked first. A porter writes provenance comments naming the rawcodes it
+        // carried, and a generated map keeps retired lines commented out rather than deleting them,
+        // so counting those charged a hero to a table whose live code never mentions her. On GGGA
+        // that reported WS_Init_WorkingSourceGeneratedMapState on nothing but strings like
+        // "// WS_REBORN_REMOVED_LEGACY_PICK_DUMMY: set u=CreateUnit(p, 'H006', ...)".
+        var lines = JassComments.Strip(script.Split('\n'));
         var found = new List<HeroSystem>();
         foreach (var fn in JassFunctionIndex.Parse(script))
         {
