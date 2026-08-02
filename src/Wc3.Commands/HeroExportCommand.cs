@@ -172,28 +172,71 @@ public static class HeroExportCommand
     /// <c>call</c> alone misses most references, which is exactly how an earlier pass lost live
     /// code. Over-matching costs a few extra functions; under-matching breaks the script.
     /// </summary>
+    /// <summary>Wurst emits s__Class_method / si__Class_field / dispatch_Class_method.</summary>
+    private static readonly System.Text.RegularExpressions.Regex WurstSymbol =
+        new(@"^(?:s__|si__|sc__|dispatch_|init_)([A-Za-z0-9]+?)_", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>
+    /// Transitive callees of the seed set, STOPPING at the boundary of a Wurst class the hero does
+    /// not belong to.
+    /// </summary>
+    /// <remarks>
+    /// Unbounded call-following carried 1,138 functions for a 10-ability hero, of which only 30
+    /// were hers. The rest were the source map's item shop and the Wurst standard library
+    /// (ShopUI, ShopAppearance, ItemInShop, LinkedList, HashList, Table...), reached because one
+    /// utility call leads into the generated class dispatcher and from there to everything the map
+    /// ever compiled. That volume is what a target cannot absorb.
+    ///
+    /// Wurst's output is namespaced, so the seam is in the naming rather than in the call graph:
+    /// the hero's own class is discoverable from the seeds, and any OTHER class is a separate
+    /// concern to be declared as a requirement instead of swallowed. Hand-written JASS has no such
+    /// marker and is still followed normally.
+    ///
+    /// Matching a name followed by '(' as well as 'function X' is deliberate: JASS uses the
+    /// <c>call</c> keyword ONLY for statement-level calls, so a call inside an expression carries
+    /// no keyword, and keying on <c>call</c> alone loses most references.
+    /// </remarks>
     private static HashSet<string> Closure(
-        Dictionary<string, (int start, int end)> spans, IEnumerable<string> seed)
+        Dictionary<string, (int start, int end)> spans, IEnumerable<string> seed,
+        SortedSet<string> excludedClasses)
     {
+        var seedList = seed.Where(spans.ContainsKey).ToList();
+
+        // Classes the hero's own functions belong to; everything else is somebody else's system.
+        var ownClasses = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var name in seedList)
+        {
+            var m = WurstSymbol.Match(name);
+            if (m.Success) ownClasses.Add(m.Groups[1].Value);
+        }
+
         var reference = new System.Text.RegularExpressions.Regex(
             @"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(|\bfunction\s+([A-Za-z_][A-Za-z0-9_]*)");
         var keep = new HashSet<string>(StringComparer.Ordinal);
-        var queue = new Queue<string>(seed.Where(spans.ContainsKey));
+        var queue = new Queue<string>(seedList);
         while (queue.Count > 0)
         {
             var name = queue.Dequeue();
             if (!keep.Add(name)) continue;
-            var (start, end) = spans[name];
-            for (int i = start; i <= end; i++)
-                foreach (System.Text.RegularExpressions.Match m in reference.Matches(lineOf(i)))
+            var (from, to) = spans[name];
+            for (int i = from; i <= to; i++)
+                foreach (System.Text.RegularExpressions.Match m in reference.Matches(_scriptLines![i]))
                 {
                     var callee = m.Groups[1].Success ? m.Groups[1].Value : m.Groups[2].Value;
-                    if (spans.ContainsKey(callee) && !keep.Contains(callee)) queue.Enqueue(callee);
+                    if (!spans.ContainsKey(callee) || keep.Contains(callee)) continue;
+
+                    var wm = WurstSymbol.Match(callee);
+                    if (wm.Success && !ownClasses.Contains(wm.Groups[1].Value))
+                    {
+                        // A different Wurst class: record it as infrastructure the target must
+                        // already provide, and do not walk into it.
+                        excludedClasses.Add(wm.Groups[1].Value);
+                        continue;
+                    }
+                    queue.Enqueue(callee);
                 }
         }
         return keep;
-
-        string lineOf(int i) => _scriptLines is null || i >= _scriptLines.Length ? "" : _scriptLines[i];
     }
 
     [ThreadStatic] private static string[]? _scriptLines;
@@ -244,6 +287,7 @@ public static class HeroExportCommand
 
         string? scriptFile = null;
         var entryPoints = new List<string>();
+        var excludedClassNames = new SortedSet<string>(StringComparer.Ordinal);
         var globals = new List<string>();
         if (bundle.Functions.Count > 0 && doc.GetFile("war3map.j") is { } js)
         {
@@ -256,7 +300,7 @@ public static class HeroExportCommand
             // hosted map has no player slots. Over-including here is cheap; under-including is not.
             _scriptLines = lines;
             var spans = IndexFunctions(lines);
-            var wanted = Closure(spans, bundle.Functions.Select(f => f.Name));
+            var wanted = Closure(spans, bundle.Functions.Select(f => f.Name), excludedClassNames);
             var reason = bundle.Functions.ToDictionary(f => f.Name, f => f.Reason, StringComparer.Ordinal);
 
             var sb = new StringBuilder();
@@ -300,6 +344,13 @@ public static class HeroExportCommand
                 + "will exist but do nothing",
                 Satisfiable: false),
         };
+        // Wurst classes the closure deliberately stopped at. These are the source map's own
+        // systems and standard library, not the hero's, so the target must already provide them.
+        // Swallowing them instead is what produced 1,138 functions for a 30-function hero.
+        foreach (var cls in excludedClassNames)
+            requires.Add(new DefinitionRequirement("wurst-class",
+                $"the target must provide the Wurst class '{cls}', which this hero's code calls into",
+                Satisfiable: false));
 
         int excludedObjects = bundle.Objects.Count - objects.Count;
         int excludedFiles = bundle.Files.Count - assets.Count;
