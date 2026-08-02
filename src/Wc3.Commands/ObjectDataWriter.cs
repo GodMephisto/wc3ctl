@@ -42,7 +42,8 @@ internal static class ObjectDataWriter
         var info = ObjectKinds.Info(kind);
         if (doc.GetFile(info.MapFile) is { } entry)
             return entry.Model;
-        var version = FormatVersionOf(doc.GetFile(info.SkinFile)?.Model) ?? ObjectDataFormatVersion.v2;
+        var version = ObjectDataSets.FormatVersionOf(doc.GetFile(info.SkinFile)?.Model)
+            ?? ObjectDataFormatVersion.v2;
         return kind switch
         {
             ObjectKind.Unit => new UnitObjectData(version),
@@ -55,18 +56,6 @@ internal static class ObjectDataWriter
             _ => throw new ArgumentOutOfRangeException(nameof(kind)),
         };
     }
-
-    private static ObjectDataFormatVersion? FormatVersionOf(object? model) => model switch
-    {
-        UnitObjectData m => m.FormatVersion,
-        ItemObjectData m => m.FormatVersion,
-        AbilityObjectData m => m.FormatVersion,
-        DestructableObjectData m => m.FormatVersion,
-        DoodadObjectData m => m.FormatVersion,
-        BuffObjectData m => m.FormatVersion,
-        UpgradeObjectData m => m.FormatVersion,
-        _ => null,
-    };
 
     /// <summary>Adapter for a model of any of the seven kinds; null for anything else
     /// (e.g. a file that parsed as an unexpected type).</summary>

@@ -464,6 +464,15 @@ public sealed class MapDocument
         // Raw override (added assets, replaced script text, non-faithful formats).
         if (entry.OverrideBytes is not null) return entry.OverrideBytes;
 
+        // A Reforged (version 3) object-data model must carry the per-object modification
+        // set prefix on EVERY group, including the ones a caller just built in memory.
+        // Without it War3Net emits setCount 0 and the game's parser derails at the first
+        // added object, which crashed Warcraft III before main ran (see ObjectDataSets).
+        // Seeded here rather than at each group-creating call site because this is the one
+        // choke point every object-data write passes through, so no future writer can
+        // reintroduce the crash. No-op for other models and for already-prefixed groups.
+        ObjectDataSets.EnsureSetPrefixes(entry.Model);
+
         // Typed models with a byte-faithful War3Net writer (all seven object-data
         // kinds share the ReadXxxObjectData/Write(xxx) round-trip; skin twins carry
         // the same model types, so dispatch on the model, not the file name).
