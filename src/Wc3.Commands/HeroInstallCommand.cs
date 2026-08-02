@@ -400,8 +400,18 @@ public static class HeroInstallCommand
         if (args.Count == 0) return $"    call {roster.Function}('{rawcode}')";
 
         var built = new List<string> { $"'{rawcode}'" };
-        string? icon = def.Assets.FirstOrDefault(a =>
-            a.Category.Equals("icon", StringComparison.OrdinalIgnoreCase))?.Path;
+        // Prefer the hero's OWN interface icon, the uico field, over whatever happens to be first
+        // in the asset list. Picking the first icon-shaped asset handed the roster an ABILITY icon
+        // (BTNHeroDarkiShiki_E, her E spell) as the hero's portrait, which is wrong and visible.
+        var root = def.Objects.FirstOrDefault(o => o.Origin == "root");
+        string? icon = root?.Fields
+                .FirstOrDefault(f => f.Code is "uico" or "ussi")?.Value
+            ?? def.Assets.FirstOrDefault(a =>
+                a.Category.Equals("icon", StringComparison.OrdinalIgnoreCase))?.Path;
+        // The field omits the extension; match it to a carried asset so the emitted path is real.
+        if (icon is not null && !icon.Contains('.'))
+            icon = def.Assets.FirstOrDefault(a =>
+                a.Path.StartsWith(icon, StringComparison.OrdinalIgnoreCase))?.Path ?? icon;
 
         for (int i = 1; i < args.Count; i++)
         {
