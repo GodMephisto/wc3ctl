@@ -521,21 +521,37 @@ public static class Render
         var sb = new StringBuilder();
         sb.AppendLine($"{r.Verdict}  ({r.SecondsElapsed:0.0}s)");
         sb.AppendLine($"  {r.Detail}");
-        sb.AppendLine($"  {r.StepsReached} of {r.StepsInstrumented} instrumented step(s) ran");
-        if (r.LastReached is not null) sb.AppendLine($"  last reached: {r.LastReached}");
-        if (r.FirstMissed is not null) sb.AppendLine($"  FIRST MISSED: {r.FirstMissed}");
+        sb.AppendLine($"  {r.FunctionsEntered} of {r.FunctionsInstrumented} instrumented function(s) "
+                      + $"entered, {r.StepsReached} of {r.StepsInstrumented} call site(s) ran");
+        if (r.LastReached is not null) sb.AppendLine($"  last event   {r.LastReached}");
+        // The unbalanced frame IS the answer when a map hangs, so it leads.
+        if (r.HangFunction is not null) sb.AppendLine($"  HANG SITE    {r.HangFunction} (entered, never returned)");
+        if (r.OpenFrames.Count > 1)
+            sb.AppendLine($"  open frames  {string.Join(" inside ", r.OpenFrames)}");
+        if (r.FunctionsSkippedByCap > 0 || r.CallSitesSkippedByCap > 0)
+            sb.AppendLine($"  CAPPED       {r.FunctionsSkippedByCap} function(s) and "
+                          + $"{r.CallSitesSkippedByCap} call site(s) carry no marker "
+                          + $"(caps are {r.FunctionCap} and {r.CallSiteCap})");
+        var entered = r.Frames.Where(f => f.Entered).OrderBy(f => f.EnteredAt).TakeLast(8).ToList();
+        if (entered.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("last functions entered, in the order they ran");
+            foreach (var f in entered)
+                sb.AppendLine($"  {(f.Open ? "OPEN" : "ok  ")}  {f.Function}");
+        }
         var tail = r.Steps.Where(s2 => s2.Reached).TakeLast(6).ToList();
         if (tail.Count > 0)
         {
             sb.AppendLine();
-            sb.AppendLine("last steps that ran:");
+            sb.AppendLine("last call sites that ran (source order, not run order)");
             foreach (var s2 in tail) sb.AppendLine($"  {s2.Index,5}  {s2.Label}");
         }
         var missed = r.Steps.Where(s2 => !s2.Reached).Take(4).ToList();
         if (missed.Count > 0)
         {
             sb.AppendLine();
-            sb.AppendLine("first steps that did NOT run:");
+            sb.AppendLine("first call sites that did NOT run");
             foreach (var s2 in missed) sb.AppendLine($"  {s2.Index,5}  {s2.Label}");
         }
         return sb.ToString().TrimEnd();
