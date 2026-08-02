@@ -78,8 +78,12 @@ public static class HeroExportCommand
         var pattern = string.Join("|", rename.Keys
             .OrderByDescending(k => k.Length)
             .Select(System.Text.RegularExpressions.Regex.Escape));
+        // A match preceded by a backslash is part of an escape sequence, not an identifier.
+        // Without this guard a carried global named 'n' turned every "\\n" in the script into
+        // "\\hH0DA__n", which pjass rejects as an invalid escape sequence. A word boundary is
+        // not enough here because the backslash IS a word boundary.
         return System.Text.RegularExpressions.Regex.Replace(
-            text, @"\b(?:" + pattern + @")\b",
+            text, @"(?<!\\)\b(?:" + pattern + @")\b",
             m => rename.TryGetValue(m.Value, out var to) ? to : m.Value);
     }
 
@@ -123,30 +127,41 @@ public static class HeroExportCommand
                     if (declOf.ContainsKey(m.Value)) used.Add(m.Value);
         }
 
+        // A carried global's INITIALISER can name another global, so closing only over function
+        // bodies leaves those dangling: 'integer A= B' carried without B fails with "Undeclared
+        // variable B". Iterate until the set stops growing.
+        bool grew = true;
+        while (grew)
+        {
+            grew = false;
+            foreach (var name in used.ToList())
+                foreach (System.Text.RegularExpressions.Match m in word.Matches(declOf[name]))
+                    if (m.Value != name && declOf.ContainsKey(m.Value) && used.Add(m.Value))
+                        grew = true;
+        }
+
         // Preserve the source's declaration order: a constant may initialise from an earlier one.
         return declOf.Where(kv => used.Contains(kv.Key)).Select(kv => kv.Value)
             .OrderBy(line => Array.IndexOf(lines, line)).ToList();
     }
 
-    /// <summary>Every function declaration in the script, mapped to its line span.</summary>
+    /// <summary>
+    /// Every function declaration mapped to its line span, via the shared
+    /// <see cref="JassFunctionIndex"/> rather than a local regex.
+    /// </summary>
+    /// <remarks>
+    /// A hand-rolled matcher here required <c>function</c> at column zero, so an INDENTED
+    /// declaration was invisible to it. Those functions never entered the closure and the emitted
+    /// script failed with "Undeclared function MakeSound". <c>JassFunctionIndex</c> exists in this
+    /// repo precisely because throwaway scans miss that (it also handles <c>constant function</c>,
+    /// trailing line comments, and vJASS <c>function interface</c>), so the fix is to use it rather
+    /// than to keep a second, weaker parser alongside it.
+    /// </remarks>
     private static Dictionary<string, (int start, int end)> IndexFunctions(string[] lines)
     {
         var spans = new Dictionary<string, (int, int)>(StringComparer.Ordinal);
-        var decl = new System.Text.RegularExpressions.Regex(@"^function\s+([A-Za-z_][A-Za-z0-9_]*)");
-        string? open = null; int openAt = 0;
-        for (int i = 0; i < lines.Length; i++)
-        {
-            if (open is null)
-            {
-                var m = decl.Match(lines[i]);
-                if (m.Success) { open = m.Groups[1].Value; openAt = i; }
-            }
-            else if (lines[i].StartsWith("endfunction", StringComparison.Ordinal))
-            {
-                spans[open] = (openAt, i);
-                open = null;
-            }
-        }
+        foreach (var fn in JassFunctionIndex.Parse(string.Join("\n", lines)))
+            spans[fn.Name] = (fn.StartLine - 1, fn.EndLine - 1);   // Parse reports 1-based lines
         return spans;
     }
 
