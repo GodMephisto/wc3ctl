@@ -91,6 +91,7 @@ public class CliMcpParityTests
         // Samples a live Warcraft III process to tell a spin from a stall. Needs a running game on
         // this machine, so it is inherently local and cannot be driven remotely.
         "debug game-hang",
+        "debug trace-load",
         // NOTE: 'lint' is here provisionally and is the one entry that arguably belongs in MCP -
         // "is this map going to work" is exactly the question an agent should be able to ask before
         // handing a map over. Wiring it is a follow-up, not a decision that it should stay CLI-only.

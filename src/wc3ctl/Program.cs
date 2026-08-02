@@ -1773,6 +1773,29 @@ public static class Program
         hero.AddCommand(heroLint);
         root.AddCommand(hero);
 
+        // Records HOW FAR initialisation gets, not just whether it finished. A hang on the loading
+        // screen otherwise gives nothing at all: no error, no log, no crash dump.
+        var trTimeout = new Option<double>("--timeout", () => 180, "Seconds to wait.");
+        var trDocs = new Option<string?>("--documents",
+            @"Warcraft III documents folder. Default: Documents\Warcraft III.");
+        var traceLoad = new Command("trace-load",
+            "Instrument a map's initialisation with numbered markers, load it, and report the last "
+            + "step that ran and the first that did not. Turns 'stuck on loading' into a line number.")
+        { mapArg, trTimeout, trDocs, jsonOption };
+        traceLoad.SetHandler(ctx => RunSafely(() =>
+        {
+            var pt = ctx.ParseResult;
+            var docs = pt.GetValueForOption(trDocs) ?? Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Warcraft III");
+            var gd = Wc3.GameData.GameInstall.Locate(pt.GetValueForOption(gameDirOption))
+                ?? throw new InvalidOperationException("Could not locate the Warcraft III install; pass --game-dir.");
+            var rt = TraceLoadCommand.Run(pt.GetValueForArgument(mapArg), gd, docs,
+                pt.GetValueForOption(trTimeout));
+            if (rt.Verdict != "COMPLETED") exitCode[0] = 1;
+            Emit(pt.GetValueForOption(jsonOption), rt, () => Render.TraceLoad(rt));
+        }));
+        debug.AddCommand(traceLoad);
+
         root.AddCommand(lint);
 
         // Container-level comparison. 'diff' compares file CONTENTS, which is why a rebuilt

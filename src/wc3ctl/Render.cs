@@ -516,6 +516,31 @@ public static class Render
         return sb.ToString().TrimEnd();
     }
 
+    public static string TraceLoad(TraceLoadResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.Verdict}  ({r.SecondsElapsed:0.0}s)");
+        sb.AppendLine($"  {r.Detail}");
+        sb.AppendLine($"  {r.StepsReached} of {r.StepsInstrumented} instrumented step(s) ran");
+        if (r.LastReached is not null) sb.AppendLine($"  last reached: {r.LastReached}");
+        if (r.FirstMissed is not null) sb.AppendLine($"  FIRST MISSED: {r.FirstMissed}");
+        var tail = r.Steps.Where(s2 => s2.Reached).TakeLast(6).ToList();
+        if (tail.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("last steps that ran:");
+            foreach (var s2 in tail) sb.AppendLine($"  {s2.Index,5}  {s2.Label}");
+        }
+        var missed = r.Steps.Where(s2 => !s2.Reached).Take(4).ToList();
+        if (missed.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("first steps that did NOT run:");
+            foreach (var s2 in missed) sb.AppendLine($"  {s2.Index,5}  {s2.Label}");
+        }
+        return sb.ToString().TrimEnd();
+    }
+
     public static string Lint(LintResult r)
     {
         var sb = new StringBuilder();
