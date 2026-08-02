@@ -96,6 +96,7 @@ public static class HeroInstallCommand
 
         // 2. Objects. Created from their base, so the target's existing codes are never disturbed.
         var remap = new Dictionary<string, string>(StringComparer.Ordinal);
+        var plan = new List<(ObjectKind Kind, string Code, DefinitionObject Object)>();
         int created = 0, fields = 0;
         foreach (var o in def.Objects)
         {
@@ -105,10 +106,19 @@ public static class HeroInstallCommand
             if (!made.Ok || made.NewRawcode is null) continue;
             remap[o.Rawcode] = made.NewRawcode;
             created++;
-            foreach (var f in o.Fields)
-                if (ObjectSetCommand.Execute(target, kind, made.NewRawcode, f.Code, f.Value).Ok)
-                    fields++;
+            plan.Add((kind, made.NewRawcode, o));
         }
+
+        // Fields are applied in a SECOND pass, after every object exists and the remap is complete.
+        // A field value can name another carried rawcode, and a hero's ability list is exactly
+        // that: uhab = "A1QZ,A1R1,...". Writing it verbatim pointed the installed hero at the
+        // SOURCE map's ability codes, which do not exist in the target, so she arrived with no
+        // abilities at all. Applying fields inside the creation loop could not have worked either,
+        // since an object referenced later in the list has not been created yet.
+        foreach (var (kind, code, o) in plan)
+            foreach (var f in o.Fields)
+                if (ObjectSetCommand.Execute(target, kind, code, f.Code, RemapRawcodes(f.Value, remap)).Ok)
+                    fields++;
 
         // 3. Assets, now that nothing has been refused. Each one also gets a war3map.imp entry:
         // an archive file the import table does not declare is a real inconsistency, and 'lint'
@@ -739,6 +749,37 @@ public static class HeroInstallCommand
 
         assumptions.Add($"display-name branch copied from the last '{chain}' branch at line {cond + 1}");
         return setLine.Trim();
+    }
+
+    /// <summary>
+    /// Rewrites any carried rawcode appearing in a field value through the install remap.
+    /// </summary>
+    /// <remarks>
+    /// Object fields reference other objects by rawcode, and a comma separated list is the common
+    /// shape (a hero's uhab and uabi list her abilities that way). Install has to rename objects
+    /// because the target's codes are its own, so a value copied verbatim points at codes that do
+    /// not exist there. The symptom is silent: the hero installs cleanly, the script compiles, and
+    /// she simply has no abilities in game.
+    /// Only whole four character tokens are replaced, so a path or a piece of prose that happens to
+    /// contain four matching characters is left alone.
+    /// </remarks>
+    private static string RemapRawcodes(string value, IReadOnlyDictionary<string, string> remap)
+    {
+        if (remap.Count == 0 || string.IsNullOrEmpty(value)) return value;
+        if (value.Contains('\\') || value.Contains('/')) return value;   // an asset path, never a code list
+
+        var parts = value.Split(',');
+        bool changed = false;
+        for (int i = 0; i < parts.Length; i++)
+        {
+            var token = parts[i].Trim();
+            if (token.Length == 4 && remap.TryGetValue(token, out var to))
+            {
+                parts[i] = parts[i].Replace(token, to, StringComparison.Ordinal);
+                changed = true;
+            }
+        }
+        return changed ? string.Join(",", parts) : value;
     }
 
     private static InstallResult Fail(string message) =>

@@ -364,9 +364,27 @@ public static class HeroExportCommand
                 o.Rawcode == bundle.RootRawcode ? "root" : "dependency", fields));
         }
 
+        // Asset paths named by the carried objects' OWN fields, which the script closure never
+        // sees. A hero's model (umdl) and icon (uico/ussi) live only in object data, so a bundle
+        // built from script references carried her ability icons and left her with no model and no
+        // portrait in game. Those are exactly the fields a player notices first.
+        var fieldAssets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var o in objects)
+            foreach (var f in o.Fields)
+                if (AssetPathCandidates.LooksLikeAssetPath(f.Value))
+                    foreach (var cand in AssetPathCandidates.Expand(f.Value))
+                        if (doc.GetFile(cand) is not null) { fieldAssets.Add(cand); break; }
+
         var assets = new List<DefinitionAsset>();
         long bytes = 0;
-        foreach (var f in bundle.Files.Where(f => realFiles.Contains(f.Path)))
+        var wantedAssets = bundle.Files.Where(f => realFiles.Contains(f.Path)).Select(f => f.Path)
+            .Concat(fieldAssets)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(p2 => bundle.Files.FirstOrDefault(bf =>
+                string.Equals(bf.Path, p2, StringComparison.OrdinalIgnoreCase))
+                ?? new BundleFile(p2, "field", true));
+
+        foreach (var f in wantedAssets)
         {
             var entry = doc.GetFile(f.Path);
             if (entry is null) continue;
