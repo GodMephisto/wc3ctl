@@ -80,6 +80,10 @@ public class CliMcpParityTests
         // not an agent, reports where its cast chain stops. A one-off local investigation aid over
         // a disposable copy of a map, not something an agent drives through MCP.
         "debug wiring",
+        // Raw byte write from a disk path, the exact counterpart of 'extract' (also CLI-only).
+        // Both sides of that pair move opaque bytes between the filesystem and an archive, a
+        // local file operation rather than map semantics an agent would reason about.
+        "file set",
     };
 
     // The real MCP tool names, read straight from the [McpServerTool] attributes the

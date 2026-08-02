@@ -1555,6 +1555,33 @@ public static class Program
         region.AddCommand(regionList);
         region.AddCommand(regionRemove);
 
+        // Writing a raw file into an archive was already implemented in the command layer
+        // (FileEditCommand); only this front-end wiring was missing. It becomes necessary as
+        // soon as a map's OWN script has to be patched rather than regenerated - registering
+        // a ported hero in the target's hero registry, for one - because a map's integration
+        // points live in its script, not in its object data.
+        var fileNameArg = new Argument<string>("internal-path",
+            "Path inside the archive, for example war3map.j or war3mapImported\\Icon.blp.");
+        var fileSrcArg = new Argument<string>("source",
+            "Disk file whose bytes are written into the archive verbatim.");
+        var fileSet = new Command("set",
+            "Write a disk file into the map, replacing that entry or adding it, and save the edited map.")
+        { mapArg, fileNameArg, fileSrcArg, setOut };
+        fileSet.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = FileEditCommand.AddOrReplace(doc, p.GetValueForArgument(fileNameArg),
+                File.ReadAllBytes(p.GetValueForArgument(fileSrcArg)));
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, true,
+                $"{(r.Replaced ? "replaced" : "added")} {r.Name} ({r.SizeBytes} bytes)");
+        }));
+
+        var file = new Command("file", "Raw file editing inside a map archive. Read with 'extract'.");
+        file.AddCommand(fileSet);
+
+        root.AddCommand(file);
         root.AddCommand(info); root.AddCommand(ls); root.AddCommand(rt);
         root.AddCommand(search); root.AddCommand(diff); root.AddCommand(obj);
         root.AddCommand(extract); root.AddCommand(render); root.AddCommand(renderModel);

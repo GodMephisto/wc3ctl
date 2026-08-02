@@ -249,7 +249,14 @@ public sealed class MapDocument
         // object changes the emitted (listfile)/(attributes) even when only HashTableSize
         // is set on it. So take the plain overload untouched whenever the inherited table
         // is safe, which keeps every already-working map byte-for-byte as it was.
-        if (grown is null)
+        if (DropMpqBookkeeping)
+            builder.SaveTo(mpq, new MpqArchiveCreateOptions
+            {
+                HashTableSize = grown,
+                ListFileCreateMode = MpqFileCreateMode.Prune,
+                AttributesCreateMode = MpqFileCreateMode.Prune,
+            }, leaveOpen: true);
+        else if (grown is null)
             builder.SaveTo(mpq, leaveOpen: true);
         else
             builder.SaveTo(mpq, new MpqArchiveCreateOptions { HashTableSize = grown }, leaveOpen: true);
@@ -301,6 +308,21 @@ public sealed class MapDocument
 
     // 'MPQ\x1A', the archive header magic.
     const uint MpqSignature = 0x1A51504D;
+
+    /// <summary>
+    /// Drops the optional MPQ bookkeeping files, <c>(listfile)</c> and <c>(attributes)</c>,
+    /// instead of regenerating them. Warcraft III needs neither: it resolves a map's files
+    /// through the hash table by name, and treats attributes as advisory.
+    /// </summary>
+    /// <remarks>
+    /// Diagnostic switch, off by default. Regenerating <c>(attributes)</c> rewrites a CRC32
+    /// per file, and a rebuild that recompresses even a handful of entries changes their
+    /// stored bytes, so a stale or disagreeing CRC is a load-time failure no content-level
+    /// check can see. Dropping both files removes that whole class of doubt from a rebuild.
+    /// Env var so it can be flipped for a single run without a rebuild or an API change.
+    /// </remarks>
+    internal static bool DropMpqBookkeeping =>
+        Environment.GetEnvironmentVariable("WC3CTL_DROP_MPQ_BOOKKEEPING") == "1";
 
     /// <summary>
     /// The hash table size a rebuild should use, or <c>null</c> to keep the source's own.
