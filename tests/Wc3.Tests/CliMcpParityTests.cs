@@ -84,6 +84,19 @@ public class CliMcpParityTests
         // Both sides of that pair move opaque bytes between the filesystem and an archive, a
         // local file operation rather than map semantics an agent would reason about.
         "file set",
+        // Container-level archive inspection. These read MPQ internals (storage flags, hash slot
+        // classification) to explain why a map that looks correct behaves wrongly. Diagnostics for
+        // whoever is debugging the toolchain, not map semantics an agent acts on.
+        "mpq-diff", "mpq-hash",
+        // Samples a live Warcraft III process to tell a spin from a stall. Needs a running game on
+        // this machine, so it is inherently local and cannot be driven remotely.
+        "debug game-hang",
+        // NOTE: 'lint' is here provisionally and is the one entry that arguably belongs in MCP -
+        // "is this map going to work" is exactly the question an agent should be able to ask before
+        // handing a map over. Wiring it is a follow-up, not a decision that it should stay CLI-only.
+        "lint",
+        // Heuristic script analysis for non-terminating loops. Reports candidates to read.
+        "script loops",
     };
 
     // The real MCP tool names, read straight from the [McpServerTool] attributes the

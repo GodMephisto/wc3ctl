@@ -127,12 +127,19 @@ public static class PjassGate
                 .Where(l => !l.StartsWith("Parse ", StringComparison.OrdinalIgnoreCase))
                 .ToList();
 
-            // "Variable x is uninitialized" is advisory. JASS zero-initializes locals, real shipped
-            // maps are full of them, and the repair this tool applies deliberately leaves a variable
-            // at its type default. Only the genuinely fatal diagnostics decide the verdict.
+            // "Variable x is uninitialized" is FATAL, not advisory. It was classified as advisory
+            // here on the belief that shipped maps are full of them. That belief is false: GGGA's
+            // own 206,845-line script reports zero. The cost of getting this wrong was severe - a
+            // ported map whose script could not compile passed `validate` clean, `script repair`
+            // consulted this gate and answered "nothing to repair", and the only symptom the user
+            // ever saw was being kicked from their own lobby, because a script that does not
+            // compile means config() never runs and the lobby has no slots. The porter itself
+            // creates these by dropping a declaration's initializer when it trims an unreachable
+            // call, and it marks them "//[wc3ctl trimmed] (initializer dropped)".
+            //
+            // Only a missing-but-real native stays advisory (see KnownRealNatives).
             bool IsAdvisory(string line) =>
-                line.Contains("is uninitialized", StringComparison.OrdinalIgnoreCase)
-                || line.Contains("failed with", StringComparison.OrdinalIgnoreCase)
+                line.Contains("failed with", StringComparison.OrdinalIgnoreCase)
                 || RealButUndeclaredNative(line);
 
             var errors = mine.Where(l => !IsAdvisory(l)).Take(50).ToList();
@@ -146,7 +153,7 @@ public static class PjassGate
 
             return new(true, passed, errors, warnings,
                 (passed ? "pjass found no fatal problem in the script" : $"pjass reported {errors.Count} error(s)")
-                + (warnings.Count == 0 ? "" : $", plus {warnings.Count} uninitialized-variable notice(s)")
+                + (warnings.Count == 0 ? "" : $", plus {warnings.Count} missing-but-real-native notice(s)")
                 + (summary.Length == 0 ? "" : $" [{summary}]"));
         }
         catch (Exception ex)

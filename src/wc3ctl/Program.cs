@@ -509,6 +509,23 @@ public static class Program
         }));
         bundle.AddCommand(bundleObject);
 
+
+        // Loops that may never terminate. A JASS loop that cannot exit presents as a tight native
+        // loop inside the game executable (the interpreter lives there), with no crash and no log,
+        // which is indistinguishable from an engine bug until you look at the script.
+        var loopsAll = new Option<bool>("--all", () => false,
+            "List every loop, not just the risky ones.");
+        var scriptLoops = new Command("loops",
+            "Find JASS loops that may never terminate: no exitwhen at all, or an exit condition "
+            + "naming only values the loop body never assigns.")
+        { mapArg, loopsAll, jsonOption };
+        scriptLoops.SetHandler(ctx => RunSafely(() =>
+        {
+            var p3 = ctx.ParseResult;
+            var doc3 = MapDocument.Load(p3.GetValueForArgument(mapArg));
+            var r3 = ScriptLoopsCommand.Run(doc3, onlyRisky: !p3.GetValueForOption(loopsAll));
+            Emit(p3.GetValueForOption(jsonOption), r3, () => Render.ScriptLoops(r3));
+        }));
         var script = new Command("script", "Map script queries.");
         var scriptFunctions = new Command("functions", "List functions declared in the map script.") { mapArg };
         scriptFunctions.SetHandler((string map, bool json) => RunSafely(() =>
@@ -518,6 +535,7 @@ public static class Program
         }), mapArg, jsonOption);
         script.AddCommand(scriptFunctions);
 
+        script.AddCommand(scriptLoops);
         var repairOut = new Option<string?>(new[] { "-o", "--out" },
             "Output map path. Default: '<map>.repaired.<ext>' next to the input - the original is never overwritten.");
         var scriptRepair = new Command("repair",
@@ -1580,6 +1598,94 @@ public static class Program
 
         var file = new Command("file", "Raw file editing inside a map archive. Read with 'extract'.");
         file.AddCommand(fileSet);
+
+        // Pre-flight checks that exist because their absence cost real debugging time. Every
+        // rule here corresponds to a failure that a green build, passing tests and a clean
+        // 'validate' all let through while a user could not host or load their map.
+        var lintAgainst = new Option<string?>("--against",
+            "Original map to compare against, enabling the checks that need a before/after: no file "
+            + "lost, and none of the target's own assets overwritten by a port.");
+        var lint = new Command("lint",
+            "Run pre-flight checks on a map: does the script compile, is war3map.imp consistent, do "
+            + "referenced assets resolve, are all file types loadable, and (with --against) did a "
+            + "rebuild lose or clobber anything.")
+        { mapArg, lintAgainst, jsonOption };
+        lint.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var doc = MapDocument.Load(p.GetValueForArgument(mapArg));
+            var against = p.GetValueForOption(lintAgainst) is { } a ? MapDocument.Load(a) : null;
+            var r = LintCommand.Run(doc, against);
+            if (!r.Ok) exitCode[0] = 1;
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.Lint(r));
+        }));
+        root.AddCommand(lint);
+
+        // Container-level comparison. 'diff' compares file CONTENTS, which is why a rebuilt
+        // archive with byte-identical files could fail to load and no tool we owned could say
+        // why. This reports how files are STORED, plus hash-table crowding.
+        var mapArgB = new Argument<string>("mapB", "Second map to compare against.");
+        var mpqDiff = new Command("mpq-diff",
+            "Compare two archives structurally: header, sector size, hash table capacity and "
+            + "crowding, and each file's storage flags, compressed size and offset. Use when two "
+            + "maps have identical contents but behave differently.")
+        { mapArg, mapArgB, jsonOption };
+        mpqDiff.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var d = MpqStructureCommand.Diff(p.GetValueForArgument(mapArg), p.GetValueForArgument(mapArgB));
+            Emit(p.GetValueForOption(jsonOption), d, () => Render.MpqDiff(d));
+        }));
+        root.AddCommand(mpqDiff);
+
+        // Hash table viewer. MPQ resolves a name by probing forward from its home slot and stops
+        // only at a NEVER-USED slot; a DELETED slot does not stop it. An archive with zero
+        // never-used slots therefore gives a failed lookup no terminator, and the probe runs
+        // forever. That is invisible unless the two are counted separately, which is exactly what
+        // this does.
+        var hashSample = new Option<int>("--slots", () => 0,
+            "Also dump this many slots from the start of the table.");
+        var mpqHash = new Command("mpq-hash",
+            "Inspect an archive's hash table: occupied, deleted and never-used slot counts, the "
+            + "worst-case probe length for a name that is absent, and whether a failed lookup can "
+            + "loop forever.")
+        { mapArg, hashSample, jsonOption };
+        mpqHash.SetHandler(ctx => RunSafely(() =>
+        {
+            var p2 = ctx.ParseResult;
+            var v = MpqHashTableCommand.Read(p2.GetValueForArgument(mapArg), p2.GetValueForOption(hashSample));
+            if (v.LookupCanLoopForever) exitCode[0] = 1;
+            Emit(p2.GetValueForOption(jsonOption), v, () => Render.MpqHash(v));
+        }));
+        root.AddCommand(mpqHash);
+
+        // Observe the running game. Static comparison could not explain a map that sits forever on
+        // the loading screen while being measurably equivalent to one that loads, so the behaviour
+        // has to be sampled instead of inferred. Read-only: reads OS counters, attaches nothing.
+        var hangSeconds = new Option<double>("--seconds", () => 5.0,
+            "How long to sample. Longer is steadier; 5s is enough to tell spinning from waiting.");
+        var hangThreads = new Option<int>("--threads", () => 6, "How many busiest threads to list.");
+        var hangIp = new Option<int>("--locate", () => 0,
+            "Take this many live instruction-pointer samples of the busiest thread and report which "
+            + "module it is executing in. Needs to briefly suspend that thread, so it is opt-in. "
+            + "Use 40 or so; 0 disables it.");
+        var hangName = new Option<string?>("--process",
+            "Process name override, if the game runs under a name this does not know.");
+        var gameHang = new Command("game-hang",
+            "Sample a running Warcraft III process to tell whether it is SPINNING (looping in its "
+            + "own code) or WAITING (blocked on I/O or a lock). Run it while a map is stuck on the "
+            + "loading screen.")
+        { hangSeconds, hangThreads, hangIp, hangName, jsonOption };
+        gameHang.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = GameHangCommand.Sample(p.GetValueForOption(hangSeconds),
+                p.GetValueForOption(hangThreads), p.GetValueForOption(hangName),
+                p.GetValueForOption(hangIp));
+            if (!r.Found) exitCode[0] = 1;
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.GameHang(r));
+        }));
+        debug.AddCommand(gameHang);
 
         root.AddCommand(file);
         root.AddCommand(info); root.AddCommand(ls); root.AddCommand(rt);

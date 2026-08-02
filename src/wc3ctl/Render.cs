@@ -240,4 +240,128 @@ public static class Render
 
     public static string Extract(ExtractManifest m, string dest) =>
         $"Extracted {m.Count} file(s) ({m.TotalBytes:N0} bytes) to {dest}";
+
+    public static string GameHang(HangReport r)
+    {
+        if (!r.Found) return r.Message;
+        var sb = new StringBuilder();
+        sb.AppendLine($"pid {r.ProcessId}, {r.Message}");
+        sb.AppendLine($"CPU used: {r.ProcessCpuMilliseconds:N0} ms over {r.SampleSeconds:0.0}s "
+                      + $"= {r.CpuCoresBusy:0.000} core(s) busy");
+        sb.AppendLine();
+        sb.AppendLine(r.Verdict);
+        if (r.BusiestThreads.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"{"thread",-9}{"cpu ms",9}  {"state",-12}{"wait reason",-22}start module");
+            foreach (var t in r.BusiestThreads)
+                sb.AppendLine($"{t.Id,-9}{t.CpuMillisecondsUsed,9:0.0}  {t.State,-12}{t.WaitReason,-22}{t.StartModule}");
+        }
+        if (r.HotThreadNote is not null || r.HotModules.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("Where the busiest thread was actually executing:");
+            foreach (var h in r.HotModules)
+                sb.AppendLine($"  {h.Percent,5:0.0}%  {h.Samples,4} sample(s)  {h.Module}  (e.g. {h.ExampleAddress})");
+            if (r.HotAddresses.Count > 0)
+            {
+                sb.AppendLine();
+                sb.AppendLine("Distinct addresses it was caught at (a short list means a tight loop):");
+                foreach (var a in r.HotAddresses)
+                    sb.AppendLine($"  {a.Percent,5:0.0}%  {a.Samples,4}x  {a.Module}{a.ModuleOffset}");
+            }
+            if (r.HotThreadNote is not null) sb.AppendLine($"  {r.HotThreadNote}");
+        }
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string ScriptLoops(ScriptLoopsResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.ScriptFile}: {r.TotalLoops} loop(s), {r.Findings.Count} reported, {r.HighRisk} high risk");
+        foreach (var f in r.Findings)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"[{f.Risk}] {f.Function}  lines {f.StartLine}-{f.EndLine}  "
+                          + $"exitwhen x{f.ExitWhenCount}{(f.HasReturnInside ? ", has return" : "")}");
+            sb.AppendLine($"        {f.Reason}");
+            if (f.ConditionSample.Length > 0) sb.AppendLine($"        {f.ConditionSample}");
+        }
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string MpqHash(HashTableView v)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{v.Path}");
+        sb.AppendLine($"  slots        {v.Slots}");
+        sb.AppendLine($"  occupied     {v.Occupied}");
+        sb.AppendLine($"  deleted      {v.Deleted}   (does NOT stop a probe)");
+        sb.AppendLine($"  never-used   {v.NeverUsed}   (the only thing that stops a probe)");
+        sb.AppendLine($"  worst-case probe for an absent name: {v.LongestRunWithoutNeverUsed} slot(s)");
+        sb.AppendLine();
+        sb.Append(v.LookupCanLoopForever
+            ? "BROKEN - zero never-used slots. A lookup for a name that is not present has no "
+              + "terminator and will probe forever, which hangs the game with no crash and no log."
+            : "ok - a failed lookup terminates.");
+        if (v.Sample.Count > 0)
+        {
+            sb.AppendLine().AppendLine();
+            sb.AppendLine($"{"slot",6}  {"kind",-11}{"block",-10}nameA");
+            foreach (var s in v.Sample)
+                sb.AppendLine($"{s.Index,6}  {s.Kind,-11}{s.BlockIndex,-10}0x{s.NameA:X8}");
+        }
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string MpqDiff(StructureDiff d)
+    {
+        var sb = new StringBuilder();
+        void Side(string label, ArchiveStructure s) => sb.AppendLine(
+            $"{label}  v{s.FormatVersion + 1}  sector={512 << s.SectorShift}  hash={s.HashTableSize}"
+            + $"  blocks={s.BlockTableSize}  occupied={s.OccupiedHashSlots}"
+            + $"  longestProbeRun={s.MaxProbeDistance}  bytes={s.FileBytes:N0}");
+        Side("A:", d.A);
+        Side("B:", d.B);
+
+        void Section(string title, IReadOnlyList<string> items)
+        {
+            sb.AppendLine().AppendLine($"{title} ({items.Count})");
+            foreach (var i in items) sb.AppendLine($"  {i}");
+        }
+        if (d.HeaderDifferences.Count > 0) Section("Header/table differences", d.HeaderDifferences);
+        if (d.OnlyInA.Count > 0) Section("Only in A", d.OnlyInA);
+        if (d.OnlyInB.Count > 0) Section("Only in B", d.OnlyInB);
+        if (d.EncodingDifferences.Count > 0)
+            Section("Files stored differently (same name, different physical encoding)", d.EncodingDifferences);
+
+        sb.AppendLine();
+        sb.Append(d.Identical
+            ? "STRUCTURALLY IDENTICAL"
+            : $"STRUCTURE DIFFERS - {d.HeaderDifferences.Count} header, "
+              + $"{d.EncodingDifferences.Count} re-encoded, {d.OnlyInA.Count} lost, {d.OnlyInB.Count} added");
+        return sb.ToString();
+    }
+
+    public static string Lint(LintResult r)
+    {
+        var sb = new StringBuilder();
+        foreach (var c in r.Checks)
+        {
+            var mark = c.Severity switch
+            {
+                LintSeverity.Error => "FAIL",
+                LintSeverity.Warning => "WARN",
+                _ => "ok  ",
+            };
+            sb.AppendLine($"{mark}  {c.Name,-22} {c.Summary}");
+            foreach (var d in c.Detail)
+                sb.AppendLine($"          {d}");
+        }
+        sb.AppendLine();
+        sb.Append(r.Ok
+            ? $"LINT OK - {r.Checks.Count} check(s), {r.Warnings} warning(s)"
+            : $"LINT FAILED - {r.Errors} error(s), {r.Warnings} warning(s)");
+        return sb.ToString();
+    }
 }

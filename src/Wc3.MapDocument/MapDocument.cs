@@ -249,12 +249,13 @@ public sealed class MapDocument
         // object changes the emitted (listfile)/(attributes) even when only HashTableSize
         // is set on it. So take the plain overload untouched whenever the inherited table
         // is safe, which keeps every already-working map byte-for-byte as it was.
-        if (DropMpqBookkeeping)
+        var (dropListFile, dropAttributes) = BookkeepingToDrop();
+        if (dropListFile || dropAttributes)
             builder.SaveTo(mpq, new MpqArchiveCreateOptions
             {
                 HashTableSize = grown,
-                ListFileCreateMode = MpqFileCreateMode.Prune,
-                AttributesCreateMode = MpqFileCreateMode.Prune,
+                ListFileCreateMode = dropListFile ? MpqFileCreateMode.Prune : MpqFileCreateMode.Overwrite,
+                AttributesCreateMode = dropAttributes ? MpqFileCreateMode.Prune : MpqFileCreateMode.Overwrite,
             }, leaveOpen: true);
         else if (grown is null)
             builder.SaveTo(mpq, leaveOpen: true);
@@ -321,8 +322,23 @@ public sealed class MapDocument
     /// check can see. Dropping both files removes that whole class of doubt from a rebuild.
     /// Env var so it can be flipped for a single run without a rebuild or an API change.
     /// </remarks>
-    internal static bool DropMpqBookkeeping =>
-        Environment.GetEnvironmentVariable("WC3CTL_DROP_MPQ_BOOKKEEPING") == "1";
+    internal static (bool ListFile, bool Attributes) BookkeepingToDrop() =>
+        ParseBookkeeping(Environment.GetEnvironmentVariable("WC3CTL_DROP_MPQ_BOOKKEEPING"));
+
+    /// <summary>
+    /// Parses the drop selection. <c>attributes</c> is the one worth reaching for, it holds the
+    /// per-file CRC32 a rebuild can invalidate. Dropping <c>listfile</c> costs real capability:
+    /// an entry with a non-standard name becomes unnameable, so ls cannot list it and extract
+    /// cannot find it, even though the game still resolves it by hashing the name.
+    /// </summary>
+    internal static (bool ListFile, bool Attributes) ParseBookkeeping(string? value) =>
+        (value?.Trim().ToLowerInvariant()) switch
+        {
+            "attributes" => (false, true),
+            "listfile" => (true, false),
+            "both" or "1" => (true, true),
+            _ => (false, false),
+        };
 
     /// <summary>
     /// The hash table size a rebuild should use, or <c>null</c> to keep the source's own.
@@ -345,6 +361,13 @@ public sealed class MapDocument
     internal static ushort? GrownHashTableSize(uint originalSize, int fileCount)
     {
         if (originalSize == 0)
+            return null;
+
+        // Escape hatch. Growing the table is a real change to the container, and a protected
+        // archive can hold entries whose names we never recover, which cannot be re-placed into a
+        // table of a different size because the slot is derived from the name. Set this to keep
+        // the source's own capacity untouched.
+        if (Environment.GetEnvironmentVariable("WC3CTL_NO_HASH_GROWTH") == "1")
             return null;
 
         static bool Fits(long entries, long slots) =>
