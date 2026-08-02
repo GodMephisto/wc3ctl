@@ -494,6 +494,18 @@ public static class Render
             sb.AppendLine("SPELL DISPATCH - an ability id that reaches none of these casts nothing:");
             foreach (var d in r.SpellDispatchers) sb.AppendLine($"  {d}");
         }
+        if (r.Templates.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("ROSTER TEMPLATE - this map registers a hero with a BLOCK, not one call.");
+            sb.AppendLine("Copy one entry and substitute; a single-call roster is just a 1-line template.");
+            foreach (var t in r.Templates)
+            {
+                sb.AppendLine();
+                sb.AppendLine($"  {t.ArrayName}: {t.Entries} entries, template at lines {t.StartLine}-{t.EndLine}");
+                foreach (var l in t.TemplateLines) sb.AppendLine($"      {l.Trim()}");
+            }
+        }
         if (r.HeroArrays.Count > 0)
         {
             sb.AppendLine();
