@@ -31,18 +31,34 @@ internal static class ObjectDataWriter
         _ => ObjectDataShape.Simple,
     };
 
+    /// <summary>The file backing one layer of a kind's object data.</summary>
+    internal static string FileFor(ObjectKind kind, ObjectLayer layer)
+    {
+        var info = ObjectKinds.Info(kind);
+        return layer == ObjectLayer.Skin ? info.SkinFile : info.MapFile;
+    }
+
     /// <summary>
     /// The kind's war3map.* model, or a fresh empty one when the map has no such file
     /// yet (format version mirrored from the skin twin when present, else v2). Null
     /// when the file exists but has no parsed model — rebuilding it blind would drop
     /// the original data, so callers must refuse to edit.
     /// </summary>
-    internal static object? GetOrCreateMapModel(MapDocument doc, ObjectKind kind)
+    internal static object? GetOrCreateMapModel(MapDocument doc, ObjectKind kind) =>
+        GetOrCreateModel(doc, kind, ObjectLayer.Map);
+
+    /// <summary>
+    /// As <see cref="GetOrCreateMapModel"/>, for either layer. The version of a newly created
+    /// file is mirrored from the kind's other layer, so the two halves of one kind never disagree
+    /// about the format they are written in.
+    /// </summary>
+    internal static object? GetOrCreateModel(MapDocument doc, ObjectKind kind, ObjectLayer layer)
     {
-        var info = ObjectKinds.Info(kind);
-        if (doc.GetFile(info.MapFile) is { } entry)
+        var wanted = FileFor(kind, layer);
+        var twin = FileFor(kind, layer == ObjectLayer.Skin ? ObjectLayer.Map : ObjectLayer.Skin);
+        if (doc.GetFile(wanted) is { } entry)
             return entry.Model;
-        var version = ObjectDataSets.FormatVersionOf(doc.GetFile(info.SkinFile)?.Model)
+        var version = ObjectDataSets.FormatVersionOf(doc.GetFile(twin)?.Model)
             ?? ObjectDataFormatVersion.v2;
         return kind switch
         {
