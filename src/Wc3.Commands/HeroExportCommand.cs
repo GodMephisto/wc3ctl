@@ -42,6 +42,14 @@ public static class HeroExportCommand
 
 
     /// <summary>
+    /// The one place the per-hero namespace prefix is defined, so install's reverse rename cannot
+    /// drift from export's forward one. Two independent copies of this rule would be a silent
+    /// mismatch, and a rename that only half applies leaves references with nothing to resolve to.
+    /// </summary>
+    internal static string NamespacePrefix(string rootRawcode) =>
+        "h" + new string(rootRawcode.Where(char.IsLetterOrDigit).ToArray()) + "__";
+
+    /// <summary>
     /// A prefix for every carried function and global, so nothing the definition brings can clash
     /// with a name the target already uses. The prefix is derived from the hero's rawcode, which is
     /// unique per definition and stable across installs.
@@ -49,7 +57,7 @@ public static class HeroExportCommand
     private static Dictionary<string, string> BuildNamespace(
         string rootRawcode, IEnumerable<string> functions, IEnumerable<string> globalLines)
     {
-        var prefix = "h" + new string(rootRawcode.Where(char.IsLetterOrDigit).ToArray()) + "__";
+        var prefix = NamespacePrefix(rootRawcode);
         var map = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var fn in functions) map[fn] = prefix + fn;
 
@@ -71,7 +79,7 @@ public static class HeroExportCommand
     /// by name (<c>ExecuteFunc("Foo")</c>) and renaming the declaration without the literal would
     /// break that call at runtime with no compile error to warn about it.
     /// </summary>
-    private static string ApplyNamespace(string text, Dictionary<string, string> rename)
+    internal static string ApplyNamespace(string text, Dictionary<string, string> rename)
     {
         if (rename.Count == 0) return text;
         // Longest first, so a name that is a prefix of another cannot corrupt it.
@@ -182,6 +190,46 @@ public static class HeroExportCommand
         wurstClass.EndsWith("Spells", StringComparison.Ordinal)
         || wurstClass.EndsWith("Debuff", StringComparison.Ordinal);
 
+    /// <summary>
+    /// True when the carried globals include a PRIVATE copy of this Wurst class's instance tables,
+    /// which is what makes its calls unbindable however complete the target's own copy is.
+    /// </summary>
+    /// <remarks>
+    /// Wurst gives every class an allocator (<c>Foo_firstFree</c>, <c>Foo_maxIndex</c>,
+    /// <c>Foo_nextFree</c>) and a <c>Foo_typeId</c> array, and its optimiser INLINES allocation into
+    /// the caller. So a hero that constructs a CallbackSingle carries the allocator counters even
+    /// though the class itself was excluded, and the instance ids she issues are indices into HER
+    /// arrays. Binding her <c>dispatch_CallbackSingle_start</c> to the target's would then pass the
+    /// target an id it never issued, and the target would read its own typeId array at that index:
+    /// a wrong dispatch or none, with no compile error and no runtime message. Measured on Shadow
+    /// Nanaya, CallbackSingle carried 4 such globals and ShopUI 12, while HashMap, Table,
+    /// CallbackPeriodic, ForForceCallback and ShopButton carried none.
+    /// </remarks>
+    private static bool CarriesClassState(string wurstClass, IEnumerable<string> globalNames)
+    {
+        foreach (var prefix in new[] { "", "s__", "si__", "sc__" })
+        {
+            var head = prefix + wurstClass + "_";
+            foreach (var n in globalNames)
+                if (n.StartsWith(head, StringComparison.Ordinal)) return true;
+        }
+        return false;
+    }
+
+    /// <summary>Declared names out of raw <c>globals</c> lines, for <see cref="CarriesClassState"/>.</summary>
+    private static List<string> GlobalNames(IEnumerable<string> globalLines)
+    {
+        var decl = new System.Text.RegularExpressions.Regex(
+            @"^\s*(?:constant\s+)?[A-Za-z_][A-Za-z0-9_]*\s+(?:array\s+)?([A-Za-z_][A-Za-z0-9_]*)");
+        var names = new List<string>();
+        foreach (var line in globalLines)
+        {
+            var m = decl.Match(line);
+            if (m.Success) names.Add(m.Groups[1].Value);
+        }
+        return names;
+    }
+
     /// <summary>Wurst emits s__Class_method / si__Class_field / dispatch_Class_method.</summary>
     private static readonly System.Text.RegularExpressions.Regex WurstSymbol =
         new(@"^(?:s__|si__|sc__|dispatch_|init_)([A-Za-z0-9]+?)_", System.Text.RegularExpressions.RegexOptions.Compiled);
@@ -263,6 +311,14 @@ public static class HeroExportCommand
         return keep;
     }
 
+    /// <summary>
+    /// The byte-preserving codec for script text, matching <c>HeroInstallCommand</c>. Latin-1 is a
+    /// byte-to-code-point identity, so a read/modify/write round-trip is lossless whatever the
+    /// script's real encoding is, and a definition carries the source's bytes rather than a guess
+    /// at their meaning.
+    /// </summary>
+    private static readonly Encoding ScriptBytes = Encoding.Latin1;
+
     [ThreadStatic] private static string[]? _scriptLines;
 
     public static HeroExportResult Run(MapDocument doc, string rawcode, string sourceMapPath,
@@ -315,9 +371,17 @@ public static class HeroExportCommand
         var peerCallTargets = new SortedSet<string>(StringComparer.Ordinal);
         bool sharedDispatcherSeen = false;
         var globals = new List<string>();
+        var stubbed = new List<DefinitionStub>();
         if (bundle.Functions.Count > 0 && doc.GetFile("war3map.j") is { } js)
         {
-            var text = Encoding.UTF8.GetString(js.OverrideBytes ?? js.RawBytes);
+            // Latin-1, so a carried line arrives byte for byte. Latin-1 maps every byte 0..255 to
+            // the same code point and back, which UTF-8 does not: a script that is really UTF-8
+            // decodes to code points above U+00FF, and everything downstream that has to write raw
+            // bytes again (pjass's input, the target's war3map.j) then replaces each with '?'. A
+            // script that is NOT valid UTF-8 loses those bytes to U+FFFD outright. Either way the
+            // carried text stops being what the source map had, which is the one thing a port
+            // cannot afford.
+            var text = ScriptBytes.GetString(js.OverrideBytes ?? js.RawBytes);
             var lines = text.Split('\n');
 
             // Carry the hero's functions AND everything they call, transitively. Carrying only the
@@ -354,20 +418,25 @@ public static class HeroExportCommand
             globals.AddRange(rawGlobals.Select(g => ApplyNamespace(g, rename)));
             entryPoints = entryPoints.Select(n => rename.TryGetValue(n, out var r) ? r : n).ToList();
 
-            // Excluding a peer class removed its DEFINITIONS but not the CALLS to it, so the
-            // emitted script failed with "Undeclared function s__AlucardSpells___...". That is the
-            // porter's trimming mistake reached from the other direction: never leave a reference
-            // without something to resolve it. Emit a no-op stub per called peer entry point. The
-            // shared dispatcher is already a declared requirement, so a stub is the honest
-            // placeholder - the script compiles, and the requirement says what must replace it.
+            // Excluding a class removed its DEFINITIONS but not the CALLS to it, so the emitted
+            // script failed with "Undeclared function s__AlucardSpells___...". That is the porter's
+            // trimming mistake reached from the other direction: never leave a reference without
+            // something to resolve it. Emit a no-op stub per called entry point, and RECORD each
+            // one, because a stub is a placeholder and only the record makes it replaceable. The
+            // stubs were previously namespaced and unrecorded, so a target that implements HashMap
+            // itself could never be reached: the carried code called a private empty function that
+            // returned 0. Install now binds what it safely can and reports the rest.
+            var globalNames = GlobalNames(rawGlobals);
             if (peerCallTargets.Count > 0)
             {
                 var stubs = new StringBuilder();
                 stubs.AppendLine();
-                stubs.AppendLine("// ==== peer stubs ====");
-                stubs.AppendLine("// These belong to OTHER characters in the source map, reached through its shared");
-                stubs.AppendLine("// dispatcher. They are stubbed so this script compiles; see the");
-                stubs.AppendLine("// shared-spell-dispatcher requirement for what the target must really provide.");
+                stubs.AppendLine("// ==== stubs for called-but-not-carried functions ====");
+                stubs.AppendLine("// The closure stopped at these classes, which are other characters' kits and the");
+                stubs.AppendLine("// source map's own infrastructure. They are stubbed so this script compiles, and");
+                stubs.AppendLine("// 'wc3ctl hero install' deletes a stub and binds the call to the target's own");
+                stubs.AppendLine("// function where that is safe, reporting every one it could not, because a stub");
+                stubs.AppendLine("// that survives means this hero is incomplete on that target.");
                 foreach (var fn in peerCallTargets)
                 {
                     if (!spans.TryGetValue(fn, out var sp)) continue;
@@ -386,12 +455,23 @@ public static class HeroExportCommand
                     else
                         stubs.AppendLine("    return null");
                     stubs.AppendLine("endfunction");
+
+                    var wm = WurstSymbol.Match(fn);
+                    var cls = wm.Success ? wm.Groups[1].Value : "(not a Wurst class)";
+                    stubbed.Add(new DefinitionStub(fn,
+                        rename.TryGetValue(fn, out var ns) ? ns : fn,
+                        cls, header.Trim(),
+                        Peer: wm.Success && IsPeerClass(cls),
+                        ClassStateCarried: wm.Success && CarriesClassState(cls, globalNames)));
                 }
                 body = stubs.ToString() + body;
             }
 
             scriptFile = "script.j";
-            File.WriteAllText(Path.Combine(outputDirectory, scriptFile), body, new UTF8Encoding(false));
+            // Latin-1 out as well as in, so script.j on disk holds the source map's own bytes and
+            // install can put them back unchanged. Reading one way and writing the other is what
+            // turned a target's 51,779 non-ASCII bytes into 103,572 on a previous install.
+            File.WriteAllText(Path.Combine(outputDirectory, scriptFile), body, ScriptBytes);
         }
 
         // What a target must already provide. Stated so an install can refuse rather than produce
@@ -411,9 +491,25 @@ public static class HeroExportCommand
         // systems and standard library, not the hero's, so the target must already provide them.
         // Swallowing them instead is what produced 1,138 functions for a 30-function hero.
         foreach (var cls in excludedClassNames)
+        {
+            // Say whether an install can actually bind this class, so the requirement is a decision
+            // and not just a name. A class whose instance tables came along is unbindable however
+            // complete the target's own copy is (see CarriesClassState), and saying so here is the
+            // difference between "the target must have HashMap" and "even a target that has it
+            // cannot be used for this one".
+            int calls = stubbed.Count(s => s.WurstClass == cls);
+            bool stateCarried = stubbed.Any(s => s.WurstClass == cls && s.ClassStateCarried);
             requires.Add(new DefinitionRequirement("wurst-class",
-                $"the target must provide the Wurst class '{cls}', which this hero's code calls into",
-                Satisfiable: false));
+                $"the target must provide the Wurst class '{cls}', which this hero's code calls into "
+                + $"({calls} function(s)). "
+                + (stateCarried
+                    ? "This definition carries the class's own instance tables, so install CANNOT "
+                      + "bind to the target's copy and will keep no-op stubs: the calls need the "
+                      + "class itself carried, or the calling code pruned."
+                    : "Install will bind these calls to the target's own functions when it declares "
+                      + "them with matching signatures."),
+                Satisfiable: !stateCarried));
+        }
         if (sharedDispatcherSeen)
             requires.Add(new DefinitionRequirement("shared-spell-dispatcher",
                 "this hero's spells route through the source map's shared dispatcher, which every "
@@ -430,11 +526,19 @@ public static class HeroExportCommand
                       + "genuinely this hero's.");
         if (excludedFiles > 0)
             notes.Add($"{excludedFiles} file(s) reachable only through the script closure were EXCLUDED.");
+        if (stubbed.Count > 0)
+            notes.Add($"{stubbed.Count} called function(s) are NO-OP STUBS, not implementations "
+                      + $"({stubbed.Count(s => s.Peer)} belong to other characters and stay stubbed, "
+                      + $"{stubbed.Count(s => !s.Peer && !s.ClassStateCarried)} can bind to a target "
+                      + $"that declares them, {stubbed.Count(s => !s.Peer && s.ClassStateCarried)} "
+                      + "cannot bind because this definition carries the class's own instance "
+                      + "tables). Whatever install leaves stubbed does nothing at runtime.");
         foreach (var d in bundle.Diagnostics) notes.Add(d);
 
         var def = new HeroDefinition(HeroDefinition.CurrentSchemaVersion, bundle.RootRawcode,
             bundle.RootName, Path.GetFileName(sourceMapPath), "wc3ctl hero export",
-            objects, assets, bundle.Strings, scriptFile, entryPoints, globals, requires, notes);
+            objects, assets, bundle.Strings, scriptFile, entryPoints, globals, requires, notes,
+            stubbed);
 
         File.WriteAllText(Path.Combine(outputDirectory, "hero.json"),
             JsonSerializer.Serialize(def, Json), new UTF8Encoding(false));

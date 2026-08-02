@@ -19,7 +19,14 @@ public sealed record InstallResult(
     IReadOnlyList<string> UnmetRequirements,
     IReadOnlyList<string> NextSteps,
     string? RegisteredWith,
-    IReadOnlyList<string> Assumptions);
+    IReadOnlyList<string> Assumptions,
+    /// <summary>
+    /// One line per Wurst class the export stubbed, saying how many of its calls were BOUND to the
+    /// target's own functions and how many are still no-op stubs, with the reason. Reported rather
+    /// than summarised away, because a stubbed call is a hero that half works and the difference is
+    /// invisible in the finished map.
+    /// </summary>
+    IReadOnlyList<string> ScriptBindings);
 
 /// <summary>
 /// Installs a <see cref="HeroDefinition"/> into any map, the <c>install</c> verb of the format.
@@ -84,7 +91,8 @@ public static class HeroInstallCommand
                 $"{collisions.Count} asset collision(s); the target's own files would be overwritten. "
                 + "Re-run with --force only if you are certain, or rename the definition's assets.",
                 new Dictionary<string, string>(), 0, 0, 0, skipped, collisions,
-                Array.Empty<string>(), Array.Empty<string>(), null, Array.Empty<string>());
+                Array.Empty<string>(), Array.Empty<string>(), null, Array.Empty<string>(),
+                Array.Empty<string>());
 
         // 2. Objects. Created from their base, so the target's existing codes are never disturbed.
         var remap = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -110,27 +118,44 @@ public static class HeroInstallCommand
         if (pending.Count > 0) AddImportEntries(target, pending.Select(p => p.path));
 
         // 4. Script, rewritten through the remap so no carried code depends on an original code.
+        var bindings = new List<string>();
+        var stubUnmet = new List<string>();
         if (def.ScriptFile is not null)
         {
             var scriptDisk = Path.Combine(definitionDirectory, def.ScriptFile);
             if (File.Exists(scriptDisk))
             {
-                var body = File.ReadAllText(scriptDisk);
+                // Latin-1 both ways. A definition's script.j can carry bytes that are not valid
+                // UTF-8 (they came out of a map whose script is not UTF-8 either), and a UTF-8
+                // round-trip turns each into '?', which pjass rejects as "Unrecognized character".
+                var body = File.ReadAllText(scriptDisk, ScriptBytes);
                 foreach (var (from, to) in remap)
                     body = body.Replace($"'{from}'", $"'{to}'", StringComparison.Ordinal);
                 var existing = target.GetFile("war3map.j");
                 var head = existing is null ? "" :
                     ScriptBytes.GetString(existing.OverrideBytes ?? existing.RawBytes);
+
+                // Bind before the globals go in, so a bound class's calls point at the target's own
+                // implementation rather than at a private no-op the definition brought with it.
+                body = BindStubs(body, head, def, bindings, stubUnmet);
+
                 // Globals must land INSIDE the target's own globals block; appended after it they
                 // are a syntax error, and the carried functions that read them will not compile.
                 head = InsertGlobals(head, def.Globals, remap);
-                FileEditCommand.WriteText(target, "war3map.j",
-                    head + "\n\n// ==== wc3ctl hero: " + def.Name + " (" + def.Id + ") ====\n" + body);
+                // Latin-1 out, not FileEditCommand.WriteText, which is UTF-8. The head was DECODED
+                // as Latin-1, so re-encoding it as UTF-8 turns each of the target's 51,779
+                // non-ASCII bytes into two, silently mangling every localised string and author
+                // name in the map. Measured on WOS2 before this line was fixed: the installed
+                // war3map.j carried 103,572 non-ASCII bytes where the original had 51,779. The
+                // read was switched to Latin-1 earlier, the write was not, and half a fix here is
+                // still a corrupted map.
+                FileEditCommand.AddOrReplace(target, "war3map.j", ScriptBytes.GetBytes(
+                    head + "\n\n// ==== wc3ctl hero: " + def.Name + " (" + def.Id + ") ====\n" + body));
             }
         }
 
         // 5. Requirements. Reported, never silently ignored.
-        var unmet = new List<string>();
+        var unmet = new List<string>(stubUnmet);
         var next = new List<string>();
         var contract = ContractCommand.Run(target);
         // Call count and a near-1.0 rawcode ratio are NOT enough to identify a hero roster. On a
@@ -194,7 +219,156 @@ public static class HeroInstallCommand
         return new(true,
             $"installed {def.Name} as '{installedRoot}'",
             remap, created, fields, pending.Count, skipped,
-            collisions, unmet, next, registeredWith, assumptions);
+            collisions, unmet, next, registeredWith, assumptions, bindings);
+    }
+
+    /// <summary>
+    /// Replaces a no-op stub with a call to the TARGET's own implementation wherever that is safe,
+    /// and reports every stub it had to keep.
+    /// </summary>
+    /// <remarks>
+    /// Export stops the closure at any Wurst class the hero does not belong to, then stubs the calls
+    /// so the script still compiles. Those stubs were namespaced like everything else, so the hero
+    /// called <c>hH0DA__dispatch_HashMap_get</c>, an empty function returning 0, even on a target
+    /// that implements HashMap perfectly well. Namespacing is right for the hero's OWN code (it
+    /// cannot then collide with anything) and wrong for a call into shared infrastructure, which
+    /// must reach the shared thing. Binding is un-namespacing one symbol so the reference resolves
+    /// to the target's declaration, and deleting the stub so it does not shadow it.
+    ///
+    /// A bind is only performed when all four hold, because a wrong bind is worse than a no-op:
+    /// <list type="number">
+    /// <item>Not a peer. A target's own <c>AlucardSpells</c> is its Alucard, not a service.</item>
+    /// <item>The definition did not carry the class's private instance tables. If it did, the ids
+    /// the hero issues index HER arrays and the target's functions index the target's, so the bind
+    /// would dispatch on an id the target never issued, with no compile error to catch it.</item>
+    /// <item>The target declares the function with a matching parameter and return shape. A
+    /// signature mismatch is a compile failure, and a war3map.j that will not compile means a
+    /// hosted map with no player slots.</item>
+    /// <item>EVERY called function of that class passes, so a class's calls are never split between
+    /// the target's implementation and a private stub, which would be two half states of one
+    /// object.</item>
+    /// </list>
+    /// </remarks>
+    private static string BindStubs(string body, string targetScript, HeroDefinition def,
+        List<string> bindings, List<string> unmet)
+    {
+        var stubs = def.Stubs;
+        if (stubs is null || stubs.Count == 0) return body;
+
+        // The target's own declarations, by name, with the signature to compare against.
+        var declared = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var fn in JassFunctionIndex.Parse(targetScript))
+            declared[fn.Name] = fn.Signature;
+
+        // Peers are collapsed to one line. There were 21 of them against 7 infrastructure classes on
+        // Shadow Nanaya, all with the same verdict for the same reason, and 21 identical lines bury
+        // the 7 that a person can act on. The shared-spell-dispatcher requirement already states the
+        // consequence, so the count is what is missing from this report, not the list.
+        var peerClasses = stubs.Where(s => s.Peer)
+            .Select(s => s.WurstClass).Distinct(StringComparer.Ordinal).ToList();
+        if (peerClasses.Count > 0)
+            bindings.Add($"{peerClasses.Count} peer class(es), {stubs.Count(s => s.Peer)} call(s) "
+                         + "left as no-op STUBS (another character's kit, never bound even on a "
+                         + "name match, see shared-spell-dispatcher)");
+
+        // Judge a whole class at once, then act.
+        var bind = new Dictionary<string, string>(StringComparer.Ordinal);   // carried name -> target name
+        foreach (var group in stubs.Where(s => !s.Peer).GroupBy(s => s.WurstClass, StringComparer.Ordinal)
+                                   .OrderBy(g => g.Key, StringComparer.Ordinal))
+        {
+            var members = group.ToList();
+            string? refusal = null;
+            if (members.Any(s => s.ClassStateCarried))
+                refusal = "this definition carries the class's own instance tables, so the target's "
+                          + "functions would be handed ids it never issued";
+            else
+            {
+                var absent = members.Where(s => !declared.ContainsKey(s.Function)).ToList();
+                if (absent.Count > 0)
+                    refusal = $"the target declares {members.Count - absent.Count} of "
+                              + $"{members.Count} of its functions";
+                else
+                {
+                    var mismatched = members
+                        .Where(s => TypeShape(declared[s.Function]) != TypeShape(s.Signature))
+                        .ToList();
+                    if (mismatched.Count > 0)
+                        refusal = $"{mismatched.Count} of {members.Count} function(s) have a "
+                                  + $"different signature in the target (e.g. {mismatched[0].Function})";
+                }
+            }
+
+            if (refusal is null)
+            {
+                foreach (var s in members) bind[s.CarriedName] = s.Function;
+                bindings.Add($"{group.Key}: {members.Count} call(s) BOUND to the target's own functions");
+            }
+            else
+            {
+                bindings.Add($"{group.Key}: {members.Count} call(s) left as no-op STUBS ({refusal})");
+                // An infrastructure stub is a hero that half works, which must not pass quietly. A
+                // peer stub is expected and already covered by shared-spell-dispatcher, so it is
+                // reported above rather than raised as an unmet requirement per character.
+                unmet.Add($"wurst-class '{group.Key}': {members.Count} call(s) still resolve to "
+                          + $"no-op stubs ({refusal}). Whatever the hero's code does through "
+                          + "this class does nothing at runtime.");
+            }
+        }
+
+        if (bind.Count == 0) return body;
+
+        // Delete each bound stub's body, so its declaration cannot shadow the target's. Indexing
+        // the script rather than trusting the emitted layout means a hand-edited definition still
+        // works, and a stub whose declaration has moved is simply not found and not renamed.
+        var lines = body.Split('\n');
+        var drop = new bool[lines.Length];
+        var removed = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var fn in JassFunctionIndex.Parse(body))
+        {
+            if (!bind.ContainsKey(fn.Name)) continue;
+            for (int i = fn.StartLine - 1; i <= fn.EndLine - 1 && i < lines.Length; i++) drop[i] = true;
+            removed.Add(fn.Name);
+        }
+
+        // Refuse to rename a reference whose stub was not found. Renaming it anyway would leave two
+        // declarations of the same name, one of them the no-op, and the no-op would win or the
+        // script would not compile. Never leave a reference without exactly one thing to resolve to.
+        foreach (var name in bind.Keys.Where(k => !removed.Contains(k)).ToList())
+        {
+            bind.Remove(name);
+            unmet.Add($"script: '{name}' was recorded as a stub but no such function is in "
+                      + "script.j, so its calls were left pointing at the definition's own name. "
+                      + "Re-export this hero.");
+        }
+        if (bind.Count == 0) return body;
+
+        var kept = new StringBuilder();
+        for (int i = 0; i < lines.Length; i++)
+            if (!drop[i]) kept.Append(lines[i]).Append('\n');
+
+        // Same rewriter export used, run backwards. One implementation of the rule means the two
+        // directions cannot drift, and it already handles the escape-sequence guard and the
+        // longest-name-first ordering that a naive replace gets wrong.
+        return HeroExportCommand.ApplyNamespace(kept.ToString(), bind);
+    }
+
+    /// <summary>
+    /// A declaration reduced to the only thing that decides whether a call compiles: its parameter
+    /// types and return type. Parameter NAMES differ freely between two maps that compiled the same
+    /// class, so comparing whole declaration lines would refuse every safe bind.
+    /// </summary>
+    private static string TypeShape(string declaration)
+    {
+        var takes = declaration.IndexOf(" takes ", StringComparison.Ordinal);
+        var returns = declaration.LastIndexOf(" returns ", StringComparison.Ordinal);
+        if (takes < 0 || returns <= takes) return "(unparsed)" + declaration;
+
+        var parameters = declaration[(takes + 7)..returns].Trim();
+        var shape = parameters.Equals("nothing", StringComparison.Ordinal)
+            ? ""
+            : string.Join(",", parameters.Split(',').Select(p =>
+                p.Trim().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "?"));
+        return shape + "->" + declaration[(returns + 9)..].Trim();
     }
 
     /// <summary>
@@ -484,5 +658,5 @@ public static class HeroInstallCommand
     private static InstallResult Fail(string message) =>
         new(false, message, new Dictionary<string, string>(), 0, 0, 0, 0,
             Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>(), null,
-            Array.Empty<string>());
+            Array.Empty<string>(), Array.Empty<string>());
 }
