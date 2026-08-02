@@ -39,6 +39,19 @@ public sealed record RosterTemplate(
     int EndLine,
     IReadOnlyList<string> TemplateLines);
 
+/// <summary>One function that mentions a hero's rawcode, and how many times.</summary>
+public sealed record IntegrationPoint(string Function, int References, bool HeroSpecificName);
+
+/// <summary>
+/// What a WORKING hero of this map is wired into that a candidate hero is not.
+/// </summary>
+public sealed record IntegrationGap(
+    string ReferenceHero,
+    string CandidateHero,
+    int ReferenceFunctions,
+    int CandidateFunctions,
+    IReadOnlyList<IntegrationPoint> Missing);
+
 public sealed record ContractResult(
     string ScriptFile,
     IReadOnlyList<RosterRegistry> Registries,
@@ -304,4 +317,80 @@ public static class ContractCommand
         Regex.Matches(text, @"\bset\s+" + Regex.Escape(name) + @"\s*\[").Count;
 
     private static string Shorten(string s) => s.Length <= 120 ? s : s[..120] + "...";
+
+    /// <summary>
+    /// Every function whose body mentions this rawcode, with a count.
+    /// </summary>
+    public static IReadOnlyList<IntegrationPoint> IntegrationPoints(MapDocument doc, string rawcode)
+    {
+        ArgumentNullException.ThrowIfNull(doc);
+        var entry = doc.GetFile("war3map.j") ?? doc.GetFile("scripts\\war3map.j");
+        if (entry is null) return Array.Empty<IntegrationPoint>();
+
+        // Latin-1: a script is a byte stream with no declared encoding and real maps are not valid
+        // UTF-8, so decoding as UTF-8 mangles content this scan then fails to match.
+        var lines = System.Text.Encoding.Latin1
+            .GetString(entry.OverrideBytes ?? entry.RawBytes).Split('\n');
+
+        var starts = new List<int>();
+        var nameAt = new Dictionary<int, string>();
+        for (int i = 0; i < lines.Length; i++)
+            if (Declaration.Match(lines[i]) is { Success: true } m)
+            { starts.Add(i); nameAt[i] = m.Groups[1].Value; }
+
+        var token = "'" + rawcode + "'";
+        var counts = new Dictionary<string, int>(StringComparer.Ordinal);
+        for (int i = 0; i < lines.Length; i++)
+        {
+            if (!lines[i].Contains(token, StringComparison.Ordinal)) continue;
+            int at = starts.BinarySearch(i);
+            if (at < 0) at = ~at - 1;
+            var fn = at >= 0 ? nameAt[starts[at]] : "(top level)";
+            counts[fn] = counts.GetValueOrDefault(fn) + 1;
+        }
+
+        return counts.OrderByDescending(kv => kv.Value)
+            .Select(kv => new IntegrationPoint(kv.Key, kv.Value, false))
+            .ToList();
+    }
+
+    /// <summary>
+    /// Diffs a candidate hero's wiring against a hero the map already supports, which is the only
+    /// reliable way to enumerate what a map requires.
+    /// </summary>
+    /// <remarks>
+    /// Detecting registries by shape found five rawcode-branching functions on GGGA and missed the
+    /// rest, so a hero was fixed one requirement at a time out of about a dozen and the symptom
+    /// never moved. Diffing against a hero that demonstrably works finds ALL of them at once,
+    /// because the map itself defines the contract by example: a native Stalker is referenced in 26
+    /// functions, a freshly installed hero in 9.
+    ///
+    /// A function whose NAME contains the reference hero's own name is flagged, since it is that
+    /// character's private code rather than shared infrastructure, and no tool should copy it.
+    /// </remarks>
+    public static IntegrationGap CompareIntegration(
+        MapDocument doc, string referenceRawcode, string candidateRawcode, string? referenceName = null)
+    {
+        var reference = IntegrationPoints(doc, referenceRawcode);
+        var candidate = IntegrationPoints(doc, candidateRawcode)
+            .Select(p => p.Function).ToHashSet(StringComparer.Ordinal);
+
+        var tokens = (referenceName ?? "")
+            .Split(new[] { ' ', '_', '-' }, StringSplitOptions.RemoveEmptyEntries)
+            .Where(t => t.Length >= 4)
+            .ToList();
+
+        var missing = reference
+            .Where(p => !candidate.Contains(p.Function))
+            .Select(p => p with
+            {
+                HeroSpecificName = tokens.Any(t =>
+                    p.Function.Contains(t, StringComparison.OrdinalIgnoreCase)),
+            })
+            .ToList();
+
+        return new IntegrationGap(referenceRawcode, candidateRawcode,
+            reference.Count, candidate.Count, missing);
+    }
+
 }

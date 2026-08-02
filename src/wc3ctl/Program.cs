@@ -1690,14 +1690,30 @@ public static class Program
         // own systems treat it as playable. The piece nothing else models, and where ported heroes
         // actually die - correct objects, correct assets, compiling script, and still no hero,
         // because the roster is built by the map's own script.
+        var contractRef = new Option<string?>("--reference",
+            "Rawcode of a hero the map ALREADY supports. Lists every function that mentions it, "
+            + "which is the map's real integration contract stated by example rather than guessed "
+            + "from shape.");
+        var contractAgainst = new Option<string?>("--against",
+            "Rawcode of a candidate hero. With --reference, reports only what the reference is "
+            + "wired into and the candidate is not, which is the checklist to complete.");
         var contract = new Command("contract",
             "Discover what a map requires before it will treat a unit as a playable hero: roster "
             + "registration calls, spell dispatchers, and per-player hero arrays.")
-        { mapArg, jsonOption };
+        { mapArg, contractRef, contractAgainst, jsonOption };
         contract.SetHandler(ctx => RunSafely(() =>
         {
             var p7 = ctx.ParseResult;
-            var r7 = ContractCommand.Run(MapDocument.Load(p7.GetValueForArgument(mapArg)));
+            var doc7 = MapDocument.Load(p7.GetValueForArgument(mapArg));
+            var refCode = p7.GetValueForOption(contractRef);
+            if (refCode is not null)
+            {
+                var cand = p7.GetValueForOption(contractAgainst) ?? "____";
+                var gap = ContractCommand.CompareIntegration(doc7, refCode, cand);
+                Emit(p7.GetValueForOption(jsonOption), gap, () => Render.IntegrationGap(gap));
+                return;
+            }
+            var r7 = ContractCommand.Run(doc7);
             Emit(p7.GetValueForOption(jsonOption), r7, () => Render.Contract(r7));
         }));
         root.AddCommand(contract);

@@ -484,6 +484,32 @@ public static class Render
         return sb.ToString().TrimEnd();
     }
 
+    public static string IntegrationGap(IntegrationGap g)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"reference {g.ReferenceHero} is wired into {g.ReferenceFunctions} function(s)");
+        sb.AppendLine($"candidate {g.CandidateHero} is wired into {g.CandidateFunctions}");
+        if (g.Missing.Count == 0)
+        {
+            sb.Append("\nNothing missing: the candidate appears everywhere the reference does.");
+            return sb.ToString();
+        }
+        var shared = g.Missing.Where(m => !m.HeroSpecificName).ToList();
+        var priv = g.Missing.Where(m => m.HeroSpecificName).ToList();
+
+        sb.AppendLine();
+        sb.AppendLine($"MISSING, shared systems every hero needs ({shared.Count}):");
+        foreach (var m in shared) sb.AppendLine($"  {m.References,3}x  {m.Function}");
+        if (priv.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"MISSING, but named for the reference hero ({priv.Count}), so this is that");
+            sb.AppendLine("character's own code and must NOT be copied, only mirrored by hand:");
+            foreach (var m in priv) sb.AppendLine($"  {m.References,3}x  {m.Function}");
+        }
+        return sb.ToString().TrimEnd();
+    }
+
     public static string Contract(ContractResult r)
     {
         if (!r.Any) return $"{r.ScriptFile}: no hero integration contract detected.";
