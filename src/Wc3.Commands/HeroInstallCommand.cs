@@ -50,7 +50,8 @@ public sealed record InstallResult(
 public static class HeroInstallCommand
 {
     public static InstallResult Run(string definitionDirectory, MapDocument target,
-        bool force = false, string? gameDir = null, string? role = null)
+        bool force = false, string? gameDir = null, string? role = null,
+        bool keepSourceStats = false)
     {
         ArgumentNullException.ThrowIfNull(target);
         var jsonPath = Path.Combine(definitionDirectory, "hero.json");
@@ -228,9 +229,60 @@ public static class HeroInstallCommand
                           + $"{call.Trim()} inside the target's registration function by hand.");
         }
 
+        // 6. The target's stat convention, applied last so it overrides the definition's own values.
+        // A hero carries the stat MODEL of the map she came from, not just her tuning. Shadow
+        // Nanaya arrived in GGGA with strength 55, agility 72, intelligence 50 and a 100 point
+        // hit-point pool, on a map where all 167 of its heroes pin those three attributes at 0 and
+        // state a flat pool instead (its Stalkers cluster on 3600). She was installed correctly and
+        // still unplayable. The numbers are measured from the target rather than written down,
+        // because they are GGGA's and would be wrong on the next map.
+        if (roster is not null && !keepSourceStats
+            && HeroStatConvention.Derive(target, roster, role) is { } convention)
+        {
+            int applied = 0;
+            foreach (var f in convention.Fields)
+            {
+                var set = ObjectSetCommand.Execute(target, ObjectKind.Unit, installedRoot, f.Code, f.Value);
+                if (set.Ok)
+                {
+                    applied++;
+                    assumptions.Add("stat convention: " + f.Evidence);
+                }
+                else
+                    // Never drop this quietly. A field the target states and this hero does not
+                    // is exactly the difference that makes her unplayable, so a refusal to write
+                    // it has to be as visible as a success.
+                    unmet.Add($"stat convention: could not set {f.Code}={f.Value} on "
+                              + $"'{installedRoot}' ({set.Message}). Set it by hand.");
+            }
+            if (applied > 0)
+                next.Add($"stats brought onto the target's convention, {applied} field(s) measured "
+                         + $"from {convention.SampleDescription}. Pass --keep-source-stats to keep "
+                         + "the values the hero was exported with.");
+        }
+        else if (roster is not null && keepSourceStats)
+            next.Add("NOT applied: the target's hero stat convention (--keep-source-stats). The "
+                     + "hero keeps the source map's attributes and pools, which is only right when "
+                     + "both maps model heroes the same way.");
+
         if (contract.SpellDispatchers.Count == 0)
             unmet.Add("spell-dispatch: no cast dispatcher detected; the hero's abilities may exist "
                       + "but do nothing.");
+
+        // 7. The per-hero kit ladder, the last thing a ported hero is missing and the only one no
+        // check used to mention. Measured in game on GGGA: this hero passed every pick-screen gate
+        // and CreateUnit produced her unit, and WS_FinalizeWorkingSourceHero still returned false
+        // because it has a hand-written branch per hero and none for her, so she arrived with no
+        // caster global, no spell trigger registrations and no kit. Named here rather than
+        // generated, because a branch copied from a neighbour would bind THAT hero's triggers to
+        // this unit, which is the same trap BindStubs refuses on a name match.
+        foreach (var chain in contract.HeroDispatchChains
+                     .Where(c => !c.Rawcodes.Contains(installedRoot, StringComparer.Ordinal)))
+            unmet.Add($"hero-kit branch: '{chain.Function}' gives each hero its kit in a branch on "
+                      + $"the hero's rawcode ({chain.Branches} of them) and has none for "
+                      + $"'{installedRoot}'. Add one by hand. It cannot be generated: every branch "
+                      + "wires that hero's OWN triggers and caster global, so a copied one would "
+                      + "point this unit at another character's kit.");
 
         return new(true,
             $"installed {def.Name} as '{installedRoot}'",

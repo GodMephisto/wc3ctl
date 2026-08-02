@@ -4,16 +4,27 @@ using Wc3.Model;
 
 namespace Wc3.Commands;
 
+/// <summary>One real registration the target already performs: the rawcode it registers and the
+/// whole source line, kept so a caller can read the OTHER arguments of that call.</summary>
+public sealed record RosterCall(string Rawcode, string Line);
+
 /// <summary>A registration call a target map expects for each unit it hosts.</summary>
 public sealed record RosterRegistry(
     string Function,
     int CallCount,
     string Signature,
     string ExampleCall,
-    IReadOnlyList<string> RegisteredRawcodes);
+    IReadOnlyList<string> RegisteredRawcodes,
+    IReadOnlyList<RosterCall> Calls);
 
 /// <summary>A per-player array a hero must appear in for the map's systems to see it.</summary>
 public sealed record HeroArray(string Name, string Type, int AssignmentSites);
+
+/// <summary>
+/// A function that branches on a hero's rawcode, one hand-written branch per hero, to give that
+/// hero its kit. A hero with no branch here reaches the end of the ladder and gets nothing.
+/// </summary>
+public sealed record HeroDispatchChain(string Function, int Branches, IReadOnlyList<string> Rawcodes);
 
 /// <summary>
 /// A roster expressed as a repeating STATEMENT BLOCK rather than a single call. Some maps register
@@ -33,7 +44,25 @@ public sealed record ContractResult(
     IReadOnlyList<RosterRegistry> Registries,
     IReadOnlyList<string> SpellDispatchers,
     IReadOnlyList<HeroArray> HeroArrays,
-    IReadOnlyList<RosterTemplate> Templates)
+    IReadOnlyList<RosterTemplate> Templates,
+    /// <summary>
+    /// Per-hero kit ladders. Measured in game on GGGA: an installed hero passed every gate the
+    /// pick screen has (registered, right role, RPB_IsHeroCommitValid true) and CreateUnit
+    /// produced her unit, and she still had no kit, because the map wires each hero's spells in a
+    /// hand-written branch of WS_FinalizeWorkingSourceHero and she has none. Reported rather than
+    /// generated, for the same reason a stub is never bound on a name match alone: a branch copied
+    /// from another hero would bind THAT hero's triggers and caster global to this unit, which is
+    /// worse than doing nothing and is invisible until someone plays her.
+    /// </summary>
+    IReadOnlyList<HeroDispatchChain> HeroDispatchChains,
+    /// <summary>
+    /// What the map's own heroes agree a hero's stats look like, when they agree on anything.
+    /// Part of the contract for the same reason the roster call is: a hero can be registered,
+    /// selectable and completely correct and still be unplayable because she brought her home
+    /// map's stat model with her. Measured over the whole roster here; install re-measures over
+    /// the hero's own role, which is narrower and more accurate.
+    /// </summary>
+    HeroStatConvention? StatConvention)
 {
     public bool Any => Registries.Count > 0 || SpellDispatchers.Count > 0
         || HeroArrays.Count > 0 || Templates.Count > 0;
@@ -71,9 +100,15 @@ public static class ContractCommand
         var entry = doc.GetFile("war3map.j") ?? doc.GetFile("scripts\\war3map.j");
         if (entry is null)
             return new ContractResult("(none)", Array.Empty<RosterRegistry>(),
-                Array.Empty<string>(), Array.Empty<HeroArray>(), Array.Empty<RosterTemplate>());
+                Array.Empty<string>(), Array.Empty<HeroArray>(), Array.Empty<RosterTemplate>(),
+                Array.Empty<HeroDispatchChain>(), null);
 
-        var text = System.Text.Encoding.UTF8.GetString(entry.OverrideBytes ?? entry.RawBytes);
+        // Latin-1, not UTF-8. Unlike the other read-only scans in this codebase, what this one
+        // decodes DOES get written back: install copies ExampleCall and a RosterTemplate's lines
+        // verbatim into the target's war3map.j. A war3map.j is a byte stream with no declared
+        // encoding and real maps carry bytes that are not valid UTF-8, so a UTF-8 decode turns each
+        // into U+FFFD and the Latin-1 write-back then stores '?'. Latin-1 round-trips every byte.
+        var text = System.Text.Encoding.Latin1.GetString(entry.OverrideBytes ?? entry.RawBytes);
         var lines = text.Split('\n');
 
         var signatures = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -97,7 +132,8 @@ public static class ContractCommand
             .Select(kv => new RosterRegistry(kv.Key, kv.Value.Count,
                 signatures.TryGetValue(kv.Key, out var s) ? s : "(unknown)",
                 Shorten(kv.Value[0].call),
-                kv.Value.Select(v => v.code).Distinct().OrderBy(c => c, StringComparer.Ordinal).ToList()))
+                kv.Value.Select(v => v.code).Distinct().OrderBy(c => c, StringComparer.Ordinal).ToList(),
+                kv.Value.Select(v => new RosterCall(v.code, v.call)).ToList()))
             .OrderByDescending(r => r.CallCount)
             .ToList();
 
@@ -123,10 +159,14 @@ public static class ContractCommand
             if (assignments > 0) arrays.Add(new HeroArray(name, gm.Groups[1].Value, assignments));
         }
 
+        // Measured against the biggest registry, the one an installer would register into.
+        var stats = registries.Count > 0
+            ? HeroStatConvention.Derive(doc, registries[0], role: null) : null;
+
         return new ContractResult(entry.FileName ?? "war3map.j", registries,
             dispatchers.Take(20).ToList(),
             arrays.OrderByDescending(a => a.AssignmentSites).Take(15).ToList(),
-            FindRosterTemplates(lines));
+            FindRosterTemplates(lines), FindHeroDispatchChains(lines), stats);
     }
 
 
@@ -190,6 +230,69 @@ public static class ContractCommand
             if (result.Count == 6) break;
         }
         return result;
+    }
+
+    /// <summary>A rawcode equality test, the shape one branch of a per-hero ladder is written in.</summary>
+    private static readonly Regex RawcodeCompare =
+        new(@"==\s*'([^']{4})'", RegexOptions.Compiled);
+
+    /// <summary>Below this, a few rawcode comparisons in one function are ordinary logic.</summary>
+    private const int MinDispatchBranches = 8;
+
+    /// <summary>
+    /// What separates a KIT ladder from a lookup table. Branching on a hero's rawcode many times
+    /// is not enough on its own: GGGA has several big ladders that only return a number (how much
+    /// SP an upgrade costs, which respawn portal a hero uses), and naming those as things a ported
+    /// hero must be added to is noise that buries the one that matters. A kit branch WIRES the
+    /// unit, so the function has to do at least one of these somewhere in its body.
+    /// </summary>
+    private static readonly string[] KitWiringCalls =
+        { "TriggerRegisterUnitEvent", "UnitAddAbility", "SetPlayerAbilityAvailable" };
+
+    /// <summary>
+    /// Finds the functions that hand a hero its kit by branching on her rawcode. The shape is one
+    /// function containing many <c>== 'XXXX'</c> tests, which is how a map writes "and this is what
+    /// THIS hero gets" when the work differs per hero and cannot be table-driven.
+    /// </summary>
+    /// <remarks>
+    /// This is the last thing a ported hero is missing after the roster, and it is invisible to
+    /// every other check: the hero is registered, selectable, and her unit is created, so nothing
+    /// reports a problem, and in game she simply has no spells. Detected so install can say which
+    /// function needs a branch, by name, instead of leaving it to be found by playing her.
+    /// </remarks>
+    private static IReadOnlyList<HeroDispatchChain> FindHeroDispatchChains(string[] lines)
+    {
+        var found = new List<HeroDispatchChain>();
+        string current = "(top level)";
+        var codes = new List<string>();
+        bool wires = false;
+
+        void Flush()
+        {
+            var distinct = codes.Distinct(StringComparer.Ordinal).ToList();
+            if (wires && distinct.Count >= MinDispatchBranches)
+                found.Add(new HeroDispatchChain(current, distinct.Count, distinct));
+            codes.Clear();
+            wires = false;
+        }
+
+        foreach (var l in lines)
+        {
+            if (Declaration.Match(l) is { Success: true } dm)
+            {
+                Flush();
+                current = dm.Groups[1].Value;
+            }
+            foreach (Match m in RawcodeCompare.Matches(l)) codes.Add(m.Groups[1].Value);
+            if (!wires)
+                wires = KitWiringCalls.Any(c => l.Contains(c, StringComparison.Ordinal));
+        }
+        Flush();
+
+        // The biggest five, not all of them. GGGA has thirteen ladders over the branch floor and a
+        // list that long is not read; the one that actually blocked a hero (93 branches) sits
+        // fourth, so the cut has to be low enough to keep it and high enough to stay readable.
+        return found.OrderByDescending(c => c.Branches).Take(5).ToList();
     }
 
     private static bool LooksLikeHeroArray(string name) =>

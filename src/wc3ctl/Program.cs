@@ -1732,10 +1732,16 @@ public static class Program
             "Role to register the hero under, when the target's roster takes one (GGGA: Stalker, "
             + "Bruiser, Striker, Tanker, Tech, Supporter). Without this the role is copied from a "
             + "neighbouring registration, which is a guess and usually the wrong tab.");
+        var installKeepStats = new Option<bool>("--keep-source-stats", () => false,
+            "Keep the attributes and hit/mana pools the hero was exported with. By default the "
+            + "target's own heroes are measured and their stat convention is applied, because a "
+            + "hero carries the stat MODEL of the map she came from (GGGA pins every hero's "
+            + "attributes at 0 and states a flat pool instead, so source attributes make her "
+            + "unplayable there). Use this when both maps model heroes the same way.");
         var heroInstall = new Command("install",
             "Install a hero definition into any map. Refuses asset collisions, remaps rawcodes, "
             + "and reports what the target must still be wired with.")
-        { installDefArg, mapArg, heroOut, installForce, installRole, jsonOption };
+        { installDefArg, mapArg, heroOut, installForce, installRole, installKeepStats, jsonOption };
         heroInstall.SetHandler(ctx => RunSafely(() =>
         {
             var p9 = ctx.ParseResult;
@@ -1743,7 +1749,7 @@ public static class Program
             var doc9 = MapDocument.Load(tgt);
             var r9 = HeroInstallCommand.Run(p9.GetValueForArgument(installDefArg), doc9,
                 p9.GetValueForOption(installForce), p9.GetValueForOption(gameDirOption),
-                p9.GetValueForOption(installRole));
+                p9.GetValueForOption(installRole), p9.GetValueForOption(installKeepStats));
             string? saved = null;
             if (r9.Ok)
             {

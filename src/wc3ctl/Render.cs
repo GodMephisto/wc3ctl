@@ -446,7 +446,10 @@ public static class Render
             sb.AppendLine();
             sb.AppendLine("Registered with the target's own roster:");
             sb.AppendLine($"  {r.RegisteredWith}");
-            foreach (var a in r.Assumptions.Take(6)) sb.AppendLine($"    assumed: {a}");
+            // Every assumption, not the first six. The cap was set when there were two of them,
+            // and it silently swallowed a stat-convention line that HAD been applied to the map,
+            // so the report disagreed with the file it had just written.
+            foreach (var a in r.Assumptions) sb.AppendLine($"    assumed: {a}");
         }
         else if (r.NextSteps.Count > 0)
         {
@@ -521,6 +524,23 @@ public static class Render
             sb.AppendLine("HERO ARRAYS - a hero missing from these is invisible to the map's systems:");
             foreach (var a in r.HeroArrays)
                 sb.AppendLine($"  {a.Type,-8} {a.Name,-32} assigned at {a.AssignmentSites} site(s)");
+        }
+        if (r.HeroDispatchChains.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("HERO KIT BRANCHES - one hand-written branch per hero. A hero with no");
+            sb.AppendLine("branch here is fully selectable, spawns, and has no kit. Largest first,");
+            sb.AppendLine("not exhaustive:");
+            foreach (var c in r.HeroDispatchChains)
+                sb.AppendLine($"  {c.Function} ({c.Branches} hero rawcode branches)");
+        }
+        if (r.StatConvention is { } sc)
+        {
+            sb.AppendLine();
+            sb.AppendLine("HERO STAT CONVENTION - what this map's own heroes look like. A hero who");
+            sb.AppendLine("keeps her home map's numbers can be fully registered and still unplayable.");
+            sb.AppendLine($"  measured over {sc.SampleDescription}");
+            foreach (var f in sc.Fields) sb.AppendLine($"      {f.Evidence}");
         }
         return sb.ToString().TrimEnd();
     }
