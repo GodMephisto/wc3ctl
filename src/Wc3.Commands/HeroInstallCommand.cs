@@ -50,7 +50,7 @@ public sealed record InstallResult(
 public static class HeroInstallCommand
 {
     public static InstallResult Run(string definitionDirectory, MapDocument target,
-        bool force = false, string? gameDir = null)
+        bool force = false, string? gameDir = null, string? role = null)
     {
         ArgumentNullException.ThrowIfNull(target);
         var jsonPath = Path.Combine(definitionDirectory, "hero.json");
@@ -217,7 +217,7 @@ public static class HeroInstallCommand
             // Automatic registration. The argument shape is learned from how the target already
             // registers every other hero, so this follows the map's own convention instead of a
             // guess at it. Anything inferred is reported, never hidden.
-            var call = BuildRegistrationCall(roster, installedRoot, def, assumptions);
+            var call = BuildRegistrationCall(roster, installedRoot, def, assumptions, role);
             if (InsertAfterLastRegistration(target, roster.Function, call))
             {
                 registeredWith = call.Trim();
@@ -393,8 +393,13 @@ public static class HeroInstallCommand
     /// filled from the definition's icon; every other argument reuses the value an existing
     /// registration used, so the call is always well-formed even on a map we have never seen.
     /// </summary>
+    /// <summary>A short quoted word that is not a file path, which is what a role looks like.</summary>
+    private static bool IsRoleArgument(string literal) =>
+        literal.StartsWith("\"", StringComparison.Ordinal) && !LooksLikeAssetArgument(literal)
+        && literal.Trim('"').Length is > 0 and <= 24 && !literal.Contains('.');
+
     private static string BuildRegistrationCall(RosterRegistry roster, string rawcode,
-        HeroDefinition def, List<string> assumptions)
+        HeroDefinition def, List<string> assumptions, string? role)
     {
         var args = SplitArguments(roster.ExampleCall);
         if (args.Count == 0) return $"    call {roster.Function}('{rawcode}')";
@@ -416,6 +421,16 @@ public static class HeroInstallCommand
         for (int i = 1; i < args.Count; i++)
         {
             var sample = args[i].Trim();
+            // A caller-supplied role wins over copying a neighbour's. Without it the hero inherits
+            // whatever the sampled registration said, so Shadow Nanaya registered as "Bruiser" and
+            // appeared under the wrong tab in the picker. Nothing in the source map states a role,
+            // so this cannot be derived and has to be told to us.
+            if (role is not null && IsRoleArgument(sample))
+            {
+                built.Add("\"" + role + "\"");
+                assumptions.Add($"argument {i + 1} (role) set from --role to \"{role}\"");
+                continue;
+            }
             if (icon is not null && LooksLikeAssetArgument(sample))
             {
                 built.Add("\"" + icon.Replace("\\", "\\\\") + "\"");

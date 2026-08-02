@@ -1728,17 +1728,22 @@ public static class Program
         var installForce = new Option<bool>("--force", () => false,
             "Overwrite the target's own assets on a hash collision. Off by default, because "
             + "silently replacing a target's textures changes how ITS content renders.");
+        var installRole = new Option<string?>("--role",
+            "Role to register the hero under, when the target's roster takes one (GGGA: Stalker, "
+            + "Bruiser, Striker, Tanker, Tech, Supporter). Without this the role is copied from a "
+            + "neighbouring registration, which is a guess and usually the wrong tab.");
         var heroInstall = new Command("install",
             "Install a hero definition into any map. Refuses asset collisions, remaps rawcodes, "
             + "and reports what the target must still be wired with.")
-        { installDefArg, mapArg, heroOut, installForce, jsonOption };
+        { installDefArg, mapArg, heroOut, installForce, installRole, jsonOption };
         heroInstall.SetHandler(ctx => RunSafely(() =>
         {
             var p9 = ctx.ParseResult;
             string tgt = p9.GetValueForArgument(mapArg);
             var doc9 = MapDocument.Load(tgt);
             var r9 = HeroInstallCommand.Run(p9.GetValueForArgument(installDefArg), doc9,
-                p9.GetValueForOption(installForce), p9.GetValueForOption(gameDirOption));
+                p9.GetValueForOption(installForce), p9.GetValueForOption(gameDirOption),
+                p9.GetValueForOption(installRole));
             string? saved = null;
             if (r9.Ok)
             {
