@@ -186,8 +186,14 @@ public static class HeroInstallCommand
                     + block.Count + " statement(s) copied from the target's own convention";
                 next.Add("registered automatically into " + tmpl.ArrayName
                          + " as entry " + tmpl.Entries);
-                next.Add("NOT automated: the display name. This map sets it in a separate "
-                         + "if/elseif chain (FRAME_PlayerPickString); add a branch for this hero.");
+                // The display name lives in a separate if/elseif chain, not in the roster block,
+                // so it needs its own edit. Same principle as the roster itself: copy the branch
+                // the map already uses for another hero and substitute, rather than invent a shape.
+                if (AddDisplayNameBranch(target, tmpl, def, assumptions) is { } named)
+                    next.Add("display name wired: " + named);
+                else
+                    next.Add("NOT automated: the display name. This map sets it in a separate "
+                             + "if/elseif chain; add a branch for this hero by hand.");
             }
             else
                 unmet.Add("roster-registration: could not instantiate the " + tmpl.ArrayName
@@ -654,6 +660,86 @@ public static class HeroInstallCommand
     /// encoding was.
     /// </summary>
     private static readonly Encoding ScriptBytes = Encoding.Latin1;
+
+    /// <summary>
+    /// Adds this hero to the target's display-name chain, the separate if/elseif ladder that maps a
+    /// roster slot to the text shown in the pick UI.
+    /// </summary>
+    /// <remarks>
+    /// A roster entry alone is not enough on a map built this way: the hero occupies a slot but the
+    /// picker shows nothing for her. The chain is found by looking for a string array assigned
+    /// literal names many times over, then the LAST branch of it is copied and substituted, so the
+    /// new branch matches whatever comparison variable and formatting the map already uses. Copying
+    /// a real branch rather than composing one is the same rule the roster block follows, and it is
+    /// why this works on a map the tool has never seen.
+    /// Returns the emitted assignment, or null when no such chain exists (plenty of maps have none).
+    /// </remarks>
+    private static string? AddDisplayNameBranch(MapDocument target, RosterTemplate tmpl,
+        HeroDefinition def, List<string> assumptions)
+    {
+        var entry = target.GetFile("war3map.j");
+        if (entry is null) return null;
+        var lines = ScriptBytes.GetString(entry.OverrideBytes ?? entry.RawBytes).Split('\n').ToList();
+
+        // A string array assigned literal names repeatedly is the display chain.
+        var assign = new Regex(@"^(\s*)set\s+([A-Za-z_][A-Za-z0-9_]*)\s*\[([^\]]*)\]\s*=\s*""([^""]{2,60})""\s*$");
+        var counts = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var l in lines)
+            if (assign.Match(l) is { Success: true } m)
+                counts[m.Groups[2].Value] = counts.GetValueOrDefault(m.Groups[2].Value) + 1;
+        var chain = counts.Where(kv => kv.Value >= 8)
+            .OrderByDescending(kv => kv.Value).Select(kv => kv.Key).FirstOrDefault();
+        if (chain is null) return null;
+
+        int last = -1;
+        for (int i = 0; i < lines.Count; i++)
+        {
+            var m = assign.Match(lines[i]);
+            if (m.Success && m.Groups[2].Value == chain) last = i;
+        }
+        if (last < 0) return null;
+
+        // The condition guarding that last branch, so the new one is worded the same way.
+        int cond = -1;
+        for (int i = last; i >= 0 && i > last - 6; i--)
+            if (Regex.IsMatch(lines[i], @"^\s*(else)?if\b.*\bthen\s*$")) { cond = i; break; }
+        if (cond < 0) return null;
+
+        var sample = assign.Match(lines[last]);
+        var indent = sample.Groups[1].Value;
+        var slotExpr = sample.Groups[3].Value;              // e.g. "pid", copied verbatim
+        var name = def.Name ?? def.Id;
+
+        // Reword the sampled condition to test THIS hero's roster slot. The comparison variable is
+        // whatever the map already compares against, so only the array and index change.
+        var condLine = Regex.Replace(lines[cond].TrimEnd('\r'),
+            @"([A-Za-z_][A-Za-z0-9_]*)\s*\[[^\]]*\]",
+            $"{tmpl.ArrayName}[{tmpl.Entries}]");
+        if (!condLine.TrimStart().StartsWith("elseif", StringComparison.Ordinal))
+            condLine = Regex.Replace(condLine, @"^(\s*)if\b", "${1}elseif");
+
+        var setLine = $"{indent}set {chain}[{slotExpr}]=\"{name}\"";
+
+        // Insert after the WHOLE sampled branch, not straight after its assignment. A branch can
+        // carry more than the one line, WOS2 follows each name with a MakeSoundLocal for that
+        // hero's pick voice line, and splicing in between stole the previous hero's sound into
+        // this hero's branch and left that hero with none.
+        int insertAt = last + 1;
+        while (insertAt < lines.Count)
+        {
+            var t = lines[insertAt].TrimStart();
+            if (t.StartsWith("elseif", StringComparison.Ordinal)
+                || t.StartsWith("else", StringComparison.Ordinal)
+                || t.StartsWith("endif", StringComparison.Ordinal)) break;
+            insertAt++;
+        }
+        lines.InsertRange(insertAt, new[] { condLine, setLine });
+        FileEditCommand.AddOrReplace(target, entry.FileName!,
+            ScriptBytes.GetBytes(string.Join("\n", lines)));
+
+        assumptions.Add($"display-name branch copied from the last '{chain}' branch at line {cond + 1}");
+        return setLine.Trim();
+    }
 
     private static InstallResult Fail(string message) =>
         new(false, message, new Dictionary<string, string>(), 0, 0, 0, 0,
