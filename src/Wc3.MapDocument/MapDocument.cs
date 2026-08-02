@@ -154,7 +154,12 @@ public sealed class MapDocument
             ?? GetFile("war3map.lua") ?? GetFile("scripts\\war3map.lua");
         if (script is { RawBytes.Length: > 0 })
         {
-            var text = Encoding.UTF8.GetString(script.RawBytes);
+            // Latin-1: this scan looks for asset PATHS in string literals, and a path containing
+            // a non-ASCII character would decode to U+FFFD under UTF-8 and silently never become a
+            // candidate. That presents as a missing imported asset, not as a decoding fault, which
+            // is a bad failure to debug. Nothing is written back here, so this only affects what
+            // the scan can see.
+            var text = Encoding.Latin1.GetString(script.RawBytes);
             foreach (Match m in AssetStringLiteral.Matches(text))
                 Harvest(AssetPathCandidates.Unescape(m.Groups[1].Value));
         }
