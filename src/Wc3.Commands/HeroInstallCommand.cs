@@ -132,8 +132,16 @@ public static class HeroInstallCommand
         var unmet = new List<string>();
         var next = new List<string>();
         var contract = ContractCommand.Run(target);
+        // Call count and a near-1.0 rawcode ratio are NOT enough to identify a hero roster. On a
+        // map with no roster at all they matched SetItemRelatives(integer itemId, ...) - an
+        // item-relation table - and inserted a bogus call. The signature is the discriminator: a
+        // hero roster names its first parameter for a unit (GGGA: RPB_AddHero(integer unitCode,
+        // ...)), an item table names it for an item. Refusing to guess is the correct outcome when
+        // no candidate looks unit-shaped; a wrong automatic edit is far worse than a manual step.
         var roster = contract.Registries.FirstOrDefault(r =>
-            r.CallCount >= 8 && r.RegisteredRawcodes.Count >= r.CallCount * 0.8);
+            r.CallCount >= 8
+            && r.RegisteredRawcodes.Count >= r.CallCount * 0.8
+            && FirstParameterLooksLikeAUnit(r.Signature));
         string installedRoot = remap.TryGetValue(def.Id, out var rootCode) ? rootCode : def.Id;
 
         string? registeredWith = null;
@@ -319,6 +327,22 @@ public static class HeroInstallCommand
 
         lines.InsertRange(end, add);
         return string.Join("\n", lines);
+    }
+
+    /// <summary>
+    /// True when the registration's FIRST parameter names a unit rather than an item, ability or
+    /// anything else. Deliberately conservative: an unrecognised shape returns false, so install
+    /// reports the requirement as unmet instead of writing a call it cannot justify.
+    /// </summary>
+    private static bool FirstParameterLooksLikeAUnit(string signature)
+    {
+        var first = signature.Split(',')[0];
+        var name = first.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).LastOrDefault();
+        if (name is null) return false;
+        if (name.Contains("item", StringComparison.OrdinalIgnoreCase)) return false;
+        return name.Contains("unit", StringComparison.OrdinalIgnoreCase)
+            || name.Contains("hero", StringComparison.OrdinalIgnoreCase)
+            || name.Contains("char", StringComparison.OrdinalIgnoreCase);
     }
 
     private static InstallResult Fail(string message) =>

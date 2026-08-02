@@ -172,6 +172,16 @@ public static class HeroExportCommand
     /// <c>call</c> alone misses most references, which is exactly how an earlier pass lost live
     /// code. Over-matching costs a few extra functions; under-matching breaks the script.
     /// </summary>
+    /// <summary>
+    /// A class that is a SIBLING of the exported unit rather than something it depends on. The
+    /// convention in these maps is one class per character, so a name ending in "Spells" is
+    /// another character's kit; reaching it means the walk passed through the shared dispatcher,
+    /// which is the thing to declare instead (see the roster-registration requirement).
+    /// </summary>
+    private static bool IsPeerClass(string wurstClass) =>
+        wurstClass.EndsWith("Spells", StringComparison.Ordinal)
+        || wurstClass.EndsWith("Debuff", StringComparison.Ordinal);
+
     /// <summary>Wurst emits s__Class_method / si__Class_field / dispatch_Class_method.</summary>
     private static readonly System.Text.RegularExpressions.Regex WurstSymbol =
         new(@"^(?:s__|si__|sc__|dispatch_|init_)([A-Za-z0-9]+?)_", System.Text.RegularExpressions.RegexOptions.Compiled);
@@ -198,8 +208,9 @@ public static class HeroExportCommand
     /// </remarks>
     private static HashSet<string> Closure(
         Dictionary<string, (int start, int end)> spans, IEnumerable<string> seed,
-        SortedSet<string> excludedClasses)
+        SortedSet<string> excludedClasses, out bool sawPeer)
     {
+        sawPeer = false;
         var seedList = seed.Where(spans.ContainsKey).ToList();
 
         // Classes the hero's own functions belong to; everything else is somebody else's system.
@@ -228,9 +239,14 @@ public static class HeroExportCommand
                     var wm = WurstSymbol.Match(callee);
                     if (wm.Success && !ownClasses.Contains(wm.Groups[1].Value))
                     {
-                        // A different Wurst class: record it as infrastructure the target must
-                        // already provide, and do not walk into it.
-                        excludedClasses.Add(wm.Groups[1].Value);
+                        var cls = wm.Groups[1].Value;
+                        // A PEER, not a dependency. 20 of 28 excluded classes were other heroes'
+                        // spell classes (AlucardSpells, AsNodtSpells, ...), and Nanaya does not
+                        // call Alucard's spells: all hero classes route through one shared Wurst
+                        // dispatcher, so reaching it makes every hero look like a neighbour. One
+                        // edge, hit 20 times. A peer is neither carried NOR declared - listing it
+                        // as a requirement would ask a target to supply unrelated characters.
+                        if (IsPeerClass(cls)) sawPeer = true; else excludedClasses.Add(cls);
                         continue;
                     }
                     queue.Enqueue(callee);
@@ -288,6 +304,7 @@ public static class HeroExportCommand
         string? scriptFile = null;
         var entryPoints = new List<string>();
         var excludedClassNames = new SortedSet<string>(StringComparer.Ordinal);
+        bool sharedDispatcherSeen = false;
         var globals = new List<string>();
         if (bundle.Functions.Count > 0 && doc.GetFile("war3map.j") is { } js)
         {
@@ -300,7 +317,8 @@ public static class HeroExportCommand
             // hosted map has no player slots. Over-including here is cheap; under-including is not.
             _scriptLines = lines;
             var spans = IndexFunctions(lines);
-            var wanted = Closure(spans, bundle.Functions.Select(f => f.Name), excludedClassNames);
+            var wanted = Closure(spans, bundle.Functions.Select(f => f.Name), excludedClassNames,
+                out sharedDispatcherSeen);
             var reason = bundle.Functions.ToDictionary(f => f.Name, f => f.Reason, StringComparer.Ordinal);
 
             var sb = new StringBuilder();
@@ -350,6 +368,12 @@ public static class HeroExportCommand
         foreach (var cls in excludedClassNames)
             requires.Add(new DefinitionRequirement("wurst-class",
                 $"the target must provide the Wurst class '{cls}', which this hero's code calls into",
+                Satisfiable: false));
+        if (sharedDispatcherSeen)
+            requires.Add(new DefinitionRequirement("shared-spell-dispatcher",
+                "this hero's spells route through the source map's shared dispatcher, which every "
+                + "character there shares. The target must provide an equivalent entry point, or the "
+                + "spells will not fire. Peer characters' classes were deliberately NOT carried.",
                 Satisfiable: false));
 
         int excludedObjects = bundle.Objects.Count - objects.Count;
