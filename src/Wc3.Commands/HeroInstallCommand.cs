@@ -284,6 +284,26 @@ public static class HeroInstallCommand
                       + "wires that hero's OWN triggers and caster global, so a copied one would "
                       + "point this unit at another character's kit.");
 
+        // 8. Every OTHER per-hero table. The kit ladder above is one of many, and reporting only it
+        // understated the work twelvefold on GGGA. Measured in the running game: the spawn path is
+        // not what fails, an installed hero reaches the world alive, visible and selected, and is
+        // simply absent from the tables that give her damage routing, death handling, portraits and
+        // ability hints. Named, never generated, for the same reason as the kit branch.
+        var targetScriptEntry = target.GetFile("war3map.j") ?? target.GetFile("scripts\\war3map.j");
+        if (roster is not null && targetScriptEntry is not null)
+        {
+            // Latin-1, never UTF-8. A war3map.j is a byte stream and real maps carry bytes that are
+            // not valid UTF-8.
+            var targetScript = System.Text.Encoding.Latin1.GetString(
+                targetScriptEntry.OverrideBytes ?? targetScriptEntry.RawBytes);
+            var alreadyNamed = contract.HeroDispatchChains.Select(c => c.Function).ToHashSet(StringComparer.Ordinal);
+            foreach (var sys in HeroSystemAudit.Run(targetScript, roster.RegisteredRawcodes, installedRoot)
+                         .Where(s => !alreadyNamed.Contains(s.Function)))
+                unmet.Add($"per-hero table: '{sys.Function}' (war3map.j line {sys.Line}) hand-lists "
+                          + $"{sys.HeroCount} of the target's own heroes and has no entry for "
+                          + $"'{installedRoot}'. Add one by hand.");
+        }
+
         return new(true,
             $"installed {def.Name} as '{installedRoot}'",
             remap, created, fields, pending.Count, skipped,
