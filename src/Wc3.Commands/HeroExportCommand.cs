@@ -50,6 +50,13 @@ public static class HeroExportCommand
         "h" + new string(rootRawcode.Where(char.IsLetterOrDigit).ToArray()) + "__";
 
     /// <summary>
+    /// A field's value with any TRIGSTR reference already resolved, so it carries meaning outside
+    /// the source map. Falls back to the raw value when there is nothing to resolve.
+    /// </summary>
+    private static string ResolvedValue(MergedField f) =>
+        f.Value.StartsWith("TRIGSTR_", StringComparison.Ordinal) ? f.Display : f.Value;
+
+    /// <summary>
     /// A prefix for every carried function and global, so nothing the definition brings can clash
     /// with a name the target already uses. The prefix is derived from the hero's rawcode, which is
     /// unique per definition and stable across installs.
@@ -342,8 +349,15 @@ public static class HeroExportCommand
         {
             var merged = ObjectGetCommand.Execute(doc, o.Kind, o.Rawcode, gameDir);
             var fields = merged.Found
+                // Resolve a TRIGSTR reference into its literal text. A raw value like
+                // "TRIGSTR_6175" indexes the SOURCE map's war3map.wts, which the target has no
+                // copy of, so carrying it verbatim gave the installed hero the literal name
+                // "TRIGSTR_6175" in game. MergedField.Display is that same value with the source's
+                // string table already applied, which is the only form that means anything in
+                // another map. Keeping the raw reference is right for editing a map in place and
+                // wrong for moving content between maps, and this format only does the latter.
                 ? merged.Fields.Where(f => f.Source == "map")
-                    .Select(f => new DefinitionField(f.Code, f.Value)).ToList()
+                    .Select(f => new DefinitionField(f.Code, ResolvedValue(f))).ToList()
                 : new List<DefinitionField>();
             objects.Add(new DefinitionObject(o.Rawcode, o.Kind.ToString().ToLowerInvariant(),
                 o.Name, merged.BaseRawcode, o.CustomToMap,
