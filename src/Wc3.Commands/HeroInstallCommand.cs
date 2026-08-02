@@ -16,7 +16,9 @@ public sealed record InstallResult(
     int AssetsSkippedIdentical,
     IReadOnlyList<string> Collisions,
     IReadOnlyList<string> UnmetRequirements,
-    IReadOnlyList<string> NextSteps);
+    IReadOnlyList<string> NextSteps,
+    string? RegisteredWith,
+    IReadOnlyList<string> Assumptions);
 
 /// <summary>
 /// Installs a <see cref="HeroDefinition"/> into any map, the <c>install</c> verb of the format.
@@ -81,7 +83,7 @@ public static class HeroInstallCommand
                 $"{collisions.Count} asset collision(s); the target's own files would be overwritten. "
                 + "Re-run with --force only if you are certain, or rename the definition's assets.",
                 new Dictionary<string, string>(), 0, 0, 0, skipped, collisions,
-                Array.Empty<string>(), Array.Empty<string>());
+                Array.Empty<string>(), Array.Empty<string>(), null, Array.Empty<string>());
 
         // 2. Objects. Created from their base, so the target's existing codes are never disturbed.
         var remap = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -128,12 +130,26 @@ public static class HeroInstallCommand
             r.CallCount >= 8 && r.RegisteredRawcodes.Count >= r.CallCount * 0.8);
         string installedRoot = remap.TryGetValue(def.Id, out var rootCode) ? rootCode : def.Id;
 
+        string? registeredWith = null;
+        var assumptions = new List<string>();
         if (roster is null)
             unmet.Add("roster-registration: no hero roster call was detected in the target. If it "
                       + "has one, the hero must be added to it by hand or it will not be selectable.");
         else
-            next.Add($"add  call {roster.Function}('{installedRoot}' , ...)  to the target's roster "
-                     + $"(it registers {roster.CallCount} heroes; e.g. {roster.ExampleCall})");
+        {
+            // Automatic registration. The argument shape is learned from how the target already
+            // registers every other hero, so this follows the map's own convention instead of a
+            // guess at it. Anything inferred is reported, never hidden.
+            var call = BuildRegistrationCall(roster, installedRoot, def, assumptions);
+            if (InsertAfterLastRegistration(target, roster.Function, call))
+            {
+                registeredWith = call.Trim();
+                next.Add($"registered automatically: {registeredWith}");
+            }
+            else
+                unmet.Add($"roster-registration: could not place the call automatically; add "
+                          + $"{call.Trim()} inside the target's registration function by hand.");
+        }
 
         if (contract.SpellDispatchers.Count == 0)
             unmet.Add("spell-dispatch: no cast dispatcher detected; the hero's abilities may exist "
@@ -142,10 +158,92 @@ public static class HeroInstallCommand
         return new(true,
             $"installed {def.Name} as '{installedRoot}'",
             remap, created, fields, pending.Count, skipped,
-            collisions, unmet, next);
+            collisions, unmet, next, registeredWith, assumptions);
+    }
+
+    /// <summary>
+    /// Builds the registration call by copying the target's OWN convention: same function, same
+    /// argument count, our rawcode first. A string argument that looks like an asset path is
+    /// filled from the definition's icon; every other argument reuses the value an existing
+    /// registration used, so the call is always well-formed even on a map we have never seen.
+    /// </summary>
+    private static string BuildRegistrationCall(RosterRegistry roster, string rawcode,
+        HeroDefinition def, List<string> assumptions)
+    {
+        var args = SplitArguments(roster.ExampleCall);
+        if (args.Count == 0) return $"    call {roster.Function}('{rawcode}')";
+
+        var built = new List<string> { $"'{rawcode}'" };
+        string? icon = def.Assets.FirstOrDefault(a =>
+            a.Category.Equals("icon", StringComparison.OrdinalIgnoreCase))?.Path;
+
+        for (int i = 1; i < args.Count; i++)
+        {
+            var sample = args[i].Trim();
+            if (icon is not null && LooksLikeAssetArgument(sample))
+            {
+                built.Add("\"" + icon.Replace("\\", "\\\\") + "\"");
+                assumptions.Add($"argument {i + 1} (portrait) set to the definition's icon: {icon}");
+                icon = null;
+            }
+            else
+            {
+                built.Add(sample);
+                assumptions.Add($"argument {i + 1} copied from an existing registration: {sample}");
+            }
+        }
+        return $"    call {roster.Function}({string.Join(" , ", built)})";
+    }
+
+    private static bool LooksLikeAssetArgument(string literal) =>
+        literal.StartsWith("\"", StringComparison.Ordinal)
+        && (literal.Contains(".blp", StringComparison.OrdinalIgnoreCase)
+            || literal.Contains(".tga", StringComparison.OrdinalIgnoreCase)
+            || literal.Contains(".dds", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Top-level arguments of one call, so nested parens and commas in strings survive.</summary>
+    private static List<string> SplitArguments(string callLine)
+    {
+        int open = callLine.IndexOf('(');
+        int close = callLine.LastIndexOf(')');
+        if (open < 0 || close <= open) return new List<string>();
+        var inner = callLine[(open + 1)..close];
+        var parts = new List<string>();
+        int depth = 0, start = 0; bool inString = false;
+        for (int i = 0; i < inner.Length; i++)
+        {
+            char c = inner[i];
+            if (c == '\"') inString = !inString;
+            else if (!inString && c == '(') depth++;
+            else if (!inString && c == ')') depth--;
+            else if (!inString && c == ',' && depth == 0)
+            { parts.Add(inner[start..i]); start = i + 1; }
+        }
+        parts.Add(inner[start..]);
+        return parts;
+    }
+
+    /// <summary>
+    /// Places the call immediately after the LAST existing registration, so it lands inside the
+    /// same function and after whatever setup those calls depend on.
+    /// </summary>
+    private static bool InsertAfterLastRegistration(MapDocument target, string function, string call)
+    {
+        var entry = target.GetFile("war3map.j");
+        if (entry is null) return false;
+        var text = Encoding.UTF8.GetString(entry.OverrideBytes ?? entry.RawBytes);
+        var lines = text.Split('\n').ToList();
+        int last = -1;
+        for (int i = 0; i < lines.Count; i++)
+            if (lines[i].Contains("call " + function + "(", StringComparison.Ordinal)) last = i;
+        if (last < 0) return false;
+        lines.Insert(last + 1, call);
+        FileEditCommand.WriteText(target, entry.FileName!, string.Join("\n", lines));
+        return true;
     }
 
     private static InstallResult Fail(string message) =>
         new(false, message, new Dictionary<string, string>(), 0, 0, 0, 0,
-            Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>());
+            Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>(), null,
+            Array.Empty<string>());
 }

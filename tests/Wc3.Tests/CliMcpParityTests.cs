@@ -100,6 +100,7 @@ public class CliMcpParityTests
         // Writes a definition folder to disk; local file output like 'extract'.
         "hero export",
         "hero install",
+        "hero lint",
         // Launches the real game on this machine; inherently local.
         "test-load",
         // Heuristic script analysis for non-terminating loops. Reports candidates to read.

@@ -391,6 +391,28 @@ public static class Render
         return sb.ToString().TrimEnd();
     }
 
+    public static string HeroLint(HeroLintResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.Directory}" + (r.Id is null ? "" : $"  [{r.Id}]"));
+        foreach (var c in r.Checks)
+        {
+            var mark = c.Severity switch
+            {
+                LintSeverity.Error => "FAIL",
+                LintSeverity.Warning => "WARN",
+                _ => "ok  ",
+            };
+            sb.AppendLine($"{mark}  {c.Name,-22} {c.Summary}");
+            foreach (var d in c.Detail) sb.AppendLine($"          {d}");
+        }
+        sb.AppendLine();
+        sb.Append(r.Ok
+            ? $"DEFINITION OK - {r.Checks.Count} check(s), {r.Warnings} warning(s)"
+            : $"DEFINITION INVALID - {r.Errors} error(s), {r.Warnings} warning(s)");
+        return sb.ToString();
+    }
+
     public static string HeroInstall(InstallResult r, string? saved)
     {
         var sb = new StringBuilder();
@@ -410,7 +432,14 @@ public static class Render
             sb.AppendLine("UNMET requirements - the hero may not be usable until these are handled:");
             foreach (var u in r.UnmetRequirements) sb.AppendLine($"  {u}");
         }
-        if (r.NextSteps.Count > 0)
+        if (r.RegisteredWith is not null)
+        {
+            sb.AppendLine();
+            sb.AppendLine("Registered with the target's own roster:");
+            sb.AppendLine($"  {r.RegisteredWith}");
+            foreach (var a in r.Assumptions.Take(6)) sb.AppendLine($"    assumed: {a}");
+        }
+        else if (r.NextSteps.Count > 0)
         {
             sb.AppendLine();
             sb.AppendLine("Still to wire:");

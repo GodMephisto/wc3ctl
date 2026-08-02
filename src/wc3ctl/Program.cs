@@ -1754,9 +1754,23 @@ public static class Program
                 () => Render.HeroInstall(r9, saved));
         }));
 
+        var heroLintDir = new Argument<string>("definition", "Folder containing hero.json.");
+        var heroLint = new Command("lint",
+            "Validate a hero definition before installing it: assets present and hash-matched, "
+            + "objects installable, declared script functions present, no dangling references.")
+        { heroLintDir, jsonOption };
+        heroLint.SetHandler(ctx => RunSafely(() =>
+        {
+            var pa = ctx.ParseResult;
+            var ra = HeroLintCommand.Run(pa.GetValueForArgument(heroLintDir));
+            if (!ra.Ok) exitCode[0] = 1;
+            Emit(pa.GetValueForOption(jsonOption), ra, () => Render.HeroLint(ra));
+        }));
+
         var hero = new Command("hero", "Hero definitions: the portable, reviewable form of a hero.");
         hero.AddCommand(heroExport);
         hero.AddCommand(heroInstall);
+        hero.AddCommand(heroLint);
         root.AddCommand(hero);
 
         root.AddCommand(lint);
