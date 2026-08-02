@@ -40,6 +40,49 @@ public static class HeroExportCommand
 
 
 
+
+    /// <summary>
+    /// A prefix for every carried function and global, so nothing the definition brings can clash
+    /// with a name the target already uses. The prefix is derived from the hero's rawcode, which is
+    /// unique per definition and stable across installs.
+    /// </summary>
+    private static Dictionary<string, string> BuildNamespace(
+        string rootRawcode, IEnumerable<string> functions, IEnumerable<string> globalLines)
+    {
+        var prefix = "h" + new string(rootRawcode.Where(char.IsLetterOrDigit).ToArray()) + "__";
+        var map = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var fn in functions) map[fn] = prefix + fn;
+
+        var decl = new System.Text.RegularExpressions.Regex(
+            @"^\s*(?:constant\s+)?[A-Za-z_][A-Za-z0-9_]*\s+(?:array\s+)?([A-Za-z_][A-Za-z0-9_]*)");
+        foreach (var line in globalLines)
+        {
+            var m = decl.Match(line);
+            if (m.Success) map[m.Groups[1].Value] = prefix + m.Groups[1].Value;
+        }
+        // 'main' and 'config' are the engine's, never ours to rename.
+        map.Remove("main");
+        map.Remove("config");
+        return map;
+    }
+
+    /// <summary>
+    /// Rewrites carried symbol names, including inside string literals, because a map can dispatch
+    /// by name (<c>ExecuteFunc("Foo")</c>) and renaming the declaration without the literal would
+    /// break that call at runtime with no compile error to warn about it.
+    /// </summary>
+    private static string ApplyNamespace(string text, Dictionary<string, string> rename)
+    {
+        if (rename.Count == 0) return text;
+        // Longest first, so a name that is a prefix of another cannot corrupt it.
+        var pattern = string.Join("|", rename.Keys
+            .OrderByDescending(k => k.Length)
+            .Select(System.Text.RegularExpressions.Regex.Escape));
+        return System.Text.RegularExpressions.Regex.Replace(
+            text, @"\b(?:" + pattern + @")\b",
+            m => rename.TryGetValue(m.Value, out var to) ? to : m.Value);
+    }
+
     /// <summary>
     /// Declarations from the source's <c>globals</c> block that the carried functions actually
     /// reference, returned verbatim so a type or initialiser is never re-derived. Only what is used
@@ -212,10 +255,21 @@ public static class HeroExportCommand
             }
             // Globals the carried code reads. A function without its globals is as broken as a
             // function without its callees, and fails the same way: the script will not compile.
-            globals.AddRange(GlobalsUsedBy(lines, wanted, spans));
+            var rawGlobals = GlobalsUsedBy(lines, wanted, spans);
+
+            // Namespace every carried symbol. Rawcodes are remapped on install and assets are
+            // hash-checked, but script symbols had no collision handling, which produced
+            // "Symbol s already defined as global variable" the moment globals started being
+            // carried: the source declares 's', the target has a local 's'. Prefixing per hero
+            // means a carried symbol cannot collide on ANY target, which is the same fix already
+            // applied to the other two namespaces.
+            var rename = BuildNamespace(bundle.RootRawcode, wanted, rawGlobals);
+            var body = ApplyNamespace(sb.ToString(), rename);
+            globals.AddRange(rawGlobals.Select(g => ApplyNamespace(g, rename)));
+            entryPoints = entryPoints.Select(n => rename.TryGetValue(n, out var r) ? r : n).ToList();
 
             scriptFile = "script.j";
-            File.WriteAllText(Path.Combine(outputDirectory, scriptFile), sb.ToString(), new UTF8Encoding(false));
+            File.WriteAllText(Path.Combine(outputDirectory, scriptFile), body, new UTF8Encoding(false));
         }
 
         // What a target must already provide. Stated so an install can refuse rather than produce
