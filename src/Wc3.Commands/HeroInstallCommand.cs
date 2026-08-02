@@ -1,6 +1,7 @@
 // src/Wc3.Commands/HeroInstallCommand.cs
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Text.Json;
 using Wc3.Model;
 
@@ -119,7 +120,7 @@ public static class HeroInstallCommand
                     body = body.Replace($"'{from}'", $"'{to}'", StringComparison.Ordinal);
                 var existing = target.GetFile("war3map.j");
                 var head = existing is null ? "" :
-                    Encoding.UTF8.GetString(existing.OverrideBytes ?? existing.RawBytes);
+                    ScriptBytes.GetString(existing.OverrideBytes ?? existing.RawBytes);
                 // Globals must land INSIDE the target's own globals block; appended after it they
                 // are a syntax error, and the carried functions that read them will not compile.
                 head = InsertGlobals(head, def.Globals, remap);
@@ -146,7 +147,28 @@ public static class HeroInstallCommand
 
         string? registeredWith = null;
         var assumptions = new List<string>();
-        if (roster is null)
+        if (roster is null && contract.Templates.Count > 0)
+        {
+            // Block-style roster. The target registers each hero with several statements rather
+            // than one call, so copy a REAL existing entry and substitute. Inventing the shape is
+            // what fails here: the block carries a counter, a hidden preview dummy and one
+            // UnitAddAbility per spell, and omitting any of those half-registers the hero.
+            var tmpl = contract.Templates[0];
+            var block = InstantiateTemplate(tmpl, installedRoot, def, remap, assumptions);
+            if (block.Count > 0 && AppendAfterLine(target, tmpl.EndLine, block))
+            {
+                registeredWith = tmpl.ArrayName + "[" + tmpl.Entries + "] block, "
+                    + block.Count + " statement(s) copied from the target's own convention";
+                next.Add("registered automatically into " + tmpl.ArrayName
+                         + " as entry " + tmpl.Entries);
+                next.Add("NOT automated: the display name. This map sets it in a separate "
+                         + "if/elseif chain (FRAME_PlayerPickString); add a branch for this hero.");
+            }
+            else
+                unmet.Add("roster-registration: could not instantiate the " + tmpl.ArrayName
+                          + " block; add an entry by hand using the template from 'wc3ctl contract'.");
+        }
+        else if (roster is null)
             unmet.Add("roster-registration: no hero roster call was detected in the target. If it "
                       + "has one, the hero must be added to it by hand or it will not be selectable.");
         else
@@ -245,14 +267,14 @@ public static class HeroInstallCommand
     {
         var entry = target.GetFile("war3map.j");
         if (entry is null) return false;
-        var text = Encoding.UTF8.GetString(entry.OverrideBytes ?? entry.RawBytes);
+        var text = ScriptBytes.GetString(entry.OverrideBytes ?? entry.RawBytes);
         var lines = text.Split('\n').ToList();
         int last = -1;
         for (int i = 0; i < lines.Count; i++)
             if (lines[i].Contains("call " + function + "(", StringComparison.Ordinal)) last = i;
         if (last < 0) return false;
         lines.Insert(last + 1, call);
-        FileEditCommand.WriteText(target, entry.FileName!, string.Join("\n", lines));
+        FileEditCommand.AddOrReplace(target, entry.FileName!, ScriptBytes.GetBytes(string.Join("\n", lines)));
         return true;
     }
 
@@ -344,6 +366,87 @@ public static class HeroInstallCommand
             || name.Contains("hero", StringComparison.OrdinalIgnoreCase)
             || name.Contains("char", StringComparison.OrdinalIgnoreCase);
     }
+
+    /// <summary>
+    /// Copies a real roster entry, substituting this hero's rawcode for the sample's and her
+    /// abilities for the sample's ability ids. Everything else is preserved verbatim so the new
+    /// entry matches the map's own convention exactly, including the preview dummy and the counter.
+    /// </summary>
+    private static List<string> InstantiateTemplate(RosterTemplate tmpl, string rawcode,
+        HeroDefinition def, IReadOnlyDictionary<string, string> remap, List<string> assumptions)
+    {
+        // What "set Arr[n]=X" assigns in the sample, i.e. the sample hero's id.
+        var slot = new Regex(@"^\s*set\s+" + Regex.Escape(tmpl.ArrayName)
+                             + @"\s*\[[^\]]*\]\s*=\s*([A-Za-z_][A-Za-z0-9_]*)");
+        string? sampleHeroId = null;
+        foreach (var l in tmpl.TemplateLines)
+        {
+            var m = slot.Match(l);
+            if (m.Success) { sampleHeroId = m.Groups[1].Value; break; }
+        }
+        if (sampleHeroId is null) return new List<string>();
+
+        var addAbility = new Regex(@"UnitAddAbility\s*\([^,]*,\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)");
+        int sampleAbilityCount = tmpl.TemplateLines.Count(l => addAbility.IsMatch(l));
+
+        // Ours: the abilities the definition carries, in declaration order, after install's remap.
+        var ours = def.Objects
+            .Where(o => o.Kind.Equals("ability", StringComparison.OrdinalIgnoreCase))
+            .Select(o => remap.TryGetValue(o.Rawcode, out var to) ? to : o.Rawcode)
+            .ToList();
+
+        var outLines = new List<string>();
+        int abilityIndex = 0;
+        foreach (var raw in tmpl.TemplateLines)
+        {
+            var line = raw;
+
+            // This hero goes after every existing entry.
+            line = Regex.Replace(line, @"^(\s*set\s+n\s*=\s*)-?\d+", "${1}" + tmpl.Entries);
+            line = line.Replace(sampleHeroId, "'" + rawcode + "'", StringComparison.Ordinal);
+
+            var am = addAbility.Match(line);
+            if (am.Success)
+            {
+                // Fewer abilities than the sample: drop the surplus line rather than emit a
+                // reference to an ability this hero does not have.
+                if (abilityIndex >= ours.Count) continue;
+                line = line.Replace(am.Groups[1].Value, "'" + ours[abilityIndex] + "'",
+                    StringComparison.Ordinal);
+                abilityIndex++;
+            }
+            outLines.Add(line);
+        }
+
+        assumptions.Add("roster block copied from " + tmpl.ArrayName + " entry at line " + tmpl.StartLine);
+        assumptions.Add(abilityIndex + " of the sample's " + sampleAbilityCount
+                        + " ability slot(s) filled from " + ours.Count
+                        + " carried ability object(s), in declaration order");
+        return outLines;
+    }
+
+    /// <summary>Inserts lines directly after a 1-based line number in war3map.j.</summary>
+    private static bool AppendAfterLine(MapDocument target, int oneBasedLine, List<string> block)
+    {
+        var entry = target.GetFile("war3map.j");
+        if (entry is null) return false;
+        var text = ScriptBytes.GetString(entry.OverrideBytes ?? entry.RawBytes);
+        var lines = text.Split('\n').ToList();
+        if (oneBasedLine < 1 || oneBasedLine > lines.Count) return false;
+        lines.InsertRange(oneBasedLine, block);
+        FileEditCommand.AddOrReplace(target, entry.FileName!, ScriptBytes.GetBytes(string.Join("\n", lines)));
+        return true;
+    }
+
+    /// <summary>
+    /// Byte-preserving codec for script text. A map's war3map.j is NOT necessarily UTF-8: WOS2
+    /// carries bytes that are not valid UTF-8, and decoding then re-encoding them as UTF-8 replaces
+    /// each with '?', which pjass reports as "Unrecognized character ? (ASCII 63)" and which
+    /// silently corrupts author names and localised strings. Latin-1 maps every byte 0..255 to the
+    /// same code point and back, so a read/modify/write round-trip is lossless whatever the real
+    /// encoding was.
+    /// </summary>
+    private static readonly Encoding ScriptBytes = Encoding.Latin1;
 
     private static InstallResult Fail(string message) =>
         new(false, message, new Dictionary<string, string>(), 0, 0, 0, 0,
