@@ -208,7 +208,7 @@ public static class HeroExportCommand
     /// </remarks>
     private static HashSet<string> Closure(
         Dictionary<string, (int start, int end)> spans, IEnumerable<string> seed,
-        SortedSet<string> excludedClasses, out bool sawPeer)
+        SortedSet<string> excludedClasses, out bool sawPeer, SortedSet<string> peerCalls)
     {
         sawPeer = false;
         var seedList = seed.Where(spans.ContainsKey).ToList();
@@ -246,7 +246,15 @@ public static class HeroExportCommand
                         // dispatcher, so reaching it makes every hero look like a neighbour. One
                         // edge, hit 20 times. A peer is neither carried NOR declared - listing it
                         // as a requirement would ask a target to supply unrelated characters.
+                        // Either way the DEFINITION is not carried, so the CALL must still resolve
+                        // to something or the script will not compile. A peer is another character;
+                        // an excluded class is the source map's infrastructure. Both get a stub, and
+                        // both are reported - a peer via shared-spell-dispatcher, infrastructure via
+                        // its own wurst-class requirement. Stubbing only peers left the
+                        // infrastructure calls dangling (dispatch_HashMap_..., dispatch_ShopUI_...),
+                        // which is the identical mistake one set over.
                         if (IsPeerClass(cls)) sawPeer = true; else excludedClasses.Add(cls);
+                        peerCalls.Add(callee);
                         continue;
                     }
                     queue.Enqueue(callee);
@@ -304,6 +312,7 @@ public static class HeroExportCommand
         string? scriptFile = null;
         var entryPoints = new List<string>();
         var excludedClassNames = new SortedSet<string>(StringComparer.Ordinal);
+        var peerCallTargets = new SortedSet<string>(StringComparer.Ordinal);
         bool sharedDispatcherSeen = false;
         var globals = new List<string>();
         if (bundle.Functions.Count > 0 && doc.GetFile("war3map.j") is { } js)
@@ -318,7 +327,7 @@ public static class HeroExportCommand
             _scriptLines = lines;
             var spans = IndexFunctions(lines);
             var wanted = Closure(spans, bundle.Functions.Select(f => f.Name), excludedClassNames,
-                out sharedDispatcherSeen);
+                out sharedDispatcherSeen, peerCallTargets);
             var reason = bundle.Functions.ToDictionary(f => f.Name, f => f.Reason, StringComparer.Ordinal);
 
             var sb = new StringBuilder();
@@ -340,10 +349,46 @@ public static class HeroExportCommand
             // carried: the source declares 's', the target has a local 's'. Prefixing per hero
             // means a carried symbol cannot collide on ANY target, which is the same fix already
             // applied to the other two namespaces.
-            var rename = BuildNamespace(bundle.RootRawcode, wanted, rawGlobals);
+            var rename = BuildNamespace(bundle.RootRawcode, wanted.Concat(peerCallTargets), rawGlobals);
             var body = ApplyNamespace(sb.ToString(), rename);
             globals.AddRange(rawGlobals.Select(g => ApplyNamespace(g, rename)));
             entryPoints = entryPoints.Select(n => rename.TryGetValue(n, out var r) ? r : n).ToList();
+
+            // Excluding a peer class removed its DEFINITIONS but not the CALLS to it, so the
+            // emitted script failed with "Undeclared function s__AlucardSpells___...". That is the
+            // porter's trimming mistake reached from the other direction: never leave a reference
+            // without something to resolve it. Emit a no-op stub per called peer entry point. The
+            // shared dispatcher is already a declared requirement, so a stub is the honest
+            // placeholder - the script compiles, and the requirement says what must replace it.
+            if (peerCallTargets.Count > 0)
+            {
+                var stubs = new StringBuilder();
+                stubs.AppendLine();
+                stubs.AppendLine("// ==== peer stubs ====");
+                stubs.AppendLine("// These belong to OTHER characters in the source map, reached through its shared");
+                stubs.AppendLine("// dispatcher. They are stubbed so this script compiles; see the");
+                stubs.AppendLine("// shared-spell-dispatcher requirement for what the target must really provide.");
+                foreach (var fn in peerCallTargets)
+                {
+                    if (!spans.TryGetValue(fn, out var sp)) continue;
+                    var header = lines[sp.start].TrimEnd('\r');
+                    stubs.AppendLine(ApplyNamespace(header, rename));
+                    if (header.Contains("returns nothing", StringComparison.Ordinal))
+                        stubs.AppendLine("    // stub");
+                    else if (header.Contains("returns boolean", StringComparison.Ordinal))
+                        stubs.AppendLine("    return false");
+                    else if (header.Contains("returns integer", StringComparison.Ordinal))
+                        stubs.AppendLine("    return 0");
+                    else if (header.Contains("returns real", StringComparison.Ordinal))
+                        stubs.AppendLine("    return 0.");
+                    else if (header.Contains("returns string", StringComparison.Ordinal))
+                        stubs.AppendLine("    return null");
+                    else
+                        stubs.AppendLine("    return null");
+                    stubs.AppendLine("endfunction");
+                }
+                body = stubs.ToString() + body;
+            }
 
             scriptFile = "script.j";
             File.WriteAllText(Path.Combine(outputDirectory, scriptFile), body, new UTF8Encoding(false));

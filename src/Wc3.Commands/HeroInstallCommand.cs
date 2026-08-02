@@ -155,7 +155,7 @@ public static class HeroInstallCommand
             // UnitAddAbility per spell, and omitting any of those half-registers the hero.
             var tmpl = contract.Templates[0];
             var block = InstantiateTemplate(tmpl, installedRoot, def, remap, assumptions);
-            if (block.Count > 0 && AppendAfterLine(target, tmpl.EndLine, block))
+            if (block.Count > 0 && AppendAfterLastEntry(target, tmpl, block))
             {
                 registeredWith = tmpl.ArrayName + "[" + tmpl.Entries + "] block, "
                     + block.Count + " statement(s) copied from the target's own convention";
@@ -404,6 +404,9 @@ public static class HeroInstallCommand
             // This hero goes after every existing entry.
             line = Regex.Replace(line, @"^(\s*set\s+n\s*=\s*)-?\d+", "${1}" + tmpl.Entries);
             line = line.Replace(sampleHeroId, "'" + rawcode + "'", StringComparison.Ordinal);
+            // The sample carried a trailing "// Tomioka"; keeping it mislabels this hero.
+            int cmt = line.IndexOf("//", StringComparison.Ordinal);
+            if (cmt > 0) line = line[..cmt].TrimEnd();
 
             var am = addAbility.Match(line);
             if (am.Success)
@@ -423,6 +426,36 @@ public static class HeroInstallCommand
                         + " ability slot(s) filled from " + ours.Count
                         + " carried ability object(s), in declaration order");
         return outLines;
+    }
+
+    /// <summary>
+    /// Appends after the LAST existing roster entry, not after the sampled one. Inserting at the
+    /// sample's end put the new entry BEFORE the rest of the roster and produced a duplicate
+    /// 'set n=' line, because the template is one entry out of many.
+    /// </summary>
+    private static bool AppendAfterLastEntry(MapDocument target, RosterTemplate tmpl, List<string> block)
+    {
+        var entry = target.GetFile("war3map.j");
+        if (entry is null) return false;
+        var text = ScriptBytes.GetString(entry.OverrideBytes ?? entry.RawBytes);
+        var lines = text.Split('\n').ToList();
+        var slot = new Regex(@"^\s*set\s+" + Regex.Escape(tmpl.ArrayName) + @"\s*\[");
+        int last = -1;
+        for (int i = 0; i < lines.Count; i++) if (slot.IsMatch(lines[i])) last = i;
+        if (last < 0) return false;
+        // Past the trailing statements of that entry (its dummy, ShowUnit, ability adds).
+        int after = last + 1;
+        while (after < lines.Count)
+        {
+            var t = lines[after].TrimStart();
+            if (t.StartsWith("call UnitAddAbility", StringComparison.Ordinal)
+                || t.StartsWith("call ShowUnit", StringComparison.Ordinal)
+                || t.StartsWith("set " + tmpl.ArrayName + "_Dummy", StringComparison.Ordinal)) after++;
+            else break;
+        }
+        lines.InsertRange(after, block);
+        FileEditCommand.AddOrReplace(target, entry.FileName!, ScriptBytes.GetBytes(string.Join("\n", lines)));
+        return true;
     }
 
     /// <summary>Inserts lines directly after a 1-based line number in war3map.j.</summary>
