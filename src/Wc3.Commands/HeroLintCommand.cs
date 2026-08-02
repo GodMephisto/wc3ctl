@@ -1,6 +1,8 @@
 // src/Wc3.Commands/HeroLintCommand.cs
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
+using Wc3.Model;
 
 namespace Wc3.Commands;
 
@@ -67,6 +69,7 @@ public static class HeroLintCommand
         checks.Add(ObjectsInstallable(def));
         checks.Add(AssetsIntact(def, directory));
         checks.Add(ScriptPresent(def, directory));
+        checks.Add(StubsMatchTheScript(def, directory));
         checks.Add(FieldsReferenceCarriedObjects(def));
 
         return new HeroLintResult(directory, def.Id, checks);
@@ -133,7 +136,10 @@ public static class HeroLintCommand
             return new("script", LintSeverity.Error,
                 $"hero.json names '{def.ScriptFile}' but it is not in the folder", Array.Empty<string>());
 
-        var text = File.ReadAllText(path);
+        // Latin-1, matching how export wrote it. Decoding a script that is really UTF-8 gives code
+        // points above U+00FF and decoding one that is neither gives U+FFFD, and both make this
+        // check answer a question about text the definition does not actually contain.
+        var text = File.ReadAllText(path, Encoding.Latin1);
         var missing = def.ScriptEntryPoints
             .Where(fn => !text.Contains("function " + fn, StringComparison.Ordinal))
             .ToList();
@@ -142,6 +148,62 @@ public static class HeroLintCommand
                 $"{def.ScriptEntryPoints.Count} declared function(s) all present", Array.Empty<string>())
             : new("script", LintSeverity.Error,
                 $"{missing.Count} declared entry point(s) are not in the script", Cap(missing));
+    }
+
+    /// <summary>
+    /// Every recorded stub must really be in script.j under the name recorded for it, because that
+    /// record is what install uses to swap a no-op for the target's own implementation.
+    /// </summary>
+    /// <remarks>
+    /// If the record and the script disagree, install cannot delete the stub it is about to rename
+    /// references away from. Install refuses that bind rather than risk two declarations of one
+    /// name, so a stale record silently costs a hero its infrastructure. Catching it here, where
+    /// nothing has been written to anyone's map yet, is the cheap version of that discovery.
+    ///
+    /// The tally is worth printing even when everything checks out: a stub is a placeholder, and
+    /// how many of them can bind is the difference between a hero that works on a given target and
+    /// one that loads and then does nothing.
+    /// </remarks>
+    private static LintCheck StubsMatchTheScript(HeroDefinition def, string directory)
+    {
+        var stubs = def.Stubs;
+        if (stubs is null || stubs.Count == 0)
+            return new("script-stubs", LintSeverity.Ok,
+                "no stubs recorded, so every called function is carried or was exported by an "
+                + "older build", Array.Empty<string>());
+
+        if (def.ScriptFile is null || !File.Exists(Path.Combine(directory, def.ScriptFile)))
+            return new("script-stubs", LintSeverity.Error,
+                $"{stubs.Count} stub(s) are recorded but there is no script to hold them",
+                Array.Empty<string>());
+
+        // Latin-1, matching how export wrote it and how install reads it. Decoding a script as
+        // UTF-8 when it is not replaces bytes with U+FFFD and can hide a name behind a mangled one.
+        var text = File.ReadAllText(Path.Combine(directory, def.ScriptFile), Encoding.Latin1);
+        var declared = JassFunctionIndex.Parse(text).Select(f => f.Name).ToHashSet(StringComparer.Ordinal);
+        var missing = stubs.Where(s => !declared.Contains(s.CarriedName))
+            .Select(s => $"{s.CarriedName} ({s.WurstClass}) is recorded as a stub but not declared")
+            .ToList();
+        if (missing.Count > 0)
+            return new("script-stubs", LintSeverity.Error,
+                $"{missing.Count} of {stubs.Count} recorded stub(s) are not in the script, so install "
+                + "cannot bind them to a target's own implementation", Cap(missing));
+
+        int peer = stubs.Count(s => s.Peer);
+        int stateBound = stubs.Count(s => !s.Peer && s.ClassStateCarried);
+        int bindable = stubs.Count - peer - stateBound;
+        var perClass = stubs.GroupBy(s => s.WurstClass, StringComparer.Ordinal)
+            .OrderBy(g => g.Key, StringComparer.Ordinal)
+            .Select(g => $"{g.Key}: {g.Count()} stub(s), "
+                         + (g.Any(s => s.Peer) ? "peer, always stubbed"
+                            : g.Any(s => s.ClassStateCarried)
+                              ? "instance tables carried here, CANNOT bind"
+                              : "bindable if the target declares them"))
+            .ToList();
+        return new("script-stubs", LintSeverity.Warning,
+            $"{stubs.Count} call(s) are no-op stubs, not implementations. {bindable} bindable to a "
+            + $"target that declares them, {peer} peer (always stubbed), {stateBound} unbindable "
+            + "because this definition carries the class's own instance tables", Cap(perClass));
     }
 
     /// <summary>

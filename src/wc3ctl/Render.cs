@@ -426,6 +426,15 @@ public static class Render
             sb.AppendLine("Asset collisions (the target already has a DIFFERENT file):");
             foreach (var c in r.Collisions.Take(15)) sb.AppendLine($"  {c}");
         }
+        // Before the requirements, because which calls reach the target's own code and which are
+        // still empty placeholders is the difference between a working hero and one that loads and
+        // then does nothing, and that used to be invisible in this report.
+        if (r.ScriptBindings.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("Calls into classes this definition did not carry:");
+            foreach (var b in r.ScriptBindings) sb.AppendLine($"  {b}");
+        }
         if (r.UnmetRequirements.Count > 0)
         {
             sb.AppendLine();
