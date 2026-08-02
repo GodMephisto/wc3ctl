@@ -916,3 +916,43 @@ heroes' icons into GGGA, `BTNMadara`, `BTNNarutoSage`, `BTNGoku_Ssj_2_by_imran_r
 in this doc (an under-carried file is cosmetic, an under-carried object is broken, so the porter
 deliberately over-carries files and reports it), not a new mechanism, just the first time it was
 actually observed on a map delivered to the user rather than reasoned about from a diagnostic count.
+
+## 2026-08-02: two WIP tools left uncommitted, deliberately
+
+`src/Wc3.Commands/ScriptStripCommand.cs` and `src/Wc3.Commands/TestLoadCommand.cs`, plus their
+wiring in `Program.cs` / `Render.cs` / `CliMcpParityTests.cs`. Both are UNTRACKED/MODIFIED on
+purpose: they do not work, and committing a broken deletion pass or a false-negative load tester
+is worse than committing nothing. They ARE present in `dist/` because binaries were published
+while iterating. Neither can damage a map (both write to new files), but do not trust them.
+
+### script strip - unsound, deletes live code
+Best run removed 461 functions and took the script from 8 compile errors to 44. Root cause of the
+damage: **JASS uses `call` only for statement-level calls.** A call in an expression,
+`if IsValid(u) then`, has NO keyword, so a matcher keyed on `call`/`function` misses most
+references. Partly fixed; at least one reference form is still unaccounted for.
+
+**Do not fix this with regex.** The project already has `JassFunctionIndex` / `JassGlobals` /
+`JassScriptCheck`, built precisely because greps were unreliable here. Build the pass on those and
+test it against a synthetic script with known-live and known-dead functions BEFORE any real map.
+
+Also learned: stripping cannot solve the over-carry anyway. The porter WIRES foreign
+`InitTrig_*` into `InitCustomTriggers`, so they are genuinely reachable. Removing 397 roots
+changed the result by exactly zero. **The fix is upstream, in what the porter wires.**
+
+### test-load - launches the game but never loads the map
+Goal is an unattended load test so the feedback loop stops running through the user, which is
+where this session's diagnoses went wrong most often.
+
+Verified working: marker injection into `main()`, launching the game (a second instance starts
+fine, Battle.net is not required), polling, process sampling on timeout, killing the instance.
+
+Not working: the map never loads, the game sits at the menu (~0.2 cores, idle in ntdll).
+Tried `-loadfile <absolute path>`, then the World Editor convention from
+`WorldEditPreferences.txt` (`[Test Map] Copy Location=WorldEditTestMap`, `Player Profile=WorldEdit`),
+copying to `Documents\Warcraft III\Maps\Test\WorldEditTestMap.w3x` and passing
+`-loadfile Maps\Test\WorldEditTestMap.w3x -testmapprofile WorldEdit`. Still menu.
+
+**Next step is an OBSERVATION, not a guess:** watch the real World Editor launch a test map and
+copy its command line verbatim (Process Explorer, or a Sysmon/WMI process-start trace). Guessing
+this convention twice already cost two 95-second runs. `PreloadGenEnd`'s output path is also still
+unverified, because the map never ran.

@@ -541,6 +541,31 @@ public static class Program
             var r4 = ScriptRootsCommand.Run(doc4);
             Emit(p4.GetValueForOption(jsonOption), r4, () => Render.ScriptRoots(r4));
         }));
+        // Remove functions nothing can reach, as the alternative to the porter's trimming (which
+        // is what breaks ported maps: an unresolvable call commented out leaves a local declared
+        // and never assigned, or strips an iterator's advance so its loop can never exit).
+        // Deleting a whole unreachable function cannot cause either, since nothing left refers to it.
+        var stripOut = new Option<string?>(new[] { "-o", "--out" },
+            "Output map path. Default: '<map>.stripped.<ext>' next to the input.");
+        var scriptStrip = new Command("strip",
+            "Remove unreachable functions from war3map.j by call-graph closure from the engine's "
+            + "entry points plus every function named in a string literal. Globals are untouched.")
+        { mapArg, stripOut, jsonOption };
+        scriptStrip.SetHandler(ctx => RunSafely(() =>
+        {
+            var p5 = ctx.ParseResult;
+            string map5 = p5.GetValueForArgument(mapArg);
+            var doc5 = MapDocument.Load(map5);
+            var r5 = ScriptStripCommand.Run(doc5);
+            FileEditCommand.WriteText(doc5, "war3map.j", r5.NewScript);
+            var dest5 = p5.GetValueForOption(stripOut) ?? Path.Combine(
+                Path.GetDirectoryName(map5) ?? "",
+                Path.GetFileNameWithoutExtension(map5) + ".stripped" + Path.GetExtension(map5));
+            doc5.Save(dest5);
+            Emit(p5.GetValueForOption(jsonOption), new { r5.FunctionsBefore, r5.FunctionsAfter,
+                r5.FunctionsRemoved, r5.PercentRemoved, r5.LinesBefore, r5.LinesAfter,
+                r5.EntryPoints, r5.StringRoots, SavedTo = dest5 }, () => Render.ScriptStrip(r5, dest5));
+        }));
         var script = new Command("script", "Map script queries.");
         var scriptFunctions = new Command("functions", "List functions declared in the map script.") { mapArg };
         scriptFunctions.SetHandler((string map, bool json) => RunSafely(() =>
@@ -552,6 +577,7 @@ public static class Program
 
         script.AddCommand(scriptLoops);
         script.AddCommand(scriptRoots);
+        script.AddCommand(scriptStrip);
         var repairOut = new Option<string?>(new[] { "-o", "--out" },
             "Output map path. Default: '<map>.repaired.<ext>' next to the input - the original is never overwritten.");
         var scriptRepair = new Command("repair",
@@ -1635,6 +1661,104 @@ public static class Program
             if (!r.Ok) exitCode[0] = 1;
             Emit(p.GetValueForOption(jsonOption), r, () => Render.Lint(r));
         }));
+        // Unattended load test. Closes the feedback loop that previously required a human to
+        // launch a 250 MB map and describe what they saw, which is where this toolchain's
+        // diagnoses went wrong most often.
+        var tlTimeout = new Option<double>("--timeout", () => 120, "Seconds to wait for the marker.");
+        var tlDocs = new Option<string?>("--documents",
+            @"Warcraft III documents folder. Default: DocumentsWarcraft III (the game writes markers there).");
+        var testLoad = new Command("test-load",
+            "Load a map in Warcraft III unattended and report whether it reached the end of main(). "
+            + "Injects a PreloadGenEnd marker into a COPY, launches the game windowed, waits for the "
+            + "marker, and on timeout measures whether the game is spinning or blocked.")
+        { mapArg, tlTimeout, tlDocs, jsonOption };
+        testLoad.SetHandler(ctx => RunSafely(() =>
+        {
+            var p6 = ctx.ParseResult;
+            var docs = p6.GetValueForOption(tlDocs) ?? Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Warcraft III");
+            var gd = Wc3.GameData.GameInstall.Locate(p6.GetValueForOption(gameDirOption))
+                ?? throw new InvalidOperationException("Could not locate the Warcraft III install; pass --game-dir.");
+            var r6 = TestLoadCommand.Run(p6.GetValueForArgument(mapArg), gd, docs,
+                p6.GetValueForOption(tlTimeout));
+            if (r6.Verdict != "LOADED") exitCode[0] = 1;
+            Emit(p6.GetValueForOption(jsonOption), r6, () => Render.TestLoad(r6));
+        }));
+        root.AddCommand(testLoad);
+
+        // A map's HERO INTEGRATION CONTRACT: what a unit must be registered with before the map's
+        // own systems treat it as playable. The piece nothing else models, and where ported heroes
+        // actually die - correct objects, correct assets, compiling script, and still no hero,
+        // because the roster is built by the map's own script.
+        var contract = new Command("contract",
+            "Discover what a map requires before it will treat a unit as a playable hero: roster "
+            + "registration calls, spell dispatchers, and per-player hero arrays.")
+        { mapArg, jsonOption };
+        contract.SetHandler(ctx => RunSafely(() =>
+        {
+            var p7 = ctx.ParseResult;
+            var r7 = ContractCommand.Run(MapDocument.Load(p7.GetValueForArgument(mapArg)));
+            Emit(p7.GetValueForOption(jsonOption), r7, () => Render.Contract(r7));
+        }));
+        root.AddCommand(contract);
+
+        // The format's 'import' verb: a hero as a reviewable artifact instead of something inferred
+        // out of a host map every time. Deliberately exports only the hero's REAL dependencies and
+        // REPORTS the script-closure carry as review notes, because silently including it is what
+        // produced thousands of foreign functions and the trimming damage that followed.
+        var heroRawcode = new Argument<string>("rawcode", "Four-character rawcode of the hero to export.");
+        var heroOut = new Option<string?>(new[] { "-o", "--out" },
+            "Output directory. Default: './<rawcode>-hero'.");
+        var heroExport = new Command("export",
+            "Export a hero from a map as a reviewable definition (hero.json), its assets, and its "
+            + "script. Reports what it deliberately left out.")
+        { mapArg, heroRawcode, heroOut, jsonOption };
+        heroExport.SetHandler(ctx => RunSafely(() =>
+        {
+            var p8 = ctx.ParseResult;
+            string map8 = p8.GetValueForArgument(mapArg);
+            string code8 = p8.GetValueForArgument(heroRawcode);
+            var dir8 = p8.GetValueForOption(heroOut) ?? Path.Combine(".", code8 + "-hero");
+            var r8 = HeroExportCommand.Run(MapDocument.Load(map8), code8, map8, dir8,
+                p8.GetValueForOption(gameDirOption));
+            Emit(p8.GetValueForOption(jsonOption), r8, () => Render.HeroExport(r8));
+        }));
+
+        var installDefArg = new Argument<string>("definition", "Folder containing hero.json.");
+        var installForce = new Option<bool>("--force", () => false,
+            "Overwrite the target's own assets on a hash collision. Off by default, because "
+            + "silently replacing a target's textures changes how ITS content renders.");
+        var heroInstall = new Command("install",
+            "Install a hero definition into any map. Refuses asset collisions, remaps rawcodes, "
+            + "and reports what the target must still be wired with.")
+        { installDefArg, mapArg, heroOut, installForce, jsonOption };
+        heroInstall.SetHandler(ctx => RunSafely(() =>
+        {
+            var p9 = ctx.ParseResult;
+            string tgt = p9.GetValueForArgument(mapArg);
+            var doc9 = MapDocument.Load(tgt);
+            var r9 = HeroInstallCommand.Run(p9.GetValueForArgument(installDefArg), doc9,
+                p9.GetValueForOption(installForce), p9.GetValueForOption(gameDirOption));
+            string? saved = null;
+            if (r9.Ok)
+            {
+                saved = p9.GetValueForOption(heroOut) ?? Path.Combine(
+                    Path.GetDirectoryName(tgt) ?? "",
+                    Path.GetFileNameWithoutExtension(tgt) + ".installed" + Path.GetExtension(tgt));
+                doc9.Save(saved);
+            }
+            else exitCode[0] = 1;
+            Emit(p9.GetValueForOption(jsonOption), new { r9.Ok, r9.Message, r9.ObjectsCreated,
+                r9.FieldsApplied, r9.AssetsWritten, r9.AssetsSkippedIdentical, r9.Collisions,
+                r9.UnmetRequirements, r9.NextSteps, SavedTo = saved },
+                () => Render.HeroInstall(r9, saved));
+        }));
+
+        var hero = new Command("hero", "Hero definitions: the portable, reviewable form of a hero.");
+        hero.AddCommand(heroExport);
+        hero.AddCommand(heroInstall);
+        root.AddCommand(hero);
+
         root.AddCommand(lint);
 
         // Container-level comparison. 'diff' compares file CONTENTS, which is why a rebuilt

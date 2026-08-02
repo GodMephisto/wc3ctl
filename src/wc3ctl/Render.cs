@@ -275,6 +275,19 @@ public static class Render
         return sb.ToString().TrimEnd();
     }
 
+    public static string ScriptStrip(StripResult r, string dest)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"functions  {r.FunctionsBefore,7:N0} -> {r.FunctionsAfter,7:N0}   "
+                      + $"removed {r.FunctionsRemoved:N0} ({r.PercentRemoved}%)");
+        sb.AppendLine($"lines      {r.LinesBefore,7:N0} -> {r.LinesAfter,7:N0}");
+        sb.AppendLine($"roots      {r.EntryPoints} engine entry point(s) + {r.StringRoots} named in a string literal");
+        sb.AppendLine();
+        sb.AppendLine("Globals were not touched. Verify with 'lint' and 'script loops' before trusting this.");
+        sb.Append($"saved: {dest}");
+        return sb.ToString();
+    }
+
     public static string ScriptRoots(ScriptRootsResult r)
     {
         var sb = new StringBuilder();
@@ -359,6 +372,107 @@ public static class Render
             : $"STRUCTURE DIFFERS - {d.HeaderDifferences.Count} header, "
               + $"{d.EncodingDifferences.Count} re-encoded, {d.OnlyInA.Count} lost, {d.OnlyInB.Count} added");
         return sb.ToString();
+    }
+
+    public static string TestLoad(TestLoadResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.Verdict}  ({r.SecondsElapsed:0.0}s)");
+        sb.AppendLine($"  {r.Detail}");
+        sb.AppendLine($"  test map: {r.TestMapPath}");
+        sb.AppendLine($"  marker:   {r.MarkerPath}");
+        if (r.HotAddresses.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("Where it was looping (a short list means a tight loop):");
+            foreach (var a in r.HotAddresses.Take(8))
+                sb.AppendLine($"  {a.Percent,5:0.0}%  {a.Samples,4}x  {a.Module}{a.ModuleOffset}");
+        }
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string HeroInstall(InstallResult r, string? saved)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine(r.Ok ? r.Message : "REFUSED: " + r.Message);
+        if (r.Ok)
+            sb.AppendLine($"  {r.ObjectsCreated} object(s), {r.FieldsApplied} field(s), "
+                          + $"{r.AssetsWritten} asset(s) written, {r.AssetsSkippedIdentical} already present");
+        if (r.Collisions.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("Asset collisions (the target already has a DIFFERENT file):");
+            foreach (var c in r.Collisions.Take(15)) sb.AppendLine($"  {c}");
+        }
+        if (r.UnmetRequirements.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("UNMET requirements - the hero may not be usable until these are handled:");
+            foreach (var u in r.UnmetRequirements) sb.AppendLine($"  {u}");
+        }
+        if (r.NextSteps.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("Still to wire:");
+            foreach (var n in r.NextSteps) sb.AppendLine($"  {n}");
+        }
+        if (saved is not null) { sb.AppendLine(); sb.Append($"saved: {saved}"); }
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string HeroExport(HeroExportResult r)
+    {
+        var d = r.Definition;
+        var sb = new StringBuilder();
+        sb.AppendLine($"{d.Id}  \"{d.Name}\"  (schema v{d.SchemaVersion}, from {d.SourceMap})");
+        sb.AppendLine($"  {d.Objects.Count} object(s), {r.AssetsWritten} asset(s) ({r.AssetBytes:N0} bytes), "
+                      + $"{d.Strings.Count} string(s), {d.ScriptEntryPoints.Count} script function(s)");
+        sb.AppendLine($"  written to {r.Directory}");
+        if (d.Requires.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("The TARGET map must provide:");
+            foreach (var q in d.Requires) sb.AppendLine($"  [{q.Kind}] {q.Detail}");
+        }
+        if (d.ReviewNotes.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("Review before installing:");
+            foreach (var n in d.ReviewNotes.Take(10)) sb.AppendLine($"  - {n}");
+        }
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string Contract(ContractResult r)
+    {
+        if (!r.Any) return $"{r.ScriptFile}: no hero integration contract detected.";
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.ScriptFile}");
+        if (r.Registries.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("ROSTER REGISTRATION - a hero absent from these does not exist to the map:");
+            foreach (var reg in r.Registries)
+            {
+                sb.AppendLine($"  {reg.Function}({reg.Signature})");
+                sb.AppendLine($"      called {reg.CallCount}x for {reg.RegisteredRawcodes.Count} distinct rawcode(s)");
+                sb.AppendLine($"      e.g. {reg.ExampleCall}");
+            }
+        }
+        if (r.SpellDispatchers.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("SPELL DISPATCH - an ability id that reaches none of these casts nothing:");
+            foreach (var d in r.SpellDispatchers) sb.AppendLine($"  {d}");
+        }
+        if (r.HeroArrays.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("HERO ARRAYS - a hero missing from these is invisible to the map's systems:");
+            foreach (var a in r.HeroArrays)
+                sb.AppendLine($"  {a.Type,-8} {a.Name,-32} assigned at {a.AssignmentSites} site(s)");
+        }
+        return sb.ToString().TrimEnd();
     }
 
     public static string Lint(LintResult r)

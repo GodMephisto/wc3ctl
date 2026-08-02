@@ -95,10 +95,19 @@ public class CliMcpParityTests
         // "is this map going to work" is exactly the question an agent should be able to ask before
         // handing a map over. Wiring it is a follow-up, not a decision that it should stay CLI-only.
         "lint",
+        // Read-only analysis of a target map's hero integration requirements.
+        "contract",
+        // Writes a definition folder to disk; local file output like 'extract'.
+        "hero export",
+        "hero install",
+        // Launches the real game on this machine; inherently local.
+        "test-load",
         // Heuristic script analysis for non-terminating loops. Reports candidates to read.
         "script loops",
         // Roots for a reachability pass; analysis output for whoever builds that pass.
         "script roots",
+        // Reachability-based function removal; a repair utility like 'script repair'.
+        "script strip",
     };
 
     // The real MCP tool names, read straight from the [McpServerTool] attributes the
