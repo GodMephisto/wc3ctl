@@ -85,7 +85,13 @@ public static class LintCommand
         var script = doc.GetFile("war3map.j") ?? doc.GetFile("scripts\\war3map.j");
         if (script is null)
             return new("script-compiles", LintSeverity.Ok, "map has no JASS script", Array.Empty<string>());
-        var pj = PjassGate.Check(System.Text.Encoding.UTF8.GetString(script.OverrideBytes ?? script.RawBytes));
+        // Latin-1, NOT UTF-8. PjassGate writes the string back out with Latin1.GetBytes, and
+        // Latin-1 cannot encode anything above U+00FF, so decoding as UTF-8 first turned every
+        // such character into '?' and pjass reported "Unrecognized character ? (ASCII 63)". That
+        // made this check fail on UNTOUCHED maps whose scripts are not pure ASCII, and worse, it
+        // passed on a map an earlier install had already corrupted into that range, so a green
+        // result meant nothing. Latin-1 both ways round-trips every byte 0..255 unchanged.
+        var pj = PjassGate.Check(System.Text.Encoding.Latin1.GetString(script.OverrideBytes ?? script.RawBytes));
         if (!pj.Ran)
             return new("script-compiles", LintSeverity.Warning,
                 "pjass did not run, so the script was not compile-checked", new[] { pj.Note });
