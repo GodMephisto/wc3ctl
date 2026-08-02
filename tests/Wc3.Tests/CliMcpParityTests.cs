@@ -97,6 +97,8 @@ public class CliMcpParityTests
         "lint",
         // Heuristic script analysis for non-terminating loops. Reports candidates to read.
         "script loops",
+        // Roots for a reachability pass; analysis output for whoever builds that pass.
+        "script roots",
     };
 
     // The real MCP tool names, read straight from the [McpServerTool] attributes the

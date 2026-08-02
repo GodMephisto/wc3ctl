@@ -526,6 +526,21 @@ public static class Program
             var r3 = ScriptLoopsCommand.Run(doc3, onlyRisky: !p3.GetValueForOption(loopsAll));
             Emit(p3.GetValueForOption(jsonOption), r3, () => Render.ScriptLoops(r3));
         }));
+        // Roots for any reachability-based cleanup: functions invoked only by name at runtime,
+        // which a caller-graph pass cannot see and would delete. Prerequisite for replacing the
+        // porter's line-by-line trimming (which is what actually breaks ported maps) with a
+        // carry-complete-then-strip pass.
+        var scriptRoots = new Command("roots",
+            "List functions reachable only via a string literal, e.g. ExecuteFunc(\"Name\"). A "
+            + "dead-code pass must pin these or it will delete live code.")
+        { mapArg, jsonOption };
+        scriptRoots.SetHandler(ctx => RunSafely(() =>
+        {
+            var p4 = ctx.ParseResult;
+            var doc4 = MapDocument.Load(p4.GetValueForArgument(mapArg));
+            var r4 = ScriptRootsCommand.Run(doc4);
+            Emit(p4.GetValueForOption(jsonOption), r4, () => Render.ScriptRoots(r4));
+        }));
         var script = new Command("script", "Map script queries.");
         var scriptFunctions = new Command("functions", "List functions declared in the map script.") { mapArg };
         scriptFunctions.SetHandler((string map, bool json) => RunSafely(() =>
@@ -536,6 +551,7 @@ public static class Program
         script.AddCommand(scriptFunctions);
 
         script.AddCommand(scriptLoops);
+        script.AddCommand(scriptRoots);
         var repairOut = new Option<string?>(new[] { "-o", "--out" },
             "Output map path. Default: '<map>.repaired.<ext>' next to the input - the original is never overwritten.");
         var scriptRepair = new Command("repair",

@@ -275,6 +275,24 @@ public static class Render
         return sb.ToString().TrimEnd();
     }
 
+    public static string ScriptRoots(ScriptRootsResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.ScriptFile}");
+        sb.AppendLine($"  functions declared            {r.FunctionsDeclared}");
+        sb.AppendLine($"  referenced by identifier      {r.ReferencedByIdentifier}");
+        sb.AppendLine($"  named in a string literal     {r.NamedInStringLiteral}");
+        sb.AppendLine($"  ROOTS (string dispatch only)  {r.Roots.Count}  ({r.RootPercent}% of all functions)");
+        if (r.Roots.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("A reachability pass must pin these or it will delete live code:");
+            foreach (var root in r.Roots)
+                sb.AppendLine($"  line {root.DeclaredAtLine,-8} {root.Function}");
+        }
+        return sb.ToString().TrimEnd();
+    }
+
     public static string ScriptLoops(ScriptLoopsResult r)
     {
         var sb = new StringBuilder();
