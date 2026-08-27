@@ -59,6 +59,127 @@ public static class Wc3Tools
         [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Without it fields cannot be grouped, ordered or bounds-checked, and the layer falls back to a measurement of the map itself.")] string? game_dir = null)
         => Run(() => ObjectFormCommand.Execute(LoadMap(map), ParseKind(kind), rawcode, ResolveGameDir(game_dir)));
 
+    private const string UnitInstanceFields =
+        "Owner|X|Y|Position|Facing|Scale|HeroLevel|Strength|Agility|Intelligence|"
+        + "HpPercent|ManaPercent|Gold|TargetAcquisition";
+
+    private const string DoodadInstanceFields =
+        "X|Y|Z|Position|Rotation|Scale|Variation|LifePercent";
+
+    /// <summary>Save-and-report for a placed-instance edit. One helper rather than one per tool,
+    /// so every mutating tool refuses and reports identically.</summary>
+    private static EditToolResult SaveEdit(
+        MapDocument doc, string map, string? outPath, bool ok, string message)
+    {
+        if (!ok) throw new McpException(message);
+        string full = ResolveOutPath(map, outPath);
+        if (Path.GetDirectoryName(full) is { Length: > 0 } dir) Directory.CreateDirectory(dir);
+        doc.Save(full);
+        return new EditToolResult(full, message);
+    }
+
+    [McpServerTool(Name = "placed_units_list", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("List every unit already PLACED on the map (war3mapUnits.doo), each with the creation number needed to edit or remove it, plus its type rawcode, owner, position and hero stats. Start locations appear here too. Call this before placed_unit_set or placed_unit_remove.")]
+    public static IReadOnlyList<UnitInstanceInfo> PlacedUnitsList(
+        [Description("Path to a .w3x/.w3m map file.")] string map)
+        => Run(() => UnitInstanceCommand.List(LoadMap(map)));
+
+    [McpServerTool(Name = "placed_unit_get", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Show one placed unit's full state by creation number: type, owner, position, facing, scale, hero level and attributes, hit points and mana percentages, gold and target acquisition range.")]
+    public static UnitInstanceInfo PlacedUnitGet(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("The unit's creation number, from placed_units_list.")] int creation_number)
+        => Run(() => UnitInstanceCommand.Get(LoadMap(map), creation_number)
+            ?? throw new McpException($"no placed unit with creation number {creation_number}"));
+
+    [McpServerTool(Name = "placed_unit_set", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Set one field on a unit already placed on the map and save the edited copy to out_path. The input map is NEVER modified in place. A position field takes 'x,y' and a scale field takes one number (uniform) or 'sx,sy,sz'.")]
+    public static EditToolResult PlacedUnitSet(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("The unit's creation number, from placed_units_list.")] int creation_number,
+        [Description("Field: " + UnitInstanceFields + ".")] string field,
+        [Description("New value.")] string value,
+        [Description("Where to write the edited map. Defaults to a sibling '.edited' copy.")] string? out_path = null)
+        => Run(() =>
+        {
+            var doc = LoadMap(map);
+            var r = PlacedInstanceFields.SetUnitField(doc, creation_number, field, value);
+            return SaveEdit(doc, map, out_path, r.Ok, r.Message);
+        });
+
+    [McpServerTool(Name = "placed_unit_remove", ReadOnly = false, Destructive = true, Idempotent = true, OpenWorld = false)]
+    [Description("Remove a unit already placed on the map and save the edited copy to out_path. The input map is NEVER modified in place.")]
+    public static EditToolResult PlacedUnitRemove(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("The unit's creation number, from placed_units_list.")] int creation_number,
+        [Description("Where to write the edited map. Defaults to a sibling '.edited' copy.")] string? out_path = null)
+        => Run(() =>
+        {
+            var doc = LoadMap(map);
+            var r = UnitInstanceCommand.Delete(doc, creation_number);
+            return SaveEdit(doc, map, out_path, r.Ok, r.Message);
+        });
+
+    [McpServerTool(Name = "placed_doodads_list", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("List every doodad and destructable already PLACED on the map (war3map.doo), each with the creation number needed to edit or remove it, plus its type rawcode, position, rotation, scale and variation.")]
+    public static IReadOnlyList<DoodadInstanceInfo> PlacedDoodadsList(
+        [Description("Path to a .w3x/.w3m map file.")] string map)
+        => Run(() => DoodadInstanceCommand.List(LoadMap(map)));
+
+    [McpServerTool(Name = "placed_doodad_get", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Show one placed doodad's full state by creation number: type, position, rotation, scale, variation and life percentage.")]
+    public static DoodadInstanceInfo PlacedDoodadGet(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("The doodad's creation number, from placed_doodads_list.")] int creation_number)
+        => Run(() => DoodadInstanceCommand.Get(LoadMap(map), creation_number)
+            ?? throw new McpException($"no placed doodad with creation number {creation_number}"));
+
+    [McpServerTool(Name = "placed_doodad_set", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Set one field on a doodad already placed on the map and save the edited copy to out_path. The input map is NEVER modified in place. A position field takes 'x,y' or 'x,y,z'.")]
+    public static EditToolResult PlacedDoodadSet(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("The doodad's creation number, from placed_doodads_list.")] int creation_number,
+        [Description("Field: " + DoodadInstanceFields + ".")] string field,
+        [Description("New value.")] string value,
+        [Description("Where to write the edited map. Defaults to a sibling '.edited' copy.")] string? out_path = null)
+        => Run(() =>
+        {
+            var doc = LoadMap(map);
+            var r = PlacedInstanceFields.SetDoodadField(doc, creation_number, field, value);
+            return SaveEdit(doc, map, out_path, r.Ok, r.Message);
+        });
+
+    [McpServerTool(Name = "placed_doodad_remove", ReadOnly = false, Destructive = true, Idempotent = true, OpenWorld = false)]
+    [Description("Remove a doodad already placed on the map and save the edited copy to out_path. The input map is NEVER modified in place.")]
+    public static EditToolResult PlacedDoodadRemove(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("The doodad's creation number, from placed_doodads_list.")] int creation_number,
+        [Description("Where to write the edited map. Defaults to a sibling '.edited' copy.")] string? out_path = null)
+        => Run(() =>
+        {
+            var doc = LoadMap(map);
+            var r = DoodadInstanceCommand.Delete(doc, creation_number);
+            return SaveEdit(doc, map, out_path, r.Ok, r.Message);
+        });
+
+    [McpServerTool(Name = "triggers_read", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Read the map's GUI trigger tree (war3map.wtg) plus the custom-text bodies (war3map.wct) and the script language: every category, every trigger with its event/condition/action tree, and every GUI variable. Read-only, because this format cannot yet be written back. A map with no GUI triggers returns empty lists rather than failing.")]
+    public static TriggerModel TriggersRead(
+        [Description("Path to a .w3x/.w3m map file.")] string map)
+        => Run(() => TriggerReadCommand.GetTriggers(LoadMap(map)));
+
+    [McpServerTool(Name = "strings_list", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("List the map's string table (war3map.wts). Every TRIGSTR_ reference in object data and in scripts resolves through here, so this is how to read what a tooltip or a unit name actually says.")]
+    public static StringsListResult StringsList(
+        [Description("Path to a .w3x/.w3m map file.")] string map)
+        => Run(() => StringsCommand.List(LoadMap(map)));
+
+    [McpServerTool(Name = "imports_list", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("List the map's import table (war3map.imp) against what the archive actually holds, so a table entry with no file behind it and a file absent from the table both show up.")]
+    public static ImportsListResult ImportsList(
+        [Description("Path to a .w3x/.w3m map file.")] string map)
+        => Run(() => ImportsCommand.Execute(LoadMap(map)));
+
     [McpServerTool(Name = "object_set", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Set a field on an object of one Object Editor kind and save the edited map to out_path (only that kind's war3map.* file is re-serialized). The input map is NEVER modified in place. Field syntax: a bare 4-char field code, or 'code:N' to select level N (ability/upgrade) or variation N (doodad).")]
     public static ObjectSetToolResult ObjectSet(

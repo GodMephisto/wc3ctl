@@ -50,6 +50,66 @@ public static class Render
     public static string Search(SearchResult r) =>
         r.Hits.Count == 0 ? "(no hits)" : string.Join("\n", r.Hits.Select(h => $"{h.FileName}  [{h.Context}]"));
 
+    public static string Imports(ImportsListResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.Entries.Count} import table entry(s)");
+        foreach (var e in r.Entries)
+            sb.AppendLine($"  {(e.InArchive ? "ok  " : "MISS")} {e.Path}");
+        // A file in the archive that the table does not list is the other half of the check.
+        var missing = r.Entries.Count(e => e.InManifest && !e.InArchive);
+        if (missing > 0)
+            sb.AppendLine($"{missing} table entry(s) have no file behind them in the archive.");
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string Triggers(TriggerModel t)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"script language {t.ScriptLanguage}");
+        sb.AppendLine($"{t.Categories.Count} category(s), {t.Triggers.Count} trigger(s), "
+            + $"{t.Variables.Count} GUI variable(s)");
+        if (t.Triggers.Count == 0)
+        {
+            sb.Append("This map has no GUI trigger tree. Its logic is in the compiled script.");
+            return sb.ToString();
+        }
+        var byCategory = t.Triggers.GroupBy(x => x.ParentCategoryId);
+        foreach (var group in byCategory)
+        {
+            var name = t.Categories.FirstOrDefault(c => c.Id == group.Key)?.Name ?? "(no category)";
+            sb.AppendLine();
+            sb.AppendLine($"== {name} ({group.Count()}) ==");
+            foreach (var tr in group)
+                sb.AppendLine($"  {(tr.Enabled ? " " : "x")} {tr.Name}"
+                    + (tr.IsCustomText ? "  [custom text]" : $"  {tr.Functions.Count} function(s)"));
+        }
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string PlacedUnit(UnitInstanceInfo u) => string.Join("\n", new[]
+    {
+        $"creation number {u.CreationNumber}   type {u.TypeRawcode}"
+            + (u.Name is null ? "" : $"   {u.Name}"),
+        $"owner            {u.OwnerId}",
+        $"position         ({u.X:0.###}, {u.Y:0.###})   facing {u.Rotation:0.###} rad",
+        $"scale            {u.Scale.Sx:0.###}, {u.Scale.Sy:0.###}, {u.Scale.Sz:0.###}",
+        $"hero             level {u.HeroLevel}   str {u.HeroStrength}   agi {u.HeroAgility}   int {u.HeroIntelligence}",
+        $"hp / mana        {u.HpPercent}% / {u.ManaPercent}%",
+        $"gold             {u.GoldAmount}",
+        $"target acquire   {u.TargetAcquisition:0.###}",
+    });
+
+    public static string PlacedDoodad(DoodadInstanceInfo d) => string.Join("\n", new[]
+    {
+        $"creation number {d.CreationNumber}   type {d.TypeRawcode}",
+        $"position         ({d.X:0.###}, {d.Y:0.###}, {d.Z:0.###})",
+        $"rotation         {d.Rotation:0.###} rad",
+        $"scale            {d.Scale.Sx:0.###}, {d.Scale.Sy:0.###}, {d.Scale.Sz:0.###}",
+        $"variation        {d.Variation}",
+        $"life             {d.LifePercent}%",
+    });
+
     public static string ObjectForm(ObjectForm f)
     {
         var sb = new StringBuilder();

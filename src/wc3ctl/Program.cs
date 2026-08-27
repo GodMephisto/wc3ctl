@@ -1255,6 +1255,196 @@ public static class Program
         terrain.AddCommand(terrainWater);
         terrain.AddCommand(terrainBlight);
 
+        static string Trim(string t) =>
+            t.Length <= 88 ? t.Replace("\n", " ") : t[..88].Replace("\n", " ") + "...";
+
+        // ---- strings / imports / trigger read: reachable from the GUI, previously not here ----
+        var stringsList = new Command("list",
+            "List the map's string table (war3map.wts). Every TRIGSTR_ reference resolves here.")
+        { mapArg, jsonOption };
+        stringsList.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = StringsCommand.List(MapDocument.Load(p.GetValueForArgument(mapArg)));
+            Emit(p.GetValueForOption(jsonOption), r,
+                () => r.Entries.Count == 0
+                    ? "(no string table)"
+                    : string.Join("\n", r.Entries.Select(e =>
+                        $"TRIGSTR_{e.Id,-6} {Trim(e.Text)}")));
+        }));
+        var strings = new Command("strings", "The map's string table (war3map.wts).");
+        strings.AddCommand(stringsList);
+        root.AddCommand(strings);
+
+        var importsList = new Command("list",
+            "List the import table (war3map.imp) against what the archive holds, so an entry with "
+            + "no file and a file absent from the table both show up.")
+        { mapArg, jsonOption };
+        importsList.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = ImportsCommand.Execute(MapDocument.Load(p.GetValueForArgument(mapArg)));
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.Imports(r));
+        }));
+        var imports = new Command("imports", "The map's import table (war3map.imp).");
+        imports.AddCommand(importsList);
+        root.AddCommand(imports);
+
+        var triggerRead = new Command("read",
+            "Read the GUI trigger tree (war3map.wtg) plus the custom-text bodies (war3map.wct). "
+            + "Read-only, since this format cannot yet be written back.")
+        { mapArg, jsonOption };
+        triggerRead.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var t = TriggerReadCommand.GetTriggers(MapDocument.Load(p.GetValueForArgument(mapArg)));
+            Emit(p.GetValueForOption(jsonOption), t, () => Render.Triggers(t));
+        }));
+
+        // ---- unit / doodad: the units and doodads ALREADY PLACED on the map ----
+        // 'place' adds one. These read, edit and remove what is there, which is most of what an
+        // editor is for and was previously reachable only from the GUI.
+        var cnArg = new Argument<int>("creation-number",
+            "The instance's creation number, as shown by 'list'. Stable for the life of the map.");
+
+        var unitInstList = new Command("list", "List every placed unit, with its creation number.")
+        { mapArg, jsonOption };
+        unitInstList.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var units = UnitInstanceCommand.List(MapDocument.Load(p.GetValueForArgument(mapArg)));
+            Emit(p.GetValueForOption(jsonOption), units,
+                () => units.Count == 0
+                    ? "(no placed units)"
+                    : string.Join("\n", units.Select(u =>
+                        $"{u.CreationNumber,6}  {u.TypeRawcode}  {u.Name ?? "",-24} "
+                        + $"owner={u.OwnerId,-3} at ({u.X:0.#}, {u.Y:0.#})"
+                        + (u.HeroLevel > 0 ? $"  lvl={u.HeroLevel}" : ""))));
+        }));
+
+        var unitInstGet = new Command("get", "Show one placed unit's full state.")
+        { mapArg, cnArg, jsonOption };
+        unitInstGet.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            int cn = p.GetValueForArgument(cnArg);
+            var u = UnitInstanceCommand.Get(MapDocument.Load(p.GetValueForArgument(mapArg)), cn);
+            if (u is null)
+            {
+                Emit(p.GetValueForOption(jsonOption), new { Ok = false, Message = $"no placed unit {cn}" },
+                    () => $"no placed unit with creation number {cn}");
+                exitCode[0] = 1;
+                return;
+            }
+            Emit(p.GetValueForOption(jsonOption), u, () => Render.PlacedUnit(u));
+        }));
+
+        var instFieldArg = new Argument<string>("field", "Field to set.");
+        var instValueArg = new Argument<string>("value",
+            "New value. A position or scale takes a comma-separated tuple, and a single number "
+            + "scales uniformly.");
+
+        var unitInstSet = new Command("set",
+            "Set a field on a placed unit and save the edited map. Fields: "
+            + string.Join("|", PlacedInstanceFields.UnitFields) + ".")
+        { mapArg, cnArg, instFieldArg, instValueArg, setOut, jsonOption };
+        unitInstSet.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = PlacedInstanceFields.SetUnitField(doc, p.GetValueForArgument(cnArg),
+                p.GetValueForArgument(instFieldArg), p.GetValueForArgument(instValueArg));
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc,
+                r.Ok, r.Message);
+        }));
+
+        var unitInstRemove = new Command("remove", "Remove a placed unit and save the edited map.")
+        { mapArg, cnArg, setOut, jsonOption };
+        unitInstRemove.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = UnitInstanceCommand.Delete(doc, p.GetValueForArgument(cnArg));
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc,
+                r.Ok, r.Message);
+        }));
+
+        var unitInst = new Command("unit",
+            "Placed units (war3mapUnits.doo): list, get, set, remove. Use 'place unit' to add one.");
+        unitInst.AddCommand(unitInstList);
+        unitInst.AddCommand(unitInstGet);
+        unitInst.AddCommand(unitInstSet);
+        unitInst.AddCommand(unitInstRemove);
+        root.AddCommand(unitInst);
+
+        var doodadInstList = new Command("list", "List every placed doodad, with its creation number.")
+        { mapArg, jsonOption };
+        doodadInstList.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var ds = DoodadInstanceCommand.List(MapDocument.Load(p.GetValueForArgument(mapArg)));
+            Emit(p.GetValueForOption(jsonOption), ds,
+                () => ds.Count == 0
+                    ? "(no placed doodads)"
+                    : string.Join("\n", ds.Select(d =>
+                        $"{d.CreationNumber,6}  {d.TypeRawcode}  at ({d.X:0.#}, {d.Y:0.#}, {d.Z:0.#})"
+                        + $"  var={d.Variation}")));
+        }));
+
+        var doodadInstGet = new Command("get", "Show one placed doodad's full state.")
+        { mapArg, cnArg, jsonOption };
+        doodadInstGet.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            int cn = p.GetValueForArgument(cnArg);
+            var d = DoodadInstanceCommand.Get(MapDocument.Load(p.GetValueForArgument(mapArg)), cn);
+            if (d is null)
+            {
+                Emit(p.GetValueForOption(jsonOption), new { Ok = false, Message = $"no placed doodad {cn}" },
+                    () => $"no placed doodad with creation number {cn}");
+                exitCode[0] = 1;
+                return;
+            }
+            Emit(p.GetValueForOption(jsonOption), d, () => Render.PlacedDoodad(d));
+        }));
+
+        var doodadInstSet = new Command("set",
+            "Set a field on a placed doodad and save the edited map. Fields: "
+            + string.Join("|", PlacedInstanceFields.DoodadFields) + ".")
+        { mapArg, cnArg, instFieldArg, instValueArg, setOut, jsonOption };
+        doodadInstSet.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = PlacedInstanceFields.SetDoodadField(doc, p.GetValueForArgument(cnArg),
+                p.GetValueForArgument(instFieldArg), p.GetValueForArgument(instValueArg));
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc,
+                r.Ok, r.Message);
+        }));
+
+        var doodadInstRemove = new Command("remove", "Remove a placed doodad and save the edited map.")
+        { mapArg, cnArg, setOut, jsonOption };
+        doodadInstRemove.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = DoodadInstanceCommand.Delete(doc, p.GetValueForArgument(cnArg));
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc,
+                r.Ok, r.Message);
+        }));
+
+        var doodadInst = new Command("doodad",
+            "Placed doodads (war3map.doo): list, get, set, remove. Use 'place doodad' to add one.");
+        doodadInst.AddCommand(doodadInstList);
+        doodadInst.AddCommand(doodadInstGet);
+        doodadInst.AddCommand(doodadInstSet);
+        doodadInst.AddCommand(doodadInstRemove);
+        root.AddCommand(doodadInst);
+
         // ---- sound: edit the map's sound catalog (war3map.w3s) ----
         var soundList = new Command("list", "List the map's sound definitions.") { mapArg };
         soundList.SetHandler(ctx => RunSafely(() =>
@@ -1919,7 +2109,8 @@ public static class Program
         root.AddCommand(place); root.AddCommand(palette); root.AddCommand(terrain);
         root.AddCommand(sound); root.AddCommand(camera); root.AddCommand(pathing);
         root.AddCommand(mapInfo); root.AddCommand(player); root.AddCommand(force);
-        root.AddCommand(region); root.AddCommand(newMap); root.AddCommand(trigger);
+        root.AddCommand(region); root.AddCommand(newMap); trigger.AddCommand(triggerRead);
+        root.AddCommand(trigger);
 
         return root;
     }
