@@ -332,7 +332,21 @@ public sealed class MapDocument
         // only via the probe, never via this archive's own listfile) still shadows its
         // original by the same hashed name when the builder adds the replacement.
         archive.AddFileNames(StandardMapFileNames.All);
-        var builder = new MpqArchiveBuilder(archive);
+
+        MpqArchiveBuilder builder;
+        try
+        {
+            builder = new MpqArchiveBuilder(archive);
+        }
+        catch (Exception ex)
+        {
+            // The builder reads every entry's stream header up front, including entries whose
+            // block table row is deliberate nonsense. Two of 34 maps measured cannot get past
+            // this, both with 65,534 of their 65,536 hash slots occupied, which is a protection
+            // technique rather than a real archive shape. Leaking War3Net's raw message told the
+            // reader nothing they could act on.
+            throw new NotSupportedException(DescribeUnrebuildable(ex), ex);
+        }
 
         // An added file with the same hashed name shadows the original at save;
         // RemoveFile must NOT be called first — its removal set also filters the
@@ -349,23 +363,75 @@ public sealed class MapDocument
         // is set on it. So take the plain overload untouched whenever the inherited table
         // is safe, which keeps every already-working map byte-for-byte as it was.
         var (dropListFile, dropAttributes) = BookkeepingToDrop();
+        var blockSize = SourceBlockSize();
+        bool needsBlockSize = blockSize != MpqArchiveCreateOptions.DefaultBlockSize;
+
         if (dropListFile || dropAttributes)
             builder.SaveTo(mpq, new MpqArchiveCreateOptions
             {
+                BlockSize = blockSize,
                 HashTableSize = grown,
                 ListFileCreateMode = dropListFile ? MpqFileCreateMode.Prune : MpqFileCreateMode.Overwrite,
                 AttributesCreateMode = dropAttributes ? MpqFileCreateMode.Prune : MpqFileCreateMode.Overwrite,
             }, leaveOpen: true);
-        else if (grown is null)
+        else if (grown is null && !needsBlockSize)
             builder.SaveTo(mpq, leaveOpen: true);
         else
-            builder.SaveTo(mpq, new MpqArchiveCreateOptions { HashTableSize = grown }, leaveOpen: true);
+            builder.SaveTo(mpq, new MpqArchiveCreateOptions
+            {
+                BlockSize = blockSize,
+                HashTableSize = grown,
+            }, leaveOpen: true);
 
         using var outStream = new MemoryStream();
         outStream.Write(PreArchiveData, 0, PreArchiveData.Length);
         mpq.Position = 0;
         mpq.CopyTo(outStream);
         return outStream.ToArray();
+    }
+
+    /// <summary>
+    /// The source archive's block-size shift, read from its own header. Sector size is
+    /// 512 &lt;&lt; shift, and War3Net's default is 3, meaning 4 KB sectors.
+    /// </summary>
+    /// <remarks>
+    /// This is what made four of 34 maps in the user's Maps folder unsaveable, with
+    /// "Unable to re-encode the mpq file, because its stream cannot be read". Reading War3Net's
+    /// MpqFile.AddToArchive, that throw is only reachable when the verbatim copy path is skipped
+    /// AND the stream cannot be read. The verbatim path needs the archive's block size to match
+    /// the file's. Those four archives use a shift of 13 or 14, which is 4 MB and 8 MB sectors,
+    /// and the rebuild was creating a 4 KB one, so every file had to be re-encoded and the
+    /// protected ones, whose keys are unrecoverable, could not be.
+    ///
+    /// The block size is only passed when it differs from the default, because passing an options
+    /// object at all changes the emitted bookkeeping, measured as a 16,916 byte difference on a
+    /// map that already saved fine. Every map that works today still takes the untouched overload.
+    /// </remarks>
+    private ushort SourceBlockSize()
+    {
+        int header = PreArchiveData.Length;
+        // The shift is a ushort at 0x0E in the MPQ header. A truncated or odd file falls back to
+        // the default rather than throwing, since Load already succeeded on these bytes.
+        if (header < 0 || header + 0x10 > _originalBytes.Length)
+            return MpqArchiveCreateOptions.DefaultBlockSize;
+        return BinaryPrimitives.ReadUInt16LittleEndian(
+            _originalBytes.AsSpan(header + 0x0E, 2));
+    }
+
+    /// <summary>
+    /// Explains, in terms of this archive, why it could not be opened for rebuilding.
+    /// </summary>
+    private string DescribeUnrebuildable(Exception cause)
+    {
+        int unreadable = _diagnostics.Count;
+        int unnamed = _files.Count(f => f.FileName is null);
+        var shape = $"{_files.Count:N0} entries, {unnamed:N0} of them with no recoverable name";
+        if (unreadable > 0)
+            shape += $", {unreadable:N0} unreadable at load";
+
+        return $"This map cannot be rebuilt, so it cannot be saved. Its archive has {shape}, "
+             + "a shape produced by map protection rather than by an editor. Reading it works, "
+             + $"writing it does not. The underlying failure was: {cause.Message}";
     }
 
     // MPQ hash tables are power-of-two sized and resolve names by linear probing, so a

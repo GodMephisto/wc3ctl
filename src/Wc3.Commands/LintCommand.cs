@@ -221,9 +221,14 @@ public static class LintCommand
     /// </summary>
     private static LintCheck NoTargetAssetsClobbered(MapDocument doc, MapDocument original)
     {
+        // Grouped, not ToDictionary. An MPQ can hold two entries under one name, and one map in
+        // the measured library of 34 holds 14 such pairs, which made this throw and took the whole
+        // lint down. The first copy is the one a name lookup resolves to, so it is the one
+        // compared, and that is what a clobber check is asking about.
         var before = original.Files
             .Where(f => f.FileName is not null && !IsBookkeeping(f.FileName) && !IsStructural(f.FileName))
-            .ToDictionary(f => f.FileName!, f => f.CurrentBytes, StringComparer.OrdinalIgnoreCase);
+            .GroupBy(f => f.FileName!, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First().CurrentBytes, StringComparer.OrdinalIgnoreCase);
 
         var clobbered = new List<string>();
         foreach (var f in doc.Files)
