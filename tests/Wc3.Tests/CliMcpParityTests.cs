@@ -84,6 +84,8 @@ public class CliMcpParityTests
         ["sound_set"] = "sound set",
         ["sound_remove"] = "sound remove",
         ["trigger_catalog_list"] = "trigger catalog list",
+        ["editor_catalog_list"] = "editor catalog list",
+        ["editor_catalog_get"] = "editor catalog get",
         ["trigger_catalog_describe"] = "trigger catalog describe",
     };
 

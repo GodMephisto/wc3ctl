@@ -56,6 +56,10 @@ public static class GameData
             var editorEnums = EditorEnumData.FromByteSources(strings,
                 src!.ReadFile(UnitEditorDataPath),
                 src!.ReadFile(WorldEditDataPath));
+            // The same file read through the catalog lens, key and every payload field
+            // kept. Only WorldEditData.txt, the unit editor file is pure enum sections.
+            var editorCatalogs = EditorCatalogData.FromByteSources(strings,
+                src!.ReadFile(WorldEditDataPath));
             // Profile TXT stores fill the fields the metadata SLKs mark "Profile"
             // (names, tooltips, art refs). Buff sections live inside the ability
             // profile files, so those two kinds share one store.
@@ -73,6 +77,7 @@ public static class GameData
                 Upgrades = BuildSafe("upgrade", s => ObjectDataStore.BuildUpgrades(s, upgradeProfile)),
                 Strings = strings,
                 EditorEnums = editorEnums,
+                EditorCatalogs = editorCatalogs,
                 UnitNames = UnitNameTable.FromSources(src!),
                 Diagnostics = diags,
                 InstallDir = dir, // lets TryReadFile lazily re-open CASC for raw assets

@@ -17,7 +17,8 @@ public class McpServerTests
     private static readonly string[] ExpectedTools =
     {
         "audit_ability", "audit_fidelity", "audit_hero", "audit_readiness", "bundle_unit",
-        "camera_add", "camera_list", "camera_remove", "camera_set", "diff", "force_list",
+        "camera_add", "camera_list", "camera_remove", "camera_set", "diff",
+        "editor_catalog_get", "editor_catalog_list", "force_list",
         "force_set_flags", "imports_list", "lint", "list_files", "map_info", "map_info_get",
         "map_info_set", "new_map", "object_field_options", "object_form", "object_get",
         "object_list", "object_new", "object_set", "palette_doodad", "pathing_paint",

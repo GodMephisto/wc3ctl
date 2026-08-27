@@ -1902,6 +1902,43 @@ public static class Program
         var trigger = new Command("trigger", "GUI trigger tooling (World-Editor catalog).");
         trigger.AddCommand(trigCatalog);
 
+        // ---- editor, the World Editor's catalogs (UI\WorldEditData.txt, read-only) ----
+        var editorCatalogList = new Command("list",
+            "List the catalog names the installed game defines, with entry counts.");
+        editorCatalogList.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var res = EditorCatalogCommand.Names(p.GetValueForOption(gameDirOption));
+            Emit(p.GetValueForOption(jsonOption), res,
+                () => string.Join("\n", res.Catalogs.Select(c => $"{c.Name,-24} {c.Entries,4}"))
+                      + $"\n\n{res.Total} catalog(s)");
+        }));
+
+        var editorCatalogNameArg = new Argument<string>("name",
+            "Catalog name, e.g. TileSets (see 'editor catalog list').");
+        var editorCatalogGet = new Command("get",
+            "Show one catalog's entries, stored key, display name and payload fields.")
+        { editorCatalogNameArg };
+        editorCatalogGet.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var res = EditorCatalogCommand.List(
+                p.GetValueForArgument(editorCatalogNameArg), p.GetValueForOption(gameDirOption));
+            Emit(p.GetValueForOption(jsonOption), res,
+                () => string.Join("\n", res.Entries.Select(e =>
+                          $"{e.Key,-18} {e.Label,-30} {string.Join(", ", e.Values)}"))
+                      + $"\n\n{res.Total} entry(ies) in {res.Catalog}");
+        }));
+
+        var editorCatalog = new Command("catalog",
+            "The World Editor's catalogs from UI\\WorldEditData.txt (list, get).");
+        editorCatalog.AddCommand(editorCatalogList);
+        editorCatalog.AddCommand(editorCatalogGet);
+
+        var editor = new Command("editor",
+            "World Editor base data (TileSets, SkyModels, LoadingScreens, brushes and more).");
+        editor.AddCommand(editorCatalog);
+
         // ---- region: list and remove regions (war3map.w3r). Add via 'place region' ----
         var regionList = new Command("list", "List the map's regions.") { mapArg };
         regionList.SetHandler(ctx => RunSafely(() =>
@@ -2218,6 +2255,7 @@ public static class Program
         root.AddCommand(mapInfo); root.AddCommand(player); root.AddCommand(force);
         root.AddCommand(region); root.AddCommand(newMap); trigger.AddCommand(triggerRead);
         root.AddCommand(trigger);
+        root.AddCommand(editor);
 
         return root;
     }
