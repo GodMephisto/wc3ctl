@@ -12,5 +12,9 @@ public static class TestAppBuilder
 {
     public static AppBuilder BuildAvaloniaApp() =>
         AppBuilder.Configure<Wc3.Studio.App>()
-            .UseHeadless(new AvaloniaHeadlessPlatformOptions());
+            .UseSkia()
+            // UseHeadlessDrawing false hands rendering to Skia, so a window can be captured to a
+            // real bitmap. That is the only way to check a complaint like "white text so it is
+            // terrible to eyes", which no assertion about control state can answer.
+            .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false });
 }
