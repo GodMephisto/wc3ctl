@@ -81,6 +81,61 @@ public static class Wc3Tools
     private const string TerrainCornerFieldNames =
         "GroundHeight|AddGroundHeight|WaterHeight|GroundTexture|CliffLevel";
 
+    [McpServerTool(Name = "unit_abilities", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("List a unit type's abilities BY NAME, resolved through the map's object data and the base game data, rather than as bare rawcodes. Use this to see what a unit can actually do without decoding 'A00c' by hand.")]
+    public static IReadOnlyList<UnitTypeAbility> UnitAbilities(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("The unit type's four-character rawcode, e.g. 'Hpal' or 'H003'.")] string rawcode,
+        [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Without it only the map's own abilities resolve to names.")] string? game_dir = null)
+        => Run(() => UnitAbilitiesCommand.ForUnitType(LoadMap(map), rawcode, ResolveGameDir(game_dir)));
+
+    [McpServerTool(Name = "object_field_options", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("The legal values for one object-data field, taken from what the base game data actually uses for it. Ask this BEFORE object_set on an enumerated field, so the value written is one the game already accepts rather than a guess.")]
+    public static ObjectFieldOptionsResult ObjectFieldOptions(
+        [Description("Object kind: " + KindValues + ".")] string kind,
+        [Description("The field's four-character code, e.g. 'utyp' or 'ua1t'.")] string field,
+        [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Required for this to return anything, since the options come from the base data.")] string? game_dir = null)
+        => Run(() => ObjectFieldOptionsCommand.Execute(ParseKind(kind), field, ResolveGameDir(game_dir)));
+
+    [McpServerTool(Name = "lint", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Pre-flight the map: does its script compile, does war3map.imp agree with what the archive holds, do referenced asset paths resolve, and is every entry a loadable type. This is the 'is this map going to work' check and is the right thing to run before handing a map to anyone. A failure here usually means the map will not host or will hang on load with no error of its own.")]
+    public static LintResult Lint(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Optional path to the ORIGINAL map this one was built from. Supplied, the lint also reports what a rebuild lost or clobbered.")] string? against = null)
+        => Run(() => LintCommand.Run(LoadMap(map), against is null ? null : LoadMap(against)));
+
+    [McpServerTool(Name = "validate", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Check the map for structural problems: missing or empty files, entries that fail to load, and a script that cannot compile. Narrower than lint and a good first question when a map behaves as though something is absent.")]
+    public static ValidateResult Validate(
+        [Description("Path to a .w3x/.w3m map file.")] string map)
+        => Run(() => ValidateCommand.Execute(LoadMap(map)));
+
+    [McpServerTool(Name = "roundtrip", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Verify the map survives a load and save byte for byte. Any file that differs is one this toolkit does not reproduce faithfully, which is worth knowing BEFORE editing that map, since a save would then rewrite it. Archive bookkeeping the container regenerates is excluded by design.")]
+    public static RoundtripResult Roundtrip(
+        [Description("Path to a .w3x/.w3m map file.")] string map)
+        => Run(() => RoundtripCommand.Execute(LoadMap(map)));
+
+    [McpServerTool(Name = "search", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Search the map's contents for a string: script text, object data values and string-table entries. Use this to find where a name, an ability id or an asset path is actually referenced, rather than guessing which file holds it.")]
+    public static SearchResult Search(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Text to look for.")] string query)
+        => Run(() => SearchCommand.Execute(LoadMap(map), query));
+
+    [McpServerTool(Name = "diff", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Compare two maps and report which internal files were added, removed or changed. The direct way to see what an edit actually did to a map, and to check that it touched only what was intended.")]
+    public static DiffResult Diff(
+        [Description("Path to the first .w3x/.w3m map.")] string map,
+        [Description("Path to the second .w3x/.w3m map.")] string other)
+        => Run(() => DiffCommand.Execute(LoadMap(map), LoadMap(other)));
+
+    [McpServerTool(Name = "script_functions", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("List every function declared in the map's compiled script, with where it starts and ends. Indentation-tolerant, so it finds declarations a naive line scan misses. Use it to locate a handler before reading or editing the script.")]
+    public static ScriptFunctionsResult ScriptFunctions(
+        [Description("Path to a .w3x/.w3m map file.")] string map)
+        => Run(() => ScriptCommand.Functions(LoadMap(map)));
+
     [McpServerTool(Name = "terrain_info", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("The terrain grid's extents in corners, plus the map's ground and cliff tile lists. Texture fields on a corner are indexes into those lists, so read this first to know what an index means.")]
     public static TerrainEditCommand.TerrainInfo TerrainInfoTool(

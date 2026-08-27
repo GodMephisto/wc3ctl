@@ -1328,6 +1328,42 @@ public static class Program
         static string Trim(string t) =>
             t.Length <= 88 ? t.Replace("\n", " ") : t[..88].Replace("\n", " ") + "...";
 
+        // ---- unit-type abilities and field options: what a unit can do, and what a field accepts ----
+        var abilRawcodeArg = new Argument<string>("rawcode", "Unit type's four-character rawcode.");
+        var unitAbilities = new Command("abilities",
+            "List a unit type's abilities by name rather than by rawcode.")
+        { mapArg, abilRawcodeArg, jsonOption, gameDirOption };
+        unitAbilities.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var abils = UnitAbilitiesCommand.ForUnitType(
+                MapDocument.Load(p.GetValueForArgument(mapArg)),
+                p.GetValueForArgument(abilRawcodeArg), p.GetValueForOption(gameDirOption));
+            Emit(p.GetValueForOption(jsonOption), abils,
+                () => abils.Count == 0
+                    ? "(no abilities, or the unit type was not found)"
+                    : string.Join("\n", abils.Select(a =>
+                        $"{a.Rawcode}  {a.Name ?? "(unresolved)"}"
+                        + (a.IsHeroAbility ? "  [hero]" : ""))));
+        }));
+
+        var optKindOpt = new Option<string>("--kind", () => "unit",
+            "Object type: unit|item|ability|destructable|doodad|buff|upgrade.");
+        var optFieldArg = new Argument<string>("field", "The field's four-character code.");
+        var objectOptions = new Command("options",
+            "The legal values for an object field, taken from what the base game data uses for it. "
+            + "Ask before 'object set' on an enumerated field.")
+        { optFieldArg, optKindOpt, jsonOption, gameDirOption };
+        objectOptions.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = ObjectFieldOptionsCommand.Execute(
+                ObjectKinds.Parse(p.GetValueForOption(optKindOpt)!),
+                p.GetValueForArgument(optFieldArg), p.GetValueForOption(gameDirOption));
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.FieldOptions(r));
+        }));
+        obj.AddCommand(objectOptions);
+
         // ---- strings / imports / trigger read: reachable from the GUI, previously not here ----
         var stringsList = new Command("list",
             "List the map's string table (war3map.wts). Every TRIGSTR_ reference resolves here.")
@@ -1447,6 +1483,7 @@ public static class Program
         unitInst.AddCommand(unitInstGet);
         unitInst.AddCommand(unitInstSet);
         unitInst.AddCommand(unitInstRemove);
+        unitInst.AddCommand(unitAbilities);
         root.AddCommand(unitInst);
 
         var doodadInstList = new Command("list", "List every placed doodad, with its creation number.")
