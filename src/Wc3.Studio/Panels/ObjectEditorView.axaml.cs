@@ -114,12 +114,23 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     private ObjectRow? _anchor;
 
     // --- typed field editor: one control shown per field, chosen from its metadata ---
-    private enum EditorMode { Text, Combo, Multi, RefList }
+    private enum EditorMode { Text, Numeric, Combo, Multi, RefList }
     private EditorMode _editorMode = EditorMode.Text;
     /// <summary>Multiselect tokens in display order, so Apply joins deterministically.</summary>
     private IReadOnlyList<string> _editorMultiTokens = Array.Empty<string>();
     /// <summary>Reference-list builder entries (rawcodes in list order); Apply joins them.</summary>
     private List<string> _refListTokens = new();
+    /// <summary>Whether the numeric editor holds a whole-number type, so Apply writes
+    /// "3" and never "3.0" into an int field.</summary>
+    private bool _numericIsInt;
+    /// <summary>The numeric editor's note, built where the bounds are known (see
+    /// <see cref="ShowNumericEditor"/>) because <see cref="UpdateEditNote"/> only sees
+    /// the option result, not the field's own metadata row.</summary>
+    private string _numericEditNote = "";
+    /// <summary>Invalidates in-flight asset picker loads. The base game's path list lands
+    /// async (first CASC open takes seconds) and must not repopulate a picker that a later
+    /// field selection, editor reset or map switch already owns.</summary>
+    private int _assetPickerGeneration;
     /// <summary>Above this many derivable options a field is treated as free text (paths,
     /// ids, and other high-cardinality fields aren't real enumerations).</summary>
     private const int MaxEditorOptions = 200;
@@ -135,6 +146,9 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         // Tunnel so right-click retargets the selection BEFORE the context menu opens.
         ObjectList.AddHandler(PointerPressedEvent, OnObjectListPointerPressed,
             RoutingStrategies.Tunnel);
+        // The picker fills the text editor rather than replacing it, so a hand-typed
+        // path (a file the map does not hold yet) keeps working.
+        AssetPickerCombo.SelectionChanged += (_, item) => EditorBox.Text = item.Id;
     }
 
     /// <summary>
@@ -999,11 +1013,13 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         }
     }
 
-    /// <summary>Pick the editor control from the field's metadata: object-reference LISTS
-    /// (a unit's abilities, an item drop set, …) get the add/remove/reorder builder;
+    /// <summary>Pick the editor control from the field's metadata. Object-reference LISTS
+    /// (a unit's abilities, an item drop set, …) get the add/remove/reorder builder,
     /// other enumerated fields get a searchable dropdown (single value) or a checklist
-    /// (list types); everything else - ints, reals, strings, paths, or fields with no
-    /// derivable option set - stays free text. The current value is always kept
+    /// (list types), int, real and unreal fields get a spin editor bounded by the
+    /// metadata, icon and model fields keep the text box but gain a picker over paths
+    /// that actually exist, and everything else (strings, paths, fields with no
+    /// derivable option set) stays free text. The current value is always kept
     /// selectable so out-of-range data is never silently lost.</summary>
     private void ConfigureEditor(FieldRow row)
     {
@@ -1028,9 +1044,12 @@ public partial class ObjectEditorView : UserControl, IMapPanel
             ShowMultiEditor(row, opt.Options);
         else if (!freeText)
             ShowComboEditor(row, opt.Options);
+        else if (NumericFieldEditor.IsNumericType(opt.Type) && NumericFieldEditor.CanEdit(row.Value))
+            ShowNumericEditor(row, opt.Type);
         else
             ShowTextEditor(row);
 
+        ConfigureAssetPicker(row, opt.Type);
         UpdateEditNote(opt);
         // The grid shows resolved text for wts references; the editor holds the raw token,
         // so flag it rather than let the user think the box "lost" the readable value.
@@ -1046,6 +1065,17 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         "int" or "real" or "unreal" or "string" => true,
         _ => false,
     };
+
+    /// <summary>Exactly one editor control is visible at a time. Every Show* method routes
+    /// through here so adding an editor cannot leave a stale one showing.</summary>
+    private void ShowEditor(Control editor)
+    {
+        EditorBox.IsVisible = ReferenceEquals(editor, EditorBox);
+        EditorNum.IsVisible = ReferenceEquals(editor, EditorNum);
+        EditorCombo.IsVisible = ReferenceEquals(editor, EditorCombo);
+        EditorMultiHost.IsVisible = ReferenceEquals(editor, EditorMultiHost);
+        RefListHost.IsVisible = ReferenceEquals(editor, RefListHost);
+    }
 
     private void ShowTextEditor(FieldRow row)
     {
@@ -1065,10 +1095,103 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         EditorBox.MinHeight = longText ? 96 : 0;
         EditorBox.MaxHeight = longText ? 220 : double.PositiveInfinity;
 
-        EditorBox.IsVisible = true;
-        EditorCombo.IsVisible = false;
-        EditorMultiHost.IsVisible = false;
-        RefListHost.IsVisible = false;
+        ShowEditor(EditorBox);
+    }
+
+    /// <summary>Bounded spin editor for int, real and unreal fields. The bounds come from
+    /// the field metadata (see <see cref="NumericFieldEditor.Bounds"/> for why they widen
+    /// to include an out-of-range stored value), so a value the game rejects can no longer
+    /// be typed here, it clamps at input time instead of failing on Apply.</summary>
+    private void ShowNumericEditor(FieldRow row, string type)
+    {
+        _editorMode = EditorMode.Numeric;
+        _numericIsInt = NumericFieldEditor.IsIntType(type);
+        var stored = NumericFieldEditor.Parse(row.Value);
+        var (min, max) = NumericFieldEditor.Bounds(row.Form, stored);
+        EditorNum.Minimum = min;
+        EditorNum.Maximum = max;
+        EditorNum.Increment = _numericIsInt ? 1m : 0.1m;
+        // Object data is invariant-culture text, so the editor parses and renders the
+        // same way regardless of the OS locale, and int fields refuse decimal input.
+        EditorNum.NumberFormat = System.Globalization.CultureInfo.InvariantCulture.NumberFormat;
+        EditorNum.ParsingNumberStyle = _numericIsInt
+            ? System.Globalization.NumberStyles.Integer
+            : System.Globalization.NumberStyles.Float;
+        EditorNum.Value = stored;
+        if (stored is null)
+            EditorNum.Text = "";
+
+        var legalMin = row.Form?.MinValue;
+        var legalMax = row.Form?.MaxValue;
+        var range = legalMin is null && legalMax is null
+            ? "no declared range"
+            : $"legal range {legalMin ?? "unbounded"} to {legalMax ?? "unbounded"}";
+        if (row.Form?.ForceNonNegative == true)
+            range += ", never negative";
+        _numericEditNote = $"Numeric field (type '{type}'), {range}, out-of-range input clamps.";
+
+        ShowEditor(EditorNum);
+    }
+
+    /// <summary>
+    /// Shows the asset path picker above the text editor for icon and model fields,
+    /// populated with paths that actually exist. The map's own imports land immediately,
+    /// the base game's merge in when the install answers (async, and cached per install,
+    /// because the first CASC listfile pass takes seconds). On a machine with no install
+    /// the picker still offers the map's imports, and with no game data at all the field
+    /// type is unknown, so the plain text editor is all that shows.
+    /// </summary>
+    private void ConfigureAssetPicker(FieldRow row, string type)
+    {
+        _assetPickerGeneration++;
+        var family = AssetCatalog.FamilyForFieldType(type);
+        if (family is null || _editorMode != EditorMode.Text || _session?.Current is not { } doc)
+        {
+            AssetPickerCombo.IsVisible = false;
+            return;
+        }
+
+        var generation = _assetPickerGeneration;
+        var current = (row.Value ?? "").Trim();
+        var mapPaths = AssetCatalog.MapPaths(doc, family.Value);
+        AssetPickerCombo.Watermark = family == AssetFamily.Icon
+            ? "Search existing icon paths…"
+            : "Search existing model paths…";
+        // No auto-selection, and the initial selection never raises SelectionChanged, so
+        // just opening a field cannot rewrite its value.
+        AssetPickerCombo.SetItems(AssetItems(mapPaths, Array.Empty<string>()),
+            selectId: current.Length > 0 ? current : null, selectFirstWhenNoMatch: false);
+        AssetPickerCombo.IsVisible = true;
+
+        AssetCatalog.GamePathsAsync(_session.GameDir, family.Value).ContinueWith(t =>
+        {
+            if (t.Result.Count == 0)
+                return;
+            Dispatcher.UIThread.Post(() =>
+            {
+                // A later field selection or a reset owns the picker now, leave it alone.
+                if (generation != _assetPickerGeneration || !AssetPickerCombo.IsVisible)
+                    return;
+                AssetPickerCombo.SetItems(AssetItems(mapPaths, t.Result),
+                    selectId: AssetPickerCombo.SelectedId, selectFirstWhenNoMatch: false);
+            });
+        }, TaskContinuationOptions.OnlyOnRanToCompletion);
+    }
+
+    /// <summary>Map imports first (a map file shadows the same-named game file at load),
+    /// then the base game's paths, duplicates folded toward the map entry.</summary>
+    private static List<SearchableComboBoxItem> AssetItems(
+        IReadOnlyList<string> mapPaths, IReadOnlyList<string> gamePaths)
+    {
+        var items = new List<SearchableComboBoxItem>(mapPaths.Count + gamePaths.Count);
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var p in mapPaths)
+            if (seen.Add(p))
+                items.Add(new SearchableComboBoxItem("", p));
+        foreach (var p in gamePaths)
+            if (seen.Add(p))
+                items.Add(new SearchableComboBoxItem("", p));
+        return items;
     }
 
     private void ShowComboEditor(FieldRow row, IReadOnlyList<EnumOption> options)
@@ -1086,10 +1209,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
             // than silently dropping data the map already relies on.
             items.Insert(0, new SearchableComboBoxItem(current, $"{current}  (not a listed value)"));
         EditorCombo.SetItems(items, selectId: current.Length > 0 ? current : null);
-        EditorBox.IsVisible = false;
-        EditorCombo.IsVisible = true;
-        EditorMultiHost.IsVisible = false;
-        RefListHost.IsVisible = false;
+        ShowEditor(EditorCombo);
     }
 
     private void ShowMultiEditor(FieldRow row, IReadOnlyList<EnumOption> options)
@@ -1118,10 +1238,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
             if (selected.Contains(t))
                 EditorMulti.SelectedItems?.Add(t);
 
-        EditorBox.IsVisible = false;
-        EditorCombo.IsVisible = false;
-        EditorMultiHost.IsVisible = true;
-        RefListHost.IsVisible = false;
+        ShowEditor(EditorMultiHost);
     }
 
     // --- object-reference LIST builder (EditorMode.RefList) ---
@@ -1146,10 +1263,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         // No auto-selection: adding is a deliberate pick, never a default first item.
         RefListAddCombo.SetItems(RefListCandidates(type), selectId: null,
             selectFirstWhenNoMatch: false);
-        EditorBox.IsVisible = false;
-        EditorCombo.IsVisible = false;
-        EditorMultiHost.IsVisible = false;
-        RefListHost.IsVisible = true;
+        ShowEditor(RefListHost);
     }
 
     /// <summary>
@@ -1262,6 +1376,10 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     /// <summary>The value to write, read from whichever editor is currently shown.</summary>
     private string CurrentEditorValue() => _editorMode switch
     {
+        // The visible text, not just Value, so an uncommitted keystroke still counts
+        // (NumericUpDown commits its text on focus loss, which the Apply click races).
+        EditorMode.Numeric => NumericFieldEditor.ValueText(
+            EditorNum.Text, EditorNum.Value, EditorNum.Minimum, EditorNum.Maximum, _numericIsInt),
         EditorMode.Combo => EditorCombo.SelectedId ?? "",
         EditorMode.Multi => string.Join(",",
             _editorMultiTokens.Where(t => EditorMulti.SelectedItems?.Contains(t) == true)),
@@ -1273,10 +1391,13 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     {
         EditNote.Text = _editorMode switch
         {
+            EditorMode.Numeric => _numericEditNote,
             EditorMode.Combo => $"Enumerated field (type '{opt.Type}') — pick a value the base game already uses.",
             EditorMode.Multi => $"List field (type '{opt.Type}') — check tokens to include; saved comma-separated.",
             EditorMode.RefList => $"Object-reference list (type '{opt.Type}') — add, remove and reorder entries; "
                 + "Apply saves the rawcodes comma-separated in list order.",
+            _ when AssetPickerCombo.IsVisible =>
+                $"Asset path field (type '{opt.Type}'), pick an existing map or game path above, or type one.",
             _ when opt.Diagnostic is { } d => $"Free-text field. ({d})",
             _ => "Free-text field; leveled fields (code:N) edit that level/variation only.",
         };
@@ -1288,11 +1409,10 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         _editorMode = EditorMode.Text;
         _editorMultiTokens = Array.Empty<string>();
         _refListTokens = new List<string>();
+        _assetPickerGeneration++; // orphan any in-flight game path load
         EditorBox.Text = "";
-        EditorBox.IsVisible = true;
-        EditorCombo.IsVisible = false;
-        EditorMultiHost.IsVisible = false;
-        RefListHost.IsVisible = false;
+        ShowEditor(EditorBox);
+        AssetPickerCombo.IsVisible = false;
         EditNote.Text = "";
         UpdateApplyState();
     }

@@ -151,45 +151,61 @@
                                 <!-- Exactly one editor is visible at a time; the field's
                                      metadata type picks it (see ConfigureEditor). The text
                                      box is the always-available fallback. -->
-                                <Panel>
-                                    <TextBox Name="EditorBox" MinHeight="0" Padding="4,3"/>
-                                    <controls:SearchableComboBox Name="EditorCombo" IsVisible="False"/>
-                                    <Border Name="EditorMultiHost" IsVisible="False"
-                                            BorderBrush="#33555555" BorderThickness="1" MaxHeight="180">
-                                        <ListBox Name="EditorMulti" SelectionMode="Multiple,Toggle"/>
-                                    </Border>
-                                    <!-- Object-reference LIST builder: the current entries in
-                                         order plus Add (searchable picker over the referenced
-                                         kind's map objects), Remove and Up/Down reorder. Apply
-                                         writes the rawcodes comma-joined in list order. -->
-                                    <Border Name="RefListHost" IsVisible="False"
-                                            BorderBrush="#33555555" BorderThickness="1" Padding="4">
-                                        <Grid RowDefinitions="Auto,4,Auto">
-                                            <DockPanel Grid.Row="0">
-                                                <Button Name="RefListAddButton" DockPanel.Dock="Right"
-                                                        Content="Add" Margin="4,0,0,0"
-                                                        Click="OnRefListAddClick"/>
-                                                <controls:SearchableComboBox Name="RefListAddCombo"/>
-                                            </DockPanel>
-                                            <DockPanel Grid.Row="2">
-                                                <StackPanel DockPanel.Dock="Right" Spacing="4"
-                                                            Margin="4,0,0,0">
-                                                    <Button Name="RefListRemoveButton" Content="Remove"
-                                                            MinWidth="70" IsEnabled="False"
-                                                            Click="OnRefListRemoveClick"/>
-                                                    <Button Name="RefListUpButton" Content="Up"
-                                                            MinWidth="70" IsEnabled="False"
-                                                            Click="OnRefListUpClick"/>
-                                                    <Button Name="RefListDownButton" Content="Down"
-                                                            MinWidth="70" IsEnabled="False"
-                                                            Click="OnRefListDownClick"/>
-                                                </StackPanel>
-                                                <ListBox Name="RefListBox" MaxHeight="140"
-                                                         SelectionChanged="OnRefListSelectionChanged"/>
-                                            </DockPanel>
-                                        </Grid>
-                                    </Border>
-                                </Panel>
+                                <DockPanel>
+                                    <!-- Icon and model fields get a picker over paths that
+                                         actually exist, the map's imports first, then the base
+                                         game's when an install answers. Picking fills the text
+                                         box below, so a hand-typed path (a file the map does
+                                         not hold yet) stays possible. -->
+                                    <controls:SearchableComboBox Name="AssetPickerCombo"
+                                                                 DockPanel.Dock="Top"
+                                                                 IsVisible="False"
+                                                                 Margin="0,0,0,4"/>
+                                    <Panel>
+                                        <TextBox Name="EditorBox" MinHeight="0" Padding="4,3"/>
+                                        <!-- Bounded spin editor for int, real and unreal fields.
+                                             The metadata's minval, maxval and forcenonneg become
+                                             Minimum and Maximum (see ShowNumericEditor). -->
+                                        <NumericUpDown Name="EditorNum" IsVisible="False"
+                                                       Padding="4,3" ClipValueToMinMax="True"/>
+                                        <controls:SearchableComboBox Name="EditorCombo" IsVisible="False"/>
+                                        <Border Name="EditorMultiHost" IsVisible="False"
+                                                BorderBrush="#33555555" BorderThickness="1" MaxHeight="180">
+                                            <ListBox Name="EditorMulti" SelectionMode="Multiple,Toggle"/>
+                                        </Border>
+                                        <!-- Object-reference LIST builder: the current entries in
+                                             order plus Add (searchable picker over the referenced
+                                             kind's map objects), Remove and Up/Down reorder. Apply
+                                             writes the rawcodes comma-joined in list order. -->
+                                        <Border Name="RefListHost" IsVisible="False"
+                                                BorderBrush="#33555555" BorderThickness="1" Padding="4">
+                                            <Grid RowDefinitions="Auto,4,Auto">
+                                                <DockPanel Grid.Row="0">
+                                                    <Button Name="RefListAddButton" DockPanel.Dock="Right"
+                                                            Content="Add" Margin="4,0,0,0"
+                                                            Click="OnRefListAddClick"/>
+                                                    <controls:SearchableComboBox Name="RefListAddCombo"/>
+                                                </DockPanel>
+                                                <DockPanel Grid.Row="2">
+                                                    <StackPanel DockPanel.Dock="Right" Spacing="4"
+                                                                Margin="4,0,0,0">
+                                                        <Button Name="RefListRemoveButton" Content="Remove"
+                                                                MinWidth="70" IsEnabled="False"
+                                                                Click="OnRefListRemoveClick"/>
+                                                        <Button Name="RefListUpButton" Content="Up"
+                                                                MinWidth="70" IsEnabled="False"
+                                                                Click="OnRefListUpClick"/>
+                                                        <Button Name="RefListDownButton" Content="Down"
+                                                                MinWidth="70" IsEnabled="False"
+                                                                Click="OnRefListDownClick"/>
+                                                    </StackPanel>
+                                                    <ListBox Name="RefListBox" MaxHeight="140"
+                                                             SelectionChanged="OnRefListSelectionChanged"/>
+                                                </DockPanel>
+                                            </Grid>
+                                        </Border>
+                                    </Panel>
+                                </DockPanel>
                             </DockPanel>
                             <TextBlock Name="EditNote" Foreground="#8FA3B8" FontSize="11"
                                        TextWrapping="Wrap" Text=""/>
