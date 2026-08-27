@@ -78,7 +78,14 @@ public sealed record ObjectForm(
 /// </summary>
 public static class ObjectFormCommand
 {
-    // The category codes the metadata uses, in the order the World Editor shows them.
+    // The category codes the metadata uses, in READING order.
+    //
+    // The order is ours and the names are not. The game ships the names in WorldEditData.txt's
+    // ObjectEditorCategories section, localized, and those are authoritative, so they are read
+    // from there and these strings are only the fallback for a machine with no install. The file
+    // lists the categories alphabetically by key, which is not a reading order, so the sequence
+    // below stays hardcoded on purpose: Art first because it is what someone looks at first, and
+    // Editor last because it is metadata about the object rather than the object.
     private static readonly (string Key, string Title)[] CategoryOrder =
     {
         ("art", "Art"),
@@ -93,6 +100,23 @@ public static class ObjectFormCommand
         ("text", "Text"),
         ("editor", "Editor"),
     };
+
+    /// <summary>
+    /// The display name for a category code, preferring the game's own localized name over the
+    /// English fallback above. A patch that renames a category, or an install in another language,
+    /// is then followed rather than contradicted.
+    /// </summary>
+    private static string CategoryTitle(GameDataContext? ctx, string key, string fallback)
+    {
+        if (ctx is not null
+            && ctx.EditorCatalogs.TryGet("ObjectEditorCategories", out var entries))
+        {
+            var hit = entries.FirstOrDefault(e =>
+                string.Equals(e.Key, key, StringComparison.OrdinalIgnoreCase));
+            if (hit is not null && hit.Label.Length > 0) return hit.Label;
+        }
+        return fallback;
+    }
 
     public static ObjectForm Execute(
         MapDocument doc, ObjectKind kind, string rawcode, string? gameDirOverride)
@@ -180,12 +204,14 @@ public static class ObjectFormCommand
         foreach (var (key, title) in CategoryOrder)
             if (groups.TryGetValue(key, out var list))
             {
-                ordered.Add(new FormGroup(key, title, Sorted(list)));
+                ordered.Add(new FormGroup(key, CategoryTitle(ctx, key, title), Sorted(list)));
                 groups.Remove(key);
             }
         // Anything the metadata did not categorise, or that arrived with no metadata at all.
         foreach (var key in groups.Keys.OrderBy(k => k, StringComparer.OrdinalIgnoreCase))
-            ordered.Add(new FormGroup(key, key == "other" ? "Other" : Title(key), Sorted(groups[key])));
+            ordered.Add(new FormGroup(key,
+                key == "other" ? "Other" : CategoryTitle(ctx, key, Title(key)),
+                Sorted(groups[key])));
 
         return new ObjectForm(rawcode, merged.Name, merged.BaseRawcode, kind, ordered,
             ordered.Sum(g => g.Fields.Count), hidden, diagnostics);
