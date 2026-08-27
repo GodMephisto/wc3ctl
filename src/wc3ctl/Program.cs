@@ -1253,6 +1253,76 @@ public static class Program
         terrain.AddCommand(terrainRamp);
         terrain.AddCommand(terrainPaint);
         terrain.AddCommand(terrainWater);
+        var colArg = new Argument<int>("col", "Corner column, 0-based.");
+        var rowArg = new Argument<int>("row", "Corner row, 0-based.");
+
+        var terrainInfo = new Command("info",
+            "Grid extents in corners, plus the map's ground and cliff tile lists. Texture fields "
+            + "are indexes into those lists.")
+        { mapArg, jsonOption };
+        terrainInfo.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var i = TerrainEditCommand.GetInfo(MapDocument.Load(p.GetValueForArgument(mapArg)));
+            if (i is null)
+            {
+                Emit(p.GetValueForOption(jsonOption), new { Ok = false, Message = "no terrain file" },
+                    () => "this map has no war3map.w3e");
+                exitCode[0] = 1;
+                return;
+            }
+            Emit(p.GetValueForOption(jsonOption), i, () => string.Join("\n", new[]
+            {
+                $"grid          {i.Width} x {i.Height} corners",
+                $"ground tiles  {string.Join(" ", i.GroundTiles)}",
+                $"cliff tiles   {string.Join(" ", i.CliffTiles)}",
+            }));
+        }));
+
+        var cornerGet = new Command("get", "Show one terrain corner's full state.")
+        { mapArg, colArg, rowArg, jsonOption };
+        cornerGet.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            int col = p.GetValueForArgument(colArg), row = p.GetValueForArgument(rowArg);
+            var c = TerrainEditCommand.GetCorner(MapDocument.Load(p.GetValueForArgument(mapArg)), col, row);
+            if (c is null)
+            {
+                Emit(p.GetValueForOption(jsonOption),
+                    new { Ok = false, Message = $"no corner at ({col}, {row})" },
+                    () => $"no terrain corner at ({col}, {row}). Try 'terrain info' for the extents.");
+                exitCode[0] = 1;
+                return;
+            }
+            Emit(p.GetValueForOption(jsonOption), c, () => Render.TerrainCorner(c));
+        }));
+
+        var cornerFieldArg = new Argument<string>("field",
+            "Field: " + string.Join("|", TerrainCornerFields.Fields) + ".");
+        var cornerValueArg = new Argument<string>("value", "New value.");
+        var cornerSet = new Command("set",
+            "Set a field on ONE terrain corner and save the edited map. For area work use "
+            + "'terrain deform', 'terrain paint' and the other brush commands.")
+        { mapArg, colArg, rowArg, cornerFieldArg, cornerValueArg, setOut, jsonOption };
+        cornerSet.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = TerrainCornerFields.SetField(doc, p.GetValueForArgument(colArg),
+                p.GetValueForArgument(rowArg), p.GetValueForArgument(cornerFieldArg),
+                p.GetValueForArgument(cornerValueArg));
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc,
+                r.Ok, r.Message);
+        }));
+
+        var corner = new Command("corner",
+            "One terrain corner at a time: get, set. The brush commands cover areas.");
+        corner.AddCommand(cornerGet);
+        corner.AddCommand(cornerSet);
+        terrain.AddCommand(terrainInfo);
+        terrain.AddCommand(corner);
+
         terrain.AddCommand(terrainBlight);
 
         static string Trim(string t) =>

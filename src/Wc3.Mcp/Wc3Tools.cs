@@ -78,6 +78,41 @@ public static class Wc3Tools
         return new EditToolResult(full, message);
     }
 
+    private const string TerrainCornerFieldNames =
+        "GroundHeight|AddGroundHeight|WaterHeight|GroundTexture|CliffLevel";
+
+    [McpServerTool(Name = "terrain_info", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("The terrain grid's extents in corners, plus the map's ground and cliff tile lists. Texture fields on a corner are indexes into those lists, so read this first to know what an index means.")]
+    public static TerrainEditCommand.TerrainInfo TerrainInfoTool(
+        [Description("Path to a .w3x/.w3m map file.")] string map)
+        => Run(() => TerrainEditCommand.GetInfo(LoadMap(map))
+            ?? throw new McpException("this map has no war3map.w3e terrain file"));
+
+    [McpServerTool(Name = "terrain_corner_get", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Show one terrain corner's full state: ground height, cliff level, water, ground and cliff texture indexes with variations, and the ramp, blight, boundary and edge flags.")]
+    public static TerrainEditCommand.CornerInfo TerrainCornerGet(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Corner column, 0-based. Bounds come from terrain_info.")] int col,
+        [Description("Corner row, 0-based.")] int row)
+        => Run(() => TerrainEditCommand.GetCorner(LoadMap(map), col, row)
+            ?? throw new McpException($"no terrain corner at ({col}, {row})"));
+
+    [McpServerTool(Name = "terrain_corner_set", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Set one field on ONE terrain corner and save the edited copy to out_path. The input map is NEVER modified in place. For area work prefer terrain_deform, terrain_paint and the other brush tools.")]
+    public static EditToolResult TerrainCornerSet(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Corner column, 0-based.")] int col,
+        [Description("Corner row, 0-based.")] int row,
+        [Description("Field: " + TerrainCornerFieldNames + ".")] string field,
+        [Description("New value.")] string value,
+        [Description("Where to write the edited map. Defaults to a sibling '.edited' copy.")] string? out_path = null)
+        => Run(() =>
+        {
+            var doc = LoadMap(map);
+            var r = TerrainCornerFields.SetField(doc, col, row, field, value);
+            return SaveEdit(doc, map, out_path, r.Ok, r.Message);
+        });
+
     [McpServerTool(Name = "placed_units_list", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("List every unit already PLACED on the map (war3mapUnits.doo), each with the creation number needed to edit or remove it, plus its type rawcode, owner, position and hero stats. Start locations appear here too. Call this before placed_unit_set or placed_unit_remove.")]
     public static IReadOnlyList<UnitInstanceInfo> PlacedUnitsList(
