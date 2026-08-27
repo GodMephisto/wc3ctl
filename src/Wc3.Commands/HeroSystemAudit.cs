@@ -11,7 +11,17 @@ namespace Wc3.Commands;
 /// between "this hero is missing from a table she belongs in" and "this table has a default and
 /// absence is the right answer for her", which are opposite instructions to give a person.
 /// </summary>
-public sealed record HeroSystem(string Function, int Line, int HeroCount, bool HasFallback = false);
+public sealed record HeroSystem(string Function, int Line, int HeroCount,
+    bool HasFallback = false, int RosterSize = 0)
+{
+    /// <summary>
+    /// Share of the roster this table actually lists. A table covering half the roster leaves
+    /// the other half absent, so absence is the state most heroes are already in and is poor
+    /// evidence that an entry is required. A table covering nearly everyone is the opposite.
+    /// </summary>
+    public int CoveragePercent =>
+        RosterSize <= 0 ? 0 : (int)Math.Round(100.0 * HeroCount / RosterSize);
+}
 
 /// <summary>
 /// Finds every place a target map hand-lists its heroes, so an installed hero can be told which of
@@ -87,7 +97,7 @@ public static class HeroSystemAudit
             // Present already, or too small to be a table every hero belongs in.
             if (hasInstalled || heroes.Count < floor) continue;
             found.Add(new HeroSystem(fn.Name, fn.StartLine, heroes.Count,
-                HasFallback(lines, fn.StartLine - 1, fn.EndLine)));
+                HasFallback(lines, fn.StartLine - 1, fn.EndLine), members.Count));
         }
 
         return found

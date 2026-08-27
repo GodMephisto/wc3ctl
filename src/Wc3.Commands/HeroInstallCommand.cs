@@ -328,10 +328,13 @@ public static class HeroInstallCommand
                           + $"{sys.HeroCount} of the target's own heroes and has no entry for "
                           + $"'{installedRoot}'."
                           + (sys.HasFallback
-                              ? " It ends in a DEFAULT, so absence may be correct here. Check what "
-                                + "the default means for this hero before adding anything."
-                              : " It has NO default, so a hero with no entry gets no answer. Add one "
-                                + "by hand."));
+                              ? $" It ends in a DEFAULT and lists {sys.CoveragePercent}% of the "
+                                + "roster, so absence is very likely correct. Check what the default "
+                                + "means for this hero before adding anything."
+                              : $" It has no default and lists {sys.CoveragePercent}% of the roster, "
+                                + $"so a lookup for '{installedRoot}' yields nothing. Whether that "
+                                + "matters depends on the reader, and at this coverage most of the "
+                                + "roster is absent too. Read the call site before adding an entry."));
         }
 
         return new(true,
