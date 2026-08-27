@@ -441,12 +441,12 @@ public partial class ObjectEditorView : UserControl, IMapPanel
             var hint = HintFor(ff);
             if (!LooksLikeRawcodes(f.Value) || !IsReferenceField(kind, f.Code, out var isList))
             {
-                rows.Add(new FieldRow(f, null, hint));
+                rows.Add(new FieldRow(f, null, hint, ff));
                 continue;
             }
             if (isList)
             {
-                rows.Add(new FieldRow(f, null, hint));
+                rows.Add(new FieldRow(f, null, hint, ff));
                 bool mapSource = f.Source == "map";
                 foreach (var token in f.Value.Split(',',
                     StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
@@ -458,7 +458,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
                 var display = RefNames().TryGetValue(token, out var name)
                     ? $"{token} ({name})"
                     : f.Display;
-                rows.Add(new FieldRow(f, display, hint));
+                rows.Add(new FieldRow(f, display, hint, ff));
             }
         }
         return rows;
@@ -1051,6 +1051,20 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     {
         _editorMode = EditorMode.Text;
         EditorBox.Text = row.Value;
+
+        // The metadata marks long text with stringext, and a tooltip or a description is exactly
+        // that. Editing several lines of it through a one-line box, where the newlines are present
+        // but invisible and Enter does nothing, is the worst affordance in this panel.
+        bool longText = row.Form?.MultiLine == true
+            || (row.Value?.Contains('|') == true)   // WC3 uses |n as its line break in tooltips
+            || (row.Value?.Length ?? 0) > 120;
+        EditorBox.AcceptsReturn = longText;
+        EditorBox.TextWrapping = longText
+            ? Avalonia.Media.TextWrapping.Wrap
+            : Avalonia.Media.TextWrapping.NoWrap;
+        EditorBox.MinHeight = longText ? 96 : 0;
+        EditorBox.MaxHeight = longText ? 220 : double.PositiveInfinity;
+
         EditorBox.IsVisible = true;
         EditorCombo.IsVisible = false;
         EditorMultiHost.IsVisible = false;
@@ -1313,6 +1327,17 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         }
 
         var value = CurrentEditorValue();
+
+        // The metadata states the legal range and whether a blank is allowed, and until now the
+        // panel showed those and enforced nothing, so a value the game rejects could be written and
+        // would only surface as a map that misbehaves. The rule lives in the command layer, so ask
+        // it rather than re-deriving it here.
+        if (row.Form?.Validate(value) is { } problem)
+        {
+            StatusText.Text = $"not applied. {problem}";
+            return;
+        }
+
         int applied = 0;
         var warnings = new List<string>();
         var problems = new List<string>();
@@ -1646,8 +1671,17 @@ public partial class ObjectEditorView : UserControl, IMapPanel
 
         private readonly bool _mapSource;
 
-        public FieldRow(MergedField field, string? displayOverride = null, string hint = "")
+        /// <summary>
+        /// The form field this row was built from, when it came from one. Carried so the panel can
+        /// ask the command layer whether a value is legal instead of re-deriving the rules, and so
+        /// the multi-line hint reaches the editor.
+        /// </summary>
+        public FormField? Form { get; private init; }
+
+        public FieldRow(MergedField field, string? displayOverride = null, string hint = "",
+            FormField? form = null)
         {
+            Form = form;
             Code = field.Code;
             Name = field.Name;
             Value = field.Value;

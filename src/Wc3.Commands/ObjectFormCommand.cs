@@ -18,8 +18,7 @@ public sealed record FormField(
     bool CanBeEmpty,
     bool MultiLine,
     ObjectLayer Layer,
-    bool LayerIsAuthoritative,
-    IReadOnlyList<EnumOption> Options)
+    bool LayerIsAuthoritative)
 {
     /// <summary>Whether a candidate value satisfies the metadata's own constraints. The message
     /// is null when it passes.</summary>
@@ -114,9 +113,16 @@ public static class ObjectFormCommand
             diagnostics.Add("no game data, so fields cannot be grouped, ordered or bounds-checked. "
                           + "Point --game-dir at a Warcraft III install for the full form.");
 
-        // The measured split is the fallback for which layer a field lands in, and the only
-        // answer available with no install present. See SkinFieldPartition.
-        var partition = SkinFieldPartition.Learn(doc, kind);
+        // The measured split is the fallback for which layer a field lands in, and the only answer
+        // available with no install present. See SkinFieldPartition.
+        //
+        // LAZY on purpose. Learning it counts every field of every object of the kind across both
+        // layers, which on a real map is 2247 units times about 170 fields times two, and with a
+        // game install present the authoritative netsafe column answers every field so the result
+        // is never read. Computing it eagerly cost 50ms on every object selection to produce a
+        // value nobody used, which is most of why this pane was four times slower than the field
+        // dump it replaced.
+        var partition = new Lazy<SkinFieldPartition>(() => SkinFieldPartition.Learn(doc, kind));
         var byCode = ObjectKinds.ModsToDict(
             merged.Fields.Select(f => KeyValuePair.Create(f.Code, f.Value)).ToList());
         var (isHero, isBuilding, isItem) = Shape(kind, byCode, rawcode);
@@ -137,9 +143,15 @@ public static class ObjectFormCommand
             bool authoritative = fm is not null && fm.NetSafe.Length > 0;
             var layer = authoritative
                 ? (fm!.IsSkinField ? ObjectLayer.Skin : ObjectLayer.Map)
-                : partition.LayerFor(bare);
+                : partition.Value.LayerFor(bare);
 
-            var options = ObjectKinds.FieldOptions(ctx, kind, bare, out var fieldType, out _);
+            // Deliberately NOT resolving the option set here. A form is a LISTING, and the legal
+            // values only matter for the one field someone selects to edit, which a front end asks
+            // for separately through ObjectFieldOptionsCommand. Resolving them for every field cost
+            // a base-data scan per field, 168 of them on one unit, which was most of why this pane
+            // was four times slower than the flat field dump it replaced, to produce a value no
+            // caller ever read.
+            var fieldType = fm?.Type ?? "";
 
             var field = new FormField(
                 Code: f.Code,
@@ -147,7 +159,7 @@ public static class ObjectFormCommand
                 Value: f.Value,
                 Display: f.Display,
                 Source: f.Source,
-                Type: fm?.Type ?? fieldType,
+                Type: fieldType,
                 MinValue: Blank(fm?.MinValue),
                 MaxValue: Blank(fm?.MaxValue),
                 ForceNonNegative: fm?.ForceNonNegative ?? false,
@@ -155,8 +167,7 @@ public static class ObjectFormCommand
                 CanBeEmpty: fm?.CanBeEmpty ?? true,
                 MultiLine: fm is not null && fm.StringExt > 0,
                 Layer: layer,
-                LayerIsAuthoritative: authoritative,
-                Options: options);
+                LayerIsAuthoritative: authoritative);
 
             var key = fm is null || fm.Category.Length == 0 ? "other" : fm.Category.ToLowerInvariant();
             // Sort key first, then the display name, so a group without sort keys is still ordered.
