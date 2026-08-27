@@ -1,4 +1,6 @@
 // src/Wc3.MapDocument/AssetPathCandidates.cs
+using System.Text.RegularExpressions;
+
 namespace Wc3.Model;
 
 /// <summary>
@@ -39,6 +41,36 @@ public static class AssetPathCandidates
     /// of script text with a plain "([^\"]*)" style regex must run it through here before treating
     /// it as a map file name, or every lookup silently misses a file that is genuinely present.</summary>
     public static string Unescape(string rawLiteral) => rawLiteral.Replace(@"\\", @"\");
+
+    // A quoted run with no line break. The floor skips "" and one or two character literals,
+    // which cannot name a file, and the ceiling skips a tooltip or a generated multi-kilobyte
+    // string, which is prose rather than a path.
+    private static readonly Regex ScriptStringLiteral =
+        new("\"([^\"\r\n]{3,260})\"", RegexOptions.Compiled);
+
+    /// <summary>
+    /// Candidate asset paths named by string literals in a body of script text, unescaped and
+    /// deduplicated in first-seen order. Filtered by <see cref="LooksLikeAssetPath"/>, so a
+    /// result is worth probing and is not yet known to exist. Callers still run each through
+    /// <see cref="Expand"/> against a real archive.
+    /// </summary>
+    /// <remarks>
+    /// A script names most of its effect art as plain literals, so any caller scanning for them
+    /// must apply the same literal shape and the same un-escaping every other caller does, or the
+    /// two disagree about what a script depends on. One doubled backslash missed is a file
+    /// reported absent while it sits in the archive.
+    /// </remarks>
+    public static IEnumerable<string> NamedInScript(string scriptText)
+    {
+        ArgumentNullException.ThrowIfNull(scriptText);
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (Match m in ScriptStringLiteral.Matches(scriptText))
+        {
+            var path = Unescape(m.Groups[1].Value);
+            if (LooksLikeAssetPath(path) && seen.Add(path))
+                yield return path;
+        }
+    }
 
     /// <summary>
     /// Every spelling <paramref name="path"/> might actually be stored under in the archive,
