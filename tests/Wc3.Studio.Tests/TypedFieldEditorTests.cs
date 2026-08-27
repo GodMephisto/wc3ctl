@@ -200,6 +200,48 @@ public class AssetCatalogGameDataTests
     }
 }
 
+/// <summary>The full ConfigureEditor dispatch against real metadata, gated because the
+/// field type token only exists once game data answers. Hermetic coverage of the same
+/// editors lives in <see cref="TypedFieldEditorViewTests"/>, which calls the Show methods
+/// directly.</summary>
+public class TypedFieldEditorDispatchTests
+{
+    [AvaloniaFact]
+    [Trait("Category", "GameData")]
+    public void Metadata_types_pick_the_numeric_editor_and_the_asset_picker()
+    {
+        if (Wc3.GameData.GameInstall.Locate(null) is null) return;
+
+        var view = new ObjectEditorView();
+        var window = new Window { Width = 900, Height = 650, Content = view };
+        window.Show();
+        typeof(ObjectEditorView)
+            .GetField("_session", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .SetValue(view, new MapSession { Current = BlankMap.Create() });
+
+        // 'uhpm' (hit points) is an int field, the default kind is Units.
+        InvokePrivate(view, "ConfigureEditor",
+            new ObjectEditorView.FieldRow(new MergedField("uhpm", "HP", "550", "base")));
+        Assert.True(((NumericUpDown)Get(view, "EditorNum")).IsVisible,
+            "an int field should get the numeric editor");
+
+        // 'uico' (interface icon) is an icon field, text box plus path picker.
+        InvokePrivate(view, "ConfigureEditor",
+            new ObjectEditorView.FieldRow(new MergedField("uico", "Icon", "", "base")));
+        Assert.True(((TextBox)Get(view, "EditorBox")).IsVisible);
+        Assert.True(((SearchableComboBox)Get(view, "AssetPickerCombo")).IsVisible,
+            "an icon field should offer the path picker");
+    }
+
+    private static void InvokePrivate(ObjectEditorView view, string method, params object[] args) =>
+        view.GetType().GetMethod(method, BindingFlags.NonPublic | BindingFlags.Instance)!
+            .Invoke(view, args);
+
+    private static object Get(object obj, string name) => obj.GetType()
+        .GetField(name, BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance)!
+        .GetValue(obj)!;
+}
+
 /// <summary>
 /// Drives the new editors through the real panel, headlessly and hermetically (a blank
 /// in-memory map, a game dir that resolves to nothing). Dispatch by metadata type needs a
