@@ -890,6 +890,19 @@ public static class Wc3Tools
                 ?? throw new McpException($"No such function: {name}");
         });
 
+    [McpServerTool(Name = "editor_catalog_list", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("List the World Editor's catalog names from UI\\WorldEditData.txt with entry counts (TileSets, SkyModels, LoadingScreens, SoundChannels, MapSizes, the brush palettes and more). These are the catalogs the editor drives its own pickers from, ask here instead of inventing a token.")]
+    public static EditorCatalogNamesResult EditorCatalogList(
+        [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var).")] string? game_dir = null)
+        => Run(() => EditorCatalogCommand.Names(ResolveGameDir(game_dir)));
+
+    [McpServerTool(Name = "editor_catalog_get", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Show one World Editor catalog's entries, each with its stored key (the token a map file actually carries), its resolved display name and every payload field. TileSets, for example, maps the letter A to Ashenvale plus its blight texture path.")]
+    public static EditorCatalogListResult EditorCatalogGet(
+        [Description("Catalog name, e.g. TileSets. Case insensitive, see editor_catalog_list for the names.")] string name,
+        [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var).")] string? game_dir = null)
+        => Run(() => EditorCatalogCommand.List(name, ResolveGameDir(game_dir)));
+
     // ---- shared plumbing -------------------------------------------------
 
     /// <summary>Expected failures become clean MCP tool errors, never stack traces.</summary>
