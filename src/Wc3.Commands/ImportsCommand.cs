@@ -52,8 +52,10 @@ public static class ImportsCommand
         {
             if (f.FileName is null || MapFormatRegistry.IsKnown(f.FileName) || NonImportFiles.Contains(f.FileName))
                 continue;
-            // Pending in-memory replacement wins over the original bytes for the size.
-            archiveFiles[f.FileName] = (f.OverrideBytes ?? f.RawBytes).Length;
+            // Pending in-memory replacement wins over the original for the size. An override is
+            // already in memory so its length is free, but the original's must come from RawSize,
+            // since reading RawBytes here would decompress every imported asset in the map.
+            archiveFiles[f.FileName] = f.OverrideBytes?.Length ?? f.RawSize;
         }
 
         return new ImportsListResult(manifest is not null, BuildEntries(manifestPaths, archiveFiles));

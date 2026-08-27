@@ -46,8 +46,11 @@ public static class ValidateCommand
 
         // 4. Empty named files are almost always a packaging mistake — and fatal when the
         //    empty entry is one the map needs to run (a required file or its only script).
+        // RawSize rather than RawBytes.Length. "Is this entry empty" is a question the archive's
+        // block table already answers, and reading the bytes to find out decompresses every entry
+        // in the map for nothing.
         foreach (var e in doc.Files)
-            if (e.FileName is not null && e.RawBytes.Length == 0)
+            if (e.FileName is not null && e.RawSize == 0)
             {
                 bool critical = IsCritical(e.FileName);
                 issues.Add(new ValidationIssue(

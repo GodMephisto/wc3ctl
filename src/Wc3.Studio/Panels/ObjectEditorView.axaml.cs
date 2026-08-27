@@ -764,7 +764,9 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         if (entry?.FileName is not null)
         {
             _modelEntryName = entry.FileName;
-            ModelText.Text = $"{rawcode} model: {entry.FileName} - in map ({entry.RawBytes.Length:N0} bytes)";
+            // Only the size is wanted here, so RawSize avoids decompressing a model that is about
+            // to be described and not read.
+            ModelText.Text = $"{rawcode} model: {entry.FileName} - in map ({entry.RawSize:N0} bytes)";
             ExtractModelButton.IsEnabled = true;
             StartPreview(doc, entry.FileName);
         }
