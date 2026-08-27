@@ -72,8 +72,9 @@ public partial class RegionsView : UserControl, IMapPanel
 
         if (regions.Count == 0)
         {
-            Catalog.SetCards(Array.Empty<Control>());
-            Catalog.SetStatus("This map has no regions yet. Add one above.");
+            Catalog.SetEmpty("This map defines no regions.",
+                "Its war3map.w3r holds a version and a count of zero, so there is nothing "
+                + "to list. Use the form above to add the first one.");
             return;
         }
 

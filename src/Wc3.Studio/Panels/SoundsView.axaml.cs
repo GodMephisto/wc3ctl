@@ -83,8 +83,10 @@ public partial class SoundsView : UserControl, IMapPanel
 
         if (sounds.Count == 0)
         {
-            Catalog.SetCards(Array.Empty<Control>());
-            Catalog.SetStatus("No sound definitions yet. Add one, or turn imported audio below into a sound.");
+            Catalog.SetEmpty("This map defines no sounds.",
+                "war3map.w3s lists none. Imported audio still plays from script without a "
+                + "definition, so an empty list is normal. Add one, or turn an imported "
+                + "file below into a sound.");
             return;
         }
 

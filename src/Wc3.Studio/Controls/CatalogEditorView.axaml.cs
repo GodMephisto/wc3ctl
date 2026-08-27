@@ -57,6 +57,40 @@ public partial class CatalogEditorView : UserControl
         ItemHost.Children.Clear();
         foreach (var card in cards)
             ItemHost.Children.Add(card);
+        // Any card at all means the empty state is stale. Panels that go from populated to
+        // empty and back (opening a second map, removing the last entry) would otherwise keep
+        // whichever of the two was set last.
+        bool any = ItemHost.Children.Count > 0;
+        EmptyState.IsVisible = !any && EmptyTitle.Text is { Length: > 0 };
+        ItemScroll.IsVisible = any;
+    }
+
+    /// <summary>
+    /// Shows the panel with its header and add form intact but no entries, explaining in the
+    /// card region that the map defines none.
+    /// </summary>
+    /// <remarks>
+    /// Not the same thing as <see cref="ShowHint"/>. A hint replaces the whole panel and is for
+    /// "there is no map open" or "this file could not be parsed", where nothing can be done. This
+    /// is for a map that simply has none of this kind yet, where the right next action is to add
+    /// one, so the title, the subtitle and the add form all stay on screen.
+    ///
+    /// The distinction matters because it was reported as a bug. A map whose war3map.w3c is eight
+    /// bytes, a version int and a count of zero, genuinely has no cameras, and the panel was
+    /// correct to show none. It just said so in a grey footnote at the bottom of an otherwise
+    /// blank panel, which is indistinguishable from broken.
+    /// </remarks>
+    public void SetEmpty(string message, string? hint = null)
+    {
+        PlaceholderText.IsVisible = false;
+        ContentRoot.IsVisible = true;
+        ItemHost.Children.Clear();
+        ItemScroll.IsVisible = false;
+        EmptyTitle.Text = message;
+        EmptyHint.Text = hint ?? "";
+        EmptyHint.IsVisible = !string.IsNullOrEmpty(hint);
+        EmptyState.IsVisible = true;
+        StatusText.Text = message;
     }
 
     /// <summary>Sets the bottom status/last-action line.</summary>
@@ -68,6 +102,7 @@ public partial class CatalogEditorView : UserControl
         PlaceholderText.Text = text;
         PlaceholderText.IsVisible = true;
         ContentRoot.IsVisible = false;
+        EmptyState.IsVisible = false;
     }
 
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)

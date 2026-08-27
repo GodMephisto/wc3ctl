@@ -122,8 +122,9 @@ public partial class HeroWiringView : UserControl, IMapPanel
             return;
         if (results.Count == 0)
         {
-            Catalog.SetCards(Array.Empty<Control>());
-            Catalog.SetStatus("No placed heroes found on this map.");
+            Catalog.SetEmpty("No placed heroes to audit.",
+                "The audit reads war3mapUnits.doo and reports on units the map places as "
+                + "heroes. This map places none, so there is no wiring to check.");
             return;
         }
 

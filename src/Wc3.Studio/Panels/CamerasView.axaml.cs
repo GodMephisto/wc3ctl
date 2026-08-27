@@ -69,8 +69,9 @@ public partial class CamerasView : UserControl, IMapPanel
 
         if (cameras.Count == 0)
         {
-            Catalog.SetCards(Array.Empty<Control>());
-            Catalog.SetStatus("This map has no cameras yet. Add one above.");
+            Catalog.SetEmpty("This map defines no cameras.",
+                "Its war3map.w3c holds a version and a count of zero, so there is nothing "
+                + "to list. Most maps never define one. Use the form above to add it.");
             return;
         }
 

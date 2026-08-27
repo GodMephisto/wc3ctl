@@ -33,9 +33,25 @@
 
             <!-- One card per catalog entry, built in code by the owning panel (no
                  virtualization, so editable controls never hit the recycling pitfall). -->
-            <ScrollViewer>
-                <StackPanel Name="ItemHost" Margin="8" Spacing="8"/>
-            </ScrollViewer>
+            <Panel>
+                <ScrollViewer Name="ItemScroll">
+                    <StackPanel Name="ItemHost" Margin="8" Spacing="8"/>
+                </ScrollViewer>
+
+                <!-- Empty state, shown INSTEAD of the (empty) card list. It lives here, in
+                     the card region, because that is where the eye goes. The four catalog
+                     panels used to announce "this map has no regions yet" on the bottom
+                     status line, a small grey footnote under a tall blank area, which reads
+                     as a panel that failed rather than a map with nothing in it. -->
+                <StackPanel Name="EmptyState" IsVisible="False" Spacing="6" Margin="32"
+                            HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <TextBlock Name="EmptyTitle" FontSize="14" FontWeight="SemiBold"
+                               Foreground="#B8C6D6" TextAlignment="Center"
+                               TextWrapping="Wrap"/>
+                    <TextBlock Name="EmptyHint" FontSize="12" Foreground="#7F93A8"
+                               TextAlignment="Center" TextWrapping="Wrap" MaxWidth="380"/>
+                </StackPanel>
+            </Panel>
         </DockPanel>
     </Grid>
 </UserControl>
