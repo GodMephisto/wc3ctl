@@ -53,9 +53,16 @@ public static class GameData
 
             // The editor's enumerated types. Read after the strings because every
             // display name in it is a WESTRING key resolved through them.
+            // UnitEditorData only. This used to ingest WorldEditData.txt as well, and that was
+            // both redundant and wrong. Redundant because EditorCatalogs below serves that file
+            // properly, and wrong because the enum lens misparsed 39 of its 41 sections, swapping
+            // columns, deduplicating away keys and folding multi-field rows. The misparses were
+            // harmless only because no object metadata field type across the seven kinds names a
+            // WorldEditData section, so nothing ever looked one up. That is measured, and
+            // EditorEnumDataTests pins it, so a patch that introduces such a type fails loudly
+            // rather than silently reading a mangled option set.
             var editorEnums = EditorEnumData.FromByteSources(strings,
-                src!.ReadFile(UnitEditorDataPath),
-                src!.ReadFile(WorldEditDataPath));
+                src!.ReadFile(UnitEditorDataPath));
             // The same file read through the catalog lens, key and every payload field
             // kept. Only WorldEditData.txt, the unit editor file is pure enum sections.
             var editorCatalogs = EditorCatalogData.FromByteSources(strings,

@@ -77,6 +77,25 @@ public static class Render
         return sb.ToString().TrimEnd();
     }
 
+    public static string AssetList(AssetListResult r, IReadOnlyList<string> shown, string source)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.Family} paths, source {source}. "
+            + $"{r.MapPaths.Count} from the map, {r.GamePaths.Count} from the base game.");
+        if (r.Diagnostic is { Length: > 0 })
+            sb.AppendLine($"note: {r.Diagnostic}");
+        if (shown.Count == 0)
+        {
+            sb.Append("(nothing to list)");
+            return sb.ToString();
+        }
+        // Marked, because which side a path came from decides whether it travels with the map.
+        var fromMap = new HashSet<string>(r.MapPaths, StringComparer.OrdinalIgnoreCase);
+        foreach (var p in shown)
+            sb.AppendLine($"  {(fromMap.Contains(p) ? "map " : "game")}  {p}");
+        return sb.ToString().TrimEnd();
+    }
+
     public static string Imports(ImportsListResult r)
     {
         var sb = new StringBuilder();

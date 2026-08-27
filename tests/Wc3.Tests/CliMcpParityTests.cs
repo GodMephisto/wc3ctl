@@ -21,6 +21,7 @@ public class CliMcpParityTests
         ["object_form"] = "object form",
         ["unit_abilities"] = "unit abilities",
         ["object_field_options"] = "object options",
+        ["asset_list"] = "asset list",
         ["lint"] = "lint",
         ["validate"] = "validate",
         ["roundtrip"] = "roundtrip",

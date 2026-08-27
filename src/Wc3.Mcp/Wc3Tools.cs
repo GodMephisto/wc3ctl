@@ -97,6 +97,17 @@ public static class Wc3Tools
         [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Required for this to return anything, since the options come from the base data.")] string? game_dir = null)
         => Run(() => ObjectFieldOptionsCommand.Execute(ParseKind(kind), field, ResolveGameDir(game_dir)));
 
+    [McpServerTool(Name = "asset_list", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("List the asset paths an icon or model object field can actually be set to, from the map's own imported files and from the base game. Ask this BEFORE setting a model or icon field, because a field naming a path that does not resolve renders as nothing and reports no error anywhere.")]
+    public static AssetListResult AssetList(
+        [Description("Asset family: icon or model. It matches the field's metadata type token.")] string family,
+        [Description("Optional path to a .w3x/.w3m map. Without one, only the base game's paths are listed.")] string? map = null,
+        [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Without it only the map's own paths are listed.")] string? game_dir = null)
+        => Run(() => AssetListCommand.Execute(
+            map is null ? null : LoadMap(map),
+            AssetListCommand.ParseFamily(family),
+            ResolveGameDir(game_dir)));
+
     [McpServerTool(Name = "lint", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Pre-flight the map: does its script compile, does war3map.imp agree with what the archive holds, do referenced asset paths resolve, and is every entry a loadable type. This is the 'is this map going to work' check and is the right thing to run before handing a map to anyone. A failure here usually means the map will not host or will hang on load with no error of its own.")]
     public static LintResult Lint(

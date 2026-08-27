@@ -1364,6 +1364,41 @@ public static class Program
         }));
         obj.AddCommand(objectOptions);
 
+        // ---- asset list: the paths an icon or model field can actually be set to ----
+        var assetFamilyOpt = new Option<string>("--family", () => "icon",
+            "Asset family: icon|model. Taken from the field's metadata type, so an icon field is "
+            + "'icon' and a model field is 'model'.");
+        var assetSourceOpt = new Option<string>("--source", () => "all",
+            "Where to look: map|game|all.");
+        var assetMapArg = new Argument<string?>("map", () => null,
+            "Optional .w3x/.w3m map. Without one, only the base game's paths are listed.");
+        var assetList = new Command("list",
+            "List the asset paths an icon or model field can be set to, from the map's own imports "
+            + "and from the base game. Use this instead of guessing a path, because a field "
+            + "naming a file that does not resolve renders as nothing with no error.")
+        { assetMapArg, assetFamilyOpt, assetSourceOpt, jsonOption, gameDirOption };
+        assetList.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var mapPath = p.GetValueForArgument(assetMapArg);
+            var doc = mapPath is null ? null : MapDocument.Load(mapPath);
+            var r = AssetListCommand.Execute(doc,
+                AssetListCommand.ParseFamily(p.GetValueForOption(assetFamilyOpt)!),
+                p.GetValueForOption(gameDirOption));
+
+            var source = (p.GetValueForOption(assetSourceOpt) ?? "all").ToLowerInvariant();
+            var shown = source switch
+            {
+                "map" => r.MapPaths,
+                "game" => r.GamePaths,
+                _ => r.All,
+            };
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.AssetList(r, shown, source));
+        }));
+        var asset = new Command("asset", "Asset paths available to an object field.");
+        asset.AddCommand(assetList);
+        root.AddCommand(asset);
+
         // ---- strings / imports / trigger read: reachable from the GUI, previously not here ----
         var stringsList = new Command("list",
             "List the map's string table (war3map.wts). Every TRIGSTR_ reference resolves here.")

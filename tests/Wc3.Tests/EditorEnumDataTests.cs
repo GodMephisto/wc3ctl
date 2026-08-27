@@ -122,4 +122,41 @@ public class EditorEnumDataTests
 
         Assert.DoesNotContain(r.Options, o => o.Value.Contains(','));
     }
+
+    [Fact]
+    [Trait("Category", "GameData")]
+    public void No_field_type_needs_a_WorldEditData_section()
+    {
+        // The load path used to read WorldEditData.txt through the ENUM lens as well as the
+        // catalog one, which misparsed most of its sections. That was harmless only because no
+        // object metadata field type, across any of the seven kinds, names a section that lives
+        // in WorldEditData rather than UnitEditorData, so nothing ever looked one up.
+        //
+        // The ingestion is gone. This pins the measurement it rested on, so if a patch introduces
+        // a field type served only by a WorldEditData section, this fails and says so rather than
+        // the option set quietly coming back empty.
+        if (!Directory.Exists(Install)) return;
+
+        Assert.True(Wc3.GameData.GameData.TryOpen(Install, out var ctx, out var why), why);
+
+        var catalogOnly = ctx!.EditorCatalogs.Names
+            .Where(n => !ctx.EditorEnums.TryGet(n, out _))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        Assert.NotEmpty(catalogOnly);   // the catalogs must actually be distinct from the enums
+
+        var offenders = new List<string>();
+        foreach (var kind in ObjectKinds.All)
+        {
+            var meta = ObjectKinds.FieldMeta(ctx, kind);
+            if (meta is null) continue;
+            foreach (var f in meta.Fields)
+                if (f.Type.Length > 0 && catalogOnly.Contains(f.Type))
+                    offenders.Add($"{kind} field {f.Code} has type '{f.Type}'");
+        }
+
+        Assert.True(offenders.Count == 0,
+            "a field type is served only by a WorldEditData catalog, so its options now come back "
+            + "empty. Serve that type from EditorCatalogs in ObjectKinds.FieldOptions. Offenders: "
+            + string.Join(", ", offenders));
+    }
 }
