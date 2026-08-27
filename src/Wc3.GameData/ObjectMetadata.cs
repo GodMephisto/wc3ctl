@@ -22,6 +22,41 @@ public sealed record ObjectFieldMeta(
     /// <summary>Which object-data layer this field is written to. "1" and "11" mean the
     /// war3mapSkin twin, "0" means war3map.*, empty means the metadata does not say.</summary>
     public bool IsSkinField => NetSafe is "1" or "11";
+
+    /// <summary>
+    /// Whether the field applies to one particular object, by rawcode, as opposed to the whole
+    /// kind. Checked against the object's own code AND its base, because a custom object keeps
+    /// its base's field set while the metadata names only the base.
+    /// </summary>
+    /// <remarks>
+    /// This is what keeps an ability editable. 708 of the 777 ability fields carry a UseSpecific
+    /// list, because an ability's data fields belong to its TYPE, so Channel's fields have
+    /// nothing to do with Blizzard's. Ignoring the list showed 769 fields for one ability where
+    /// the World Editor shows about 70, and that is not a longer form, it is an unusable one.
+    ///
+    /// A field with no UseSpecific is general and applies to every object of the kind.
+    /// NotSpecific is an explicit exclusion and wins outright.
+    /// </remarks>
+    public bool AppliesToObject(string? rawcode, string? baseRawcode)
+    {
+        if (NotSpecific.Length > 0 && Names(NotSpecific, rawcode, baseRawcode)) return false;
+        if (UseSpecific.Length == 0) return true;
+        return Names(UseSpecific, rawcode, baseRawcode);
+    }
+
+    private static bool Names(string list, string? rawcode, string? baseRawcode)
+    {
+        foreach (var token in list.Split(',', StringSplitOptions.RemoveEmptyEntries
+                                             | StringSplitOptions.TrimEntries))
+        {
+            if (rawcode is not null && token.Equals(rawcode, StringComparison.OrdinalIgnoreCase))
+                return true;
+            if (baseRawcode is not null
+                && token.Equals(baseRawcode, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
+    }
 }
 
 /// <summary>

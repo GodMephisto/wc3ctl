@@ -175,7 +175,13 @@ public static class ObjectFormCommand
         {
             foreach (var fm in meta.Fields)
             {
-                if (!fm.AppliesTo(isHero, isBuilding, isItem)) { hidden++; continue; }
+                // Two filters, and both matter. AppliesTo answers whether the field applies to
+                // an object of this SHAPE, a hero or a building or an item. AppliesToObject
+                // answers whether it applies to THIS object, which for an ability is the
+                // difference between about 70 fields and 769, because 708 of the 777 ability
+                // fields belong to one named ability type rather than to abilities in general.
+                if (!fm.AppliesTo(isHero, isBuilding, isItem)
+                    || !fm.AppliesToObject(rawcode, merged.BaseRawcode)) { hidden++; continue; }
 
                 // A per-level field surfaces once per level it actually carries, and unset at
                 // level 1 otherwise, so a leveled kind is not flattened to a single row.
