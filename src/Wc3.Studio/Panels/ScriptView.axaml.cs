@@ -59,6 +59,7 @@ public partial class ScriptView : UserControl, IMapPanel
     private string _loaded = string.Empty;            // the text the editor was loaded with
     private bool _dirty;                              // editor text differs from _loaded
     private bool _selecting;                          // suppress reentry while jumping
+    private int _generation;                          // invalidates an in-flight index
 
     public ScriptView()
     {
@@ -116,10 +117,10 @@ public partial class ScriptView : UserControl, IMapPanel
     /// </summary>
     private void LoadFromDoc(MapDocument doc, string? keepFunctionName)
     {
-        ScriptFunctionsResult result;
+        string file, source;
         try
         {
-            result = ScriptCommand.Functions(doc);
+            (file, source) = ScriptCommand.Read(doc);
         }
         catch (FileNotFoundException)
         {
@@ -127,17 +128,63 @@ public partial class ScriptView : UserControl, IMapPanel
             return;
         }
 
-        _scriptFile = result.ScriptFile;
-        var entry = doc.GetFile(result.ScriptFile);
-        _loaded = Encoding.UTF8.GetString(entry?.CurrentBytes ?? Array.Empty<byte>());
-        _functions = result.Functions.OrderBy(f => f.StartLine).ToList();
+        _scriptFile = file;
+        _loaded = source;
         _dirty = false;
 
-        Editor.LoadScript(_loaded, NativesForHighlighting(_loaded, _functions));
+        // Paint the script FIRST, with keywords and types only. Putting 8.4 MB into the document
+        // costs 252ms and there is no way around that, but indexing it (131ms) and deriving its
+        // externals (161ms) are pure computation that nobody has to wait through to start reading.
+        // Doing all three before the first paint is what made opening this tab cost 606ms.
+        Editor.LoadScript(source, natives: null);
 
-        HeaderText.Text = $"{_functions.Count:N0} functions, "
-                        + $"{Editor.LineCount:N0} lines in {result.ScriptFile}";
+        _functions = new List<JassFunction>();
+        FunctionList.ItemsSource = null;
+        HeaderText.Text = $"{Editor.LineCount:N0} lines in {file}, indexing…";
+        ListCountText.Text = "…";
         CheckButton.IsEnabled = true;
+
+        // A generation counter, because the user can open another map while this runs. Without it
+        // a slow index would land on top of the map that replaced it.
+        int generation = ++_generation;
+        _ = IndexInBackgroundAsync(source, keepFunctionName, file, generation);
+    }
+
+    /// <summary>
+    /// Indexes the script off the UI thread and fills in the symbol list and the native
+    /// highlighting when it lands. Anything that throws is reported in the header rather than
+    /// escaping onto the thread pool, where it would take the process down.
+    /// </summary>
+    private async Task IndexInBackgroundAsync(
+        string source, string? keepFunctionName, string file, int generation)
+    {
+        List<JassFunction> functions;
+        IReadOnlySet<string>? externals;
+        try
+        {
+            (functions, externals) = await Task.Run(() =>
+            {
+                var fns = JassFunctionIndex.Parse(source).OrderBy(f => f.StartLine).ToList();
+                IReadOnlySet<string>? ext;
+                try { ext = JassSyntax.ExternalCalls(source, fns.Select(f => f.Name)); }
+                catch { ext = null; }   // highlighting is never worth failing a load over
+                return (fns, ext);
+            }).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            if (generation == _generation)
+                HeaderText.Text = $"{Editor.LineCount:N0} lines in {file}, "
+                                + $"could not be indexed ({ex.Message})";
+            return;
+        }
+
+        if (generation != _generation) return;   // a different map is showing now
+
+        _functions = functions;
+        Editor.SetNatives(externals);
+        HeaderText.Text = $"{_functions.Count:N0} functions, "
+                        + $"{Editor.LineCount:N0} lines in {file}";
         ApplyFilter();
 
         if (keepFunctionName is not null && FunctionList.ItemsSource is List<FunctionItem> items)
@@ -145,27 +192,6 @@ public partial class ScriptView : UserControl, IMapPanel
             var again = items.FirstOrDefault(i => i.Fn.Name == keepFunctionName);
             if (again is not null)
                 FunctionList.SelectedItem = again;
-        }
-    }
-
-    /// <summary>
-    /// The externals to highlight as natives, derived from the script itself. See
-    /// <see cref="JassSyntax.ExternalCalls"/> for why that beats reading the game's common.j.
-    /// </summary>
-    /// <remarks>
-    /// Best-effort and silent on failure. Highlighting is worth having and never worth an error,
-    /// so anything unexpected degrades to keywords and types rather than to a broken panel.
-    /// </remarks>
-    private static IReadOnlySet<string>? NativesForHighlighting(
-        string source, IReadOnlyList<JassFunction> declared)
-    {
-        try
-        {
-            return JassSyntax.ExternalCalls(source, declared.Select(f => f.Name));
-        }
-        catch
-        {
-            return null;
         }
     }
 

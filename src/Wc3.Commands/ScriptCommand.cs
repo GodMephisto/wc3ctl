@@ -28,6 +28,29 @@ public static class ScriptCommand
     }
 
     /// <summary>
+    /// The map's script file and its decoded text, without indexing it.
+    /// </summary>
+    /// <remarks>
+    /// Split out from <see cref="Functions"/> for the Studio, which needs the text on the UI
+    /// thread to put it in the editor but wants the indexing off it. Parsing 8.4 MB costs 131ms
+    /// and deriving its externals another 161ms, and neither has to happen before the reader can
+    /// see their script.
+    /// </remarks>
+    public static (string ScriptFile, string Source) Read(MapDocument doc)
+    {
+        var entry = ScriptEntry(doc);
+        return (entry.FileName!, Encoding.UTF8.GetString(entry.CurrentBytes));
+    }
+
+    /// <summary>The map's script entry, war3map.j first, else war3map.lua.</summary>
+    private static MapFileEntry ScriptEntry(MapDocument doc) =>
+        doc.GetFile("war3map.j")
+        ?? doc.GetFile(@"scripts\war3map.j")
+        ?? doc.GetFile("war3map.lua")
+        ?? throw new FileNotFoundException(
+            "map contains no war3map.j or war3map.lua", "war3map.j");
+
+    /// <summary>
     /// Char offset of the start of each 1-based line, following JassFunctionIndex line
     /// numbering (lines are '\n'-separated). Result[0] is always 0; a source of length N
     /// with K newlines yields K+1 entries. Empty source yields a single entry [0].

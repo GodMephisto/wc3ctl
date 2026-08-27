@@ -315,7 +315,16 @@ public partial class FilesView : UserControl, IMapPanel
             if (i < doc.Files.Count)
             {
                 var entry = doc.Files[i];
-                size = (entry.CurrentBytes)?.Length ?? f.SizeBytes;
+                // CurrentSize, not CurrentBytes.Length. Asking for the bytes in order to learn
+                // the size decompresses the entry, and this is a sweep over EVERY entry, so it
+                // decompressed the whole archive. That cost the Files tab 1,948ms to open on a
+                // 5,888 entry map, against 22ms once everything was already materialized.
+                //
+                // ListCommand had already been fixed for exactly this and carries a comment
+                // saying so. The panel threw the fix away one layer up, which is why the size
+                // question now has an override-aware, decompression-free answer of its own
+                // instead of every caller assembling one.
+                size = entry.CurrentSize;
             }
             rows.Add(new FileRow
             {

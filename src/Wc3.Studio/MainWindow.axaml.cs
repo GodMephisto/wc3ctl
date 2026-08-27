@@ -38,6 +38,9 @@ public partial class MainWindow : Window
         SourceWorkspace.Session.GameDir = _settings.GameDir;
         TargetWorkspace.Session.GameDir = _settings.GameDir;
         FilePicker.SeedLastDirectory(_settings.MapsDir);
+        // Open the base game data now, off the UI thread, rather than making whichever panel
+        // needs it first block for a second and a half. See GameDataWarmup for the measurement.
+        GameDataWarmup.Begin(_settings.GameDir);
     }
 
     private async void OnSettingsClick(object? sender, RoutedEventArgs e)

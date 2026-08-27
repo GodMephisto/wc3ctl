@@ -170,12 +170,29 @@ public class JassEditorTests
         var source = File.ReadAllText(path, System.Text.Encoding.Latin1);
         var view = Shown();
 
+        // Split the load, because "LoadScript costs 275ms" does not say whether to attack the
+        // document or the highlighting, and they have completely different fixes.
+        var fns = JassFunctionIndex.Parse(source);
+        var externals = JassSyntax.ExternalCalls(source, fns.Select(f => f.Name));
+
         var sw = Stopwatch.StartNew();
+        var def = JassHighlighting.For(externals);
+        var buildDef = sw.Elapsed;
+
+        sw.Restart();
+        _ = new AvaloniaEdit.Document.TextDocument(source);
+        var buildDoc = sw.Elapsed;
+
+        _out.WriteLine($"highlighting definition {buildDef.TotalMilliseconds:F0}ms "
+                     + $"({externals.Count:N0} externals), TextDocument "
+                     + $"{buildDoc.TotalMilliseconds:F0}ms");
+
+        sw.Restart();
         view.LoadScript(source, natives: null);
         var load = sw.Elapsed;
 
         sw.Restart();
-        var fns = JassFunctionIndex.Parse(source);
+        _ = JassFunctionIndex.Parse(source);
         var index = sw.Elapsed;
 
         sw.Restart();
