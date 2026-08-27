@@ -6,7 +6,12 @@ namespace Wc3.Commands;
 
 /// <summary>One hand-written per-hero table in the target's script, and how many of the target's
 /// own roster heroes it names. <paramref name="Line"/> is 1-based, so a human can open it.</summary>
-public sealed record HeroSystem(string Function, int Line, int HeroCount);
+/// <summary>
+/// One place a map hand-lists its heroes. <paramref name="HasFallback"/> is the difference
+/// between "this hero is missing from a table she belongs in" and "this table has a default and
+/// absence is the right answer for her", which are opposite instructions to give a person.
+/// </summary>
+public sealed record HeroSystem(string Function, int Line, int HeroCount, bool HasFallback = false);
 
 /// <summary>
 /// Finds every place a target map hand-lists its heroes, so an installed hero can be told which of
@@ -81,7 +86,8 @@ public static class HeroSystemAudit
                 }
             // Present already, or too small to be a table every hero belongs in.
             if (hasInstalled || heroes.Count < floor) continue;
-            found.Add(new HeroSystem(fn.Name, fn.StartLine, heroes.Count));
+            found.Add(new HeroSystem(fn.Name, fn.StartLine, heroes.Count,
+                HasFallback(lines, fn.StartLine - 1, fn.EndLine)));
         }
 
         return found
@@ -89,4 +95,40 @@ public static class HeroSystemAudit
             .Take(MaxReported)
             .ToList();
     }
+
+    /// <summary>
+    /// Whether the ladder ends in a default, an <c>else</c> arm or a <c>return</c> reached after
+    /// the last <c>endif</c>, so a hero with no branch still gets a defined answer.
+    /// </summary>
+    /// <remarks>
+    /// This is the difference between a real gap and a false alarm. GGGA's
+    /// WS_GetWorkingSourceSkinOriginCode maps a skinned hero back to the hero it is a skin OF, and
+    /// ends with <c>return 0</c>. A newly installed hero is not a skin of anything, so having no
+    /// branch there is correct, and telling someone to add one sends them to break something that
+    /// already works. Reported as a fact rather than acted on, because whether the default suits a
+    /// particular hero is a judgement about that map's semantics.
+    /// </remarks>
+    private static bool HasFallback(string[] lines, int start, int end)
+    {
+        int depth = 0;
+        bool sawIf = false;
+        for (int i = Math.Max(0, start); i < Math.Min(end, lines.Length); i++)
+        {
+            var t = lines[i].Trim();
+            if (IfOpen.IsMatch(t)) { depth++; sawIf = true; continue; }
+            if (t.StartsWith("endif", StringComparison.Ordinal)) { depth = Math.Max(0, depth - 1); continue; }
+            // An else arm inside the ladder is itself the default.
+            if (depth > 0 && Else.IsMatch(t)) return true;
+            // A statement outside every branch, after at least one branch, is the fallback.
+            if (depth == 0 && sawIf
+                && (t.StartsWith("return", StringComparison.Ordinal)
+                    || t.StartsWith("set ", StringComparison.Ordinal)
+                    || t.StartsWith("call ", StringComparison.Ordinal)))
+                return true;
+        }
+        return false;
+    }
+
+    private static readonly Regex IfOpen = new(@"^if\b.*\bthen$", RegexOptions.Compiled);
+    private static readonly Regex Else = new(@"^else$", RegexOptions.Compiled);
 }
