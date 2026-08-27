@@ -271,6 +271,8 @@ public class ProtectedMapNameRecoveryTests
 
             result.Add(path);
         }
-        return result;
+        // Bounded for the same reason as the port triage sweep, and CorpusSweep.Describe reports
+        // what was left out so a sampled run never reads as a complete one. See CorpusSweep.
+        return CorpusSweep.Bound(result);
     }
 }

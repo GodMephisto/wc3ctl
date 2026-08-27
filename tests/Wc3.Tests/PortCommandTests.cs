@@ -175,36 +175,48 @@ public class PortCommandTests
     /// </summary>
     [Fact]
     [Trait("Category", "Corpus")]
-    public void Real_map_self_port_remaps_the_whole_hero_and_rewrites_references()
+    public void Real_map_self_port_of_an_identical_map_reuses_rather_than_duplicates()
     {
-        const string path = @"C:\Users\GodMephisto\Documents\Warcraft III\Maps\Download\Anime_WOS2_0.25c1.w3x";
+        string path = CorpusMap.PathOrEmpty;
         if (!File.Exists(path)) return;
 
         var source = MapDocument.Load(path);
-        var target = MapDocument.Load(path); // identical → every rawcode collides
-        var bundle = BundleCommand.ResolveUnit(source, "H000", gameDirOverride: null);
+        var target = MapDocument.Load(path); // identical, so every object collides with itself
+
+        // Pick a hero out of the map rather than naming one. This test used to name a rawcode that
+        // existed only in the map it was pinned to, and once that file was gone it skipped in
+        // silence for long enough that the behaviour below changed underneath it without anyone
+        // finding out.
+        var hero = FindHeroWithAbilities(source);
+        if (hero is null) return;
+
+        var bundle = BundleCommand.ResolveUnit(source, hero, gameDirOverride: null);
+        int unitsBefore = ((UnitObjectData)target.GetFile("war3map.w3u")!.Model!).NewUnits.Count;
 
         var result = PortCommand.PortUnit(source, bundle, target);
 
-        // The hero and its five custom abilities all collided and were remapped.
-        Assert.NotEqual("H000", result.RootPortedTo);
-        Assert.Contains(result.Remaps, r => r.From == "H000" && r.Kind == ObjectKind.Unit);
-        Assert.True(result.Remaps.Count(r => r.Kind == ObjectKind.Ability) >= 5);
+        // A collision with a CONTENT-IDENTICAL target object reuses that object's code instead of
+        // allocating a new one, which is what makes re-porting the same unit a no-op. A self-port
+        // is the extreme case of that, so the hero must come back under its own code.
+        Assert.Equal(hero, result.RootPortedTo);
+        Assert.DoesNotContain(result.Remaps, r => r.From == hero && r.Kind == ObjectKind.Unit);
 
-        // The ported unit exists in the target under its new code with a valid ability list.
+        // And nothing was duplicated into the target, which is the property that actually matters.
+        int unitsAfter = ((UnitObjectData)target.GetFile("war3map.w3u")!.Model!).NewUnits.Count;
+        Assert.Equal(unitsBefore, unitsAfter);
+
+        // The hero's ability list still names abilities the target defines, whether they were
+        // reused or remapped. A code pointing at nothing is the failure this guards.
         var tw3u = (UnitObjectData)target.GetFile("war3map.w3u")!.Model!;
         var ported = tw3u.NewUnits.Single(u => u.NewId == result.RootPortedTo!.FromRawcode());
-        var abilityRemaps = result.Remaps.Where(r => r.Kind == ObjectKind.Ability)
-            .ToDictionary(r => r.From, r => r.To);
-        var uhab = (string)ported.Modifications.First(m => m.Id == "uhab".FromRawcode()).Value!;
-        foreach (var code in uhab.Split(',', StringSplitOptions.RemoveEmptyEntries))
-            if (abilityRemaps.ContainsKey(code)) // an original ability code must NOT survive
-                Assert.Fail($"unit still references un-remapped ability {code}");
-
-        // Every remapped ability was injected into the target's w3a.
-        var tw3a = (AbilityObjectData)target.GetFile("war3map.w3a")!.Model!;
-        foreach (var to in abilityRemaps.Values)
-            Assert.Contains(tw3a.NewAbilities, a => a.NewId == to.FromRawcode());
+        var uhabMod = ported.Modifications.FirstOrDefault(m => m.Id == "uhab".FromRawcode());
+        if (uhabMod?.Value is string uhab)
+        {
+            var defined = ObjectKinds.MergedEntries(target, ObjectKinds.Info(ObjectKind.Ability))
+                .Select(e => e.Id).ToHashSet();
+            foreach (var code in uhab.Split(',', StringSplitOptions.RemoveEmptyEntries))
+                Assert.Contains(code.Trim().FromRawcode(), defined);
+        }
     }
 
     /// <summary>
@@ -364,5 +376,30 @@ public class PortCommandTests
         using var ms = new MemoryStream();
         using (var bw = new BinaryWriter(ms, Encoding.UTF8, leaveOpen: true)) write(bw);
         return ms.ToArray();
+    }
+
+    /// <summary>
+    /// A CUSTOM hero unit in this map that lists at least five hero abilities, which is what the
+    /// self-port assertions need. Returns null when the map has none, so the test skips rather
+    /// than failing on a map that simply cannot exercise it.
+    /// </summary>
+    private static string? FindHeroWithAbilities(MapDocument doc)
+    {
+        foreach (var o in ObjectListCommand.Execute(doc, ObjectKind.Unit, gameDirOverride: null).Items)
+        {
+            // Custom only. A modified standard is keyed by its own rawcode and represents an edit
+            // to a base-game unit, so a self-port correctly leaves it alone and this test would
+            // then be asserting the wrong thing about a working port.
+            if (o.BaseRawcode is null || o.BaseRawcode == o.Rawcode) continue;
+
+            var fields = ObjectGetCommand.Execute(doc, ObjectKind.Unit, o.Rawcode, null);
+            if (!fields.Found) continue;
+            var hab = fields.Fields.FirstOrDefault(f =>
+                string.Equals(f.Code, "uhab", StringComparison.OrdinalIgnoreCase));
+            if (hab is null) continue;
+            var count = hab.Value.Split(',', StringSplitOptions.RemoveEmptyEntries).Length;
+            if (count >= 5) return o.Rawcode;
+        }
+        return null;
     }
 }
