@@ -154,15 +154,65 @@ public static class ObjectFormCommand
         int hidden = 0;
         var groups = new Dictionary<string, List<(string Sort, FormField Field)>>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var f in merged.Fields)
+        // The form is built from the fields that APPLY to this object, not from the fields that
+        // happen to hold a value.
+        //
+        // This was the wrong way round and it cost a lot of the form's usefulness. Iterating the
+        // merged values means a field the object inherits without overriding, and that the base
+        // data has no row for, never appears at all. Measured on a hero unit, the metadata says
+        // 223 of its 273 fields apply and the form listed 160. Art showed 19 of 51 and Techtree 3
+        // of 18. The Abilities group existed with 3 of its 5 rows, which reads as "this hero has
+        // almost no ability fields" when the truth is they were simply unset.
+        //
+        // An editor has to offer an unset field, because setting it is the entire point. So the
+        // metadata supplies the row list and the merged values fill in what exists, and a field
+        // with no value anywhere is shown empty with source "unset".
+        var valueOf = new Dictionary<string, MergedField>(StringComparer.OrdinalIgnoreCase);
+        foreach (var f in merged.Fields) valueOf[f.Code] = f;
+
+        var rows = new List<MergedField>();
+        if (meta is not null)
+        {
+            foreach (var fm in meta.Fields)
+            {
+                if (!fm.AppliesTo(isHero, isBuilding, isItem)) { hidden++; continue; }
+
+                // A per-level field surfaces once per level it actually carries, and unset at
+                // level 1 otherwise, so a leveled kind is not flattened to a single row.
+                var levelled = valueOf.Keys
+                    .Where(k => k.Length > fm.Code.Length
+                                && k.StartsWith(fm.Code + ":", StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+                if (levelled.Count > 0)
+                {
+                    foreach (var k in levelled) rows.Add(valueOf[k]);
+                    continue;
+                }
+                rows.Add(valueOf.TryGetValue(fm.Code, out var have)
+                    ? have
+                    : new MergedField(fm.Code, DisplayNameOf(ctx, fm), "", "unset"));
+            }
+
+            // Anything the map defines that the metadata does not know about. Never drop a value
+            // the map actually holds just because the installed patch has no row for its code.
+            var known = new HashSet<string>(meta.Fields.Select(f => f.Code), StringComparer.OrdinalIgnoreCase);
+            foreach (var f in merged.Fields)
+            {
+                var bareCode = f.Code.Contains(':') ? f.Code[..f.Code.IndexOf(':')] : f.Code;
+                if (!known.Contains(bareCode)) rows.Add(f);
+            }
+        }
+        else
+        {
+            // No game data, so the applicable set is unknowable and the values are all there is.
+            rows.AddRange(merged.Fields);
+        }
+
+        foreach (var f in rows)
         {
             var bare = f.Code.Contains(':') ? f.Code[..f.Code.IndexOf(':')] : f.Code;
             ObjectFieldMeta? fm = null;
             if (meta is not null && meta.TryGet(bare, out var found)) fm = found;
-
-            // A field the game says does not apply to this shape is noise, not data. The World
-            // Editor hides them, which is most of the difference between 273 rows and a form.
-            if (fm is not null && !fm.AppliesTo(isHero, isBuilding, isItem)) { hidden++; continue; }
 
             bool authoritative = fm is not null && fm.NetSafe.Length > 0;
             var layer = authoritative
@@ -248,5 +298,22 @@ public static class ObjectFormCommand
                  || (rawcode.Length == 4 && char.IsUpper(rawcode[0]));
 
         return (hero && !building, building, false);
+    }
+
+    /// <summary>
+    /// The label for a field the object does not currently hold, which therefore has no merged
+    /// row to take a name from. Resolves the metadata's WESTRING display key, falling back to the
+    /// field code, because a row labelled with a raw WESTRING is worse than one labelled with its
+    /// code.
+    /// </summary>
+    private static string DisplayNameOf(GameDataContext? ctx, ObjectFieldMeta fm)
+    {
+        if (fm.DisplayName.Length == 0) return fm.Code;
+        if (ctx is not null && ctx.Strings.TryGet(fm.DisplayName, out var resolved)
+            && resolved.Length > 0)
+            return resolved;
+        return fm.DisplayName.StartsWith("WESTRING", StringComparison.OrdinalIgnoreCase)
+            ? fm.Code
+            : fm.DisplayName;
     }
 }
