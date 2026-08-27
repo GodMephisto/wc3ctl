@@ -375,29 +375,11 @@ public static class HeroExportCommand
                     foreach (var cand in AssetPathCandidates.Expand(f.Value))
                         if (doc.GetFile(cand) is not null) { fieldAssets.Add(cand); break; }
 
-        var assets = new List<DefinitionAsset>();
-        long bytes = 0;
-        var wantedAssets = bundle.Files.Where(f => realFiles.Contains(f.Path)).Select(f => f.Path)
-            .Concat(fieldAssets)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Select(p2 => bundle.Files.FirstOrDefault(bf =>
-                string.Equals(bf.Path, p2, StringComparison.OrdinalIgnoreCase))
-                ?? new BundleFile(p2, "field", true));
-
-        foreach (var f in wantedAssets)
-        {
-            var entry = doc.GetFile(f.Path);
-            if (entry is null) continue;
-            var payload = entry.OverrideBytes ?? entry.RawBytes;
-            var dest = Path.Combine(assetDir, f.Path.Replace('\\', Path.DirectorySeparatorChar));
-            Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
-            File.WriteAllBytes(dest, payload);
-            assets.Add(new DefinitionAsset(f.Path, f.Category, payload.Length,
-                Convert.ToHexString(SHA256.HashData(payload)).ToLowerInvariant()));
-            bytes += payload.Length;
-        }
 
         string? scriptFile = null;
+        // The carried functions and their spans, kept so the asset pass below can scan the bodies
+        // that actually ship rather than only the bundle's narrower seed set.
+        var carriedSpans = new List<(string Name, int Start, int End)>();
         var entryPoints = new List<string>();
         var excludedClassNames = new SortedSet<string>(StringComparer.Ordinal);
         var peerCallTargets = new SortedSet<string>(StringComparer.Ordinal);
@@ -424,6 +406,10 @@ public static class HeroExportCommand
             var spans = IndexFunctions(lines);
             var wanted = Closure(spans, bundle.Functions.Select(f => f.Name), excludedClassNames,
                 out sharedDispatcherSeen, peerCallTargets);
+            foreach (var name in wanted)
+                if (spans.TryGetValue(name, out var sp))
+                    carriedSpans.Add((name, sp.start, sp.end));
+
             var reason = bundle.Functions.ToDictionary(f => f.Name, f => f.Reason, StringComparer.Ordinal);
 
             var sb = new StringBuilder();
@@ -506,6 +492,62 @@ public static class HeroExportCommand
             File.WriteAllText(Path.Combine(outputDirectory, scriptFile), body, ScriptBytes);
         }
 
+        // Effect art named by string literals inside the functions that ACTUALLY SHIP.
+        //
+        // The bundle runs its own per-function asset scan, but only over its SEED functions, the
+        // ones that reference the hero directly. The script carried here is the transitive closure
+        // of those, which on one hero was 246 functions against the bundle's 92. Anything named
+        // only in a transitively-carried function is therefore invisible to the bundle, with no
+        // entry in bundle.Files and no edge, so it is unreachable however the dependency walk is
+        // seeded. Five effect models for one hero's passive were lost exactly that way and her
+        // spells fired with no visual at all.
+        //
+        // The bank guard is kept, and keeping it is the whole difference between this and a
+        // blanket rescan. A function naming more than SharedAssetBankCount distinct assets is a
+        // roster-wide bank, a pick screen or a shared effect dispatcher, and its paths belong to
+        // nobody in particular. Scanning the carried text WITHOUT that guard pulled in 134 files
+        // that appear in no carried model and in no carried handler.
+        var scriptAssets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        int assetBanksSkipped = 0, bankAssetsSkipped = 0;
+        foreach (var (_, start, end) in carriedSpans)
+        {
+            var named = AssetPathCandidates
+                .NamedInScript(string.Join("\n", _scriptLines[start..(end + 1)]))
+                .ToList();
+            if (named.Count > BundleCommand.SharedAssetBankCount)
+            {
+                assetBanksSkipped++;
+                bankAssetsSkipped += named.Count;
+                continue;
+            }
+            foreach (var path in named)
+                foreach (var cand in AssetPathCandidates.Expand(path))
+                    if (doc.GetFile(cand) is not null) { scriptAssets.Add(cand); break; }
+        }
+
+        var assets = new List<DefinitionAsset>();
+        long bytes = 0;
+        var wantedAssets = bundle.Files.Where(f => realFiles.Contains(f.Path)).Select(f => f.Path)
+            .Concat(fieldAssets)
+            .Concat(scriptAssets)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(p2 => bundle.Files.FirstOrDefault(bf =>
+                string.Equals(bf.Path, p2, StringComparison.OrdinalIgnoreCase))
+                ?? new BundleFile(p2, scriptAssets.Contains(p2) ? "effect" : "field", true));
+
+        foreach (var f in wantedAssets)
+        {
+            var entry = doc.GetFile(f.Path);
+            if (entry is null) continue;
+            var payload = entry.OverrideBytes ?? entry.RawBytes;
+            var dest = Path.Combine(assetDir, f.Path.Replace('\\', Path.DirectorySeparatorChar));
+            Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+            File.WriteAllBytes(dest, payload);
+            assets.Add(new DefinitionAsset(f.Path, f.Category, payload.Length,
+                Convert.ToHexString(SHA256.HashData(payload)).ToLowerInvariant()));
+            bytes += payload.Length;
+        }
+
         // What a target must already provide. Stated so an install can refuse rather than produce
         // a map that silently lacks the hero.
         var requires = new List<DefinitionRequirement>
@@ -565,6 +607,16 @@ public static class HeroExportCommand
                       + $"that declares them, {stubbed.Count(s => !s.Peer && s.ClassStateCarried)} "
                       + "cannot bind because this definition carries the class's own instance "
                       + "tables). Whatever install leaves stubbed does nothing at runtime.");
+        if (assetBanksSkipped > 0)
+            notes.Add($"skipped {bankAssetsSkipped} asset path(s) named in {assetBanksSkipped} "
+                + $"carried function(s) that each name more than {BundleCommand.SharedAssetBankCount} "
+                + "distinct assets. A body that names that many is a roster-wide bank (a pick "
+                + "screen, a shared effect dispatcher) and its paths belong to no one hero. If this "
+                + "hero is missing a visual, the path is probably in one of these and needs "
+                + "carrying by hand.");
+        if (scriptAssets.Count > 0)
+            notes.Add($"carried {scriptAssets.Count} effect asset(s) named only by string literals "
+                + "inside the carried handlers, which object fields never mention.");
         foreach (var d in bundle.Diagnostics) notes.Add(d);
 
         var def = new HeroDefinition(HeroDefinition.CurrentSchemaVersion, bundle.RootRawcode,

@@ -283,7 +283,7 @@ public static class BundleCommand
     /// Anime_WOS2, OnClick names 155 assets and RandomPick 30, while Asta's busiest own handler
     /// names 12. Same shape and same justification as RosterRegistryGrantCount, and both are why a
     /// port of one hero stops importing every hero's art.</summary>
-    private const int SharedAssetBankCount = 24;
+    internal const int SharedAssetBankCount = 24;
 
     private static readonly Regex Identifier = new(@"[A-Za-z_][A-Za-z0-9_]*", RegexOptions.Compiled);
 
