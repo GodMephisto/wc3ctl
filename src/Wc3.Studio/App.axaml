@@ -5,5 +5,8 @@
 
     <Application.Styles>
         <FluentTheme />
+        <!-- AvaloniaEdit's TextEditor has no template without this, so the JASS editor would
+             render as an empty box. Fluent, to match the shell. -->
+        <StyleInclude Source="avares://AvaloniaEdit/Themes/Fluent/AvaloniaEdit.xaml"/>
     </Application.Styles>
 </Application>

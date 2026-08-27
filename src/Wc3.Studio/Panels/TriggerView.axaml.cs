@@ -2,6 +2,8 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Wc3.Commands;
+using Wc3.Studio.Controls;
+using Wc3.Model;
 
 namespace Wc3.Studio.Panels;
 
@@ -209,9 +211,11 @@ public partial class TriggerView : UserControl, IMapPanel
                 return;
             }
             DetailHint.IsVisible = false;
-            CustomTextBox.Text = trig.CustomText;
-            CustomTextBox.CaretIndex = 0;
-            CustomTextBox.IsVisible = true;
+            // The externals are derived from this body alone, so a one-function trigger
+            // highlights its natives without the whole map's script being in hand.
+            CustomScript.LoadScript(trig.CustomText,
+                JassSyntax.ExternalCalls(trig.CustomText));
+            CustomScript.IsVisible = true;
             return;
         }
 
@@ -327,8 +331,8 @@ public partial class TriggerView : UserControl, IMapPanel
         DescriptionText.IsVisible = false;
         EcaTree.Items.Clear();
         EcaTree.IsVisible = false;
-        CustomTextBox.Text = string.Empty;
-        CustomTextBox.IsVisible = false;
+        CustomScript.LoadScript(string.Empty, natives: null);
+        CustomScript.IsVisible = false;
         DetailHint.Text = hint;
         DetailHint.IsVisible = true;
     }

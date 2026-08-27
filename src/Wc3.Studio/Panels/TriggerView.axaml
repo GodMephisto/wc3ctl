@@ -59,11 +59,14 @@
                                TextWrapping="Wrap" IsVisible="False" Text=""/>
                     <Grid Grid.Row="3" Margin="4">
                         <TreeView Name="EcaTree" IsVisible="False"/>
-                        <TextBox Name="CustomTextBox" IsVisible="False" IsReadOnly="True"
-                                 AcceptsReturn="True" TextWrapping="NoWrap"
-                                 FontFamily="Consolas,Cascadia Mono,Menlo,monospace"
-                                 ScrollViewer.VerticalScrollBarVisibility="Auto"
-                                 ScrollViewer.HorizontalScrollBarVisibility="Auto"/>
+                        <!-- A custom-text trigger's body IS JASS, so it gets the same editor
+                             the Script panel uses, read-only. It was a bare monospace TextBox
+                             with the default foreground, which is the other place the "white
+                             text so it is terrible to eyes" complaint came from. Composing the
+                             control rather than restyling the box means this pane gained line
+                             numbers, highlighting and Ctrl+F for free. -->
+                        <controls:JassEditorView Name="CustomScript" IsVisible="False"
+                                                 IsReadOnly="True"/>
                         <TextBlock Name="DetailHint" Margin="8" TextWrapping="Wrap"
                                    Foreground="#8FA3B8" IsHitTestVisible="False"
                                    Text="Select a trigger to see its events, conditions and actions."/>
