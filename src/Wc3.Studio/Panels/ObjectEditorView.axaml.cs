@@ -324,12 +324,19 @@ public partial class ObjectEditorView : UserControl, IMapPanel
 
         try
         {
-            var result = ObjectGetCommand.Execute(doc, SelectedKind.Kind, first.Rawcode, _session.GameDir);
-            var baseInfo = result.BaseRawcode is null ? "no base" : $"base {result.BaseRawcode}";
+            // The form, not the raw field list: grouped, ordered, applicability-filtered and
+            // bounds-annotated from the game's own metadata. Building that here would put map
+            // logic in a panel, so it lives in Wc3.Commands and is shared with the CLI and MCP.
+            var form = ObjectFormCommand.Execute(doc, SelectedKind.Kind, first.Rawcode, _session.GameDir);
+            var baseInfo = form.BaseRawcode is null ? "no base" : $"base {form.BaseRawcode}";
+            var hiddenNote = form.HiddenFieldCount > 0
+                ? $", {form.HiddenFieldCount} hidden"
+                : "";
             SelectedHeader.Text =
-                $"{result.Name ?? first.Rawcode} ({first.Rawcode}) - {baseInfo} - {result.Fields.Count} field(s)";
+                $"{form.Name ?? first.Rawcode} ({first.Rawcode}) - {baseInfo} - "
+                + $"{form.FieldCount} field(s) in {form.Groups.Count} group(s){hiddenNote}";
 
-            var rows = BuildFieldRows(result.Fields);
+            var rows = BuildFieldRows(form);
             _suppress = true;
             FieldList.ItemsSource = rows;
             _suppress = false;
@@ -339,13 +346,13 @@ public partial class ObjectEditorView : UserControl, IMapPanel
             // Sub-rows are display-only children and never the preserved selection.
             var keep = string.IsNullOrEmpty(preserveFieldCode)
                 ? null
-                : rows.FirstOrDefault(r => !r.IsSubRow && r.Code == preserveFieldCode);
+                : rows.FirstOrDefault(r => r.IsSelectable && r.Code == preserveFieldCode);
             FieldList.SelectedItem = keep;
             if (keep is null)
                 ResetEditor();
 
-            if (result.Diagnostics.Count > 0)
-                StatusText.Text = string.Join("; ", result.Diagnostics);
+            if (form.Diagnostics.Count > 0)
+                StatusText.Text = string.Join("; ", form.Diagnostics);
         }
         catch (Exception ex)
         {
@@ -384,20 +391,49 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     /// LIST as indented read-only sub-rows ("A000 - Naginata Combo") under the parent
     /// row, one per entry. Every other field is one plain row, exactly as before.
     /// </summary>
-    private List<FieldRow> BuildFieldRows(IReadOnlyList<MergedField> fields)
+    /// <summary>
+    /// Flattens the form into list rows: one heading per category, then that category's fields in
+    /// the metadata's own order, with reference lists still expanded beneath their field.
+    /// </summary>
+    private List<FieldRow> BuildFieldRows(ObjectForm form)
+    {
+        var rows = new List<FieldRow>(form.FieldCount + form.Groups.Count);
+        foreach (var group in form.Groups)
+        {
+            rows.Add(FieldRow.GroupHeader(group.Title, group.Fields.Count));
+            rows.AddRange(BuildGroupRows(group.Fields));
+        }
+        return rows;
+    }
+
+    /// <summary>Legal range and target layer, shown beside the value so an edit that the game
+    /// would reject, or that would land in the layer the game ignores, is visible before it is
+    /// made rather than after the map fails to load.</summary>
+    private static string HintFor(FormField f)
+    {
+        var bounds = f.MinValue is null && f.MaxValue is null
+            ? ""
+            : $"{f.MinValue ?? "*"}..{f.MaxValue ?? "*"}";
+        var layer = f.Layer == ObjectLayer.Skin ? "skin" : "";
+        return string.Join("  ", new[] { bounds, layer }.Where(x => x.Length > 0));
+    }
+
+    private List<FieldRow> BuildGroupRows(IReadOnlyList<FormField> fields)
     {
         var kind = SelectedKind.Kind;
         var rows = new List<FieldRow>(fields.Count);
-        foreach (var f in fields)
+        foreach (var ff in fields)
         {
+            var f = new MergedField(ff.Code, ff.Name, ff.Value, ff.Source) { Display = ff.Display };
+            var hint = HintFor(ff);
             if (!LooksLikeRawcodes(f.Value) || !IsReferenceField(kind, f.Code, out var isList))
             {
-                rows.Add(new FieldRow(f));
+                rows.Add(new FieldRow(f, null, hint));
                 continue;
             }
             if (isList)
             {
-                rows.Add(new FieldRow(f));
+                rows.Add(new FieldRow(f, null, hint));
                 bool mapSource = f.Source == "map";
                 foreach (var token in f.Value.Split(',',
                     StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
@@ -409,7 +445,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
                 var display = RefNames().TryGetValue(token, out var name)
                     ? $"{token} ({name})"
                     : f.Display;
-                rows.Add(new FieldRow(f, display));
+                rows.Add(new FieldRow(f, display, hint));
             }
         }
         return rows;
@@ -1570,16 +1606,18 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     {
         private static readonly IBrush BaseBrush = new SolidColorBrush(Color.Parse("#C8CDD3"));
         private static readonly IBrush MapBrush = new SolidColorBrush(Color.Parse("#E8C56A"));
+        private static readonly IBrush HeaderBrush = new SolidColorBrush(Color.Parse("#7FB2E5"));
 
         private readonly bool _mapSource;
 
-        public FieldRow(MergedField field, string? displayOverride = null)
+        public FieldRow(MergedField field, string? displayOverride = null, string hint = "")
         {
             Code = field.Code;
             Name = field.Name;
             Value = field.Value;
             DisplayValue = displayOverride ?? field.Display;
             Source = field.Source;
+            Hint = hint;
             _mapSource = field.Source == "map";
         }
 
@@ -1597,6 +1635,22 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         /// <summary>An expanded reference-list entry rendered beneath its field row.</summary>
         public static FieldRow SubRow(string display, bool mapSource) => new(display, mapSource);
 
+        private FieldRow(string title, int count, bool header)
+        {
+            Code = "";
+            Name = title;
+            Value = "";
+            DisplayValue = "";
+            Source = "";
+            Hint = $"{count} field(s)";
+            IsGroupHeader = header;
+            _mapSource = false;
+        }
+
+        /// <summary>A category heading. The World Editor shows these as collapsible sections and
+        /// they are the difference between a form and a list of 169 rows.</summary>
+        public static FieldRow GroupHeader(string title, int count) => new(title, count, true);
+
         public string Code { get; }
         public string Name { get; }
         /// <summary>Raw stored value (TRIGSTR_ refs intact) — what the editor edits and writes back.</summary>
@@ -1607,8 +1661,21 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         /// <summary>Display-only child of a reference-list field (not a field itself).</summary>
         public bool IsSubRow { get; }
 
-        public IBrush RowBrush => _mapSource ? MapBrush : BaseBrush;
-        public FontWeight RowWeight => _mapSource && !IsSubRow ? FontWeight.SemiBold : FontWeight.Normal;
+        /// <summary>A category heading rather than an editable field.</summary>
+        public bool IsGroupHeader { get; private init; }
+
+        /// <summary>Legal range and target layer, from the game's own field metadata. Empty when
+        /// there is no install to read it from.</summary>
+        public string Hint { get; private init; } = "";
+
+        /// <summary>Only a real field row can be picked up by the editor pane.</summary>
+        public bool IsSelectable => !IsSubRow && !IsGroupHeader;
+
+        public IBrush RowBrush => IsGroupHeader ? HeaderBrush : _mapSource ? MapBrush : BaseBrush;
+        public FontWeight RowWeight =>
+            IsGroupHeader || (_mapSource && !IsSubRow) ? FontWeight.SemiBold : FontWeight.Normal;
+        /// <summary>Headings get air above them so the groups read as blocks.</summary>
+        public Thickness RowMargin => IsGroupHeader ? new Thickness(0, 8, 0, 2) : new Thickness(0);
         /// <summary>Sub-rows indent their text under the parent's value column.</summary>
         public Thickness ValueMargin => IsSubRow ? new Thickness(24, 0, 4, 0) : new Thickness(4, 0);
     }

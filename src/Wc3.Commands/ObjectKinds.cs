@@ -171,6 +171,19 @@ public static class ObjectKinds
         return display.Length > 0;
     }
 
+    /// <summary>The kind's field metadata (the *MetaData.slk view), or null with no game data.
+    /// One accessor so the form builder and the option lookup cannot read different tables.</summary>
+    internal static ObjectMetadata? FieldMeta(GameDataContext? ctx, ObjectKind kind) => ctx switch
+    {
+        null => null,
+        _ => kind switch
+        {
+            ObjectKind.Unit => ctx.Units.FieldMetadata,
+            ObjectKind.Ability => ctx.Abilities.FieldMetadata,
+            _ => SimpleStore(ctx, kind).Metadata,
+        },
+    };
+
     private static ObjectDataStore SimpleStore(GameDataContext ctx, ObjectKind kind) => kind switch
     {
         ObjectKind.Item => ctx.Items,

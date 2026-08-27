@@ -7,7 +7,22 @@ namespace Wc3.GameData;
 /// ability data fields carry one) and NotSpecific lists rawcodes it never applies to.</summary>
 public sealed record ObjectFieldMeta(
     string Code, string SlkName, string Column, string DisplayName, string Type,
-    int Index = 0, int Repeat = 0, int Data = 0, string UseSpecific = "", string NotSpecific = "");
+    int Index = 0, int Repeat = 0, int Data = 0, string UseSpecific = "", string NotSpecific = "",
+    string Category = "", string Sort = "", string MinValue = "", string MaxValue = "",
+    bool ForceNonNegative = false, bool CanBeEmpty = false, int StringExt = 0,
+    bool UseHero = true, bool UseUnit = true, bool UseBuilding = true, bool UseItem = true,
+    string NetSafe = "")
+{
+    /// <summary>Whether the field applies to an object of this shape, from the four use* flags.
+    /// The World Editor hides the rest, which is how it shows a readable form instead of every
+    /// field the kind defines.</summary>
+    public bool AppliesTo(bool isHero, bool isBuilding, bool isItem) =>
+        isItem ? UseItem : isBuilding ? UseBuilding : isHero ? UseHero : UseUnit;
+
+    /// <summary>Which object-data layer this field is written to. "1" and "11" mean the
+    /// war3mapSkin twin, "0" means war3map.*, empty means the metadata does not say.</summary>
+    public bool IsSkinField => NetSafe is "1" or "11";
+}
 
 /// <summary>
 /// Type-agnostic view of the metadata SLK shape shared by every Object Editor type
@@ -40,8 +55,26 @@ public sealed class ObjectMetadata
             int data = row.TryGetValue("data", out var dt) && int.TryParse(dt, out var dv) ? dv : 0;
             string use = row.TryGetValue("usespecific", out var us) ? us : "";
             string not = row.TryGetValue("notspecific", out var ns) ? ns : "";
+
+            // The columns the World Editor builds its whole object form from. Without them a
+            // client can only render one flat alphabetical list of every field the kind
+            // defines, which for a unit is 273 rows and unusable.
+            string Str(string c) => row.TryGetValue(c, out var v) ? v.Trim() : "";
+            bool Flag(string c, bool fallback) =>
+                row.TryGetValue(c, out var v) && int.TryParse(v.Trim(), out var n) ? n != 0 : fallback;
+            int Num(string c) => row.TryGetValue(c, out var v) && int.TryParse(v.Trim(), out var n) ? n : 0;
+
             if (col.Length > 0)
-                m._byCode[code] = new ObjectFieldMeta(code, slk, col, disp, type, index, repeat, data, use, not);
+                m._byCode[code] = new ObjectFieldMeta(code, slk, col, disp, type, index, repeat, data,
+                    use, not,
+                    Category: Str("category"), Sort: Str("sort"),
+                    MinValue: Str("minval"), MaxValue: Str("maxval"),
+                    ForceNonNegative: Flag("forcenonneg", false), CanBeEmpty: Flag("canbeempty", true),
+                    StringExt: Num("stringext"),
+                    // A column the ability metadata omits entirely means "applies", not "does not".
+                    UseHero: Flag("usehero", true), UseUnit: Flag("useunit", true),
+                    UseBuilding: Flag("usebuilding", true), UseItem: Flag("useitem", true),
+                    NetSafe: Str("netsafe"));
         }
         return m;
     }

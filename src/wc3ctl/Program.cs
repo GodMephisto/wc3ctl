@@ -140,6 +140,23 @@ public static class Program
             }
             Emit(json, r, () => Render.ObjectGet(r));
         }));
+        var objForm = new Command("form",
+            "Show an object the way an editor should: fields grouped and ordered like the World "
+            + "Editor, fields that do not apply to this object hidden, legal ranges shown, and "
+            + "which object-data layer each field is written to.")
+        { mapArg, objRawcode, objGetKind, jsonOption };
+        objForm.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var kindToken = p.GetValueForOption(objGetKind);
+            var form = ObjectFormCommand.Execute(
+                MapDocument.Load(p.GetValueForArgument(mapArg)),
+                kindToken is null ? ObjectKind.Unit : ObjectKinds.Parse(kindToken),
+                p.GetValueForArgument(objRawcode),
+                p.GetValueForOption(gameDirOption));
+            Emit(p.GetValueForOption(jsonOption), form, () => Render.ObjectForm(form));
+        }));
+        obj.AddCommand(objForm);
         obj.AddCommand(objGet);
 
         var objList = new Command("list", "List the map's custom/modified objects of one kind.")
