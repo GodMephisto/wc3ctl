@@ -82,7 +82,7 @@ public static class JassSyntax
         var found = new HashSet<string>(StringComparer.Ordinal);
         if (string.IsNullOrEmpty(commonJ)) return found;
 
-        foreach (var raw in commonJ.Split('\n'))
+        foreach (var raw in JassLines.Split(commonJ))
         {
             var line = raw.Trim();
             if (line.Length == 0 || line.StartsWith("//", StringComparison.Ordinal)) continue;
@@ -106,7 +106,7 @@ public static class JassSyntax
         var found = new HashSet<string>(StringComparer.Ordinal);
         if (string.IsNullOrEmpty(jass)) return found;
 
-        foreach (var raw in jass.Split('\n'))
+        foreach (var raw in JassLines.Split(jass))
         {
             var line = raw.Trim();
             if (!line.StartsWith("type ", StringComparison.Ordinal)) continue;

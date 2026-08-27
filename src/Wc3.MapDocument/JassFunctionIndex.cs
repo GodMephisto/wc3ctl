@@ -15,7 +15,10 @@ public static class JassFunctionIndex
         var result = new List<JassFunction>();
         if (string.IsNullOrEmpty(jass)) return result;
 
-        var lines = jass.Split('\n');
+        // JassLines, not Split on a newline. 13 of 34 maps measured in the user's Maps
+        // folder separate their script with a BARE CARRIAGE RETURN, and every one of them
+        // reported zero functions here. See JassLines for the measurement.
+        var lines = JassLines.Split(jass);
         string? name = null;
         int startLine = 0;
         string signature = "";

@@ -223,4 +223,31 @@ public class ScriptPanelTests
     private static void Invoke(ScriptView view, string method, params object[] args) =>
         view.GetType().GetMethod(method, BindingFlags.NonPublic | BindingFlags.Instance)!
             .Invoke(view, args);
+
+    /// <summary>
+    /// The user-facing half of the line-ending finding. 13 of 34 maps in the user's Maps folder
+    /// separate their script with a bare carriage return, and the Script panel showed "0 functions"
+    /// on every one of them while displaying a perfectly readable script beside the empty list.
+    /// </summary>
+    [AvaloniaFact]
+    [Trait("Category", "Corpus")]
+    public void The_panel_lists_functions_in_a_carriage_return_separated_script()
+    {
+        var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+                               "Warcraft III", "Maps", "Download");
+        var map = Path.Combine(dir, "Tom_and_Jerry_2014_v1.05.w3x");
+        if (!File.Exists(map)) return;
+
+        var doc = MapDocument.Load(map);
+        var view = Shown();
+        Open(view, doc);
+
+        // Measured at 807 functions, in a script whose 249,947 bytes hold 5,802 bare CR and only
+        // 1,380 LF. Asserting a floor rather than the exact number, since the point is that the
+        // list is populated at all.
+        Assert.True(FunctionList(view).ItemCount > 500,
+            $"the panel lists {FunctionList(view).ItemCount} functions in a CR separated script");
+        // And it found the script under scripts\, which is where this map keeps it.
+        Assert.Contains("war3map.j", TextOf(view, "HeaderText"));
+    }
 }

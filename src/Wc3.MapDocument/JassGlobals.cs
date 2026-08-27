@@ -79,7 +79,7 @@ public static class JassGlobals
     /// global looked assigned when the actual assignment never runs.</summary>
     public static HashSet<string> Assigned(IReadOnlyDictionary<string, string> declared, string scopeText)
     {
-        string stripped = string.Join('\n', JassComments.Strip(scopeText.Replace("\r\n", "\n").Split('\n')));
+        string stripped = string.Join('\n', JassComments.Strip(JassLines.Split(scopeText)));
         var assigned = new HashSet<string>(StringComparer.Ordinal);
         foreach (Match m in SetStatement.Matches(stripped))
             if (declared.ContainsKey(m.Groups[1].Value)) assigned.Add(m.Groups[1].Value);

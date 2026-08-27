@@ -31,6 +31,36 @@ public static class StandardMapFileNames
     };
 
     /// <summary>
+    /// Other names the same logical file is known to be stored under, most specific first.
+    /// Empty for a name with no known alternative.
+    /// </summary>
+    /// <remarks>
+    /// Measured, not guessed. Across 34 maps only two known map files ever sit under a directory,
+    /// <c>scripts\war3map.j</c> in 13 of them and <c>war3mapImported\war3mapMap.blp</c> in 4.
+    /// The second is a genuine second copy of the minimap rather than the same file moved, so only
+    /// the script pair is aliased here.
+    ///
+    /// Kept as an explicit pair rather than a general "search every directory for this leaf name",
+    /// because a general search would happily return an imported asset that merely shares a name
+    /// with a map file, and answering a question about war3map.j with somebody's art is worse than
+    /// answering it with nothing.
+    /// </remarks>
+    public static IEnumerable<string> AliasesFor(string fileName)
+    {
+        foreach (var (a, b) in ScriptAliases)
+        {
+            if (string.Equals(fileName, a, StringComparison.OrdinalIgnoreCase)) { yield return b; yield break; }
+            if (string.Equals(fileName, b, StringComparison.OrdinalIgnoreCase)) { yield return a; yield break; }
+        }
+    }
+
+    private static readonly (string Root, string Nested)[] ScriptAliases =
+    {
+        ("war3map.j", "scripts\\war3map.j"),
+        ("war3map.lua", "scripts\\war3map.lua"),
+    };
+
+    /// <summary>
     /// Every name worth probing for, every name <see cref="MapFormatRegistry"/> parses
     /// plus <see cref="Extra"/>. Built from the registry rather than duplicated by hand so
     /// the two lists cannot drift apart as parsers are added.

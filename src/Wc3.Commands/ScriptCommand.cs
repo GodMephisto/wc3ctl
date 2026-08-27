@@ -15,10 +15,7 @@ public static class ScriptCommand
     /// </summary>
     public static ScriptFunctionsResult Functions(MapDocument doc)
     {
-        var entry = doc.GetFile("war3map.j")
-            ?? doc.GetFile("scripts\\war3map.j")
-            ?? doc.GetFile("war3map.lua")
-            ?? throw new FileNotFoundException("map contains no war3map.j or war3map.lua", "war3map.j");
+        var entry = ScriptEntry(doc);
 
         // Prefer pending in-memory edits (OverrideBytes) over the original bytes so
         // re-listing after a script edit reflects the current document state.
@@ -51,17 +48,17 @@ public static class ScriptCommand
             "map contains no war3map.j or war3map.lua", "war3map.j");
 
     /// <summary>
-    /// Char offset of the start of each 1-based line, following JassFunctionIndex line
-    /// numbering (lines are '\n'-separated). Result[0] is always 0; a source of length N
-    /// with K newlines yields K+1 entries. Empty source yields a single entry [0].
+    /// Char offset of the start of each 1-based line, following JassFunctionIndex line numbering.
+    /// Result[0] is always 0. Empty source yields a single entry [0].
     /// </summary>
-    public static int[] ComputeLineStarts(string source)
-    {
-        var starts = new List<int> { 0 };
-        for (int i = 0; i < source.Length; i++)
-            if (source[i] == '\n') starts.Add(i + 1);
-        return starts.ToArray();
-    }
+    /// <remarks>
+    /// Delegates to <see cref="JassLines.LineStarts"/> so the offsets and the line numbers cannot
+    /// disagree. They did. This counted only LF while the index counted only LF too, which was
+    /// consistent and both wrong, and on the 13 of 34 measured maps that separate their script
+    /// with a bare CR it meant one enormous line. Slicing a function out of such a file returned
+    /// the whole file, and replacing one would have written it back over everything.
+    /// </remarks>
+    public static int[] ComputeLineStarts(string source) => JassLines.LineStarts(source);
 
     /// <summary>
     /// Returns the substring of <paramref name="source"/> spanning the 1-based line range
@@ -116,7 +113,9 @@ public static class ScriptCommand
         if (end > start && source[end - 1] == '\r') end--;
         if (end < start) end = start;
 
-        var newline = source.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
+        // The script's own convention, including a bare CR, so an edited function is not
+        // written back in a different one from the lines around it.
+        var newline = JassLines.DominantTerminator(source);
         var replacement = (newFunctionText ?? string.Empty)
             .Replace("\r\n", "\n")
             .Replace("\n", newline);

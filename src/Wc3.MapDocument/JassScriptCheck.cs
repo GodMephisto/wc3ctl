@@ -64,7 +64,9 @@ public static class JassScriptCheck
         var issues = new List<JassIssue>();
         if (string.IsNullOrWhiteSpace(jass)) return issues;
 
-        var lines = jass.Replace("\r\n", "\n").Split('\n');
+        // Normalizing CRLF was not enough, a bare CR is a line terminator too, and a script
+        // that split into almost no lines produced almost no findings, which read as clean.
+        var lines = JassLines.Split(jass);
         var code = StripComments(lines);                 // comment-free view, same indices
         var (globals, _) = JassGlobals.Parse(lines);
         var functions = JassFunctionIndex.Parse(jass);
@@ -186,7 +188,9 @@ public static class JassScriptCheck
         if (string.IsNullOrEmpty(jass)) return jass;
 
         string nl = jass.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
-        var lines = jass.Replace("\r\n", "\n").Split('\n');
+        // Normalizing CRLF was not enough, a bare CR is a line terminator too, and a script
+        // that split into almost no lines produced almost no findings, which read as clean.
+        var lines = JassLines.Split(jass);
         for (int i = 0; i < lines.Length; i++)
         {
             var m = DroppedLocal.Match(lines[i]);

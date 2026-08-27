@@ -40,7 +40,13 @@ public static class ExtractCommand
         if (selector.All)
             picked = doc.Files;                              // includes unnamed (protected) entries
         else if (selector.ExactName is { } exact)
-            picked = doc.Files.Where(f => string.Equals(f.FileName, exact, StringComparison.OrdinalIgnoreCase));
+            // Through GetFile, so an exact name resolves the same way everywhere. Matching
+            // doc.Files directly here meant `extract war3map.j` answered "file not found" on the
+            // 13 of 34 measured maps that store it as scripts\war3map.j, a file `ls` had just
+            // listed on the line above.
+            picked = doc.GetFile(exact) is { } hit
+                ? new[] { hit }
+                : Enumerable.Empty<MapFileEntry>();
         else
             picked = doc.Files.Where(f => f.FileName != null && selector.Patterns.Any(p => GlobMatch(p, f.FileName!)));
 

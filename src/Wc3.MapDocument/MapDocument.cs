@@ -277,8 +277,50 @@ public sealed class MapDocument
         _ => Enumerable.Empty<string>(),
     };
 
-    public MapFileEntry? GetFile(string fileName) =>
-        _files.FirstOrDefault(f => string.Equals(f.FileName, fileName, StringComparison.OrdinalIgnoreCase));
+    /// <summary>
+    /// The named entry, falling back to the same file under a directory a compiler is known to
+    /// move it to. An exact match always wins, so a map holding both keeps the root one.
+    /// </summary>
+    /// <remarks>
+    /// Measured over 34 maps in the user's Maps folder, 13 store their script as
+    /// <c>scripts\war3map.j</c> rather than at the archive root, which is what the widely used map
+    /// optimizer emits. The prober in <see cref="StandardMapFileNames"/> already knew that and
+    /// recovered the name, so <c>ls</c> listed the file, but every caller that asked for
+    /// "war3map.j" got nothing. <c>extract war3map.j</c> answered "file not found" for a file it
+    /// had just listed, and <c>validate</c> answered "map has no script file, it cannot run" and
+    /// exited 2, on 13 working maps.
+    ///
+    /// The alias list is deliberately narrow and derived from measurement, not a general search of
+    /// every directory for a matching leaf name. Only two known map files ever appear under a
+    /// directory in that corpus, this one and <c>war3mapImported\war3mapMap.blp</c>, and the
+    /// second is a genuine second copy of the minimap rather than the same file moved.
+    /// </remarks>
+    public MapFileEntry? GetFile(string fileName)
+    {
+        if (GetFileExact(fileName) is { } exact) return exact;
+
+        foreach (var alias in StandardMapFileNames.AliasesFor(fileName))
+        {
+            var hit = _files.FirstOrDefault(
+                f => string.Equals(f.FileName, alias, StringComparison.OrdinalIgnoreCase));
+            if (hit is not null) return hit;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// The named entry by its exact name, with no alias fallback. What every WRITE must use.
+    /// </summary>
+    /// <remarks>
+    /// A read may reasonably answer "war3map.j" with the script stored under scripts\. A write
+    /// may not. Adding scripts\war3map.j to a map that already has a root war3map.j would resolve
+    /// through the alias and silently overwrite the root file instead of adding the nested one,
+    /// which is how a map that carries both, and two in the measured corpus do, would lose the one
+    /// the game actually reads. Caught by a test the same hour the alias was added.
+    /// </remarks>
+    private MapFileEntry? GetFileExact(string fileName) =>
+        _files.FirstOrDefault(
+            f => string.Equals(f.FileName, fileName, StringComparison.OrdinalIgnoreCase));
 
     public void Save(string path) => File.WriteAllBytes(path, SaveToBytes());
 
@@ -464,7 +506,8 @@ public sealed class MapDocument
     /// </summary>
     public MapFileEntry AddOrReplaceRawFile(string fileName, byte[] bytes)
     {
-        if (GetFile(fileName) is { } existing)
+        // Exact, never aliased. See GetFileExact.
+        if (GetFileExact(fileName) is { } existing)
         {
             existing.OverrideBytes = bytes;
             existing.Model = null; // raw payload wins; drop any stale parsed model
@@ -491,7 +534,8 @@ public sealed class MapDocument
     /// </summary>
     public MapFileEntry AddOrReplaceModelFile(string fileName, object model)
     {
-        if (GetFile(fileName) is { } existing)
+        // Exact, never aliased. See GetFileExact.
+        if (GetFileExact(fileName) is { } existing)
         {
             existing.Model = model;
             existing.OverrideBytes = null;

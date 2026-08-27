@@ -30,7 +30,8 @@ public static class JassRawcodeAliases
         var result = new Dictionary<string, string>(StringComparer.Ordinal);
         if (string.IsNullOrEmpty(jass)) return result;
 
-        var lines = jass.Replace("\r\n", "\n").Split('\n');
+        // Normalizing CRLF was not enough, a bare CR is a line terminator too.
+        var lines = JassLines.Split(jass);
         var inFunction = new bool[lines.Length];
         foreach (var f in JassFunctionIndex.Parse(jass))
             for (int i = f.StartLine - 1; i < f.EndLine && i < lines.Length; i++)
