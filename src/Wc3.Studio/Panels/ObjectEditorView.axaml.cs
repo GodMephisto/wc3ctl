@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using Wc3.GameData;
 using System.ComponentModel;
 using Avalonia;
 using Avalonia.Controls;
@@ -65,6 +66,18 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     private bool _suppress;
     /// <summary>Fields applied via ObjectSetCommand but not yet written to disk.</summary>
     private int _unsavedEdits;
+
+    /// <summary>
+    /// The value a field held BEFORE this session first changed it, keyed by kind, object and
+    /// field. Captured on the first edit only, so reverting always returns to what the map was
+    /// opened with rather than to the previous keystroke.
+    /// </summary>
+    /// <remarks>
+    /// Nothing recorded this before, so once a value was typed over there was no copy of it
+    /// anywhere in the app and no way back short of closing the map without saving. Editing
+    /// without a visible original and an undo is guesswork.
+    /// </remarks>
+    private readonly Dictionary<(ObjectKind Kind, string Rawcode, string Field), string> _originalValues = new();
     /// <summary>The current kind's full object list; SearchBox filters this in memory.</summary>
     private List<ObjectRow> _allRows = new();
     /// <summary>rawcode → display name across every kind's map objects, for reference
@@ -971,9 +984,12 @@ public partial class ObjectEditorView : UserControl, IMapPanel
             return;
         // Sub-rows (a reference list's expanded entries) are display-only; their
         // containers are disabled, but guard anyway so they never reach the editor.
-        if (FieldList.SelectedItem is FieldRow { IsSubRow: false } row)
+        // A category heading is not a field. Its containers are disabled so a click cannot
+        // select one, but keyboard navigation can, and it would arrive here as "Art ()".
+        if (FieldList.SelectedItem is FieldRow { IsSelectable: true } row)
         {
             FieldEditLabel.Text = $"{row.Name} ({row.Code})";
+            ShowValueContext(row);
             ConfigureEditor(row);
             UpdateApplyState();
         }
@@ -998,7 +1014,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         }
         catch
         {
-            opt = new ObjectFieldOptionsResult("", false, Array.Empty<string>());
+            opt = new ObjectFieldOptionsResult("", false, Array.Empty<EnumOption>());
         }
 
         bool freeText = opt.Options.Count == 0
@@ -1041,39 +1057,53 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         RefListHost.IsVisible = false;
     }
 
-    private void ShowComboEditor(FieldRow row, IReadOnlyList<string> options)
+    private void ShowComboEditor(FieldRow row, IReadOnlyList<EnumOption> options)
     {
         _editorMode = EditorMode.Combo;
-        var tokens = options.ToList();
+        // The id is the value the game stores. The label is what the World Editor calls it, from
+        // UnitEditorData.txt. Showing the token where a name exists makes a closed set unreadable.
+        var items = options
+            .Select(o => new SearchableComboBoxItem(o.Value, o.Label))
+            .ToList();
         var current = (row.Value ?? "").Trim();
-        if (current.Length > 0 && !tokens.Contains(current, StringComparer.OrdinalIgnoreCase))
-            tokens.Insert(0, current);
-        EditorCombo.SetItems(
-            tokens.Select(t => new SearchableComboBoxItem(t, t)).ToList(),
-            selectId: current.Length > 0 ? current : null);
+        if (current.Length > 0
+            && !items.Any(i => string.Equals(i.Id, current, StringComparison.OrdinalIgnoreCase)))
+            // The stored value is not one the game defines. Keep it selectable and say so, rather
+            // than silently dropping data the map already relies on.
+            items.Insert(0, new SearchableComboBoxItem(current, $"{current}  (not a listed value)"));
+        EditorCombo.SetItems(items, selectId: current.Length > 0 ? current : null);
         EditorBox.IsVisible = false;
         EditorCombo.IsVisible = true;
         EditorMultiHost.IsVisible = false;
         RefListHost.IsVisible = false;
     }
 
-    private void ShowMultiEditor(FieldRow row, IReadOnlyList<string> options)
+    private void ShowMultiEditor(FieldRow row, IReadOnlyList<EnumOption> options)
     {
         _editorMode = EditorMode.Multi;
         var selected = new HashSet<string>(
             (row.Value ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
             StringComparer.OrdinalIgnoreCase);
-        // Options ∪ any current tokens outside the option set, so nothing is dropped.
-        var tokens = options.ToList();
+
+        // The listed values, plus any the field already holds that the game does not list. Keeping
+        // the strays visible and selected is what stops an Apply from dropping data the map relies
+        // on.
+        var tokens = options.Select(o => o.Value).ToList();
         foreach (var s in selected)
             if (!tokens.Contains(s, StringComparer.OrdinalIgnoreCase))
                 tokens.Add(s);
         _editorMultiTokens = tokens;
+
+        // Deliberately the raw values here, NOT the display names. CurrentEditorValue rebuilds the
+        // field by matching SelectedItems against these exact strings, so showing labels would make
+        // every Apply write an empty list. The single-value combo is where names are safe, because
+        // it carries the id separately from the label.
         EditorMulti.ItemsSource = tokens;
         EditorMulti.SelectedItems?.Clear();
         foreach (var t in tokens)
             if (selected.Contains(t))
                 EditorMulti.SelectedItems?.Add(t);
+
         EditorBox.IsVisible = false;
         EditorCombo.IsVisible = false;
         EditorMultiHost.IsVisible = true;
@@ -1270,7 +1300,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
             StatusText.Text = "No map open.";
             return;
         }
-        if (FieldList.SelectedItem is not FieldRow { IsSubRow: false } row)
+        if (FieldList.SelectedItem is not FieldRow { IsSelectable: true } row)
         {
             StatusText.Text = "Select a field first.";
             return;
@@ -1290,6 +1320,12 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         {
             try
             {
+                // Remember what the field held before the FIRST change to it, so Revert can
+                // return to the value the map was opened with rather than to the last keystroke.
+                var key = (SelectedKind.Kind, target.Rawcode, row.Code);
+                if (!_originalValues.ContainsKey(key))
+                    _originalValues[key] = StoredValue(doc, target.Rawcode, row.Code) ?? "";
+
                 var result = ObjectSetCommand.Execute(doc, SelectedKind.Kind, target.Rawcode, row.Code, value);
                 if (result.Ok)
                 {
@@ -1678,5 +1714,106 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         public Thickness RowMargin => IsGroupHeader ? new Thickness(0, 8, 0, 2) : new Thickness(0);
         /// <summary>Sub-rows indent their text under the parent's value column.</summary>
         public Thickness ValueMargin => IsSubRow ? new Thickness(24, 0, 4, 0) : new Thickness(4, 0);
+    }
+
+    /// <summary>The value a field holds in the document right now, or null when it holds none.</summary>
+    private string? StoredValue(MapDocument doc, string rawcode, string fieldCode)
+    {
+        try
+        {
+            var merged = ObjectGetCommand.Execute(doc, SelectedKind.Kind, rawcode, _session?.GameDir);
+            return merged.Fields
+                .FirstOrDefault(f => string.Equals(f.Code, fieldCode, StringComparison.OrdinalIgnoreCase))
+                ?.Value;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Shows what the selected field holds now and, when this session has changed it, what it held
+    /// when the map was opened. Also decides whether Revert and Reset Box can do anything.
+    /// </summary>
+    private void ShowValueContext(FieldRow row)
+    {
+        FieldCurrentText.IsVisible = false;
+        FieldOriginalText.IsVisible = false;
+        RevertButton.IsEnabled = false;
+        ResetBoxButton.IsEnabled = false;
+
+        if (row.Code.Length == 0) return;
+
+        var current = row.DisplayValue;
+        FieldCurrentText.Text = $"stored: {Trim(current)}   [{row.Source}]";
+        FieldCurrentText.IsVisible = true;
+        ResetBoxButton.IsEnabled = true;
+
+        // Only the single-selection case has one unambiguous original to offer.
+        var targets = SelectedObjects();
+        if (targets.Count != 1) return;
+
+        if (_originalValues.TryGetValue((SelectedKind.Kind, targets[0].Rawcode, row.Code), out var original))
+        {
+            FieldOriginalText.Text = $"changed this session, was: {Trim(original)}";
+            FieldOriginalText.IsVisible = true;
+            RevertButton.IsEnabled = true;
+        }
+    }
+
+    private static string Trim(string v)
+    {
+        v = (v ?? "").Replace('\n', ' ').Replace('\r', ' ');
+        if (v.Length == 0) return "(empty)";
+        return v.Length <= 120 ? v : v[..120] + "...";
+    }
+
+    /// <summary>Discards what was typed and shows the field's stored value again.</summary>
+    private void OnResetBoxClick(object? sender, RoutedEventArgs e)
+    {
+        if (FieldList.SelectedItem is FieldRow { IsSelectable: true } row)
+        {
+            ConfigureEditor(row);
+            UpdateApplyState();
+            StatusText.Text = $"editor reset to the stored value of {row.Code}";
+        }
+    }
+
+    /// <summary>
+    /// Puts the field back to the value it held when the map was opened, through the same write
+    /// path as any other edit, then forgets the record so the field reads as untouched again.
+    /// </summary>
+    private void OnRevertClick(object? sender, RoutedEventArgs e)
+    {
+        if (_session?.Current is not { } doc) { StatusText.Text = "No map open."; return; }
+        if (FieldList.SelectedItem is not FieldRow { IsSelectable: true } row) return;
+
+        var targets = SelectedObjects();
+        if (targets.Count != 1)
+        {
+            StatusText.Text = "Revert works on one object at a time.";
+            return;
+        }
+        var key = (SelectedKind.Kind, targets[0].Rawcode, row.Code);
+        if (!_originalValues.TryGetValue(key, out var original))
+        {
+            StatusText.Text = "This field has not been changed in this session.";
+            return;
+        }
+
+        var result = ObjectSetCommand.Execute(doc, SelectedKind.Kind, targets[0].Rawcode, row.Code, original);
+        if (!result.Ok)
+        {
+            StatusText.Text = $"could not revert {row.Code}: {result.Message}";
+            return;
+        }
+
+        // Reverting is itself an unsaved change to the document, so the counter goes UP, not down.
+        // The field matches the opened map again; the file on disk does not yet.
+        _originalValues.Remove(key);
+        _unsavedEdits++;
+        RefreshFieldPane(row.Code);
+        StatusText.Text = $"{row.Code} reverted to {Trim(original)}. Save Edits to write it.";
     }
 }

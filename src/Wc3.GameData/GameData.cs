@@ -9,6 +9,9 @@ namespace Wc3.GameData;
 /// </summary>
 public static class GameData
 {
+    private const string UnitEditorDataPath = @"war3.w3mod:ui\uniteditordata.txt";
+    private const string WorldEditDataPath = @"war3.w3mod:ui\worldeditdata.txt";
+
     private const string WorldEditStringsPath = @"war3.w3mod:_locales\enus.w3mod:ui\worldeditstrings.txt";
     // Object names for destructables/doodads (WESTRING_DEST_* / WESTRING_DOODAD_*) live in
     // this parallel file, not worldeditstrings.txt, so both are merged into one Strings table.
@@ -47,6 +50,12 @@ public static class GameData
             var strings = WorldEditStrings.FromByteSources(
                 src!.ReadFile(WorldEditStringsPath),
                 src!.ReadFile(WorldEditGameStringsPath));
+
+            // The editor's enumerated types. Read after the strings because every
+            // display name in it is a WESTRING key resolved through them.
+            var editorEnums = EditorEnumData.FromByteSources(strings,
+                src!.ReadFile(UnitEditorDataPath),
+                src!.ReadFile(WorldEditDataPath));
             // Profile TXT stores fill the fields the metadata SLKs mark "Profile"
             // (names, tooltips, art refs). Buff sections live inside the ability
             // profile files, so those two kinds share one store.
@@ -63,6 +72,7 @@ public static class GameData
                 Buffs = BuildSafe("buff", s => ObjectDataStore.BuildBuffs(s, abilityProfile)),
                 Upgrades = BuildSafe("upgrade", s => ObjectDataStore.BuildUpgrades(s, upgradeProfile)),
                 Strings = strings,
+                EditorEnums = editorEnums,
                 UnitNames = UnitNameTable.FromSources(src!),
                 Diagnostics = diags,
                 InstallDir = dir, // lets TryReadFile lazily re-open CASC for raw assets
