@@ -978,8 +978,8 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         var dest = Path.Combine(dir, baseName);
         try
         {
-            await Task.Run(() => File.WriteAllBytes(dest, entry.RawBytes));
-            StatusText.Text = $"Extracted {_modelEntryName} → {dest} ({entry.RawBytes.Length:N0} bytes)";
+            await Task.Run(() => File.WriteAllBytes(dest, entry.CurrentBytes));
+            StatusText.Text = $"Extracted {_modelEntryName} → {dest} ({entry.CurrentBytes.Length:N0} bytes)";
         }
         catch (Exception ex)
         {

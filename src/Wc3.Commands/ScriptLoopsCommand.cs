@@ -58,7 +58,7 @@ public static class ScriptLoopsCommand
         if (entry is null)
             return new ScriptLoopsResult("(none)", 0, Array.Empty<LoopFinding>());
 
-        var text = System.Text.Encoding.UTF8.GetString(entry.OverrideBytes ?? entry.RawBytes);
+        var text = System.Text.Encoding.UTF8.GetString(entry.CurrentBytes);
         var lines = text.Split('\n');
 
         var findings = new List<LoopFinding>();

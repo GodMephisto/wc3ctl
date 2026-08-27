@@ -34,7 +34,7 @@ public static class GameplayConstants
     {
         var srcEntry = source.GetFile(MiscFile);
         if (srcEntry is null) return null;
-        string srcText = Enc.GetString(srcEntry.OverrideBytes ?? srcEntry.RawBytes);
+        string srcText = Enc.GetString(srcEntry.CurrentBytes);
 
         var tgtEntry = target.GetFile(MiscFile);
         if (tgtEntry is null)
@@ -46,7 +46,7 @@ public static class GameplayConstants
                 : $"added {MiscFile} from source";
         }
 
-        string tgtText = Enc.GetString(tgtEntry.OverrideBytes ?? tgtEntry.RawBytes);
+        string tgtText = Enc.GetString(tgtEntry.CurrentBytes);
         var changes = new List<string>();
         foreach (var key in LevelCapKeys)
             tgtText = RaiseKey(tgtText, srcText, key, changes);

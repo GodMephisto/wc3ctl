@@ -106,7 +106,7 @@ public static class StringsCommand
     /// original bytes. UTF-8 keeps a BOM as U+FEFF through GetString/GetBytes, so decode +
     /// re-encode of untouched text is byte-identical.</summary>
     private static string CurrentSource(MapFileEntry entry)
-        => Encoding.UTF8.GetString(entry.OverrideBytes ?? entry.RawBytes);
+        => Encoding.UTF8.GetString(entry.CurrentBytes);
 
     private static List<EntrySpan> ParseSpans(string src)
     {

@@ -76,7 +76,7 @@ public static class AbilityAuditCommand
             if (f.Global is not null) readinessByGlobal.TryAdd(f.Global, f);
 
         var entry = doc.GetFile(PreplacedUnitsScript.ScriptFile);
-        byte[]? bytes = entry?.OverrideBytes ?? entry?.RawBytes;
+        byte[]? bytes = entry?.CurrentBytes;
         string jass = bytes is { Length: > 0 } ? Encoding.Latin1.GetString(bytes) : "";
         var sv = new ScriptView(jass);
         var branches = ResolveBranches(sv, heroRawcode);

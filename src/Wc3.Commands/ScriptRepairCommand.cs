@@ -23,7 +23,7 @@ public static class ScriptRepairCommand
     public static ScriptRepairResult Execute(MapDocument doc)
     {
         var entry = doc.GetFile("war3map.j") ?? doc.GetFile("scripts\\war3map.j");
-        byte[]? bytes = entry?.OverrideBytes ?? entry?.RawBytes;
+        byte[]? bytes = entry?.CurrentBytes;
         if (entry?.FileName is null || bytes is null || bytes.Length == 0)
             return new(false, "map has no war3map.j to repair", 0, Array.Empty<string>());
 

@@ -288,7 +288,7 @@ public partial class PaletteView : UserControl, IMapPanel
     private static HashSet<string> ScriptRawcodes(Wc3.Model.MapDocument doc)
     {
         var codes = new HashSet<string>(StringComparer.Ordinal);
-        if (doc.GetFile("war3map.j")?.RawBytes is not { Length: > 0 } bytes)
+        if (doc.GetFile("war3map.j")?.CurrentBytes is not { Length: > 0 } bytes)
             return codes;
         var text = System.Text.Encoding.UTF8.GetString(bytes);
         for (int i = 0; i + 5 < text.Length; i++)

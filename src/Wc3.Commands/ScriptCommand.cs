@@ -22,7 +22,7 @@ public static class ScriptCommand
 
         // Prefer pending in-memory edits (OverrideBytes) over the original bytes so
         // re-listing after a script edit reflects the current document state.
-        var source = Encoding.UTF8.GetString(entry.OverrideBytes ?? entry.RawBytes);
+        var source = Encoding.UTF8.GetString(entry.CurrentBytes);
         var functions = JassFunctionIndex.Parse(source).OrderBy(f => f.StartLine).ToList();
         return new ScriptFunctionsResult(entry.FileName!, functions);
     }

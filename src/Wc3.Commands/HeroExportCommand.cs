@@ -395,7 +395,7 @@ public static class HeroExportCommand
             // script that is NOT valid UTF-8 loses those bytes to U+FFFD outright. Either way the
             // carried text stops being what the source map had, which is the one thing a port
             // cannot afford.
-            var text = ScriptBytes.GetString(js.OverrideBytes ?? js.RawBytes);
+            var text = ScriptBytes.GetString(js.CurrentBytes);
             var lines = text.Split('\n');
 
             // Carry the hero's functions AND everything they call, transitively. Carrying only the
@@ -539,7 +539,7 @@ public static class HeroExportCommand
         {
             var entry = doc.GetFile(f.Path);
             if (entry is null) continue;
-            var payload = entry.OverrideBytes ?? entry.RawBytes;
+            var payload = entry.CurrentBytes;
             var dest = Path.Combine(assetDir, f.Path.Replace('\\', Path.DirectorySeparatorChar));
             Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
             File.WriteAllBytes(dest, payload);

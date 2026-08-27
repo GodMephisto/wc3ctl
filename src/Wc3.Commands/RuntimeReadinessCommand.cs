@@ -85,7 +85,7 @@ public static class RuntimeReadinessCommand
         string? heroName = ObjectName(doc, ObjectKind.Unit, heroRawcode);
 
         var entry = doc.GetFile("war3map.j") ?? doc.GetFile("scripts\\war3map.j");
-        byte[]? bytes = entry?.OverrideBytes ?? entry?.RawBytes;
+        byte[]? bytes = entry?.CurrentBytes;
         if (entry?.FileName is null || bytes is null || bytes.Length == 0)
         {
             diagnostics.Add(doc.GetFile("war3map.lua") is not null

@@ -124,8 +124,8 @@ internal static class ScriptPorter
         // and messages the port never meant to touch. Latin1 maps all 256 byte values one-to-one,
         // so decode then re-encode round-trips the original bytes exactly, and our inserted ASCII
         // is identical either way.
-        string srcJ = ByteText.GetString(srcEntry.RawBytes);
-        string tgtJ = ByteText.GetString(tgtEntry.RawBytes);
+        string srcJ = ByteText.GetString(srcEntry.CurrentBytes);
+        string tgtJ = ByteText.GetString(tgtEntry.CurrentBytes);
         var srcLines = srcJ.Replace("\r\n", "\n").Split('\n');
 
         // Idempotency: the object layer reuses an identical prior port rather than duplicating it,

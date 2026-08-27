@@ -99,7 +99,7 @@ public static class PreplacedUnitsScript
     public static BlockAudit Audit(MapDocument doc)
     {
         var entry = doc.GetFile(ScriptFile);
-        byte[]? bytes = entry?.OverrideBytes ?? entry?.RawBytes;
+        byte[]? bytes = entry?.CurrentBytes;
         if (bytes is null || bytes.Length == 0)
             return new(false, 0, GeneratorVersion, false, false);
 
@@ -144,7 +144,7 @@ public static class PreplacedUnitsScript
         // RawBytes alone would miss what an earlier sync in this same session already wrote,
         // which would leave a stale block behind when placements change (e.g. a phantom unit
         // after the last one is removed).
-        byte[]? effective = scriptEntry?.OverrideBytes ?? scriptEntry?.RawBytes;
+        byte[]? effective = scriptEntry?.CurrentBytes;
         if (scriptEntry is null || effective is null || effective.Length == 0)
             return new(false, "no war3map.j to wire (a scriptless melee map spawns preplaced widgets from the .doo directly)", 0, 0);
 

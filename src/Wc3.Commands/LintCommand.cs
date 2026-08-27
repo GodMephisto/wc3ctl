@@ -91,7 +91,7 @@ public static class LintCommand
         // made this check fail on UNTOUCHED maps whose scripts are not pure ASCII, and worse, it
         // passed on a map an earlier install had already corrupted into that range, so a green
         // result meant nothing. Latin-1 both ways round-trips every byte 0..255 unchanged.
-        var pj = PjassGate.Check(System.Text.Encoding.Latin1.GetString(script.OverrideBytes ?? script.RawBytes));
+        var pj = PjassGate.Check(System.Text.Encoding.Latin1.GetString(script.CurrentBytes));
         if (!pj.Ran)
             return new("script-compiles", LintSeverity.Warning,
                 "pjass did not run, so the script was not compile-checked", new[] { pj.Note });
@@ -153,7 +153,7 @@ public static class LintCommand
         if (script is null)
             return new("asset-references", LintSeverity.Ok, "no script to scan", Array.Empty<string>());
 
-        var text = System.Text.Encoding.UTF8.GetString(script.OverrideBytes ?? script.RawBytes);
+        var text = System.Text.Encoding.UTF8.GetString(script.CurrentBytes);
         var imported = ImportedPathsOf(doc);
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var missing = new List<string>();
@@ -223,13 +223,13 @@ public static class LintCommand
     {
         var before = original.Files
             .Where(f => f.FileName is not null && !IsBookkeeping(f.FileName) && !IsStructural(f.FileName))
-            .ToDictionary(f => f.FileName!, f => f.RawBytes, StringComparer.OrdinalIgnoreCase);
+            .ToDictionary(f => f.FileName!, f => f.CurrentBytes, StringComparer.OrdinalIgnoreCase);
 
         var clobbered = new List<string>();
         foreach (var f in doc.Files)
         {
             if (f.FileName is null || !before.TryGetValue(f.FileName, out var was)) continue;
-            var now = f.OverrideBytes ?? f.RawBytes;
+            var now = f.CurrentBytes;
             if (!now.AsSpan().SequenceEqual(was)) clobbered.Add(f.FileName);
         }
 
@@ -244,7 +244,7 @@ public static class LintCommand
     {
         var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         if (doc.GetFile("war3map.imp") is not { } imp) return set;
-        var bytes = imp.OverrideBytes ?? imp.RawBytes;
+        var bytes = imp.CurrentBytes;
         // Entries are a flag byte followed by a NUL-terminated path. Reading the paths out
         // directly keeps this independent of the header's declared count, which is what a
         // consistency check should do.

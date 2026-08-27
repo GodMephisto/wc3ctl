@@ -6,8 +6,8 @@ public static class DiffCommand
 {
     public static DiffResult Execute(MapDocument a, MapDocument b)
     {
-        var av = a.Files.Where(f => f.FileName != null).ToDictionary(f => f.FileName!, f => f.RawBytes);
-        var bv = b.Files.Where(f => f.FileName != null).ToDictionary(f => f.FileName!, f => f.RawBytes);
+        var av = a.Files.Where(f => f.FileName != null).ToDictionary(f => f.FileName!, f => f.CurrentBytes);
+        var bv = b.Files.Where(f => f.FileName != null).ToDictionary(f => f.FileName!, f => f.CurrentBytes);
         var entries = new List<DiffEntry>();
         foreach (var name in av.Keys.Union(bv.Keys))
         {

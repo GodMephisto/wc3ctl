@@ -56,7 +56,7 @@ public static class RenderModelCommand
     {
         if (FindModelEntry(doc, modelInternalPath) is { } entry)
         {
-            var model = ModelParser.Parse(entry.RawBytes, entry.FileName!);
+            var model = ModelParser.Parse(entry.CurrentBytes, entry.FileName!);
             return new PreparedModel(model, ResolveTextures(doc, model, ctx));
         }
 
@@ -248,7 +248,7 @@ public static class RenderModelCommand
     public static MapFileEntry? FindModelEntry(MapDocument doc, string path)
     {
         foreach (var candidate in PathCandidates(path))
-            if (doc.GetFile(candidate) is { } entry && entry.RawBytes.Length > 0)
+            if (doc.GetFile(candidate) is { } entry && entry.CurrentBytes.Length > 0)
                 return entry;
         return null;
     }
@@ -266,7 +266,7 @@ public static class RenderModelCommand
     public static MapFileEntry? FindTextureEntry(MapDocument doc, string path)
     {
         foreach (var candidate in TexturePathCandidates(path))
-            if (doc.GetFile(candidate) is { } entry && entry.RawBytes.Length > 0)
+            if (doc.GetFile(candidate) is { } entry && entry.CurrentBytes.Length > 0)
                 return entry;
         return null;
     }
@@ -306,12 +306,12 @@ public static class RenderModelCommand
     {
         foreach (var p in new[] { path, path.Replace('/', '\\'), path.Replace('\\', '/') }.Distinct())
         {
-            if (doc.GetFile(p) is { RawBytes.Length: > 0 } exact) return exact;
+            if (doc.GetFile(p) is { CurrentBytes.Length: > 0 } exact) return exact;
             var ext = Path.GetExtension(p);
             var stem = SoundExtensions.Any(e => ext.Equals(e, StringComparison.OrdinalIgnoreCase))
                 ? p[..^ext.Length] : p;
             foreach (var e in SoundExtensions)
-                if (doc.GetFile(stem + e) is { RawBytes.Length: > 0 } hit) return hit;
+                if (doc.GetFile(stem + e) is { CurrentBytes.Length: > 0 } hit) return hit;
         }
         return null;
     }
@@ -379,7 +379,7 @@ public static class RenderModelCommand
             var entry = doc.GetFile(path)
                 ?? doc.GetFile(path.Replace('/', '\\'))
                 ?? doc.GetFile(path.Replace('\\', '/'));
-            byte[]? bytes = entry is { RawBytes.Length: > 0 } ? entry.RawBytes : null;
+            byte[]? bytes = entry is { CurrentBytes.Length: > 0 } ? entry.CurrentBytes : null;
             if (bytes is null && ctx is not null)
                 foreach (var candidate in CascTextureCandidates(path))
                     if (ctx.TryReadFile(candidate, out var cascBytes)) { bytes = cascBytes; break; }

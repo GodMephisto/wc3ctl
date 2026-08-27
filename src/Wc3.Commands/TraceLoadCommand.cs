@@ -153,7 +153,7 @@ public static class TraceLoadCommand
             ?? throw new InvalidOperationException("Map has no war3map.j to instrument.");
         // Latin-1 so a script that is not valid UTF-8 round-trips unchanged. A UTF-8 round-trip
         // replaced WOS2's high bytes with '?' and broke the map, so this is not a free choice.
-        var text = Encoding.Latin1.GetString(script.OverrideBytes ?? script.RawBytes);
+        var text = Encoding.Latin1.GetString(script.CurrentBytes);
         var plan = Instrument(text, functionCap, callSiteCap);
         FileEditCommand.AddOrReplace(doc, script.FileName!, Encoding.Latin1.GetBytes(plan.Script));
 

@@ -74,7 +74,7 @@ public partial class ScriptView : UserControl, IMapPanel
 
         _scriptFile = result.ScriptFile;
         var entry = doc.GetFile(result.ScriptFile);
-        var raw = entry?.OverrideBytes ?? entry?.RawBytes ?? Array.Empty<byte>();
+        var raw = entry?.CurrentBytes ?? Array.Empty<byte>();
         _source = Encoding.UTF8.GetString(raw);
         _lineStarts = ScriptCommand.ComputeLineStarts(_source);
         _functions = result.Functions.OrderBy(f => f.StartLine).ToList();

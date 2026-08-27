@@ -63,4 +63,30 @@ public sealed class MapFileEntry
     /// original bytes; this is the pending replacement.
     /// </summary>
     public byte[]? OverrideBytes { get; set; }
+
+    /// <summary>
+    /// What this entry's bytes are NOW, the pending replacement if there is one and the
+    /// original bytes otherwise. This is what Save will write, so it is what a reader that
+    /// asks "what does this file contain" almost always means.
+    /// </summary>
+    /// <remarks>
+    /// This exists because the choice was being made 67 times by hand. 39 sites wrote
+    /// <c>OverrideBytes ?? RawBytes</c> inline, one of them behind a private helper of its
+    /// own, and 28 read <see cref="RawBytes"/> bare. The bare reads are not a style
+    /// difference, they are a stale read, and several were user-visible. The Files panel
+    /// previewed and hex-dumped the pre-edit content of any file another panel had just
+    /// changed. Lint asked "does the script compile" of the script on disk rather than the
+    /// script about to be saved, so a broken edit passed. Extract wrote the old bytes.
+    ///
+    /// Reach for <see cref="RawBytes"/> only when the ORIGINAL bytes are the point, which
+    /// means round-trip fidelity checks and nothing else. Every other reader wants this.
+    /// </remarks>
+    public byte[] CurrentBytes => OverrideBytes ?? RawBytes;
+
+    /// <summary>
+    /// The size <see cref="CurrentBytes"/> has, answered without triggering decompression
+    /// when nothing has replaced the entry. The deferred-decompression counterpart of
+    /// <see cref="RawSize"/> for callers that sweep every entry.
+    /// </summary>
+    public int CurrentSize => OverrideBytes?.Length ?? RawSize;
 }

@@ -1062,7 +1062,7 @@ public static class Program
             if (p.GetValueForOption(deepOption))
             {
                 var entry = doc.GetFile("war3map.j") ?? doc.GetFile("scripts\\war3map.j");
-                byte[]? bytes = entry?.OverrideBytes ?? entry?.RawBytes;
+                byte[]? bytes = entry?.CurrentBytes;
                 if (bytes is { Length: > 0 })
                     deep = PjassGate.Check(System.Text.Encoding.Latin1.GetString(bytes),
                         p.GetValueForOption(gameDirOption));

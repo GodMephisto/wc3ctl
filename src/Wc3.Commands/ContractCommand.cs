@@ -130,7 +130,7 @@ public static class ContractCommand
         // verbatim into the target's war3map.j. A war3map.j is a byte stream with no declared
         // encoding and real maps carry bytes that are not valid UTF-8, so a UTF-8 decode turns each
         // into U+FFFD and the Latin-1 write-back then stores '?'. Latin-1 round-trips every byte.
-        var text = System.Text.Encoding.Latin1.GetString(entry.OverrideBytes ?? entry.RawBytes);
+        var text = System.Text.Encoding.Latin1.GetString(entry.CurrentBytes);
         var lines = text.Split('\n');
 
         var signatures = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -339,7 +339,7 @@ public static class ContractCommand
         // Latin-1: a script is a byte stream with no declared encoding and real maps are not valid
         // UTF-8, so decoding as UTF-8 mangles content this scan then fails to match.
         var lines = System.Text.Encoding.Latin1
-            .GetString(entry.OverrideBytes ?? entry.RawBytes).Split('\n');
+            .GetString(entry.CurrentBytes).Split('\n');
 
         var starts = new List<int>();
         var nameAt = new Dictionary<int, string>();

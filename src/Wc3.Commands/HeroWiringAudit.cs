@@ -108,7 +108,7 @@ public static class HeroWiringAudit
     public static HeroWiringResult Audit(MapDocument doc, string heroRawcode, int ownerId)
     {
         var entry = doc.GetFile(PreplacedUnitsScript.ScriptFile);
-        byte[]? bytes = entry?.OverrideBytes ?? entry?.RawBytes;
+        byte[]? bytes = entry?.CurrentBytes;
         string jass = bytes is { Length: > 0 } ? Encoding.Latin1.GetString(bytes) : "";
 
         var ctx = new ScriptContext(jass, ownerId, doc);

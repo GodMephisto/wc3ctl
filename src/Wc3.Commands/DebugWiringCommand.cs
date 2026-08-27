@@ -41,7 +41,7 @@ public static class DebugWiringCommand
         var noTargets = Array.Empty<DebugWiringTarget>();
 
         var entry = doc.GetFile(PreplacedUnitsScript.ScriptFile) ?? doc.GetFile(@"scripts\war3map.j");
-        byte[]? bytes = entry?.OverrideBytes ?? entry?.RawBytes;
+        byte[]? bytes = entry?.CurrentBytes;
         if (entry?.FileName is null || bytes is null || bytes.Length == 0)
             return new(false, "map contains no war3map.j script", noTargets, diagnostics);
 

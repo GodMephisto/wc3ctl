@@ -44,6 +44,6 @@ public static class ExtractCommand
         else
             picked = doc.Files.Where(f => f.FileName != null && selector.Patterns.Any(p => GlobMatch(p, f.FileName!)));
 
-        return new ExtractResult(picked.Select(f => new ExtractedItem(f.FileName, f.BlockIndex, f.RawBytes)).ToList());
+        return new ExtractResult(picked.Select(f => new ExtractedItem(f.FileName, f.BlockIndex, f.CurrentBytes)).ToList());
     }
 }

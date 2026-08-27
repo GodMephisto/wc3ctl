@@ -54,7 +54,7 @@ public static class ScriptRootsCommand
         if (entry is null)
             return new ScriptRootsResult("(none)", 0, 0, 0, Array.Empty<ScriptRoot>());
 
-        var text = System.Text.Encoding.UTF8.GetString(entry.OverrideBytes ?? entry.RawBytes);
+        var text = System.Text.Encoding.UTF8.GetString(entry.CurrentBytes);
 
         var declaredAt = new Dictionary<string, int>(StringComparer.Ordinal);
         int line = 1;

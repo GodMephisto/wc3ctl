@@ -91,7 +91,7 @@ public partial class FilesView : UserControl, IMapPanel
         {
             var entry = doc.Files[row.Ordinal];
             _previewRow = row;
-            _previewBytes = entry.OverrideBytes ?? entry.RawBytes;   // reflect in-session edits
+            _previewBytes = entry.CurrentBytes;   // reflect in-session edits
             _audioBytes = _previewBytes;
             _audioExt = Path.GetExtension(row.Name ?? "");
             _hexMode = false;
@@ -315,7 +315,7 @@ public partial class FilesView : UserControl, IMapPanel
             if (i < doc.Files.Count)
             {
                 var entry = doc.Files[i];
-                size = (entry.OverrideBytes ?? entry.RawBytes)?.Length ?? f.SizeBytes;
+                size = (entry.CurrentBytes)?.Length ?? f.SizeBytes;
             }
             rows.Add(new FileRow
             {
@@ -448,7 +448,7 @@ public partial class FilesView : UserControl, IMapPanel
 
         var toExt = Path.GetExtension(dest);
         if (string.IsNullOrEmpty(toExt)) { dest += ".png"; toExt = ".png"; }
-        var raw = doc.Files[row.Ordinal].RawBytes;
+        var raw = doc.Files[row.Ordinal].CurrentBytes;
         var converted = await Task.Run(() => ConvertCommand.ConvertImage(raw, ".blp", toExt));
         await File.WriteAllBytesAsync(dest, converted);
         StatusText.Text = $"Exported {Path.GetFileName(dest)} ({converted.Length:N0} bytes)";
@@ -487,7 +487,7 @@ public partial class FilesView : UserControl, IMapPanel
         });
         if (file?.TryGetLocalPath() is not { } dest) return;
 
-        var raw = doc.Files[row.Ordinal].RawBytes;
+        var raw = doc.Files[row.Ordinal].CurrentBytes;
         await File.WriteAllBytesAsync(dest, raw);
         StatusText.Text = $"Exported {Path.GetFileName(dest)} ({raw.Length:N0} bytes)";
     }

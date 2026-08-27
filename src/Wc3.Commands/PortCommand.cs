@@ -286,7 +286,7 @@ public static class PortCommand
             // so the copy step locates the SAME bytes discovery marked present. Using plain
             // FindFile here silently dropped every custom model from the port.
             var srcEntry = ResolveEntry(source, f.Path, f.Category);
-            if (srcEntry is null || srcEntry.RawBytes.Length == 0) { skipped.Add($"{f.Path} (unreadable in source)"); continue; }
+            if (srcEntry is null || srcEntry.CurrentBytes.Length == 0) { skipped.Add($"{f.Path} (unreadable in source)"); continue; }
 
             // The real stored name (e.g. the ".mdx" backing a ".mdl" reference) — copied
             // and registered under this, not the reference spelling.
@@ -294,19 +294,19 @@ public static class PortCommand
 
             // What the target holds for that asset — including files "copied" by an earlier
             // bundle of a preview batch (pendingCopies simulates the real port's mutation).
-            var tgtBytes = ResolveEntry(target, f.Path, f.Category)?.RawBytes;
+            var tgtBytes = ResolveEntry(target, f.Path, f.Category)?.CurrentBytes;
             if (tgtBytes is null && pendingCopies is not null
                 && pendingCopies.TryGetValue(NormalizePath(storedName), out var pending))
                 tgtBytes = pending;
 
-            if (tgtBytes is not null && tgtBytes.SequenceEqual(srcEntry.RawBytes))
+            if (tgtBytes is not null && tgtBytes.SequenceEqual(srcEntry.CurrentBytes))
             { skipped.Add($"{f.Path} (already in target)"); continue; }
             if (tgtBytes is not null)
                 warnings.Add($"{f.Path} already exists in target with different bytes — overwritten.");
 
             if (apply)
             {
-                target.AddOrReplaceRawFile(storedName, srcEntry.RawBytes);
+                target.AddOrReplaceRawFile(storedName, srcEntry.CurrentBytes);
 
                 if (!tgtImports.Files.Any(i => PathEq(i.FullPath, storedName)))
                 {
@@ -318,7 +318,7 @@ public static class PortCommand
             }
             else
             {
-                pendingCopies![NormalizePath(storedName)] = srcEntry.RawBytes;
+                pendingCopies![NormalizePath(storedName)] = srcEntry.CurrentBytes;
             }
             copied.Add(storedName);
             if (!realFilePaths.Contains(f.Path)) carriedFiles.Add(storedName);

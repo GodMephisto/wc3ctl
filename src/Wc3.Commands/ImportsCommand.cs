@@ -54,8 +54,8 @@ public static class ImportsCommand
                 continue;
             // Pending in-memory replacement wins over the original for the size. An override is
             // already in memory so its length is free, but the original's must come from RawSize,
-            // since reading RawBytes here would decompress every imported asset in the map.
-            archiveFiles[f.FileName] = f.OverrideBytes?.Length ?? f.RawSize;
+            // since reading CurrentBytes here would decompress every imported asset in the map.
+            archiveFiles[f.FileName] = f.CurrentSize;
         }
 
         return new ImportsListResult(manifest is not null, BuildEntries(manifestPaths, archiveFiles));

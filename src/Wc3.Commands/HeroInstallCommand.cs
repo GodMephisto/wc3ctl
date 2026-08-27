@@ -79,7 +79,7 @@ public static class HeroInstallCommand
 
             if (target.GetFile(a.Path) is { } existing)
             {
-                var have = Convert.ToHexString(SHA256.HashData(existing.OverrideBytes ?? existing.RawBytes))
+                var have = Convert.ToHexString(SHA256.HashData(existing.CurrentBytes))
                     .ToLowerInvariant();
                 if (have == a.Sha256) { skipped++; continue; }   // already exactly this file
                 collisions.Add($"{a.Path}: the target has a DIFFERENT file at this path");
@@ -145,7 +145,7 @@ public static class HeroInstallCommand
                     body = body.Replace($"'{from}'", $"'{to}'", StringComparison.Ordinal);
                 var existing = target.GetFile("war3map.j");
                 var head = existing is null ? "" :
-                    ScriptBytes.GetString(existing.OverrideBytes ?? existing.RawBytes);
+                    ScriptBytes.GetString(existing.CurrentBytes);
 
                 // Bind before the globals go in, so a bound class's calls point at the target's own
                 // implementation rather than at a private no-op the definition brought with it.
@@ -315,7 +315,7 @@ public static class HeroInstallCommand
             // Latin-1, never UTF-8. A war3map.j is a byte stream and real maps carry bytes that are
             // not valid UTF-8.
             var targetScript = System.Text.Encoding.Latin1.GetString(
-                targetScriptEntry.OverrideBytes ?? targetScriptEntry.RawBytes);
+                targetScriptEntry.CurrentBytes);
             var alreadyNamed = contract.HeroDispatchChains.Select(c => c.Function).ToHashSet(StringComparer.Ordinal);
             foreach (var sys in HeroSystemAudit.Run(targetScript, roster.RegisteredRawcodes, installedRoot)
                          .Where(s => !alreadyNamed.Contains(s.Function)))
@@ -587,7 +587,7 @@ public static class HeroInstallCommand
     {
         var entry = target.GetFile("war3map.j");
         if (entry is null) return false;
-        var text = ScriptBytes.GetString(entry.OverrideBytes ?? entry.RawBytes);
+        var text = ScriptBytes.GetString(entry.CurrentBytes);
         var lines = text.Split('\n').ToList();
         int last = -1;
         for (int i = 0; i < lines.Count; i++)
@@ -606,7 +606,7 @@ public static class HeroInstallCommand
     private static void AddImportEntries(MapDocument target, IEnumerable<string> paths)
     {
         var entry = target.GetFile("war3map.imp");
-        var existing = entry is null ? Array.Empty<byte>() : (entry.OverrideBytes ?? entry.RawBytes);
+        var existing = entry is null ? Array.Empty<byte>() : (entry.CurrentBytes);
         byte flag = existing.Length > 8 ? existing[8] : (byte)0x0D;
 
         uint version = 1, count = 0;
@@ -757,7 +757,7 @@ public static class HeroInstallCommand
     {
         var entry = target.GetFile("war3map.j");
         if (entry is null) return false;
-        var text = ScriptBytes.GetString(entry.OverrideBytes ?? entry.RawBytes);
+        var text = ScriptBytes.GetString(entry.CurrentBytes);
         var lines = text.Split('\n').ToList();
         var slot = new Regex(@"^\s*set\s+" + Regex.Escape(tmpl.ArrayName) + @"\s*\[");
         int last = -1;
@@ -783,7 +783,7 @@ public static class HeroInstallCommand
     {
         var entry = target.GetFile("war3map.j");
         if (entry is null) return false;
-        var text = ScriptBytes.GetString(entry.OverrideBytes ?? entry.RawBytes);
+        var text = ScriptBytes.GetString(entry.CurrentBytes);
         var lines = text.Split('\n').ToList();
         if (oneBasedLine < 1 || oneBasedLine > lines.Count) return false;
         lines.InsertRange(oneBasedLine, block);
@@ -819,7 +819,7 @@ public static class HeroInstallCommand
     {
         var entry = target.GetFile("war3map.j");
         if (entry is null) return null;
-        var lines = ScriptBytes.GetString(entry.OverrideBytes ?? entry.RawBytes).Split('\n').ToList();
+        var lines = ScriptBytes.GetString(entry.CurrentBytes).Split('\n').ToList();
 
         // A string array assigned literal names repeatedly is the display chain.
         var assign = new Regex(@"^(\s*)set\s+([A-Za-z_][A-Za-z0-9_]*)\s*\[([^\]]*)\]\s*=\s*""([^""]{2,60})""\s*$");

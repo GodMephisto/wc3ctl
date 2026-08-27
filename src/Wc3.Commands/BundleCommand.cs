@@ -150,7 +150,7 @@ public static class BundleCommand
             if (entry?.FileName is null) return;
             try
             {
-                var model = ModelParser.Parse(entry.RawBytes, entry.FileName);
+                var model = ModelParser.Parse(entry.CurrentBytes, entry.FileName);
                 foreach (var texture in model.Textures)
                 {
                     if (string.IsNullOrWhiteSpace(texture)
@@ -352,7 +352,7 @@ public static class BundleCommand
             return Array.Empty<BundleFunction>();
         }
 
-        var source = Encoding.UTF8.GetString(entry.RawBytes);
+        var source = Encoding.UTF8.GetString(entry.CurrentBytes);
         var index = JassFunctionIndex.Parse(source);
         if (index.Count == 0) return Array.Empty<BundleFunction>();
 
@@ -812,7 +812,7 @@ public static class BundleCommand
     private static MapFileEntry? FindFileEntry(MapDocument doc, string path)
     {
         foreach (var p in new[] { path, path.Replace('/', '\\'), path.Replace('\\', '/') }.Distinct())
-            if (doc.GetFile(p) is { RawBytes.Length: > 0 } entry) return entry;
+            if (doc.GetFile(p) is { CurrentBytes.Length: > 0 } entry) return entry;
         return null;
     }
 }
