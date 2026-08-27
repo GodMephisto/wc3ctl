@@ -319,9 +319,19 @@ public static class HeroInstallCommand
             var alreadyNamed = contract.HeroDispatchChains.Select(c => c.Function).ToHashSet(StringComparer.Ordinal);
             foreach (var sys in HeroSystemAudit.Run(targetScript, roster.RegisteredRawcodes, installedRoot)
                          .Where(s => !alreadyNamed.Contains(s.Function)))
+                // A ladder that ends in a default already answers for a hero with no branch,
+                // so "add one by hand" would be wrong. GGGA's skin-origin table returns 0 for
+                // anything it does not list, and a newly installed hero is not a skin of
+                // anything, so absence there is the correct state. Say which case this is
+                // rather than issuing the same instruction for both.
                 unmet.Add($"per-hero table: '{sys.Function}' (war3map.j line {sys.Line}) hand-lists "
                           + $"{sys.HeroCount} of the target's own heroes and has no entry for "
-                          + $"'{installedRoot}'. Add one by hand.");
+                          + $"'{installedRoot}'."
+                          + (sys.HasFallback
+                              ? " It ends in a DEFAULT, so absence may be correct here. Check what "
+                                + "the default means for this hero before adding anything."
+                              : " It has NO default, so a hero with no entry gets no answer. Add one "
+                                + "by hand."));
         }
 
         return new(true,
