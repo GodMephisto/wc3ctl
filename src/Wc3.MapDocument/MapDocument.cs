@@ -512,6 +512,24 @@ public sealed class MapDocument
             // was confirmed by MapSoundsProbe (reflection dump) and is pinned by
             // MapWriteTests.Sounds_writer_is_byte_faithful_on_real_map.
             case MapSounds m: return WriteBinary(w => w.Write(m));
+            // GUI trigger tree (war3map.wtg) and the custom-text bodies (war3map.wct). Read via
+            // ReadMapTriggers/ReadMapCustomTextTriggers (Parsers.cs); the inverse writers exist as
+            // BinaryWriterExtensions.Write(BinaryWriter, MapTriggers) and (..., MapCustomTextTriggers),
+            // confirmed by reflection against War3Net.Build.Core 6.0.3 and pinned for
+            // byte-faithfulness by MapWriteTests.
+            //
+            // Worth stating why this case matters beyond completeness. Without it, editing a map's
+            // compiled script while leaving its trigger tree behind is a ONE-WAY operation: the two
+            // disagree, and the next World Editor save regenerates the script from the stale tree and
+            // silently discards the edit.
+            case War3Net.Build.Script.MapTriggers m: return WriteBinary(w => w.Write(m));
+            // war3map.wct is deliberately NOT here. War3Net ships a writer for it, and that writer
+            // is not byte-faithful: a real map measured 549,168 bytes in and 549,170 out, a 2 byte
+            // gain on an untouched file. Adding the case would grow the file a little on every
+            // save of a map nobody had even edited. Pinned by
+            // TriggerWriteTests.Custom_text_triggers_have_no_model_writer_because_it_is_not_faithful.
+            // The custom-text bodies stay raw, which loses nothing, since they are read for
+            // inspection and edited through the script rather than through this model.
         }
 
         // A dirty entry with no override and no supported model would silently lose

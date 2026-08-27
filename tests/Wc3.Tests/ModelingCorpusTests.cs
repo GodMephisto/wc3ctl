@@ -11,8 +11,7 @@ namespace Wc3.Tests;
 /// </summary>
 public class ModelingCorpusTests
 {
-    private const string AnimeMap =
-        @"C:\Users\GodMephisto\Documents\Warcraft III\Maps\Download\Anime_WOS2_0.25c1.w3x";
+    private static string AnimeMap => CorpusMap.PathOrEmpty;
 
     private const string BlpSamplesDir =
         @"C:\Users\GodMephisto\AppData\Local\Temp\wc3x_modelsamples\blp";

@@ -11,8 +11,7 @@ namespace Wc3.Tests;
 /// </summary>
 public class ObjectKindsCorpusTests
 {
-    private const string MapPath =
-        @"C:\Users\GodMephisto\Documents\Warcraft III\Maps\Download\Anime_WOS2_0.25c1.w3x";
+    private static string MapPath => CorpusMap.PathOrEmpty;
 
     [Fact]
     [Trait("Category", "Corpus")]

@@ -233,7 +233,11 @@ public class PortTriageCorpusTests
             long size = new FileInfo(path).Length;
             if (!best.TryGetValue(key, out var cur) || size > cur.Size) best[key] = (path, size);
         }
-        return best.Values.OrderBy(v => v.Size).Select(v => v.Path).ToList();
+        // Bounded, because loading the whole library reads gigabytes of MPQ and pushed this
+        // category past a ten minute timeout. CorpusSweep.Describe reports what was left out,
+        // so a sampled run never reads as a complete one.
+        return CorpusSweep.Bound(
+            best.Values.OrderBy(v => v.Size).Select(v => v.Path));
     }
 
     private static string Trunc(string s, int max = 160)
