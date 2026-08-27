@@ -20,7 +20,7 @@ public class McpServerTests
         "bundle_unit", "camera_add", "camera_list", "camera_remove",
         "camera_set", "force_list", "force_set_flags", "list_files",
         "map_info", "map_info_get", "map_info_set", "new_map",
-        "object_get", "object_list", "object_new", "object_set",
+        "object_form", "object_get", "object_list", "object_new", "object_set",
         "palette_doodad", "pathing_paint", "place_doodad", "place_item",
         "place_region", "place_start_location", "place_unit", "player_list",
         "player_set_force", "port_unit", "region_list", "region_remove",

@@ -18,6 +18,7 @@ public class CliMcpParityTests
     {
         ["map_info"] = "info",
         ["list_files"] = "ls",
+        ["object_form"] = "object form",
         ["object_get"] = "object get",
         ["object_list"] = "object list",
         ["object_set"] = "object set",

@@ -50,6 +50,32 @@ public static class Render
     public static string Search(SearchResult r) =>
         r.Hits.Count == 0 ? "(no hits)" : string.Join("\n", r.Hits.Select(h => $"{h.FileName}  [{h.Context}]"));
 
+    public static string ObjectForm(ObjectForm f)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine(Headline(f.Rawcode, f.Name, f.BaseRawcode));
+        sb.AppendLine($"{f.FieldCount} field(s) in {f.Groups.Count} group(s)"
+            + (f.HiddenFieldCount > 0
+                ? $", {f.HiddenFieldCount} hidden as not applying to this object"
+                : ""));
+
+        foreach (var g in f.Groups)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"== {g.Title} ({g.Fields.Count}) ==");
+            foreach (var x in g.Fields)
+            {
+                var bounds = x.MinValue is null && x.MaxValue is null
+                    ? ""
+                    : $"  [{x.MinValue ?? "*"}..{x.MaxValue ?? "*"}]";
+                var layer = x.Layer == ObjectLayer.Skin ? "  -> skin" : "";
+                sb.AppendLine($"  {x.Name} ({x.Code}) = {x.Display}  [{x.Source}]{bounds}{layer}");
+            }
+        }
+        foreach (var d in f.Diagnostics) sb.AppendLine($"note: {d}");
+        return sb.ToString().TrimEnd();
+    }
+
     public static string ObjectGet(MergedObjectResult r)
     {
         if (!r.Found) return $"{r.Rawcode}: not found";

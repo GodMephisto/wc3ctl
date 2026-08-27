@@ -50,6 +50,15 @@ public static class Wc3Tools
             ? ObjectGetCommand.Execute(LoadMap(map), rawcode, ResolveGameDir(game_dir))
             : ObjectGetCommand.Execute(LoadMap(map), ParseKind(kind), rawcode, ResolveGameDir(game_dir)));
 
+    [McpServerTool(Name = "object_form", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Get an object as an editable FORM rather than a flat field dump: fields grouped and ordered the way the World Editor groups them (Art, Combat, Stats, ...), fields that do not apply to this object hidden, each field's legal range and whether a blank is allowed, and which object-data layer it is written to (war3map.* or the war3mapSkin.* twin). Prefer this over object_get when deciding what to edit.")]
+    public static ObjectForm ObjectFormTool(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Four-character object rawcode, e.g. 'hfoo' or 'H000'.")] string rawcode,
+        [Description("Object kind: " + KindValues + ".")] string kind = "unit",
+        [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Without it fields cannot be grouped, ordered or bounds-checked, and the layer falls back to a measurement of the map itself.")] string? game_dir = null)
+        => Run(() => ObjectFormCommand.Execute(LoadMap(map), ParseKind(kind), rawcode, ResolveGameDir(game_dir)));
+
     [McpServerTool(Name = "object_set", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Set a field on an object of one Object Editor kind and save the edited map to out_path (only that kind's war3map.* file is re-serialized). The input map is NEVER modified in place. Field syntax: a bare 4-char field code, or 'code:N' to select level N (ability/upgrade) or variation N (doodad).")]
     public static ObjectSetToolResult ObjectSet(

@@ -12,7 +12,7 @@
             <Setter Property="MinHeight" Value="0"/>
             <!-- Reference-list sub-rows are display-only: disabling the container
                  keeps them out of selection (and thus out of the field editor). -->
-            <Setter Property="IsEnabled" Value="{Binding !IsSubRow}"/>
+            <Setter Property="IsEnabled" Value="{Binding IsSelectable}"/>
         </Style>
     </UserControl.Styles>
 
@@ -180,7 +180,7 @@
                     <ListBox Name="FieldList" SelectionChanged="OnFieldSelectionChanged">
                         <ListBox.ItemTemplate>
                             <DataTemplate>
-                                <Grid ColumnDefinitions="230,56,*,72">
+                                <Grid ColumnDefinitions="230,56,*,116,64" Margin="{Binding RowMargin}">
                                     <TextBlock Grid.Column="0" Text="{Binding Name}"
                                                Foreground="{Binding RowBrush}"
                                                FontWeight="{Binding RowWeight}"
@@ -198,7 +198,17 @@
                                                TextTrimming="CharacterEllipsis"
                                                Margin="{Binding ValueMargin}"
                                                VerticalAlignment="Center"/>
-                                    <TextBlock Grid.Column="3" Text="{Binding Source}"
+                                    <!-- Legal range and target layer, from the game's own field
+                                         metadata. Seeing that a field lands in the skin layer
+                                         before editing it is the whole point. -->
+                                    <TextBlock Grid.Column="3" Text="{Binding Hint}"
+                                               FontFamily="Consolas,Menlo,monospace"
+                                               FontSize="11"
+                                               Opacity="0.75"
+                                               Foreground="{Binding RowBrush}"
+                                               TextTrimming="CharacterEllipsis"
+                                               VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="4" Text="{Binding Source}"
                                                Foreground="{Binding RowBrush}"
                                                FontWeight="{Binding RowWeight}"
                                                VerticalAlignment="Center"/>
