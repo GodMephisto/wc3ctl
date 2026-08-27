@@ -125,10 +125,29 @@
                         <StackPanel Spacing="4">
                             <TextBlock Name="FieldEditLabel" FontWeight="SemiBold"
                                        Text="Select a field to edit"/>
+                            <!-- What the field holds right now, and what it held when the map was
+                                 opened. Without this, typing into the box destroys the only copy
+                                 of the value you were about to replace. -->
+                            <TextBlock Name="FieldCurrentText" FontSize="11" Opacity="0.8"
+                                       TextWrapping="Wrap" IsVisible="False"/>
+                            <TextBlock Name="FieldOriginalText" FontSize="11"
+                                       Foreground="#E8C56A" TextWrapping="Wrap"
+                                       IsVisible="False"/>
                             <DockPanel>
                                 <Button Name="ApplyButton" DockPanel.Dock="Right"
                                         Content="Apply" Margin="6,0,0,0" VerticalAlignment="Top"
                                         IsEnabled="False" Click="OnApplyClick"/>
+                                <!-- Two undos, because there are two things to undo. Reset Box
+                                     throws away what you typed. Revert puts the field back to
+                                     the value the map was opened with. -->
+                                <Button Name="RevertButton" DockPanel.Dock="Right"
+                                        Content="Revert" Margin="6,0,0,0" VerticalAlignment="Top"
+                                        IsEnabled="False" Click="OnRevertClick"
+                                        ToolTip.Tip="Put this field back to the value it had when the map was opened."/>
+                                <Button Name="ResetBoxButton" DockPanel.Dock="Right"
+                                        Content="Reset Box" Margin="6,0,0,0" VerticalAlignment="Top"
+                                        IsEnabled="False" Click="OnResetBoxClick"
+                                        ToolTip.Tip="Discard what you typed and show the field's current stored value again."/>
                                 <!-- Exactly one editor is visible at a time; the field's
                                      metadata type picks it (see ConfigureEditor). The text
                                      box is the always-available fallback. -->

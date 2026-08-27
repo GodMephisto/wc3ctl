@@ -19,7 +19,7 @@ public sealed record FormField(
     bool MultiLine,
     ObjectLayer Layer,
     bool LayerIsAuthoritative,
-    IReadOnlyList<string> Options)
+    IReadOnlyList<EnumOption> Options)
 {
     /// <summary>Whether a candidate value satisfies the metadata's own constraints. The message
     /// is null when it passes.</summary>
@@ -139,7 +139,7 @@ public static class ObjectFormCommand
                 ? (fm!.IsSkinField ? ObjectLayer.Skin : ObjectLayer.Map)
                 : partition.LayerFor(bare);
 
-            ObjectKinds.TryGetFieldOptions(ctx, kind, bare, out _, out _, out var options);
+            var options = ObjectKinds.FieldOptions(ctx, kind, bare, out var fieldType, out _);
 
             var field = new FormField(
                 Code: f.Code,
@@ -147,7 +147,7 @@ public static class ObjectFormCommand
                 Value: f.Value,
                 Display: f.Display,
                 Source: f.Source,
-                Type: fm?.Type ?? "",
+                Type: fm?.Type ?? fieldType,
                 MinValue: Blank(fm?.MinValue),
                 MaxValue: Blank(fm?.MaxValue),
                 ForceNonNegative: fm?.ForceNonNegative ?? false,
