@@ -19,6 +19,14 @@ public class CliMcpParityTests
         ["map_info"] = "info",
         ["list_files"] = "ls",
         ["object_form"] = "object form",
+        ["unit_abilities"] = "unit abilities",
+        ["object_field_options"] = "object options",
+        ["lint"] = "lint",
+        ["validate"] = "validate",
+        ["roundtrip"] = "roundtrip",
+        ["search"] = "search",
+        ["diff"] = "diff",
+        ["script_functions"] = "script functions",
         ["terrain_info"] = "terrain info",
         ["terrain_corner_get"] = "terrain corner get",
         ["terrain_corner_set"] = "terrain corner set",
@@ -82,8 +90,18 @@ public class CliMcpParityTests
     // CLI commands that intentionally have no MCP tool (local dev / query utilities).
     private static readonly HashSet<string> CliOnly = new(StringComparer.Ordinal)
     {
-        "roundtrip", "search", "diff", "render", "bundle object",
-        "script functions", "extract", "convert", "validate",
+        // Writes an image to a path on this machine, so the output is a local file rather
+        // than an answer. Same reason as extract.
+        "render",
+        // The generalisation of bundle_unit to any object kind. The unit form is what a
+        // caller actually reaches for, and both would return the same shape.
+        "bundle object",
+        // Moves opaque bytes between the filesystem and the archive. A local file
+        // operation rather than map semantics an agent reasons about.
+        "extract",
+        // Disk to disk asset conversion. Neither side is a map, so there is no map for an
+        // agent to act on.
+        "convert",
         // Repair utility: regenerates the preplaced-widget creation script. Placement
         // already runs it automatically (CommitUnits), so MCP needs no separate tool.
         "place sync",
@@ -107,10 +125,6 @@ public class CliMcpParityTests
         // this machine, so it is inherently local and cannot be driven remotely.
         "debug game-hang",
         "debug trace-load",
-        // NOTE: 'lint' is here provisionally and is the one entry that arguably belongs in MCP -
-        // "is this map going to work" is exactly the question an agent should be able to ask before
-        // handing a map over. Wiring it is a follow-up, not a decision that it should stay CLI-only.
-        "lint",
         // Read-only analysis of a target map's hero integration requirements.
         "contract",
         // Writes a definition folder to disk; local file output like 'extract'.

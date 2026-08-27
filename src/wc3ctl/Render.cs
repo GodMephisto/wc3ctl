@@ -60,6 +60,23 @@ public static class Render
         $"flags            ramp={c.Ramp}  blighted={c.Blighted}  boundary={c.Boundary}  edge={c.EdgeTile}",
     });
 
+    public static string FieldOptions(ObjectFieldOptionsResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"type {(r.Type.Length == 0 ? "(unknown)" : r.Type)}"
+            + (r.IsList ? "  (a comma-separated list)" : ""));
+        if (r.Diagnostic is { Length: > 0 }) sb.AppendLine("note: " + r.Diagnostic);
+        if (r.Options.Count == 0)
+        {
+            sb.Append("No enumerated options. This field takes free text or a number, and with no "
+                + "game data present nothing can be listed at all.");
+            return sb.ToString();
+        }
+        sb.AppendLine($"{r.Options.Count} value(s) the base data already uses:");
+        foreach (var o in r.Options) sb.AppendLine("  " + o);
+        return sb.ToString().TrimEnd();
+    }
+
     public static string Imports(ImportsListResult r)
     {
         var sb = new StringBuilder();
