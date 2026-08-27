@@ -50,6 +50,16 @@ public static class Render
     public static string Search(SearchResult r) =>
         r.Hits.Count == 0 ? "(no hits)" : string.Join("\n", r.Hits.Select(h => $"{h.FileName}  [{h.Context}]"));
 
+    public static string TerrainCorner(TerrainEditCommand.CornerInfo c) => string.Join("\n", new[]
+    {
+        $"corner           ({c.Col}, {c.Row})",
+        $"ground height    {c.GroundHeight:0.###}   cliff level {c.CliffLevel}",
+        $"water            {(c.Water ? $"yes, height {c.WaterHeight:0.###}" : "no")}",
+        $"ground texture   {c.GroundTexture}   variation {c.TextureVariation}",
+        $"cliff texture    {c.CliffTexture}   variation {c.CliffVariation}",
+        $"flags            ramp={c.Ramp}  blighted={c.Blighted}  boundary={c.Boundary}  edge={c.EdgeTile}",
+    });
+
     public static string Imports(ImportsListResult r)
     {
         var sb = new StringBuilder();
