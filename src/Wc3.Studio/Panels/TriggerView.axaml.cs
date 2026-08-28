@@ -274,6 +274,7 @@ public partial class TriggerView : UserControl, IMapPanel
         // JASS in war3map.wct, which is never written, so offering the bar there would offer an
         // edit that can only be refused.
         EcaBar.IsVisible = trig is not null && !trig.IsCustomText;
+        EcaCompileNote.IsVisible = EcaBar.IsVisible;
         EcaRemoveButton.IsEnabled = EcaBar.IsVisible && SelectedFunctionIndex is not null;
         if (trig is null) return;
 

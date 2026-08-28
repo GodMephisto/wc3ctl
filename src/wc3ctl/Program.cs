@@ -1508,7 +1508,9 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
             "Add an event, condition or action to a GUI trigger and save the edited map. "
             + "Parameters you leave off are filled from the World-Editor table's own defaults, "
             + "because a function written with the wrong number of parameters produces a map "
-            + "nothing can read.")
+            + "nothing can read. This edits the World Editor's trigger source (war3map.wtg), not "
+            + "the compiled script the game runs (war3map.j), so the trigger takes effect only "
+            + "after the map is opened and saved in the World Editor.")
         { mapArg, trigIdArg, ecaKindArg, ecaNameArg, ecaParamsOpt, setOut };
         ecaAdd.SetHandler(ctx => RunSafely(() =>
         {
@@ -1569,7 +1571,9 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         var trigAdd = new Command("add",
             "Add a trigger under a category and save the edited map. The new trigger is enabled "
             + "and initially on, matching the World Editor. Custom-text triggers cannot be added, "
-            + "because their body lives in war3map.wct, which cannot be written back.")
+            + "because their body lives in war3map.wct, which cannot be written back. This edits "
+            + "the World Editor's trigger source, not the compiled war3map.j the game runs, so "
+            + "the trigger takes effect only after a World Editor save.")
         { mapArg, trigNewName, trigParentReq, trigCommentOpt, setOut };
         trigAdd.SetHandler(ctx => RunSafely(() =>
         {

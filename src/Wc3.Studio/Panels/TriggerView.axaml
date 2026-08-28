@@ -133,6 +133,16 @@
                                 Click="OnRemoveEcaClick" IsEnabled="False"/>
                     </WrapPanel>
 
+                    <!-- Said where the editing happens, not buried in a help page. Warcraft III
+                         runs war3map.j, and nothing regenerates it from the trigger tree except
+                         the World Editor, so a trigger authored here is inert in game until the
+                         map is saved there. Measured: adding an event and an action left
+                         war3map.j byte-identical. -->
+                    <TextBlock Name="EcaCompileNote" Grid.Row="3" IsVisible="False"
+                               Margin="8,30,8,0" FontSize="11" Foreground="#E8B339"
+                               TextWrapping="Wrap"
+                               Text="Edits the World Editor's trigger source. The game runs the compiled war3map.j, which wc3ctl does not regenerate, so these take effect only after a World Editor save."/>
+
                     <Grid Grid.Row="4" Margin="4">
                         <TreeView Name="EcaTree" IsVisible="False"/>
                         <!-- A custom-text trigger's body IS JASS, so it gets the same editor

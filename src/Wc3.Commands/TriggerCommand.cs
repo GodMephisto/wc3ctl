@@ -93,6 +93,25 @@ public static class TriggerCommand
         SetTriggerFlag(doc, id, t => t.RunOnMapInit = on,
             $"Set trigger {id} run-on-map-init = {on}.");
 
+    /// <summary>
+    /// What a GUI trigger edit does NOT do, said once so every caller can say it.
+    ///
+    /// Warcraft III runs war3map.j, the compiled script. war3map.wtg is the World Editor's
+    /// SOURCE for that script, and nothing regenerates one from the other except the World
+    /// Editor itself. Measured: adding a trigger with an event and an action to a real map left
+    /// war3map.j byte-identical and never mentioning the trigger by name.
+    ///
+    /// So a trigger authored here is real, is visible in the World Editor, and does nothing in
+    /// game until the map is opened and saved there. That is the exact failure this codebase
+    /// keeps guarding against, something that looks correct and silently never runs, so it is
+    /// stated in the result of every edit that creates one rather than left in documentation
+    /// nobody reads at the moment it matters.
+    /// </summary>
+    public const string NotCompiledNote =
+        " Note that this changes the World Editor's trigger source only. Warcraft III runs the "
+        + "compiled war3map.j, which wc3ctl does not regenerate, so this trigger does nothing in "
+        + "game until the map is opened and saved in the World Editor.";
+
     /// <summary>What kind of trigger to create. Custom-text triggers are deliberately absent:
     /// their body lives in war3map.wct, which cannot be written (see <see cref="Remove"/>), so
     /// creating one would produce a trigger whose code can never be set.</summary>
@@ -185,7 +204,8 @@ public static class TriggerCommand
             : string.Empty;
 
         return Persist(doc, triggers,
-            $"Added {kind.ToString().ToLowerInvariant()} trigger '{name}' with id {td.Id}.{note}");
+            $"Added {kind.ToString().ToLowerInvariant()} trigger '{name}' with id {td.Id}.{note}"
+            + NotCompiledNote);
     }
 
     /// <summary>
@@ -291,7 +311,8 @@ public static class TriggerCommand
             : " (" + string.Join(", ", fn.Parameters.Select(p =>
                 p.Value.Length == 0 ? "<empty>" : p.Value)) + ")";
         return Persist(doc, triggers!,
-            $"Added {kind.ToString().ToLowerInvariant()} '{name}'{shown} to '{td.Name}'.");
+            $"Added {kind.ToString().ToLowerInvariant()} '{name}'{shown} to '{td.Name}'."
+            + NotCompiledNote);
     }
 
     /// <summary>
