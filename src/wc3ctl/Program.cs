@@ -74,12 +74,17 @@ public static class Program
             Emit(json, r, () => Render.Info(r));
         }), mapArg, jsonOption);
 
-        var ls = new Command("ls", "List internal files.") { mapArg };
-        ls.SetHandler((string map, bool json) => RunSafely(() =>
+        var lsHarvestOption = new Option<bool>("--harvest",
+            "Recover unnamed entries' names from the map's own script and object data before listing "
+            + "(a second pass worth paying for on a protected map, wasted on a healthy one).");
+        var ls = new Command("ls", "List internal files.") { mapArg, lsHarvestOption };
+        ls.SetHandler((string map, bool harvest, bool json) => RunSafely(() =>
         {
-            var r = ListCommand.Execute(MapDocument.Load(map));
+            var doc = MapDocument.Load(map);
+            if (harvest) doc.HarvestAssetNames();
+            var r = ListCommand.Execute(doc, typeUnnamed: true);
             Emit(json, r, () => Render.List(r));
-        }), mapArg, jsonOption);
+        }), mapArg, lsHarvestOption, jsonOption);
 
         var rt = new Command("roundtrip", "Verify byte-faithful round-trip.") { mapArg };
         rt.SetHandler((string map, bool json) => RunSafely(() =>

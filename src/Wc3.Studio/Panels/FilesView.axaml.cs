@@ -16,20 +16,36 @@ public sealed class FileRow
     public bool Known { get; init; }
     public bool Parsed { get; init; }
 
+    /// <summary>Sniffed content kind for a nameless entry ("BLP texture", "empty", ...),
+    /// null for named entries. From ListCommand, the panel never sniffs bytes itself.</summary>
+    public string? ContentType { get; init; }
+
     public string DisplayName => Name ?? $"(unnamed #{Ordinal})";
     public string SizeText => SizeBytes.ToString("N0");
+
+    /// <summary>The Type column. A named entry shows its extension, a nameless one shows what
+    /// its bytes are, so a protected map's rows read "BLP texture" instead of nothing while
+    /// the Name column keeps saying the name is unknown.</summary>
+    public string TypeText => ContentType
+        ?? (Name is null ? "" : Path.GetExtension(Name).TrimStart('.').ToLowerInvariant());
     public string KnownText => Known ? "yes" : "";
     public string ParsedText => Parsed ? "yes" : "";
 }
 
 public partial class FilesView : UserControl, IMapPanel
 {
-    private enum SortColumn { Name, Size, Known, Parsed }
+    private enum SortColumn { Name, Size, Type, Known, Parsed }
 
     private MapSession? _session;
     private List<FileRow> _rows = new();
     private SortColumn _sortColumn = SortColumn.Name;
     private bool _sortAscending = true;
+
+    // Background nameless-entry typing (see BeginTypingNamelessEntries). The generation stamp
+    // keeps a pass started for an earlier map from touching a newer map's rows, and _typesReady
+    // tells RefreshList whether asking for types is a cache read or seconds of sniffing.
+    private int _typeGeneration;
+    private bool _typesReady;
 
     private readonly AudioPlayer _audio = new();
     private byte[]? _audioBytes;
@@ -72,13 +88,44 @@ public partial class FilesView : UserControl, IMapPanel
         }
 
         // Ordinal == position in doc.Files order, shared by ListCommand and ExtractCommand(All).
-        _rows = BuildRows(doc);
+        // First paint goes up without content types, because typing a protected map's 65,000
+        // nameless entries takes seconds and must not hold the UI thread. The background pass
+        // below warms the per-entry sniff cache and then refreshes the rows, the panel's usual
+        // blocked-then-settled shape.
+        _typesReady = false;
+        _rows = BuildRows(doc, withTypes: false);
         SummaryText.Text = $"{_rows.Count} file(s), {_rows.Sum(r => (long)r.SizeBytes):N0} bytes";
         PlaceholderText.IsVisible = false;
         ContentRoot.IsVisible = true;
         ResetPreview();
         ApplySort();
         ExportButton.IsEnabled = false; // re-sorting/reloading clears the selection
+        BeginTypingNamelessEntries(doc);
+    }
+
+    /// <summary>
+    /// Sniffs every nameless entry's content type off the UI thread, then refreshes the rows.
+    /// The sniff reads a bounded prefix per entry and caches its verdict on the entry, so the
+    /// refresh rebuild (and every later one) gets the types for free. A healthy map has no
+    /// nameless entries and skips all of this, no second rebuild, no flicker.
+    /// </summary>
+    private void BeginTypingNamelessEntries(Wc3.Model.MapDocument doc)
+    {
+        if (!doc.Files.Any(f => f.FileName is null)) { _typesReady = true; return; }
+        int generation = ++_typeGeneration;
+        Task.Run(() =>
+        {
+            foreach (var entry in doc.Files)
+                if (entry.FileName is null)
+                    Wc3.Model.ContentTypeSniffer.Sniff(entry);
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                // A newer map (or a re-shown one) owns the panel now, leave its rows alone.
+                if (generation != _typeGeneration || _session?.Current != doc) return;
+                _typesReady = true;
+                RefreshList();
+            });
+        });
     }
 
     // --- content preview (double-click a file) ---
@@ -294,19 +341,21 @@ public partial class FilesView : UserControl, IMapPanel
 
     private void OnFilterChanged(object? sender, TextChangedEventArgs e) => ApplySort();
 
-    /// <summary>Rebuild the row list from the current doc (override-aware sizes), preserving the preview.</summary>
+    /// <summary>Rebuild the row list from the current doc (override-aware sizes), preserving the preview.
+    /// Content types come along once the background typing pass has warmed the cache, before that a
+    /// refresh must not sniff synchronously (on the worst protected map that is seconds of work).</summary>
     private void RefreshList()
     {
         if (_session?.Current is not { } doc) return;
-        _rows = BuildRows(doc);
+        _rows = BuildRows(doc, withTypes: _typesReady);
         SummaryText.Text = $"{_rows.Count} file(s), {_rows.Sum(r => (long)r.SizeBytes):N0} bytes";
         ApplySort();
     }
 
     /// <summary>Rows from ListCommand, with byte sizes taken override-aware from doc.Files.</summary>
-    private static List<FileRow> BuildRows(Wc3.Model.MapDocument doc)
+    private static List<FileRow> BuildRows(Wc3.Model.MapDocument doc, bool withTypes)
     {
-        var files = ListCommand.Execute(doc).Files;
+        var files = ListCommand.Execute(doc, typeUnnamed: withTypes).Files;
         var rows = new List<FileRow>(files.Count);
         for (int i = 0; i < files.Count; i++)
         {
@@ -329,6 +378,7 @@ public partial class FilesView : UserControl, IMapPanel
             rows.Add(new FileRow
             {
                 Ordinal = i, Name = f.Name, SizeBytes = size, Known = f.Known, Parsed = f.Parsed,
+                ContentType = f.ContentType,
             });
         }
         return rows;
@@ -380,6 +430,7 @@ public partial class FilesView : UserControl, IMapPanel
 
     private void OnSortByName(object? sender, RoutedEventArgs e) => ToggleSort(SortColumn.Name);
     private void OnSortBySize(object? sender, RoutedEventArgs e) => ToggleSort(SortColumn.Size);
+    private void OnSortByType(object? sender, RoutedEventArgs e) => ToggleSort(SortColumn.Type);
     private void OnSortByKnown(object? sender, RoutedEventArgs e) => ToggleSort(SortColumn.Known);
     private void OnSortByParsed(object? sender, RoutedEventArgs e) => ToggleSort(SortColumn.Parsed);
 
@@ -400,6 +451,7 @@ public partial class FilesView : UserControl, IMapPanel
         IEnumerable<FileRow> sorted = _sortColumn switch
         {
             SortColumn.Size => src.OrderBy(r => r.SizeBytes),
+            SortColumn.Type => src.OrderBy(r => r.TypeText, StringComparer.OrdinalIgnoreCase),
             SortColumn.Known => src.OrderBy(r => r.Known),
             SortColumn.Parsed => src.OrderBy(r => r.Parsed),
             _ => src.OrderBy(r => r.DisplayName, StringComparer.OrdinalIgnoreCase),
@@ -410,6 +462,7 @@ public partial class FilesView : UserControl, IMapPanel
         var arrow = _sortAscending ? " ▲" : " ▼";
         NameHeader.Content = "Name" + (_sortColumn == SortColumn.Name ? arrow : "");
         SizeHeader.Content = "Size (bytes)" + (_sortColumn == SortColumn.Size ? arrow : "");
+        TypeHeader.Content = "Type" + (_sortColumn == SortColumn.Type ? arrow : "");
         KnownHeader.Content = "Known" + (_sortColumn == SortColumn.Known ? arrow : "");
         ParsedHeader.Content = "Parsed" + (_sortColumn == SortColumn.Parsed ? arrow : "");
     }
@@ -487,7 +540,7 @@ public partial class FilesView : UserControl, IMapPanel
     private async Task ExportRawAsync(IStorageProvider storage, Wc3.Model.MapDocument doc, FileRow row)
     {
         var suggested = row.Name is null
-            ? $"block_{row.Ordinal}.bin"
+            ? $"block_{row.Ordinal}.{Wc3.Model.ContentTypeSniffer.Sniff(doc.Files[row.Ordinal]).Extension}"
             : Sanitize(Path.GetFileName(row.Name));
         var file = await storage.SaveFilePickerAsync(new FilePickerSaveOptions
         {
@@ -556,7 +609,8 @@ public partial class FilesView : UserControl, IMapPanel
         long total = 0;
         foreach (var item in items)
         {
-            var dest = Path.GetFullPath(Path.Combine(root, SafeRelativePath(item.Name, item.BlockIndex)));
+            var ext = item.Name is null ? Wc3.Model.ContentTypeSniffer.Sniff(item.Bytes).Extension : "bin";
+            var dest = Path.GetFullPath(Path.Combine(root, SafeRelativePath(item.Name, item.BlockIndex, ext)));
             if (!dest.StartsWith(rootPrefix, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException($"refusing to write outside output directory: {item.Name}");
             Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
@@ -569,18 +623,19 @@ public partial class FilesView : UserControl, IMapPanel
     /// <summary>
     /// Maps an internal name to a safe relative path: splits on '\'/'/', drops
     /// '.'/'..'/empty segments, replaces invalid characters. Unnamed entries
-    /// (Name == null) go to _unnamed\block_&lt;n&gt;.bin.
+    /// (Name == null) go to _unnamed\block_&lt;n&gt;.&lt;ext&gt;, the extension taken
+    /// from the entry's sniffed content type so a nameless BLP extracts as a .blp.
     /// </summary>
-    private static string SafeRelativePath(string? name, int blockIndex)
+    private static string SafeRelativePath(string? name, int blockIndex, string unnamedExtension = "bin")
     {
-        if (name is null) return Path.Combine("_unnamed", $"block_{blockIndex}.bin");
+        if (name is null) return Path.Combine("_unnamed", $"block_{blockIndex}.{unnamedExtension}");
         var segments = name.Split('\\', '/')
             .Where(s => s.Length > 0 && s != "." && s != "..")
             .Select(Sanitize)
             .Where(s => s.Length > 0)
             .ToArray();
         return segments.Length == 0
-            ? Path.Combine("_unnamed", $"block_{blockIndex}.bin")
+            ? Path.Combine("_unnamed", $"block_{blockIndex}.{unnamedExtension}")
             : Path.Combine(segments);
     }
 

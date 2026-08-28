@@ -74,4 +74,31 @@ public class ExtractCommandTests
         Assert.All(r.Items, i => Assert.NotNull(i.Name));
         Assert.Contains(r.Items, i => i.Name == @"war3mapImported\a.mdx");
     }
+
+    [Fact]
+    public void Extraction_names_an_unnamed_entry_by_its_sniffed_type()
+    {
+        // An unnamed entry whose bytes are a recognisable BLP texture must extract as a
+        // .blp under _unnamed, not as an anonymous .bin, while staying visibly unnamed.
+        var blp = new byte[64];
+        System.Text.Encoding.ASCII.GetBytes("BLP1").CopyTo(blp, 0);
+        var doc = MapDocument.Load(SyntheticMap.Build(
+            new Dictionary<string, byte[]> { ["war3map.j"] = new byte[] { 7 } },
+            new[] { blp }));
+        var r = ExtractCommand.Execute(doc, new ExtractSelector { All = true });
+
+        var dir = Path.Combine(Path.GetTempPath(), "wc3ctl-extract-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var manifest = Wc3Ctl.ExtractWriter.WriteAll(r, dir);
+            var unnamed = manifest.Files.Single(f => f.Name is null);
+            Assert.EndsWith(".blp", unnamed.Path);
+            Assert.Contains("_unnamed", unnamed.Path);
+            Assert.Equal(blp, File.ReadAllBytes(unnamed.Path));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
 }

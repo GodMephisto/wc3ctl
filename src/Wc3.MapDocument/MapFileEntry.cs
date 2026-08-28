@@ -11,6 +11,18 @@ public sealed class MapFileEntry
     private byte[]? _rawBytes;
     private Lazy<byte[]>? _deferred;
     private int _deferredSize;
+    private Func<int, byte[]>? _prefixReader;
+
+    /// <summary>Cached verdict for <see cref="ContentTypeSniffer.Sniff(MapFileEntry)"/>, so
+    /// listing the same map twice sniffs each entry once. Only the original archive bytes get
+    /// cached, a pending replacement is sniffed fresh because it can change again.</summary>
+    internal SniffedContentType? SniffCache;
+
+    /// <summary>True when <see cref="MapDocument.HarvestAssetNames"/> recovered this entry's
+    /// name from the map's own script or object data. False for a name the archive's listfile
+    /// carried, or for a standard name Load probed. Listings surface this so a caller knows
+    /// which names are recovered guesses that happened to resolve, rather than stored names.</summary>
+    public bool NameFromHarvest { get; internal set; }
 
     /// <summary>
     /// The entry's original DECOMPRESSED bytes. Decompression is deferred until first
@@ -48,6 +60,32 @@ public sealed class MapFileEntry
     {
         _deferred = read;
         _deferredSize = size;
+    }
+
+    /// <summary>Arms cheap prefix reads for a deferred entry (see <see cref="ReadPrefix"/>).
+    /// <paramref name="readPrefix"/> takes a byte count and returns at most that many leading
+    /// bytes of the entry, decompressing only the sectors it touches.</summary>
+    internal void DeferPrefixRead(Func<int, byte[]> readPrefix) => _prefixReader = readPrefix;
+
+    /// <summary>
+    /// The first <paramref name="count"/> bytes of <see cref="CurrentBytes"/>, without
+    /// materializing the rest. Bytes already in memory (a pending replacement, an eager or
+    /// already-deferred read) are sliced. A still-deferred entry goes through the prefix
+    /// reader Load armed, which decompresses only the entry's leading sectors, so sweeping
+    /// every entry for a content sniff stays cheap on a 250 MB archive. The full-decompression
+    /// fallback at the bottom only runs for entries no reader was armed for, which are
+    /// placeholder entries whose <see cref="RawBytes"/> is already an empty array.
+    /// </summary>
+    public byte[] ReadPrefix(int count)
+    {
+        if (count <= 0) return Array.Empty<byte>();
+        if (OverrideBytes is { } pending) return Slice(pending, count);
+        if (_rawBytes is { } eager) return Slice(eager, count);
+        if (_deferred is { IsValueCreated: true } done) return Slice(done.Value, count);
+        if (_prefixReader is { } read) return read(count);
+        return Slice(RawBytes, count);
+
+        static byte[] Slice(byte[] all, int wanted) => all.Length <= wanted ? all : all[..wanted];
     }
 
     public required bool IsKnown { get; set; }

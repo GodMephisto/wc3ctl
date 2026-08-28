@@ -26,10 +26,16 @@ public static class Wc3Tools
         => Run(() => InfoCommand.Execute(LoadMap(map)));
 
     [McpServerTool(Name = "list_files", ReadOnly = true, Idempotent = true, OpenWorld = false)]
-    [Description("List the map archive's internal files: name (null = unnamed/protected entry), size in bytes, and whether wc3ctl knows/parses the format.")]
+    [Description("List the map archive's internal files, each with its name (null = unnamed/protected entry), size in bytes, whether wc3ctl knows/parses the format, and for unnamed entries the content type sniffed from their leading bytes ('BLP texture', 'MDX model', 'empty', ...).")]
     public static FileListResult ListFiles(
-        [Description("Path to a .w3x/.w3m map file.")] string map)
-        => Run(() => ListCommand.Execute(LoadMap(map)));
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Recover unnamed entries' names from the map's own script and object data before listing (worth paying for on a protected map). Recovered names are flagged nameFromHarvest.")] bool harvest = false)
+        => Run(() =>
+        {
+            var doc = LoadMap(map);
+            if (harvest) doc.HarvestAssetNames();
+            return ListCommand.Execute(doc, typeUnnamed: true);
+        });
 
     [McpServerTool(Name = "object_list", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("List the map's custom/modified objects of one Object Editor kind: rawcode, base rawcode (null = created from scratch) and resolved name.")]

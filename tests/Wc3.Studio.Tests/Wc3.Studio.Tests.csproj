@@ -26,4 +26,10 @@
     <ProjectReference Include="..\..\src\Wc3.Studio\Wc3.Studio.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Shared with Wc3.Tests rather than copied, both suites build the same synthetic
+         archives (here, a map with nameless entries for the Files panel). -->
+    <Compile Include="..\Wc3.Tests\SyntheticMap.cs" Link="SyntheticMap.cs" />
+  </ItemGroup>
+
 </Project>
