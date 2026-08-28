@@ -109,36 +109,55 @@ public static class LintCommand
     /// listed path should exist. Adding an archive entry without its import entry is easy to do
     /// and invisible to a content diff.
     /// </summary>
+    /// <remarks>
+    /// A WARNING, not an error, and the reasoning is worth keeping because the opposite mistake has
+    /// been made in this file before. Measured across 34 maps in the user's Maps folder, 4 have an
+    /// .imp listing files the archive does not contain, up to 1,138 of them, and all 4 are
+    /// published playable maps. The absent entries are checked by hand and are genuinely absent,
+    /// none is a prefix-spelling miss. What makes them harmless is that nothing references them,
+    /// which is why asset-references passes on those maps, and the game loads an asset by path when
+    /// something asks for it rather than by walking this table.
+    ///
+    /// So the table is stale bookkeeping, the normal residue of an optimizer stripping unused
+    /// imports without rewriting it. Reporting it as an error made `lint` exit 1 on working maps,
+    /// which is how a tool teaches people to ignore its exit code.
+    ///
+    /// The other direction is the one with teeth, and the message says so. An archive entry the
+    /// table does NOT list survives in the game but is invisible to the World Editor's import
+    /// manager, so the next World Editor save can drop it. That is data loss rather than a
+    /// rendering fault, and it is still not something that stops the current map running, which is
+    /// what an error-level finding claims.
+    /// </remarks>
     private static LintCheck ImportTableConsistent(MapDocument doc)
     {
-        var imp = doc.GetFile("war3map.imp");
-        if (imp is null)
+        if (doc.GetFile(ImportsCommand.ImpFileName) is null)
             return new("import-table", LintSeverity.Ok, "map has no war3map.imp", Array.Empty<string>());
 
-        var listed = ImportedPathsOf(doc);
+        var listing = ImportsCommand.Execute(doc);
+        var stale = listing.Entries.Where(e => e.InManifest && !e.InArchive).ToList();
+        var unlisted = listing.Entries.Where(e => !e.InManifest && e.InArchive).ToList();
+
+        if (stale.Count == 0 && unlisted.Count == 0)
+            return new("import-table", LintSeverity.Ok,
+                $"war3map.imp agrees with the archive ({listing.Entries.Count} entries)",
+                Array.Empty<string>());
+
         var problems = new List<string>();
+        foreach (var e in stale)
+            problems.Add($"war3map.imp lists '{e.Path}', which is not in the archive");
+        foreach (var e in unlisted)
+            problems.Add($"'{e.Path}' is in the archive but not listed in war3map.imp");
 
-        // An .imp routinely spells a separator differently from the archive (forward slash in the
-        // table, backslash in the stored name), so resolve through the same spelling expansion the
-        // loader effectively does rather than comparing the literal strings.
-        foreach (var path in listed)
-            if (!AssetPathCandidates.Expand(path).Any(c => doc.GetFile(c) is not null))
-                problems.Add($"war3map.imp lists '{path}', which is not in the archive");
+        // Say which direction, and what each costs, rather than one count of "disagree".
+        var parts = new List<string>();
+        if (stale.Count > 0)
+            parts.Add($"{stale.Count} listed path(s) are not in the archive (stale table entries, "
+                    + "the map still runs, see asset-references for whether anything needs them)");
+        if (unlisted.Count > 0)
+            parts.Add($"{unlisted.Count} archive entry(ies) are not listed (they load in the game, "
+                    + "but the World Editor cannot see them and may drop them on its next save)");
 
-        var listedSpellings = listed.SelectMany(AssetPathCandidates.Expand)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        foreach (var entry in doc.Files)
-        {
-            if (entry.FileName is null) continue;
-            if (!entry.FileName.StartsWith("war3mapImported", StringComparison.OrdinalIgnoreCase)) continue;
-            if (!listedSpellings.Contains(entry.FileName))
-                problems.Add($"'{entry.FileName}' is in the archive but not listed in war3map.imp");
-        }
-
-        return problems.Count == 0
-            ? new("import-table", LintSeverity.Ok, $"war3map.imp agrees with the archive ({listed.Count} entries)", Array.Empty<string>())
-            : new("import-table", LintSeverity.Error,
-                $"war3map.imp and the archive disagree on {problems.Count} path(s)", Capped(problems));
+        return new("import-table", LintSeverity.Warning, string.Join("; ", parts), Capped(problems));
     }
 
     /// <summary>
@@ -245,24 +264,31 @@ public static class LintCommand
                 + "The target's other content renders with these.", Capped(clobbered));
     }
 
+    /// <summary>
+    /// Paths the map's own war3map.imp claims to import, in both the spelling the table uses and
+    /// the archive spelling WorldEdit prepends, so a membership test hits either way.
+    /// </summary>
+    /// <remarks>
+    /// This used to hand-roll the .imp parse by scanning NUL-delimited runs from offset 8, and it
+    /// was wrong in a way that produced a lot of confident noise. The format is a flag byte
+    /// followed by a NUL-terminated path, and the scan accumulated the FLAG BYTE into the path, so
+    /// every path came out with a leading control character and none of them ever resolved.
+    ///
+    /// On FgoRD_1.11 that reported 1,124 problems, 562 "listed but not in the archive" and the same
+    /// 562 as "in the archive but not listed", which is the tell, the same files counted twice from
+    /// both directions. The canonical reader says the real number is ONE. ImportsCommand had always
+    /// parsed it properly through War3Net's model and knew about the war3mapImported\ prefix, so
+    /// the duplicate was not only wrong but unnecessary.
+    /// </remarks>
     private static HashSet<string> ImportedPathsOf(MapDocument doc)
     {
         var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        if (doc.GetFile("war3map.imp") is not { } imp) return set;
-        var bytes = imp.CurrentBytes;
-        // Entries are a flag byte followed by a NUL-terminated path. Reading the paths out
-        // directly keeps this independent of the header's declared count, which is what a
-        // consistency check should do.
-        var cur = new List<byte>();
-        for (int i = 8; i < bytes.Length; i++)
+        foreach (var e in ImportsCommand.Execute(doc).Entries)
         {
-            if (bytes[i] != 0) { cur.Add(bytes[i]); continue; }
-            if (cur.Count > 1)
-            {
-                var s = System.Text.Encoding.UTF8.GetString(cur.ToArray()).Trim();
-                if (s.Length > 1) set.Add(s);
-            }
-            cur.Clear();
+            if (!e.InManifest) continue;
+            set.Add(e.Path);
+            if (!e.Path.StartsWith(ImportsCommand.DefaultImportPrefix, StringComparison.OrdinalIgnoreCase))
+                set.Add(ImportsCommand.DefaultImportPrefix + e.Path);
         }
         return set;
     }

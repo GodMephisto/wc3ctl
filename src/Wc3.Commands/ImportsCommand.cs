@@ -61,6 +61,35 @@ public static class ImportsCommand
         return new ImportsListResult(manifest is not null, BuildEntries(manifestPaths, archiveFiles));
     }
 
+
+    /// <summary>
+    /// The spellings an archive may store a manifest path under, most literal first. An MPQ name
+    /// uses a backslash, and a manifest routinely does not.
+    /// </summary>
+    /// <remarks>
+    /// Measured on GGGA_V0.04b.w3x, whose war3map.imp writes 2,113 paths with forward slashes,
+    /// "Archer/Archer_R_effect1.mp3", where the archive stores them with backslashes. Matching
+    /// only the literal spelling and the prefixed literal reported all 2,113 as missing from the
+    /// archive AND the same 2,113 as missing from the manifest, which is the tell for a spelling
+    /// problem, the same files counted from both directions.
+    ///
+    /// Worth recording that the check this replaced in LintCommand had the opposite pair of
+    /// strengths. It expanded separators, so it got this map nearly right, and it hand-rolled the
+    /// .imp parse and read the format's leading flag byte into every path, so it reported 1,124
+    /// phantom problems on FgoRD_1.11 where the truth is one. Each implementation was correct
+    /// exactly where the other was wrong, which is the argument for there being one.
+    /// </remarks>
+    public static IEnumerable<string> ArchiveSpellings(string manifestPath)
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var spelling in new[] { manifestPath, manifestPath.Replace('/', '\\') })
+        {
+            if (seen.Add(spelling)) yield return spelling;
+            var prefixed = DefaultImportPrefix + spelling;
+            if (seen.Add(prefixed)) yield return prefixed;
+        }
+    }
+
     /// <summary>
     /// Pure merge of the manifest path list with the archive's candidate import files
     /// (name → size in bytes). Case sensitivity of the match follows
@@ -78,9 +107,7 @@ public static class ImportsCommand
         foreach (var path in manifestPaths)
         {
             if (string.IsNullOrEmpty(path) || !seen.Add(path)) continue;
-            string? archiveName = null;
-            if (archiveFiles.ContainsKey(path)) archiveName = path;
-            else if (archiveFiles.ContainsKey(DefaultImportPrefix + path)) archiveName = DefaultImportPrefix + path;
+            string? archiveName = ArchiveSpellings(path).FirstOrDefault(archiveFiles.ContainsKey);
             if (archiveName is not null) claimed.Add(archiveName);
             entries.Add(new ImportEntry(
                 path,
