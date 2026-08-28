@@ -365,7 +365,14 @@ public static class Wc3Tools
                 new TextContentBlock { Text = JsonSerializer.Serialize(info, Wc3McpServer.JsonOptions) },
             };
             if (inline)
-                content.Add(new ImageContentBlock { MimeType = "image/png", Data = png });
+                // FromBytes, not the Data setter. Data holds the BASE64-ENCODED bytes, so
+                // assigning the raw PNG to it put binary where base64 text belongs, and the
+                // reply did not survive the round trip. An MCP client failed to deserialize
+                // it with "The JSON value could not be converted to ContentBlock.
+                // Path: $.content[1]", so every agent calling render_model got that instead
+                // of an image. FromBytes is the SDK's factory for decoded bytes and does the
+                // encoding itself.
+                content.Add(ImageContentBlock.FromBytes(png, "image/png"));
             return new CallToolResult { Content = content };
         });
 
