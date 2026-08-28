@@ -1132,7 +1132,18 @@ public static class Program
 
         // Generic save-and-report for any (Ok, Message) mutation result. On failure emits the
         // message and sets exit 1; on success saves to --out (or a sibling .edited) and reports.
-        void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok, string message)
+        static bool TryParseEcaKind(string text, out War3Net.Build.Script.TriggerFunctionType kind)
+{
+    switch (text.Trim().ToLowerInvariant())
+    {
+        case "event": kind = War3Net.Build.Script.TriggerFunctionType.Event; return true;
+        case "condition": kind = War3Net.Build.Script.TriggerFunctionType.Condition; return true;
+        case "action": kind = War3Net.Build.Script.TriggerFunctionType.Action; return true;
+        default: kind = default; return false;
+    }
+}
+
+void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok, string message)
         {
             if (!ok)
             {
@@ -1471,8 +1482,76 @@ public static class Program
             "Id of the category to add the trigger to, or -1 for the top level.");
         var trigCommentOpt = new Option<bool>("--comment",
             "Create a comment rather than a GUI trigger.");
+        var ecaKindArg = new Argument<string>("kind", "event, condition or action.");
+        var ecaNameArg = new Argument<string>("name",
+            "Function name from the World-Editor table, for example DisplayTextToForce. "
+            + "Use 'trigger catalog list' to find one.");
+        // An OPTION rather than a trailing variadic argument, because System.CommandLine binds a
+        // ZeroOrMore positional greedily: it swallowed the id, the kind and the name, and the
+        // command then reported "MapInitializationEvent takes 0 parameter(s), but 3 were given".
+        // Repeating -p is unambiguous and reads better for values that contain spaces.
+        var ecaParamsOpt = new Option<string[]>(new[] { "-p", "--param" },
+            "A parameter value, repeated once per parameter, in the order the function declares "
+            + "them. Any you leave off are filled from the World-Editor table's own defaults.")
+        { AllowMultipleArgumentsPerToken = false };
+        var ecaIndexArg = new Argument<int>("index",
+            "Zero-based position of the function within the trigger, as 'trigger read' lists it.");
+
         var trigRecursiveOpt = new Option<bool>(new[] { "-r", "--recursive" },
             "Remove the item's descendants too, rather than refusing to orphan them.");
+
+        // ---- events, conditions and actions ----
+        // war3map.wtg stores a function's parameters but not how many there are, so the count is
+        // taken from the World-Editor table on read. Writing the wrong number makes the file
+        // unreadable rather than merely wrong, which is why the arity is not negotiable here.
+        var ecaAdd = new Command("add-eca",
+            "Add an event, condition or action to a GUI trigger and save the edited map. "
+            + "Parameters you leave off are filled from the World-Editor table's own defaults, "
+            + "because a function written with the wrong number of parameters produces a map "
+            + "nothing can read.")
+        { mapArg, trigIdArg, ecaKindArg, ecaNameArg, ecaParamsOpt, setOut };
+        ecaAdd.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            if (!TryParseEcaKind(p.GetValueForArgument(ecaKindArg), out var kind))
+            {
+                Console.Error.WriteLine("kind must be event, condition or action.");
+                Environment.ExitCode = 1;
+                return;
+            }
+            var doc = MapDocument.Load(map);
+            var r = TriggerCommand.AddFunction(doc, p.GetValueForArgument(trigIdArg), kind,
+                p.GetValueForArgument(ecaNameArg), p.GetValueForOption(ecaParamsOpt));
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message);
+        }));
+
+        var ecaRemove = new Command("remove-eca",
+            "Remove one event, condition or action from a GUI trigger by its position.")
+        { mapArg, trigIdArg, ecaIndexArg, setOut };
+        ecaRemove.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = TriggerCommand.RemoveFunction(doc, p.GetValueForArgument(trigIdArg),
+                p.GetValueForArgument(ecaIndexArg));
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message);
+        }));
+
+        var ecaEnabled = new Command("set-eca-enabled",
+            "Enable or disable ONE event, condition or action within a trigger, which is the "
+            + "World Editor's per-line toggle rather than the whole-trigger one.")
+        { mapArg, trigIdArg, ecaIndexArg, trigOnArg, setOut };
+        ecaEnabled.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = TriggerCommand.SetFunctionEnabled(doc, p.GetValueForArgument(trigIdArg),
+                p.GetValueForArgument(ecaIndexArg), p.GetValueForArgument(trigOnArg));
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message);
+        }));
 
         var trigAddCat = new Command("add-category",
             "Add a category to the trigger tree and save the edited map.")
@@ -2425,6 +2504,8 @@ public static class Program
         trigger.AddCommand(trigInitiallyOn); trigger.AddCommand(trigRunOnInit);
         trigger.AddCommand(trigAddCat); trigger.AddCommand(trigAdd);
         trigger.AddCommand(trigRemove);
+        trigger.AddCommand(ecaAdd); trigger.AddCommand(ecaRemove);
+        trigger.AddCommand(ecaEnabled);
         root.AddCommand(trigger);
         root.AddCommand(editor);
 

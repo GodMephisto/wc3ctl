@@ -889,6 +889,61 @@ public static class Wc3Tools
             return (r.Ok, r.Message);
         }));
 
+    [McpServerTool(Name = "trigger_add_eca", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Add an event, condition or action to a GUI trigger and save the edited map to out_path. Parameters are given in the order the function declares them; any left off are filled from the World-Editor table's own defaults. This matters more than it looks: war3map.wtg stores a function's parameters but NOT how many there are, so a function written with the wrong number of parameters yields a map that nothing, including this tool, can read afterwards. Use trigger_catalog_list and trigger_catalog_describe to find a function name and its arguments. Custom-text (script) triggers are refused, since their body is JASS rather than a list of functions. The input map is NEVER modified in place.")]
+    public static EditToolResult TriggerAddEca(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Trigger item id, from triggers_read.")] int id,
+        [Description("One of: event, condition, action.")] string kind,
+        [Description("Function name from the World-Editor table, for example DisplayTextToForce.")] string name,
+        [Description("Parameter values in declared order. Omit to take the table's defaults.")] string[]? parameters = null)
+        => Run(() => SaveEdit(map, out_path, doc =>
+        {
+            if (!TryParseEcaKind(kind, out var parsed))
+                return (false, "kind must be event, condition or action.");
+            var r = TriggerCommand.AddFunction(doc, id, parsed, name, parameters);
+            return (r.Ok, r.Message);
+        }));
+
+    [McpServerTool(Name = "trigger_remove_eca", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = false)]
+    [Description("Remove one event, condition or action from a GUI trigger by its zero-based position, and save the edited map to out_path. Positions come from triggers_read, which lists a trigger's functions in order. The input map is NEVER modified in place.")]
+    public static EditToolResult TriggerRemoveEca(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Trigger item id, from triggers_read.")] int id,
+        [Description("Zero-based position of the function within the trigger.")] int index)
+        => Run(() => SaveEdit(map, out_path, doc =>
+        {
+            var r = TriggerCommand.RemoveFunction(doc, id, index);
+            return (r.Ok, r.Message);
+        }));
+
+    [McpServerTool(Name = "trigger_set_eca_enabled", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Enable or disable ONE event, condition or action within a trigger, the World Editor's per-line toggle rather than the whole-trigger one, and save the edited map to out_path. The input map is NEVER modified in place.")]
+    public static EditToolResult TriggerSetEcaEnabled(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Trigger item id, from triggers_read.")] int id,
+        [Description("Zero-based position of the function within the trigger.")] int index,
+        [Description("True to enable, false to disable.")] bool on)
+        => Run(() => SaveEdit(map, out_path, doc =>
+        {
+            var r = TriggerCommand.SetFunctionEnabled(doc, id, index, on);
+            return (r.Ok, r.Message);
+        }));
+
+    private static bool TryParseEcaKind(string text, out War3Net.Build.Script.TriggerFunctionType kind)
+    {
+        switch ((text ?? string.Empty).Trim().ToLowerInvariant())
+        {
+            case "event": kind = War3Net.Build.Script.TriggerFunctionType.Event; return true;
+            case "condition": kind = War3Net.Build.Script.TriggerFunctionType.Condition; return true;
+            case "action": kind = War3Net.Build.Script.TriggerFunctionType.Action; return true;
+            default: kind = default; return false;
+        }
+    }
+
     [McpServerTool(Name = "trigger_add_category", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Add a category to the map's GUI trigger tree and save the edited map to out_path. A category is a folder in the trigger tree, so this is always safe: categories hold no script and adding one moves nothing. The input map is NEVER modified in place. Writes war3map.wtg only.")]
     public static EditToolResult TriggerAddCategory(

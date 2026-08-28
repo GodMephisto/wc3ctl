@@ -264,6 +264,102 @@ public static class TriggerCommand
         return Persist(doc, triggers, $"Removed {what}.");
     }
 
+    /// <summary>
+    /// Appends an event, condition or action to a GUI trigger.
+    ///
+    /// The parameters are built by <see cref="TriggerFunctionBuilder"/> against the World-Editor
+    /// function table, and that is not a nicety. war3map.wtg stores a function's parameters but
+    /// not how many there are, so the count is taken from the table on read. Writing the wrong
+    /// number does not make a wrong trigger, it makes a file nobody can parse, this tool included.
+    ///
+    /// Refuses on a custom-text trigger, whose body is JASS in war3map.wct rather than a list of
+    /// functions, and which this cannot edit at all because that file is never written.
+    /// </summary>
+    public static TriggerOpResult AddFunction(
+        MapDocument doc, int id, TriggerFunctionType kind, string name,
+        IReadOnlyList<string>? parameters = null)
+    {
+        var (triggers, td, refusal) = ResolveGuiTrigger(doc, id);
+        if (refusal is not null) return new TriggerOpResult(false, refusal);
+
+        var (fn, error) = TriggerFunctionBuilder.Build(kind, name, parameters);
+        if (error is not null || fn is null) return new TriggerOpResult(false, error ?? "Unknown error.");
+
+        td!.Functions.Add(fn);
+        string shown = fn.Parameters.Count == 0
+            ? string.Empty
+            : " (" + string.Join(", ", fn.Parameters.Select(p =>
+                p.Value.Length == 0 ? "<empty>" : p.Value)) + ")";
+        return Persist(doc, triggers!,
+            $"Added {kind.ToString().ToLowerInvariant()} '{name}'{shown} to '{td.Name}'.");
+    }
+
+    /// <summary>
+    /// Removes the function at <paramref name="index"/> from a GUI trigger, counting over the
+    /// trigger's whole function list in the order <see cref="TriggerReadCommand"/> reports it.
+    /// </summary>
+    public static TriggerOpResult RemoveFunction(MapDocument doc, int id, int index)
+    {
+        var (triggers, td, refusal) = ResolveGuiTrigger(doc, id);
+        if (refusal is not null) return new TriggerOpResult(false, refusal);
+
+        if (index < 0 || index >= td!.Functions.Count)
+            return new TriggerOpResult(false,
+                td.Functions.Count == 0
+                    ? $"'{td.Name}' has no events, conditions or actions to remove."
+                    : $"'{td.Name}' has {td.Functions.Count} function(s), so index {index} is out "
+                      + $"of range (0 to {td.Functions.Count - 1}).");
+
+        var removed = td.Functions[index];
+        td.Functions.RemoveAt(index);
+        return Persist(doc, triggers!,
+            $"Removed {removed.Type.ToString().ToLowerInvariant()} '{removed.Name}' from "
+            + $"'{td.Name}'.");
+    }
+
+    /// <summary>Enables or disables one function within a trigger, the World Editor's per-line
+    /// toggle rather than the whole-trigger one.</summary>
+    public static TriggerOpResult SetFunctionEnabled(
+        MapDocument doc, int id, int index, bool on)
+    {
+        var (triggers, td, refusal) = ResolveGuiTrigger(doc, id);
+        if (refusal is not null) return new TriggerOpResult(false, refusal);
+        if (index < 0 || index >= td!.Functions.Count)
+            return new TriggerOpResult(false,
+                $"'{td.Name}' has {td.Functions.Count} function(s), so index {index} is out of range.");
+
+        td.Functions[index].IsEnabled = on;
+        return Persist(doc, triggers!,
+            $"{(on ? "Enabled" : "Disabled")} {td.Functions[index].Type.ToString().ToLowerInvariant()} "
+            + $"'{td.Functions[index].Name}' in '{td.Name}'.");
+    }
+
+    /// <summary>Resolves an id to a GUI trigger, or explains why it is not one.</summary>
+    private static (MapTriggers?, TriggerDefinition?, string?) ResolveGuiTrigger(
+        MapDocument doc, int id)
+    {
+        var triggers = GetTriggers(doc);
+        var item = triggers.TriggerItems.FirstOrDefault(i => i.Id == id);
+        if (item is null) return (null, null, $"No trigger item with id {id}.");
+
+        int sharing = triggers.TriggerItems.Count(i => i.Id == id);
+        if (sharing > 1)
+            return (null, null,
+                $"{sharing} trigger items share id {id}, so it does not identify one item. "
+                + "This map numbers items per type rather than uniquely.");
+
+        if (item is not TriggerDefinition td)
+            return (null, null, $"Trigger item {id} is a {item.Type}, not a trigger.");
+
+        if (WctPairing.IsCustomText(td))
+            return (null, null,
+                $"'{td.Name}' is a custom-text trigger. Its body is JASS in "
+                + $"{CustomTextFileName}, not a list of events and actions, and that file is never "
+                + "written back. Edit the map script instead.");
+
+        return (triggers, td, null);
+    }
+
     /// <summary>Why this removal would move a war3map.wct code body onto the wrong trigger, or
     /// null when it provably would not.</summary>
     private static string? WctRemovalRefusal(

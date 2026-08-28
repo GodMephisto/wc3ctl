@@ -55,7 +55,21 @@ public partial class TriggerView : UserControl, IMapPanel
         MapInitCheck.IsCheckedChanged += (_, _) =>
             OnFlagToggled((doc, id, on) => TriggerCommand.SetRunOnMapInit(doc, id, on),
                 MapInitCheck.IsChecked);
+
+        EcaTree.SelectionChanged += (_, _) =>
+            EcaRemoveButton.IsEnabled = EcaBar.IsVisible && SelectedFunctionIndex is not null;
     }
+
+    /// <summary>
+    /// Position of the selected function within its trigger, or null when the selection is a
+    /// section header or nothing.
+    ///
+    /// The ECA tree groups functions into Events / Conditions / Actions sections for reading,
+    /// while the command layer addresses them by their position in the trigger's single function
+    /// list. The tag carries that position so the two never have to be reconciled by counting.
+    /// </summary>
+    private int? SelectedFunctionIndex =>
+        EcaTree.SelectedItem is TreeViewItem { Tag: int i } ? i : null;
 
     public void ShowMap(MapSession session)
     {
@@ -256,6 +270,11 @@ public partial class TriggerView : UserControl, IMapPanel
 
         var trig = SelectedTrigger;
         FlagBar.IsVisible = trig is not null;
+        // Only a GUI trigger has events, conditions and actions. A custom-text trigger's body is
+        // JASS in war3map.wct, which is never written, so offering the bar there would offer an
+        // edit that can only be refused.
+        EcaBar.IsVisible = trig is not null && !trig.IsCustomText;
+        EcaRemoveButton.IsEnabled = EcaBar.IsVisible && SelectedFunctionIndex is not null;
         if (trig is null) return;
 
         // Set the boxes without letting them fire an edit for the value they already carry.
@@ -323,6 +342,47 @@ public partial class TriggerView : UserControl, IMapPanel
         Mutate(doc => TriggerCommand.Remove(doc, item.Id, RecursiveCheck.IsChecked == true));
     }
 
+    private void OnAddEcaClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (SelectedTrigger is not { } trig)
+        {
+            StatusText.Text = "Select a GUI trigger first.";
+            return;
+        }
+        var name = EcaNameBox.Text?.Trim() ?? string.Empty;
+        if (name.Length == 0)
+        {
+            StatusText.Text = "Type the function name, for example DisplayTextToForce.";
+            return;
+        }
+
+        var kind = (EcaKindBox.SelectedIndex) switch
+        {
+            0 => War3Net.Build.Script.TriggerFunctionType.Event,
+            1 => War3Net.Build.Script.TriggerFunctionType.Condition,
+            _ => War3Net.Build.Script.TriggerFunctionType.Action,
+        };
+
+        // Empty entries are dropped rather than sent as blank values, so "a,,b" cannot silently
+        // become a parameter the World Editor shows as empty.
+        var values = (EcaParamsBox.Text ?? string.Empty)
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        if (Mutate(doc => TriggerCommand.AddFunction(doc, trig.Id, kind, name, values)))
+            EcaNameBox.Text = EcaParamsBox.Text = string.Empty;
+    }
+
+    private void OnRemoveEcaClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (SelectedTrigger is not { } trig) { StatusText.Text = "Select a GUI trigger first."; return; }
+        if (SelectedFunctionIndex is not { } index)
+        {
+            StatusText.Text = "Select the event, condition or action to remove.";
+            return;
+        }
+        Mutate(doc => TriggerCommand.RemoveFunction(doc, trig.Id, index));
+    }
+
     private void OnFlagToggled(Func<MapDocument, int, bool, TriggerOpResult> op, bool? value)
     {
         if (_syncingFlags || value is not { } on) return;
@@ -347,12 +407,12 @@ public partial class TriggerView : UserControl, IMapPanel
     /// either way. Selection is restored by id afterwards, since rebuilding the tree throws
     /// the TreeViewItem instances away.
     /// </summary>
-    private void Mutate(Func<MapDocument, TriggerOpResult> op)
+    private bool Mutate(Func<MapDocument, TriggerOpResult> op)
     {
         if (_session is not { Current: { } doc } session)
         {
             StatusText.Text = "No map open.";
-            return;
+            return false;
         }
 
         TriggerOpResult result;
@@ -363,7 +423,7 @@ public partial class TriggerView : UserControl, IMapPanel
         catch (Exception ex)
         {
             StatusText.Text = $"Edit failed: {ex.Message}";
-            return;
+            return false;
         }
 
         int? keep = SelectedItem?.Id;
@@ -377,6 +437,7 @@ public partial class TriggerView : UserControl, IMapPanel
             NameBox.Text = string.Empty;
             MapEdited?.Invoke(this, EventArgs.Empty);
         }
+        return result.Ok;
     }
 
     /// <summary>Re-selects the item carrying this id after a rebuild, so an edit does not
@@ -468,6 +529,12 @@ public partial class TriggerView : UserControl, IMapPanel
     {
         EcaTree.Items.Clear();
 
+        // The tree groups by kind for reading, while TriggerCommand addresses a function by its
+        // position in the trigger's single flat list. Capturing that position here means the two
+        // never have to be reconciled by counting sections.
+        var indexOf = new Dictionary<TriggerFunctionInfo, int>();
+        for (int i = 0; i < functions.Count; i++) indexOf[functions[i]] = i;
+
         var sections = new (string Kind, string Title)[]
         {
             ("Event", "Events"),
@@ -485,7 +552,7 @@ public partial class TriggerView : UserControl, IMapPanel
                 IsExpanded = true,
             };
             foreach (var fn in group)
-                section.Items.Add(MakeFunctionItem(fn));
+                section.Items.Add(MakeFunctionItem(fn, indexOf));
             EcaTree.Items.Add(section);
         }
 
@@ -498,7 +565,7 @@ public partial class TriggerView : UserControl, IMapPanel
                 IsExpanded = true,
             };
             foreach (var fn in other)
-                section.Items.Add(MakeFunctionItem(fn));
+                section.Items.Add(MakeFunctionItem(fn, indexOf));
             EcaTree.Items.Add(section);
         }
     }
@@ -507,7 +574,8 @@ public partial class TriggerView : UserControl, IMapPanel
     /// parameter strings the command layer produced, recursing into nested blocks
     /// (if/then/else, loops, and/or). Long rows trim with the full text on the
     /// tooltip.</summary>
-    private static TreeViewItem MakeFunctionItem(TriggerFunctionInfo fn)
+    private static TreeViewItem MakeFunctionItem(
+        TriggerFunctionInfo fn, IReadOnlyDictionary<TriggerFunctionInfo, int>? indexOf = null)
     {
         var text = $"{fn.Kind}: {fn.Name}({string.Join(", ", fn.Parameters)})";
         if (!fn.Enabled)
@@ -523,6 +591,9 @@ public partial class TriggerView : UserControl, IMapPanel
         ToolTip.SetTip(label, text);
 
         var item = new TreeViewItem { Header = label, IsExpanded = true };
+        // Only top-level functions carry a position, because only those can be removed: a nested
+        // block's children belong to their parent rather than to the trigger's list.
+        if (indexOf is not null && indexOf.TryGetValue(fn, out int at)) item.Tag = at;
         foreach (var child in fn.Children)
             item.Items.Add(MakeFunctionItem(child));
         return item;

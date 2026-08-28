@@ -335,4 +335,60 @@ public class TriggerPanelEditTests
         Assert.Contains("without moving code", Status(view));
         Assert.Equal(0, edits);
     }
+
+    // ---------------------------------------------------------------- events, conditions, actions
+
+    [AvaloniaFact]
+    public void Adding_an_action_from_the_panel_persists_and_stays_readable()
+    {
+        var (view, session, window) = Shown(SimpleMap());
+        SelectTrigger(view, "Melee Init");
+
+        Named<TextBox>(view, "EcaNameBox").Text = "DisplayTextToForce";
+        Named<TextBox>(view, "EcaParamsBox").Text = "GetPlayersAll, hello from the panel";
+        Press(view, window, "EcaAddButton");
+
+        Assert.Contains("Added action", Status(view));
+
+        // Read back through the real reader, which is the check that matters: a function written
+        // with the wrong arity makes the whole wtg unparseable and the panel would show nothing.
+        var model = TriggerReadCommand.GetTriggers(session.Current!);
+        var fn = model.Triggers.Single(t => t.Name == "Melee Init").Functions.Single();
+        Assert.Equal("Action", fn.Kind);
+        Assert.Equal("DisplayTextToForce", fn.Name);
+        Assert.Equal(2, fn.Parameters.Count);
+    }
+
+    [AvaloniaFact]
+    public void An_unknown_function_name_is_reported_and_nothing_is_written()
+    {
+        var (view, session, window) = Shown(SimpleMap());
+        SelectTrigger(view, "Melee Init");
+        Named<TextBox>(view, "EcaNameBox").Text = "NotARealAction";
+        Press(view, window, "EcaAddButton");
+
+        Assert.Contains("declares no action", Status(view));
+        Assert.Empty(TriggerReadCommand.GetTriggers(session.Current!)
+            .Triggers.Single(t => t.Name == "Melee Init").Functions);
+    }
+
+    [AvaloniaFact]
+    public void The_eca_bar_is_hidden_for_a_custom_text_trigger()
+    {
+        // Its body is JASS in war3map.wct, which is never written, so the bar would only be able
+        // to refuse.
+        var (view, _, window) = Shown(MapWithCode());
+        SelectTrigger(view, "First");
+        window.UpdateLayout();
+        Assert.False(Named<WrapPanel>(view, "EcaBar").IsVisible);
+    }
+
+    [AvaloniaFact]
+    public void The_eca_bar_is_shown_for_a_gui_trigger()
+    {
+        var (view, _, window) = Shown(SimpleMap());
+        SelectTrigger(view, "Melee Init");
+        window.UpdateLayout();
+        Assert.True(Named<WrapPanel>(view, "EcaBar").IsVisible);
+    }
 }
