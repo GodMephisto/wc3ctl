@@ -486,7 +486,11 @@ public partial class FilesView : UserControl, IMapPanel
         var ext = Path.GetExtension(row.Name ?? "").ToLowerInvariant();
         try
         {
-            if (ext == ".blp") await ExportImageAsync(storage, doc, row);
+            // Every source format TextureConvert accepts, not just .blp. A .dds entry used to
+            // fall through to the raw export and hand back undecoded bytes, while the preview
+            // pane beside it rendered the very same file, because FilePreviewCommand decodes DDS
+            // and this gate did not.
+            if (ImageExtensions.Contains(ext)) await ExportImageAsync(storage, doc, row);
             else if (ext is ".mdx" or ".mdl") await ExportModelAsync(storage, doc, row);
             else await ExportRawAsync(storage, doc, row);
         }
@@ -496,7 +500,15 @@ public partial class FilesView : UserControl, IMapPanel
         }
     }
 
-    /// <summary>.blp → save dialog defaulting to &lt;name&gt;.png (the chosen extension picks the format).</summary>
+    /// <summary>The image formats TextureConvert can read, so the export gate and the converter
+    /// agree instead of the panel guessing. See Wc3.Render.TextureConvert.</summary>
+    private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".blp", ".dds", ".png", ".jpg", ".jpeg", ".bmp", ".tga", ".gif",
+    };
+
+    /// <summary>An image entry → save dialog defaulting to &lt;name&gt;.png (the chosen extension
+    /// picks the output format).</summary>
     private async Task ExportImageAsync(IStorageProvider storage, Wc3.Model.MapDocument doc, FileRow row)
     {
         var baseName = Sanitize(Path.GetFileNameWithoutExtension(row.Name!));
@@ -511,7 +523,10 @@ public partial class FilesView : UserControl, IMapPanel
         var toExt = Path.GetExtension(dest);
         if (string.IsNullOrEmpty(toExt)) { dest += ".png"; toExt = ".png"; }
         var raw = doc.Files[row.Ordinal].CurrentBytes;
-        var converted = await Task.Run(() => ConvertCommand.ConvertImage(raw, ".blp", toExt));
+        // The entry's own extension, not a hardcoded one. Passing ".blp" for a .dds entry asked
+        // the converter to read DDS bytes as BLP.
+        var fromExt = Path.GetExtension(row.Name ?? string.Empty).ToLowerInvariant();
+        var converted = await Task.Run(() => ConvertCommand.ConvertImage(raw, fromExt, toExt));
         await File.WriteAllBytesAsync(dest, converted);
         StatusText.Text = $"Exported {Path.GetFileName(dest)} ({converted.Length:N0} bytes)";
     }

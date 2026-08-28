@@ -24,7 +24,7 @@ public static class ScriptCommand
 
         // Prefer pending in-memory edits (OverrideBytes) over the original bytes so
         // re-listing after a script edit reflects the current document state.
-        var source = Encoding.UTF8.GetString(entry.CurrentBytes);
+        var source = ScriptText.GetString(entry.CurrentBytes);
         var functions = JassFunctionIndex.Parse(source).OrderBy(f => f.StartLine).ToList();
         return new ScriptFunctionsResult(entry.FileName!, functions);
     }
@@ -41,8 +41,32 @@ public static class ScriptCommand
     public static (string ScriptFile, string Source) Read(MapDocument doc)
     {
         var entry = ScriptEntry(doc);
-        return (entry.FileName!, Encoding.UTF8.GetString(entry.CurrentBytes));
+        return (entry.FileName!, ScriptEncoding.GetString(entry.CurrentBytes));
     }
+
+    /// <summary>
+    /// Latin-1, deliberately, and it must match what Parsers.cs uses to register war3map.j.
+    ///
+    /// A map script is a byte stream with no declared encoding, and real maps carry bytes that are
+    /// not valid UTF-8 (one map in this library carries about 52,000 of them, from text written in
+    /// a legacy code page). Decoding those as UTF-8 turns each invalid sequence into U+FFFD, and
+    /// re-encoding U+FFFD writes back the three bytes EF BF BD, so the original byte is gone and
+    /// every later round trip looks clean.
+    ///
+    /// This path read UTF-8 and wrote UTF-8, and it is the one the Studio's Script panel uses to
+    /// load and to save. Measured on a synthetic script, the five bytes E3 29 B5 F1 80 came back
+    /// as EF BF BD 29 EF BF BD EF BF BD, a file five bytes longer with three bytes destroyed,
+    /// from opening the panel and saving without typing anything.
+    ///
+    /// Latin-1 maps every byte 0 to 255 to the same code point and back, so it is lossless in both
+    /// directions. The cost is that genuinely multi-byte text shows as mojibake in the editor,
+    /// which is a display fault in rare string literals rather than permanent damage to the map.
+    /// Parsers.cs and HeroWiringAudit already made this call, and this makes the third caller
+    /// agree with them instead of quietly disagreeing.
+    ///
+    /// The same reasoning, and the same fix, as StringsCommand for war3map.wts.
+    /// </summary>
+    public static readonly Encoding ScriptEncoding = ScriptText.Encoding;
 
     /// <summary>
     /// Writes the script text back to the entry it came FROM, whatever that entry is named.
@@ -61,7 +85,7 @@ public static class ScriptCommand
     public static string Write(MapDocument doc, string text, Encoding? encoding = null)
     {
         var entry = ScriptEntry(doc);
-        doc.AddOrReplaceRawFile(entry.FileName!, (encoding ?? Encoding.UTF8).GetBytes(text));
+        doc.AddOrReplaceRawFile(entry.FileName!, (encoding ?? ScriptEncoding).GetBytes(text));
         return entry.FileName!;
     }
 

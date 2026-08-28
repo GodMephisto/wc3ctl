@@ -239,7 +239,7 @@ public static class LintCommand
         if (script is null)
             return new("asset-references", LintSeverity.Ok, "no script to scan", Array.Empty<string>());
 
-        var text = System.Text.Encoding.UTF8.GetString(script.CurrentBytes);
+        var text = ScriptText.GetString(script.CurrentBytes);
         var imported = ImportedPathsOf(doc);
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var missing = new List<string>();
