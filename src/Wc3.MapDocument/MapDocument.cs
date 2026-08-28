@@ -104,10 +104,13 @@ public sealed class MapDocument
                 IsKnown = readable && name is not null && MapFormatRegistry.IsKnown(name),
             };
             if (readable)
+            {
                 file.DeferRawBytes(new Lazy<byte[]>(
                         () => doc.ReadEntryBytes(entry),
                         LazyThreadSafetyMode.ExecutionAndPublication),
                     (int)entry.FileSize);
+                file.DeferPrefixRead(count => doc.ReadEntryPrefix(entry, count));
+            }
             doc._files.Add(file);
         }
 
@@ -138,6 +141,38 @@ public sealed class MapDocument
                 lock (_diagnostics)
                     _diagnostics.Add(new Diagnostic(DiagnosticSeverity.Warning, entry.FileName ?? "(unnamed)",
                         $"Could not read file data, preserved via archive rebuild: {ex.Message}"));
+                return Array.Empty<byte>();
+            }
+        }
+    }
+
+    /// <summary>
+    /// The bounded read behind <see cref="MapFileEntry.ReadPrefix"/>. Reading N bytes from an
+    /// MpqStream decompresses only the sectors those bytes sit in, which is what lets a content
+    /// sniff sweep every entry of a 250 MB archive without paying the full decompression Load
+    /// deferred. Same lock as <see cref="ReadEntryBytes"/>, same shared underlying stream. A
+    /// failure returns empty without a diagnostic, the full read is the one that owns reporting.
+    /// </summary>
+    private byte[] ReadEntryPrefix(MpqEntry entry, int count)
+    {
+        lock (_archiveLock)
+        {
+            try
+            {
+                using var fs = _archive!.OpenFile(entry);
+                int want = (int)Math.Min(count, entry.FileSize);
+                var buffer = new byte[want];
+                int got = 0;
+                while (got < want)
+                {
+                    int n = fs.Read(buffer, got, want - got);
+                    if (n <= 0) break;
+                    got += n;
+                }
+                return got == want ? buffer : buffer[..got];
+            }
+            catch
+            {
                 return Array.Empty<byte>();
             }
         }
@@ -253,6 +288,7 @@ public sealed class MapDocument
             if (entry.FileName is not null && byBlock.TryGetValue(i, out var mine) && mine.FileName is null)
             {
                 mine.FileName = entry.FileName;
+                mine.NameFromHarvest = true;
                 mine.IsKnown = MapFormatRegistry.IsKnown(entry.FileName);
                 if (mine.IsKnown) TryParse(mine);
                 named++;

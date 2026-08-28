@@ -167,24 +167,9 @@ public class PanelLoadCostTests
         if (panel is IMapPanel p) p.ShowMap(session);
     }
 
-    /// <summary>Runs queued UI work until nothing more arrives, so background loads land.</summary>
-    private static void Settle()
-    {
-        var deadline = DateTime.UtcNow.AddSeconds(10);
-        int quiet = 0;
-        while (DateTime.UtcNow < deadline && quiet < 3)
-        {
-            Dispatcher.UIThread.RunJobs();
-            Thread.Sleep(10);
-            quiet++;
-            if (Dispatcher.UIThread.HasJobsWithPriority(DispatcherPriority.Background)) quiet = 0;
-        }
-    }
+    // Settle and Time moved to UiWork when FilesPanelNamelessCostTests needed the same
+    // loop, so every measurement test agrees on what "settled" means.
+    private static void Settle() => UiWork.Settle();
 
-    private static long Time(Action a)
-    {
-        var sw = Stopwatch.StartNew();
-        a();
-        return sw.ElapsedMilliseconds;
-    }
+    private static long Time(Action a) => UiWork.Time(a);
 }
