@@ -1469,6 +1469,38 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
             Emit(p.GetValueForOption(jsonOption), t, () => Render.Triggers(t));
         }));
 
+        // ---- repairing a map wc3ctl generated ----
+        // This existed complete and tested and was reachable from nothing, which is the same
+        // defect the four trigger edits had. It is deliberately narrow: it looks for the
+        // wc3ctl_WirePlacedHeroSpells helper, so it repairs maps this tool generated rather than
+        // maps in general, and it says so rather than appearing to be a general repair.
+        var repairHeroes = new Command("repair-generated",
+            "Repair a map that wc3ctl generated, whose preplaced-hero helper block is too narrow "
+            + "for the heroes installed into it. Widens the player slots, rewrites the hero "
+            + "owners in the script, and brings war3map.w3i and the map header into line. Only "
+            + "applies to maps carrying wc3ctl's own generated helper, and refuses others.")
+        { mapArg, setOut };
+        repairHeroes.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = GeneratedMapRepairCommand.RepairGeneratedHeroes(doc);
+
+            // The detail goes in the message rather than in a second print, so the --json shape
+            // and the human shape carry the same facts through the one shared helper.
+            string detail = r.Ok
+                ? $"{r.Message} Player slots {r.PlayerSlotsBefore} to {r.PlayerSlotsAfter}. "
+                  + $"Script {(r.ScriptUpdated ? "updated" : "unchanged")}, "
+                  + $"war3map.w3i {(r.MapInfoUpdated ? "updated" : "unchanged")}, "
+                  + $"header {(r.HeaderUpdated ? "updated" : "unchanged")}. "
+                  + $"{r.Heroes.Count} hero(es) reassigned."
+                : r.Message;
+
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut),
+                map, doc, r.Ok, detail);
+        }));
+
         // ---- trigger edits ----
         // These four already existed in Wc3.Commands, worked, and were reachable from NO
         // front-end at all. Verified to survive a save and to touch only war3map.wtg before being
@@ -2510,6 +2542,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         trigger.AddCommand(trigRemove);
         trigger.AddCommand(ecaAdd); trigger.AddCommand(ecaRemove);
         trigger.AddCommand(ecaEnabled);
+        root.AddCommand(repairHeroes);
         root.AddCommand(trigger);
         root.AddCommand(editor);
 

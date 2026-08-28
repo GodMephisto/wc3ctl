@@ -944,6 +944,20 @@ public static class Wc3Tools
         }
     }
 
+    [McpServerTool(Name = "repair_generated", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Repair a map that wc3ctl itself generated, whose preplaced-hero helper block is too narrow for the heroes installed into it, and save the repaired map to out_path. Widens the player slots, rewrites hero owners in the script, and brings war3map.w3i and the map header into line. This is NOT a general map repair: it looks for wc3ctl's own generated helper function and refuses any map that does not carry one. The input map is NEVER modified in place.")]
+    public static EditToolResult RepairGenerated(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the repaired copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map).")] string out_path)
+        => Run(() => SaveEdit(map, out_path, doc =>
+        {
+            var r = GeneratedMapRepairCommand.RepairGeneratedHeroes(doc);
+            return (r.Ok, r.Ok
+                ? $"{r.Message} Player slots {r.PlayerSlotsBefore} to {r.PlayerSlotsAfter}, "
+                  + $"{r.Heroes.Count} hero(es) reassigned."
+                : r.Message);
+        }));
+
     [McpServerTool(Name = "trigger_add_category", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Add a category to the map's GUI trigger tree and save the edited map to out_path. A category is a folder in the trigger tree, so this is always safe: categories hold no script and adding one moves nothing. The input map is NEVER modified in place. Writes war3map.wtg only.")]
     public static EditToolResult TriggerAddCategory(
