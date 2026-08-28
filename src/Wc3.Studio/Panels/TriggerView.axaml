@@ -131,6 +131,11 @@
                         <Button Name="EcaAddButton" Content="Add" Click="OnAddEcaClick"/>
                         <Button Name="EcaRemoveButton" Content="Remove selected"
                                 Click="OnRemoveEcaClick" IsEnabled="False"/>
+                        <!-- The tree already renders "[disabled]" per function, so without this
+                             the panel showed a state it had no way to change. -->
+                        <Button Name="EcaToggleButton" Content="Enable/disable selected"
+                                Click="OnToggleEcaClick" IsEnabled="False"
+                                ToolTip.Tip="Turn one event, condition or action off without disabling the whole trigger"/>
                     </WrapPanel>
 
                     <!-- Said where the editing happens, not buried in a help page. Warcraft III

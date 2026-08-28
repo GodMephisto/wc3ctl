@@ -391,4 +391,48 @@ public class TriggerPanelEditTests
         window.UpdateLayout();
         Assert.True(Named<WrapPanel>(view, "EcaBar").IsVisible);
     }
+
+    [AvaloniaFact]
+    public void One_action_can_be_disabled_without_disabling_the_trigger()
+    {
+        // The tree has always rendered "[disabled]" per function while the panel had no way to
+        // set it, so it displayed a state the user could not change.
+        var (view, session, window) = Shown(SimpleMap());
+        SelectTrigger(view, "Melee Init");
+        Named<TextBox>(view, "EcaNameBox").Text = "DisplayTextToForce";
+        Named<TextBox>(view, "EcaParamsBox").Text = "GetPlayersAll, hi";
+        Press(view, window, "EcaAddButton");
+
+        // Select the action itself, not its section header.
+        var node = view.GetVisualDescendants().OfType<TreeViewItem>()
+            .First(n => n.Tag is int);
+        node.IsSelected = true;
+        window.UpdateLayout();
+
+        Press(view, window, "EcaToggleButton");
+        Assert.Contains("Disabled action", Status(view));
+
+        var fn = TriggerReadCommand.GetTriggers(session.Current!)
+            .Triggers.Single(t => t.Name == "Melee Init").Functions.Single();
+        Assert.False(fn.Enabled);
+
+        // The trigger itself is untouched, which is the distinction the button exists for.
+        Assert.True(TriggerReadCommand.GetTriggers(session.Current!)
+            .Triggers.Single(t => t.Name == "Melee Init").Enabled);
+    }
+
+    [AvaloniaFact]
+    public void The_panel_warns_that_an_authored_trigger_will_not_run_yet()
+    {
+        // Warcraft III runs war3map.j, which wc3ctl does not regenerate. Without this said where
+        // the authoring happens, a user gets a trigger that looks right and does nothing.
+        var (view, _, window) = Shown(SimpleMap());
+        SelectTrigger(view, "Melee Init");
+        window.UpdateLayout();
+
+        var note = Named<TextBlock>(view, "EcaCompileNote");
+        Assert.True(note.IsVisible);
+        Assert.Contains("war3map.j", note.Text ?? string.Empty);
+        Assert.Contains("World Editor", note.Text ?? string.Empty);
+    }
 }

@@ -69,9 +69,13 @@ public partial class CamerasView : UserControl, IMapPanel
 
         if (cameras.Count == 0)
         {
+            // The reason is asked rather than asserted. This used to state that war3map.w3c
+            // held a count of zero, which the panel could not know: the command layer returns an
+            // empty list for an absent file and for an unparseable one too, so a user with a
+            // damaged map was told their map was fine.
             Catalog.SetEmpty("This map defines no cameras.",
-                "Its war3map.w3c holds a version and a count of zero, so there is nothing "
-                + "to list. Most maps never define one. Use the form above to add it.");
+                MapFilePresence.Describe(doc, "war3map.w3c", "cameras",
+                    "Most maps never define one. Use the form above to add it."));
             return;
         }
 

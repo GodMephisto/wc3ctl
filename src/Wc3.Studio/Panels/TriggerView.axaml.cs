@@ -20,10 +20,15 @@ namespace Wc3.Studio.Panels;
 /// category's children, or shifting a war3map.wct code body onto the wrong trigger) arrive
 /// here as a message on the status line rather than being re-derived in the UI.
 ///
-/// NOT editable here: a trigger's events, conditions and actions, and a custom-text
-/// trigger's body. The ECA tree needs a parameter editor driven by TriggerData.txt, and a
-/// custom-text body lives in war3map.wct, whose decoder loses bytes it cannot interpret, so
-/// that file is never written.
+/// Events, conditions and actions are editable too, added by name against the World-Editor
+/// function table, removed by position, and enabled or disabled one at a time.
+///
+/// NOT editable here: a custom-text trigger's body, which is JASS in war3map.wct, a file whose
+/// decoder loses bytes it cannot interpret and which is therefore never written.
+///
+/// And nothing here compiles. Warcraft III runs war3map.j, the World Editor generates it from
+/// this tree, and wc3ctl does not, so a trigger authored here is inert in game until the map is
+/// saved in the World Editor. The panel says so beside the controls that create one.
 /// </summary>
 public partial class TriggerView : UserControl, IMapPanel
 {
@@ -57,7 +62,10 @@ public partial class TriggerView : UserControl, IMapPanel
                 MapInitCheck.IsChecked);
 
         EcaTree.SelectionChanged += (_, _) =>
+        {
             EcaRemoveButton.IsEnabled = EcaBar.IsVisible && SelectedFunctionIndex is not null;
+            EcaToggleButton.IsEnabled = EcaRemoveButton.IsEnabled;
+        };
     }
 
     /// <summary>
@@ -276,6 +284,7 @@ public partial class TriggerView : UserControl, IMapPanel
         EcaBar.IsVisible = trig is not null && !trig.IsCustomText;
         EcaCompileNote.IsVisible = EcaBar.IsVisible;
         EcaRemoveButton.IsEnabled = EcaBar.IsVisible && SelectedFunctionIndex is not null;
+        EcaToggleButton.IsEnabled = EcaRemoveButton.IsEnabled;
         if (trig is null) return;
 
         // Set the boxes without letting them fire an edit for the value they already carry.
@@ -371,6 +380,21 @@ public partial class TriggerView : UserControl, IMapPanel
 
         if (Mutate(doc => TriggerCommand.AddFunction(doc, trig.Id, kind, name, values)))
             EcaNameBox.Text = EcaParamsBox.Text = string.Empty;
+    }
+
+    private void OnToggleEcaClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (SelectedTrigger is not { } trig) { StatusText.Text = "Select a GUI trigger first."; return; }
+        if (SelectedFunctionIndex is not { } index)
+        {
+            StatusText.Text = "Select the event, condition or action to toggle.";
+            return;
+        }
+
+        // Read the current state from the model rather than tracking it here, so the button
+        // cannot drift out of step with what the tree is showing.
+        bool currentlyEnabled = trig.Functions.Count > index && trig.Functions[index].Enabled;
+        Mutate(doc => TriggerCommand.SetFunctionEnabled(doc, trig.Id, index, !currentlyEnabled));
     }
 
     private void OnRemoveEcaClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)

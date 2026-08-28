@@ -72,9 +72,11 @@ public partial class RegionsView : UserControl, IMapPanel
 
         if (regions.Count == 0)
         {
+            // See CamerasView. An absent war3map.w3r and an unreadable one both arrive here as
+            // an empty list, so the panel asks which it is instead of announcing one.
             Catalog.SetEmpty("This map defines no regions.",
-                "Its war3map.w3r holds a version and a count of zero, so there is nothing "
-                + "to list. Use the form above to add the first one.");
+                MapFilePresence.Describe(doc, "war3map.w3r", "regions",
+                    "Use the form above to add the first one."));
             return;
         }
 
