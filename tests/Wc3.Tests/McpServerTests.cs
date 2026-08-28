@@ -26,7 +26,7 @@ public class McpServerTests
         "placed_doodad_remove", "placed_doodad_set", "placed_doodads_list", "placed_unit_get",
         "placed_unit_remove", "placed_unit_set", "placed_units_list", "player_list",
         "player_set_force", "port_unit", "region_list", "region_remove", "render_model",
-        "roundtrip", "script_functions", "search", "sound_add", "sound_list", "sound_remove",
+        "roundtrip", "script_functions", "script_references", "search", "sound_add", "sound_list", "sound_remove",
         "sound_set", "strings_list", "terrain_blight", "terrain_cliff", "terrain_corner_get",
         "terrain_corner_set", "terrain_deform", "terrain_info", "terrain_paint", "terrain_ramp",
         "terrain_stats", "terrain_water", "trigger_catalog_describe", "trigger_catalog_list",

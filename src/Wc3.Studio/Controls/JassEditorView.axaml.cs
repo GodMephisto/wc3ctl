@@ -50,6 +50,10 @@ public partial class JassEditorView : UserControl
     /// The panel owns the lookup, since only it knows the function index.</summary>
     public event EventHandler<string>? GoToDefinitionRequested;
 
+    /// <summary>Raised when the user asks who uses the word at the caret (Shift+F12, the same
+    /// binding every IDE uses for it). The panel owns the search.</summary>
+    public event EventHandler<string>? FindReferencesRequested;
+
     /// <summary>Raised on every text change while editable, so a panel can enable its Apply.</summary>
     public event EventHandler? TextEdited;
 
@@ -223,6 +227,18 @@ public partial class JassEditorView : UserControl
 
     private void OnEditorKeyDown(object? sender, KeyEventArgs e)
     {
+        // Shift+F12 first, since F12 alone would otherwise swallow it.
+        if (e.Key == Key.F12 && e.KeyModifiers.HasFlag(KeyModifiers.Shift))
+        {
+            var word = WordAtCaret();
+            if (word.Length > 0)
+            {
+                FindReferencesRequested?.Invoke(this, word);
+                e.Handled = true;
+            }
+            return;
+        }
+
         if (e.Key == Key.F12 || (e.Key == Key.Enter && e.KeyModifiers.HasFlag(KeyModifiers.Control)))
         {
             var word = WordAtCaret();

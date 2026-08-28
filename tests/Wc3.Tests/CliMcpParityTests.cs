@@ -28,6 +28,7 @@ public class CliMcpParityTests
         ["search"] = "search",
         ["diff"] = "diff",
         ["script_functions"] = "script functions",
+        ["script_references"] = "script refs",
         ["terrain_info"] = "terrain info",
         ["terrain_corner_get"] = "terrain corner get",
         ["terrain_corner_set"] = "terrain corner set",

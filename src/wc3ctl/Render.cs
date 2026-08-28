@@ -1,8 +1,9 @@
-﻿// src/wc3ctl/Render.cs
+// src/wc3ctl/Render.cs
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Wc3.Commands;
+using Wc3.Model;
 
 namespace Wc3Ctl;
 
@@ -369,6 +370,35 @@ public static class Render
     public static string ScriptFunctions(ScriptFunctionsResult r) =>
         $"{r.Functions.Count} functions in {r.ScriptFile}"
         + string.Concat(r.Functions.Select(f => $"\nline {f.StartLine}-{f.EndLine}  {f.Name}"));
+
+    /// <summary>
+    /// Uses of a name, grouped so the reader sees WHERE from, not just how many. The code-value
+    /// uses are called out because they are the ones a text search misses.
+    /// </summary>
+    public static string ScriptReferences(ScriptReferencesResult r)
+    {
+        if (r.References.Count == 0)
+            return $"nothing in {r.ScriptFile} uses '{r.Name}'";
+
+        var sb = new StringBuilder();
+        sb.Append($"{r.References.Count} use(s) of '{r.Name}' in {r.ScriptFile}");
+        if (r.AsCode > 0)
+            sb.Append($", {r.AsCode} passing it as a code value");
+        foreach (var u in r.References)
+        {
+            var kind = u.Kind switch
+            {
+                JassReferenceKind.Call => "call   ",
+                JassReferenceKind.CodeReference => "as code",
+                _ => "declares",
+            };
+            sb.AppendLine();
+            sb.Append($"{u.Line,8}  {kind}  {u.InFunction ?? "(file scope)"}");
+            sb.AppendLine();
+            sb.Append($"              {u.Text}");
+        }
+        return sb.ToString();
+    }
 
     public static string Extract(ExtractManifest m, string dest) =>
         $"Extracted {m.Count} file(s) ({m.TotalBytes:N0} bytes) to {dest}";

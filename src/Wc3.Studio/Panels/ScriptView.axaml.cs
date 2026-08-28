@@ -51,6 +51,9 @@ public partial class ScriptView : UserControl, IMapPanel
     }
 
     private static readonly Color ProblemTint = Color.FromArgb(0x40, 0xC0, 0x30, 0x30);
+    /// <summary>A found reference, tinted apart from a problem so the strip's two uses of
+    /// the same surface do not read as the same thing.</summary>
+    private static readonly Color ReferenceTint = Color.FromArgb(0x38, 0x30, 0x50, 0xA0);
 
     private MapSession? _session;
     private string? _scriptFile;                      // write-back target
@@ -78,6 +81,7 @@ public partial class ScriptView : UserControl, IMapPanel
         };
         FunctionList.SelectionChanged += (_, _) => OnFunctionSelected();
         Editor.GoToDefinitionRequested += (_, word) => GoToDefinition(word);
+        Editor.FindReferencesRequested += (_, word) => FindReferences(word);
         Editor.CaretLineChanged += (_, line) => OnCaretMoved(line);
         Editor.TextEdited += (_, _) => OnTextEdited();
     }
@@ -304,6 +308,60 @@ public partial class ScriptView : UserControl, IMapPanel
         Editor.GoToLine(target.StartLine, target.EndLine);
         SignatureText.Text = target.Signature;
         StatusText.Text = $"{target.Name} at line {target.StartLine:N0}.";
+    }
+
+    /// <summary>
+    /// Shift+F12. Lists every use of the word at the caret in the problems strip, each row jumping
+    /// to its line.
+    /// </summary>
+    /// <remarks>
+    /// The question a merged arena script raises constantly, and the one go to definition does not
+    /// answer. Reading one of 3,009 functions means asking what reaches it far more often than
+    /// asking where it starts.
+    ///
+    /// Reuses the problems strip rather than adding a second list, because a clickable set of
+    /// script locations is exactly what it already renders. The badge says which kind each use is,
+    /// and the code kind is the one that matters, JASS passes a handler as a code value by naming
+    /// it without parentheses so TriggerAddAction(t, function Foo) is how most handlers are
+    /// actually reached, and a text search for "Foo(" misses every one.
+    /// </remarks>
+    private void FindReferences(string word)
+    {
+        var uses = JassReferences.FindUses(Editor.Text, word);
+        if (uses.Count == 0)
+        {
+            Editor.ClearProblems();
+            StatusText.Text = JassSyntax.IsReserved(word)
+                ? $"'{word}' is a JASS keyword or type, so it has no call sites."
+                : $"Nothing in this script uses '{word}'.";
+            return;
+        }
+
+        var rows = uses
+            .Select(u => new JassEditorView.Problem
+            {
+                Badge = u.Kind switch
+                {
+                    JassReferenceKind.Call => "call",
+                    JassReferenceKind.CodeReference => "as code",
+                    _ => "declares",
+                },
+                Where = $"line {u.Line:N0}",
+                Message = u.InFunction is { } fn ? $"in {fn}   {u.Text}" : u.Text,
+                Accent = new SolidColorBrush(u.Kind == JassReferenceKind.CodeReference
+                    ? Color.FromRgb(0xC5, 0x86, 0xC0)      // the kind a text search misses
+                    : Color.FromRgb(0x9C, 0xC4, 0xE4)),
+                Jump = new JumpCommand(() => Editor.GoToLine(u.Line)),
+            })
+            .ToList();
+
+        Editor.ShowProblems(rows);
+        Editor.MarkLines(uses.Select(u => u.Line), ReferenceTint);
+
+        int asCode = uses.Count(u => u.Kind == JassReferenceKind.CodeReference);
+        StatusText.Text = asCode > 0
+            ? $"{uses.Count} use(s) of '{word}', {asCode} passing it as code."
+            : $"{uses.Count} use(s) of '{word}'.";
     }
 
     private void OnCheckClick(object? sender, RoutedEventArgs e) => RunCheck(announceClean: true);

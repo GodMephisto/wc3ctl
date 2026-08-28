@@ -596,6 +596,18 @@ public static class Program
         }), mapArg, jsonOption);
         script.AddCommand(scriptFunctions);
 
+        var refsName = new Argument<string>("name", "Function or global name to find uses of.");
+        var scriptRefs = new Command("refs",
+            "Find every use of a name in the map script: direct calls, and the places it is passed "
+            + "as a code value (Condition, Filter, TriggerAddAction), which a text search for "
+            + "'name(' cannot see.") { mapArg, refsName };
+        scriptRefs.SetHandler((string map, string name, bool json) => RunSafely(() =>
+        {
+            var r = ScriptCommand.References(MapDocument.Load(map), name);
+            Emit(json, r, () => Render.ScriptReferences(r));
+        }), mapArg, refsName, jsonOption);
+        script.AddCommand(scriptRefs);
+
         script.AddCommand(scriptLoops);
         script.AddCommand(scriptRoots);
         script.AddCommand(scriptStrip);

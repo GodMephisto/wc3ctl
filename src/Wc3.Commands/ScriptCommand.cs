@@ -6,6 +6,11 @@ namespace Wc3.Commands;
 
 public sealed record ScriptFunctionsResult(string ScriptFile, IReadOnlyList<JassFunction> Functions);
 
+/// <summary>Where a name is used in the map's script, and how many of those uses pass it as a
+/// <c>code</c> value rather than calling it.</summary>
+public sealed record ScriptReferencesResult(
+    string ScriptFile, string Name, int AsCode, IReadOnlyList<JassReference> References);
+
 public static class ScriptCommand
 {
     /// <summary>
@@ -66,6 +71,26 @@ public static class ScriptCommand
         var entry = ScriptEntry(doc);
         doc.AddOrReplaceRawFile(entry.FileName!, bytes);
         return entry.FileName!;
+    }
+
+    /// <summary>
+    /// Every use of <paramref name="name"/> in the map's script, declaration excluded.
+    /// </summary>
+    /// <remarks>
+    /// "Who calls this", which go to definition does not answer and which a merged arena script
+    /// raises constantly. The count of code references is surfaced separately because that is the
+    /// half a text search cannot find, JASS passes a handler as a code value by naming it without
+    /// parentheses, so TriggerAddAction(t, function Foo) is how most handlers are reached and
+    /// grepping for "Foo(" misses every one.
+    /// </remarks>
+    public static ScriptReferencesResult References(MapDocument doc, string name)
+    {
+        var (file, source) = Read(doc);
+        var uses = JassReferences.FindUses(source, name);
+        return new ScriptReferencesResult(
+            file, name,
+            uses.Count(r => r.Kind == JassReferenceKind.CodeReference),
+            uses);
     }
 
     /// <summary>The map's script entry, war3map.j first, else war3map.lua.</summary>

@@ -147,6 +147,13 @@ public static class Wc3Tools
         [Description("Path to a .w3x/.w3m map file.")] string map)
         => Run(() => ScriptCommand.Functions(LoadMap(map)));
 
+    [McpServerTool(Name = "script_references", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Find every use of a name in the map's compiled script: direct calls, and the places it is passed as a code value (Condition, Filter, TriggerAddAction). The second kind is how most trigger handlers are actually reached and a text search for 'name(' cannot see it, so use this rather than search when asking what reaches a function. Each result carries its line, the function containing it, and the line text.")]
+    public static ScriptReferencesResult ScriptReferences(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Function or global name to find uses of.")] string name)
+        => Run(() => ScriptCommand.References(LoadMap(map), name));
+
     [McpServerTool(Name = "terrain_info", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("The terrain grid's extents in corners, plus the map's ground and cliff tile lists. Texture fields on a corner are indexes into those lists, so read this first to know what an index means.")]
     public static TerrainEditCommand.TerrainInfo TerrainInfoTool(
