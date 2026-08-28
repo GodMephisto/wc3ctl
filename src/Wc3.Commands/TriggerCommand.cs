@@ -30,8 +30,15 @@ public sealed record TriggerOpResult(bool Ok, string Message, int Count = -1);
 /// untouched trigger items survive byte-for-byte. MapDocument.SerializeEntry has no
 /// MapTriggers case, so the bytes go back through <see cref="MapDocument.AddOrReplaceRawFile"/>
 /// (raw payloads are written verbatim on Save) and the parsed model is restored afterwards
-/// so in-memory readers keep seeing the mutation. Edits here never add or remove items, so
-/// the model's <c>TriggerItemCounts</c> stays consistent with the writer.
+/// so in-memory readers keep seeing the mutation. Edits here never add or remove items.
+///
+/// That last sentence used to end "so the model's TriggerItemCounts stays consistent with the
+/// writer", which read as a LIMIT on what could ever be edited here. Measured, it is not one.
+/// Adding a category to a real map's tree, serializing through this same path, saving and
+/// reloading yields 3 items where there were 2, the added item survives by name, and
+/// TriggerReadCommand sees the new category. War3Net's writer recomputes its own counts, so
+/// adding and removing items is buildable on this writer as it stands. See
+/// tests/Wc3.Tests/TriggerAddFeasibilityProbe.cs.
 /// </summary>
 public static class TriggerCommand
 {
