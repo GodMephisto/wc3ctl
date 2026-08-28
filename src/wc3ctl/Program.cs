@@ -1449,13 +1449,74 @@ public static class Program
 
         var triggerRead = new Command("read",
             "Read the GUI trigger tree (war3map.wtg) plus the custom-text bodies (war3map.wct). "
-            + "Read-only, since this format cannot yet be written back.")
+            + "Use the sibling verbs to edit a trigger's name and flags.")
         { mapArg, jsonOption };
         triggerRead.SetHandler(ctx => RunSafely(() =>
         {
             var p = ctx.ParseResult;
             var t = TriggerReadCommand.GetTriggers(MapDocument.Load(p.GetValueForArgument(mapArg)));
             Emit(p.GetValueForOption(jsonOption), t, () => Render.Triggers(t));
+        }));
+
+        // ---- trigger edits ----
+        // These four already existed in Wc3.Commands, worked, and were reachable from NO
+        // front-end at all. Verified to survive a save and to touch only war3map.wtg before being
+        // exposed, because a trigger edit that silently did not persist is worse than none.
+        var trigIdArg = new Argument<int>("id", "Trigger item id, as shown by 'trigger read'.");
+        var trigOnArg = new Argument<bool>("on", "true or false.");
+        var trigNewName = new Argument<string>("name", "New name.");
+
+        var trigRename = new Command("rename",
+            "Rename a trigger item (a category, a trigger or a deleted stub) and save the edited map.")
+        { mapArg, trigIdArg, trigNewName, setOut };
+        trigRename.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = TriggerCommand.Rename(doc, p.GetValueForArgument(trigIdArg),
+                p.GetValueForArgument(trigNewName));
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message);
+        }));
+
+        var trigEnabled = new Command("set-enabled",
+            "Enable or disable a trigger. A disabled trigger is not compiled into the map script.")
+        { mapArg, trigIdArg, trigOnArg, setOut };
+        trigEnabled.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = TriggerCommand.SetEnabled(doc, p.GetValueForArgument(trigIdArg),
+                p.GetValueForArgument(trigOnArg));
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message);
+        }));
+
+        var trigInitiallyOn = new Command("set-initially-on",
+            "Set whether a trigger starts switched on. One that is off at map start never fires "
+            + "until something turns it on.")
+        { mapArg, trigIdArg, trigOnArg, setOut };
+        trigInitiallyOn.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = TriggerCommand.SetInitiallyOn(doc, p.GetValueForArgument(trigIdArg),
+                p.GetValueForArgument(trigOnArg));
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message);
+        }));
+
+        var trigRunOnInit = new Command("set-run-on-map-init",
+            "Set whether a trigger runs on map initialization.")
+        { mapArg, trigIdArg, trigOnArg, setOut };
+        trigRunOnInit.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = TriggerCommand.SetRunOnMapInit(doc, p.GetValueForArgument(trigIdArg),
+                p.GetValueForArgument(trigOnArg));
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message);
         }));
 
         // ---- unit / doodad: the units and doodads ALREADY PLACED on the map ----
@@ -1950,7 +2011,8 @@ public static class Program
         trigCatalog.AddCommand(trigList);
         trigCatalog.AddCommand(trigDescribe);
 
-        var trigger = new Command("trigger", "GUI trigger tooling (World-Editor catalog).");
+        var trigger = new Command("trigger", "GUI triggers: read the tree, edit a trigger's name "
+            + "and flags, and browse the World-Editor catalog.");
         trigger.AddCommand(trigCatalog);
 
         // ---- editor, the World Editor's catalogs (UI\WorldEditData.txt, read-only) ----
@@ -2305,6 +2367,8 @@ public static class Program
         root.AddCommand(sound); root.AddCommand(camera); root.AddCommand(pathing);
         root.AddCommand(mapInfo); root.AddCommand(player); root.AddCommand(force);
         root.AddCommand(region); root.AddCommand(newMap); trigger.AddCommand(triggerRead);
+        trigger.AddCommand(trigRename); trigger.AddCommand(trigEnabled);
+        trigger.AddCommand(trigInitiallyOn); trigger.AddCommand(trigRunOnInit);
         root.AddCommand(trigger);
         root.AddCommand(editor);
 

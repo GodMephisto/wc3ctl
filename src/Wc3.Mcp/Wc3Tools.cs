@@ -889,6 +889,58 @@ public static class Wc3Tools
             return (r.Ok, r.Message);
         }));
 
+    [McpServerTool(Name = "trigger_rename", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Rename a trigger item (a category, a trigger or a deleted stub) in the GUI trigger tree and save the edited map to out_path. The input map is NEVER modified in place. Ids come from triggers_read. Writes war3map.wtg only.")]
+    public static EditToolResult TriggerRename(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Trigger item id, from triggers_read.")] int id,
+        [Description("New name.")] string name)
+        => Run(() => SaveEdit(map, out_path, doc =>
+        {
+            var r = TriggerCommand.Rename(doc, id, name);
+            return (r.Ok, r.Message);
+        }));
+
+    [McpServerTool(Name = "trigger_set_enabled", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Enable or disable a GUI trigger and save the edited map to out_path. A disabled trigger is not compiled into the map script at all, so this is how you take one out of play without deleting it. The input map is NEVER modified in place.")]
+    public static EditToolResult TriggerSetEnabled(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Trigger item id, from triggers_read.")] int id,
+        [Description("True to enable, false to disable.")] bool on)
+        => Run(() => SaveEdit(map, out_path, doc =>
+        {
+            var r = TriggerCommand.SetEnabled(doc, id, on);
+            return (r.Ok, r.Message);
+        }));
+
+    [McpServerTool(Name = "trigger_set_initially_on", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Set whether a GUI trigger starts switched on, and save the edited map to out_path. A trigger that is off at map start never fires until something turns it on, which is a common reason a trigger looks correct and does nothing. The input map is NEVER modified in place.")]
+    public static EditToolResult TriggerSetInitiallyOn(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Trigger item id, from triggers_read.")] int id,
+        [Description("True to start on, false to start off.")] bool on)
+        => Run(() => SaveEdit(map, out_path, doc =>
+        {
+            var r = TriggerCommand.SetInitiallyOn(doc, id, on);
+            return (r.Ok, r.Message);
+        }));
+
+    [McpServerTool(Name = "trigger_set_run_on_map_init", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Set whether a GUI trigger runs on map initialization, and save the edited map to out_path. The input map is NEVER modified in place.")]
+    public static EditToolResult TriggerSetRunOnMapInit(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Trigger item id, from triggers_read.")] int id,
+        [Description("True to run on map init.")] bool on)
+        => Run(() => SaveEdit(map, out_path, doc =>
+        {
+            var r = TriggerCommand.SetRunOnMapInit(doc, id, on);
+            return (r.Ok, r.Message);
+        }));
+
     [McpServerTool(Name = "trigger_catalog_list", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("List GUI-trigger functions from the World-Editor catalog (UI\\TriggerData.txt), optionally filtered by kind and/or a name/display-name search. The catalog is read from an explicit file when given, otherwise from the installed game.")]
     public static TriggerCatalogListResult TriggerCatalogList(

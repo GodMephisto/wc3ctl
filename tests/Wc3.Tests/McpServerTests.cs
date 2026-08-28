@@ -30,6 +30,8 @@ public class McpServerTests
         "sound_set", "strings_list", "terrain_blight", "terrain_cliff", "terrain_corner_get",
         "terrain_corner_set", "terrain_deform", "terrain_info", "terrain_paint", "terrain_ramp",
         "terrain_stats", "terrain_water", "trigger_catalog_describe", "trigger_catalog_list",
+        "trigger_rename", "trigger_set_enabled", "trigger_set_initially_on",
+        "trigger_set_run_on_map_init",
         "triggers_read", "unit_abilities", "validate",
     };
 
