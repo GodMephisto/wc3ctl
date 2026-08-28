@@ -100,14 +100,35 @@ public class PanelSurvivalTests
             {
                 var panel = make();
                 var window = new Window { Width = 1280, Height = 800, Content = panel };
-                window.Show();
-                window.UpdateLayout();
+                try
+                {
+                    window.Show();
+                    window.UpdateLayout();
 
-                if (panel is IMapPanel p) p.ShowMap(session);
-                window.UpdateLayout();
-                Dispatcher.UIThread.RunJobs();
-                window.UpdateLayout();
-                _out.WriteLine($"   {name,-13} ok");
+                    if (panel is IMapPanel p) p.ShowMap(session);
+                    window.UpdateLayout();
+                    Dispatcher.UIThread.RunJobs();
+                    window.UpdateLayout();
+                    _out.WriteLine($"   {name,-13} ok");
+                }
+                finally
+                {
+                    // Closed, not leaked. This opened fifteen windows per map case and closed
+                    // none, so a full run left around ninety of them alive in the application.
+                    // Correct hygiene either way, and NOT a cure for the intermittent "Unable to
+                    // locate 'Avalonia.Platform.IFontManagerImpl'" thrown from inside a text
+                    // measure: measured over four runs after this change, the failure still
+                    // appeared once.
+                    //
+                    // That flake now has three falsified explanations, the theory data source,
+                    // cross-class parallelism, and these leaked windows. It is confined to the
+                    // Avalonia headless harness rather than the product (every assertion in the
+                    // body passes whenever the session comes up healthy), it fails in about one
+                    // run in four, and the remaining suspects are the session lifetime itself
+                    // under UseHeadlessDrawing=false across sixteen Avalonia test classes.
+                    // Recorded rather than guessed at a fourth time.
+                    window.Close();
+                }
             }
             catch (Exception ex)
             {

@@ -158,7 +158,18 @@ public sealed class MapDocument
             return;
         try
         {
-            entry.Model = parse(entry.RawBytes);
+            // A parser that reached the end of the file returns the model directly; one that
+            // stopped short returns the model plus the bytes it never looked at.
+            var parsed = parse(entry.RawBytes);
+            if (parsed is MapFormatRegistry.ParsedModel withTail)
+            {
+                entry.Model = withTail.Model;
+                entry.UnreadTail = withTail.UnreadTail;
+            }
+            else
+            {
+                entry.Model = parsed;
+            }
         }
         catch (Exception ex)
         {
@@ -626,10 +637,39 @@ public sealed class MapDocument
     // Serialization by model type. A raw OverrideBytes payload always wins; otherwise
     // the model's War3Net writer is used. Only formats with a byte-faithful writer are
     // handled — anything else must stay non-dirty (raw) so Save preserves original bytes.
-    private static byte[] SerializeEntry(MapFileEntry entry)
+    // Internal rather than private so SerializerFidelitySweep can measure the REAL save
+    // path across the map library. A test holding its own copy of this dispatch would
+    // drift from it, and the drift would look like the maps changing.
+    internal static byte[] SerializeEntry(MapFileEntry entry)
     {
         // Raw override (added assets, replaced script text, non-faithful formats).
         if (entry.OverrideBytes is not null) return entry.OverrideBytes;
+        return WithUnreadTail(entry, SerializeModel(entry));
+    }
+
+    /// <summary>
+    /// Re-attaches the bytes this file's parser never consumed.
+    ///
+    /// Rebuilding a file from its model must not make it shorter than it arrived. Measured across
+    /// the map library, six object tables on three maps end with a trailing int32 zero that
+    /// War3Net's writer does not emit, and one war3mapUnits.doo ends with a stray 0x0A. Those
+    /// files re-serialize to a strict PREFIX of themselves, so without this, editing a single unit
+    /// in such a map silently drops four bytes nobody asked to remove.
+    ///
+    /// This is what makes byte-faithfulness statable in one line: everything we read is written
+    /// back, and so is everything we did not understand. See <see cref="MapFileEntry.UnreadTail"/>.
+    /// </summary>
+    private static byte[] WithUnreadTail(MapFileEntry entry, byte[] written)
+    {
+        if (entry.UnreadTail.Length == 0) return written;
+        var joined = new byte[written.Length + entry.UnreadTail.Length];
+        written.CopyTo(joined, 0);
+        entry.UnreadTail.CopyTo(joined, written.Length);
+        return joined;
+    }
+
+    private static byte[] SerializeModel(MapFileEntry entry)
+    {
 
         // A Reforged (version 3) object-data model must carry the per-object modification
         // set prefix on EVERY group, including the ones a caller just built in memory.

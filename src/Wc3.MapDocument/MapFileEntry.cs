@@ -52,6 +52,17 @@ public sealed class MapFileEntry
 
     public required bool IsKnown { get; set; }
     public object? Model { get; set; }
+
+    /// <summary>
+    /// Bytes past the end of what this file's parser consumed, preserved so that rebuilding the
+    /// file from its model does not truncate it.
+    ///
+    /// Empty for almost every file. Not empty for the ones that matter: an object table ending in
+    /// a trailing int32 zero that War3Net's writer omits, or a war3mapUnits.doo ending in a stray
+    /// newline. Without this, editing one unit in such a map shortens the file by four bytes that
+    /// nobody asked to remove. See MapFormatRegistry.ParsedModel.
+    /// </summary>
+    public byte[] UnreadTail { get; set; } = Array.Empty<byte>();
     public bool IsParsed => Model is not null;
     public bool IsDirty { get; set; }
 
