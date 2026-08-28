@@ -8,12 +8,22 @@ using Wc3.Model;
 namespace Wc3.Studio.Panels;
 
 /// <summary>
-/// Read-only trigger browser over <see cref="TriggerReadCommand"/>: a World-Editor
-/// style tree of categories and their triggers (plus the global variables) on the
-/// left, and the selected trigger's detail on the right. GUI triggers show their
-/// event/condition/action tree with nested blocks indented, custom-text triggers
-/// show their war3map.wct script body in a read-only monospace box. No write-back,
-/// trigger editing is a later wave.
+/// Trigger browser and editor over <see cref="TriggerReadCommand"/> and
+/// <see cref="TriggerCommand"/>: a World-Editor style tree of categories and their triggers
+/// (plus the global variables) on the left, and the selected trigger's detail on the right.
+/// GUI triggers show their event/condition/action tree with nested blocks indented,
+/// custom-text triggers show their war3map.wct script body in the shared JASS editor.
+///
+/// Editable here: a category or trigger's name, a trigger's enabled / initially-on /
+/// run-on-map-init flags, and adding or removing categories and triggers. Every one of those
+/// goes through <see cref="TriggerCommand"/>, so the refusals it computes (orphaning a
+/// category's children, or shifting a war3map.wct code body onto the wrong trigger) arrive
+/// here as a message on the status line rather than being re-derived in the UI.
+///
+/// NOT editable here: a trigger's events, conditions and actions, and a custom-text
+/// trigger's body. The ECA tree needs a parameter editor driven by TriggerData.txt, and a
+/// custom-text body lives in war3map.wct, whose decoder loses bytes it cannot interpret, so
+/// that file is never written.
 /// </summary>
 public partial class TriggerView : UserControl, IMapPanel
 {
@@ -22,14 +32,35 @@ public partial class TriggerView : UserControl, IMapPanel
     /// <summary>Dim ink for hints and secondary text, the shade the other panels use.</summary>
     private static readonly IBrush DimBrush = new SolidColorBrush(Color.Parse("#8FA3B8"));
 
+    private MapSession? _session;
+
+    /// <summary>Guards the flag checkboxes while they are being set to match the selected
+    /// trigger, so reflecting a selection does not fire an edit for the value it already has.</summary>
+    private bool _syncingFlags;
+
+    /// <summary>Raised after an edit lands, which is what enables Save in the host.</summary>
+    public event EventHandler? MapEdited;
+
     public TriggerView()
     {
         InitializeComponent();
         TriggerTree.SelectionChanged += (_, _) => OnTreeSelectionChanged();
+
+        EnabledCheck.IsCheckedChanged += (_, _) =>
+            OnFlagToggled((doc, id, on) => TriggerCommand.SetEnabled(doc, id, on),
+                EnabledCheck.IsChecked);
+        InitiallyOnCheck.IsCheckedChanged += (_, _) =>
+            OnFlagToggled((doc, id, on) => TriggerCommand.SetInitiallyOn(doc, id, on),
+                InitiallyOnCheck.IsChecked);
+        MapInitCheck.IsCheckedChanged += (_, _) =>
+            OnFlagToggled((doc, id, on) => TriggerCommand.SetRunOnMapInit(doc, id, on),
+                MapInitCheck.IsChecked);
     }
 
     public void ShowMap(MapSession session)
     {
+        _session = session;
+        StatusText.Text = string.Empty;
         // Rebuild from scratch on every call, like the other panels.
         TriggerTree.Items.Clear();
         ClearDetails(SelectHint);
@@ -99,6 +130,9 @@ public partial class TriggerView : UserControl, IMapPanel
             {
                 Header = MakeLabel($"{name} ({triggers.Count})", bold: true),
                 IsExpanded = true,
+                // Tagged so the toolbar can parent a new trigger to it, rename it or remove
+                // it. Untagged category nodes were why editing had nothing to act on.
+                Tag = cat,
             };
             foreach (var trig in triggers)
                 catItem.Items.Add(MakeTriggerItem(trig));
@@ -186,11 +220,197 @@ public partial class TriggerView : UserControl, IMapPanel
                 ShowVariable(variable);
                 break;
             default:
-                // A category or the Variables folder, nothing to detail.
+                // The Variables folder or the orphan bucket, nothing to detail.
                 ClearDetails(SelectHint);
                 break;
         }
+        UpdateToolbar();
     }
+
+    // ---------------------------------------------------------------- editing
+
+    /// <summary>The selected category, or null when the selection is not one.</summary>
+    private TriggerCategoryInfo? SelectedCategory =>
+        TriggerTree.SelectedItem is TreeViewItem { Tag: TriggerCategoryInfo c } ? c : null;
+
+    /// <summary>The selected trigger, or null when the selection is not one.</summary>
+    private TriggerInfo? SelectedTrigger =>
+        TriggerTree.SelectedItem is TreeViewItem { Tag: TriggerInfo t } ? t : null;
+
+    /// <summary>The id and name of whichever item is selected, for rename and remove. A
+    /// variable row is deliberately excluded: wtg variables are a separate list from the item
+    /// tree and TriggerCommand does not edit them.</summary>
+    private (int Id, string Name)? SelectedItem =>
+        SelectedCategory is { } c ? (c.Id, c.Name)
+        : SelectedTrigger is { } t ? (t.Id, t.Name)
+        : null;
+
+    private void UpdateToolbar()
+    {
+        bool hasMap = _session?.Current is not null;
+        var item = SelectedItem;
+        AddCategoryButton.IsEnabled = hasMap;
+        AddTriggerButton.IsEnabled = hasMap && SelectedCategory is not null;
+        RenameButton.IsEnabled = hasMap && item is not null;
+        RemoveButton.IsEnabled = hasMap && item is not null;
+
+        var trig = SelectedTrigger;
+        FlagBar.IsVisible = trig is not null;
+        if (trig is null) return;
+
+        // Set the boxes without letting them fire an edit for the value they already carry.
+        _syncingFlags = true;
+        EnabledCheck.IsChecked = trig.Enabled;
+        InitiallyOnCheck.IsChecked = trig.InitiallyOn;
+        // TriggerInfo does not carry run-on-map-init, so read it from the flat item list,
+        // which does, rather than showing a value that is always false.
+        MapInitCheck.IsChecked = RunOnMapInitOf(trig.Id);
+        _syncingFlags = false;
+    }
+
+    private bool RunOnMapInitOf(int id)
+    {
+        if (_session?.Current is not { } doc) return false;
+        try
+        {
+            return TriggerCommand.List(doc)
+                .FirstOrDefault(i => i.Id == id)?.RunOnMapInit ?? false;
+        }
+        catch
+        {
+            return false;   // a panel must never take the workspace down
+        }
+    }
+
+    private void OnAddCategoryClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (RequireName() is not { } name) return;
+        // A selected category becomes the parent, so nesting is a selection rather than a
+        // separate control.
+        int parent = SelectedCategory?.Id ?? -1;
+        Mutate(doc => TriggerCommand.AddCategory(doc, name, parent));
+    }
+
+    private void OnAddTriggerClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (SelectedCategory is not { } cat)
+        {
+            StatusText.Text = "Select the category to add the trigger to.";
+            return;
+        }
+        if (RequireName() is not { } name) return;
+        Mutate(doc => TriggerCommand.AddTrigger(doc, name, cat.Id));
+    }
+
+    private void OnRenameClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (SelectedItem is not { } item)
+        {
+            StatusText.Text = "Select a category or trigger to rename.";
+            return;
+        }
+        if (RequireName() is not { } name) return;
+        Mutate(doc => TriggerCommand.Rename(doc, item.Id, name));
+    }
+
+    private void OnRemoveClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (SelectedItem is not { } item)
+        {
+            StatusText.Text = "Select a category or trigger to remove.";
+            return;
+        }
+        Mutate(doc => TriggerCommand.Remove(doc, item.Id, RecursiveCheck.IsChecked == true));
+    }
+
+    private void OnFlagToggled(Func<MapDocument, int, bool, TriggerOpResult> op, bool? value)
+    {
+        if (_syncingFlags || value is not { } on) return;
+        if (SelectedTrigger is not { } trig) return;
+        Mutate(doc => op(doc, trig.Id, on));
+    }
+
+    /// <summary>The typed name, or null (with a status message) when it is blank.</summary>
+    private string? RequireName()
+    {
+        var name = NameBox.Text?.Trim() ?? string.Empty;
+        if (name.Length > 0) return name;
+        StatusText.Text = "Type a name in the box first.";
+        return null;
+    }
+
+    /// <summary>
+    /// Runs one command, then rebuilds from the map and reports what happened.
+    ///
+    /// The rebuild is unconditional, including after a refusal, because a refusal means the
+    /// tree on screen is right and the panel should not be left showing a half-applied state
+    /// either way. Selection is restored by id afterwards, since rebuilding the tree throws
+    /// the TreeViewItem instances away.
+    /// </summary>
+    private void Mutate(Func<MapDocument, TriggerOpResult> op)
+    {
+        if (_session is not { Current: { } doc } session)
+        {
+            StatusText.Text = "No map open.";
+            return;
+        }
+
+        TriggerOpResult result;
+        try
+        {
+            result = op(doc);
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"Edit failed: {ex.Message}";
+            return;
+        }
+
+        int? keep = SelectedItem?.Id;
+        ShowMap(session);
+        if (keep is { } id) SelectById(id);
+
+        StatusText.Text = result.Message;
+        StatusText.Foreground = result.Ok ? DimBrush : WarnBrush;
+        if (result.Ok)
+        {
+            NameBox.Text = string.Empty;
+            MapEdited?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    /// <summary>Re-selects the item carrying this id after a rebuild, so an edit does not
+    /// bounce the user back to the top of the tree.</summary>
+    private void SelectById(int id)
+    {
+        foreach (var node in AllNodes(TriggerTree.Items))
+        {
+            int? nodeId = node.Tag switch
+            {
+                TriggerCategoryInfo c => c.Id,
+                TriggerInfo t => t.Id,
+                _ => null,
+            };
+            if (nodeId != id) continue;
+            node.IsSelected = true;
+            return;
+        }
+    }
+
+    private static IEnumerable<TreeViewItem> AllNodes(ItemCollection items)
+    {
+        foreach (var raw in items)
+        {
+            if (raw is not TreeViewItem node) continue;
+            yield return node;
+            foreach (var child in AllNodes(node.Items))
+                yield return child;
+        }
+    }
+
+    /// <summary>Ink for a refusal, so "cannot remove this without moving code" does not read
+    /// like the same dim aside as a success.</summary>
+    private static readonly IBrush WarnBrush = new SolidColorBrush(Color.Parse("#E8B339"));
 
     private void ShowTrigger(TriggerInfo trig)
     {

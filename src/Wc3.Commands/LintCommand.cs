@@ -66,6 +66,7 @@ public static class LintCommand
             ImportTableConsistent(doc),
             AssetReferencesResolve(doc),
             CarriedFileTypesLoadable(doc),
+            TriggerBodiesPairUp(doc),
         };
         if (original is not null)
         {
@@ -73,6 +74,72 @@ public static class LintCommand
             checks.Add(NoTargetAssetsClobbered(doc, original));
         }
         return new LintResult(checks);
+    }
+
+    /// <summary>
+    /// war3map.wct holds one code body per trigger, found by POSITION, with no name or id
+    /// anchoring it to the trigger it belongs to. So if the count on either side drifts, every
+    /// body after the drift belongs to the wrong trigger, and the map still loads, still runs,
+    /// and still looks correct in a tree view. There is no symptom until someone reads a script
+    /// and finds someone else's.
+    ///
+    /// The expected count depends on the wtg sub-version, and both branches were measured across
+    /// the whole map library rather than assumed (see <see cref="WctPairing"/>). Every readable
+    /// map there agrees with its own rule, which is what makes a disagreement worth reporting
+    /// rather than a false alarm waiting to happen.
+    ///
+    /// A Warning rather than an Error: a mismatch makes the trigger panel untrustworthy and makes
+    /// removing a trigger unsafe, but it does not stop the map loading, and a map that arrived
+    /// this way is not made worse by being opened.
+    /// </summary>
+    private static LintCheck TriggerBodiesPairUp(MapDocument doc)
+    {
+        var wtg = doc.GetFile(TriggerCommand.FileName)?.Model
+            as War3Net.Build.Script.MapTriggers;
+        if (wtg is null)
+            return new("trigger-bodies", LintSeverity.Ok,
+                "map has no readable war3map.wtg", Array.Empty<string>());
+
+        var wct = doc.GetFile(TriggerCommand.CustomTextFileName)?.Model
+            as War3Net.Build.Script.MapCustomTextTriggers;
+        if (wct is null)
+            return new("trigger-bodies", LintSeverity.Ok,
+                "map has no war3map.wct, so no code bodies to pair", Array.Empty<string>());
+
+        int expected = WctPairing.ExpectedSlotCount(wtg);
+        int actual = wct.CustomTextTriggers.Count;
+        bool guiHoldsSlot = WctPairing.GuiTriggersHoldASlot(wtg);
+        string rule = guiHoldsSlot
+            ? "no wtg sub-version, so every trigger owns a slot (an empty one when it is GUI)"
+            : "wtg sub-version present, so only custom-text triggers own a slot";
+
+        if (expected == actual)
+            return new("trigger-bodies", LintSeverity.Ok,
+                $"{actual} war3map.wct code slot(s) pair up with the trigger tree",
+                new[] { rule });
+
+        var detail = new List<string>
+        {
+            rule,
+            $"war3map.wct holds {actual} slot(s), the trigger tree accounts for {expected}",
+        };
+
+        // Name the first trigger whose body is in doubt, since that is what makes the report
+        // actionable rather than a number.
+        var slots = WctPairing.SlotIndices(wtg);
+        var firstAffected = slots
+            .Where(kv => kv.Value >= Math.Min(expected, actual))
+            .OrderBy(kv => kv.Value)
+            .Select(kv => kv.Key)
+            .FirstOrDefault();
+        if (firstAffected is not null)
+            detail.Add($"from '{firstAffected.Name}' onward, a body may belong to another trigger");
+        detail.Add("removing a trigger is refused while this holds, and the trigger panel's "
+                 + "script bodies cannot be trusted");
+
+        return new("trigger-bodies", LintSeverity.Warning,
+            $"war3map.wct and war3map.wtg disagree by {Math.Abs(expected - actual)} slot(s)",
+            detail);
     }
 
     /// <summary>

@@ -1449,7 +1449,7 @@ public static class Program
 
         var triggerRead = new Command("read",
             "Read the GUI trigger tree (war3map.wtg) plus the custom-text bodies (war3map.wct). "
-            + "Use the sibling verbs to edit a trigger's name and flags.")
+            + "Use the sibling verbs to add, remove, rename and re-flag triggers.")
         { mapArg, jsonOption };
         triggerRead.SetHandler(ctx => RunSafely(() =>
         {
@@ -1465,6 +1465,60 @@ public static class Program
         var trigIdArg = new Argument<int>("id", "Trigger item id, as shown by 'trigger read'.");
         var trigOnArg = new Argument<bool>("on", "true or false.");
         var trigNewName = new Argument<string>("name", "New name.");
+        var trigParentOpt = new Option<int>(new[] { "-p", "--parent" },
+            () => -1, "Parent item id, or -1 for the top level.");
+        var trigParentReq = new Argument<int>("parent",
+            "Id of the category to add the trigger to, or -1 for the top level.");
+        var trigCommentOpt = new Option<bool>("--comment",
+            "Create a comment rather than a GUI trigger.");
+        var trigRecursiveOpt = new Option<bool>(new[] { "-r", "--recursive" },
+            "Remove the item's descendants too, rather than refusing to orphan them.");
+
+        var trigAddCat = new Command("add-category",
+            "Add a category to the trigger tree and save the edited map.")
+        { mapArg, trigNewName, trigParentOpt, setOut };
+        trigAddCat.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = TriggerCommand.AddCategory(doc, p.GetValueForArgument(trigNewName),
+                p.GetValueForOption(trigParentOpt));
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message);
+        }));
+
+        var trigAdd = new Command("add",
+            "Add a trigger under a category and save the edited map. The new trigger is enabled "
+            + "and initially on, matching the World Editor. Custom-text triggers cannot be added, "
+            + "because their body lives in war3map.wct, which cannot be written back.")
+        { mapArg, trigNewName, trigParentReq, trigCommentOpt, setOut };
+        trigAdd.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = TriggerCommand.AddTrigger(doc, p.GetValueForArgument(trigNewName),
+                p.GetValueForArgument(trigParentReq),
+                p.GetValueForOption(trigCommentOpt)
+                    ? TriggerCommand.NewTriggerKind.Comment
+                    : TriggerCommand.NewTriggerKind.Gui);
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message);
+        }));
+
+        var trigRemove = new Command("remove",
+            "Remove a trigger item and save the edited map. Refuses to orphan a category's "
+            + "children (pass --recursive to take the subtree) and refuses when it would shift a "
+            + "war3map.wct code body onto the wrong trigger.")
+        { mapArg, trigIdArg, trigRecursiveOpt, setOut };
+        trigRemove.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = TriggerCommand.Remove(doc, p.GetValueForArgument(trigIdArg),
+                p.GetValueForOption(trigRecursiveOpt));
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message);
+        }));
 
         var trigRename = new Command("rename",
             "Rename a trigger item (a category, a trigger or a deleted stub) and save the edited map.")
@@ -2369,6 +2423,8 @@ public static class Program
         root.AddCommand(region); root.AddCommand(newMap); trigger.AddCommand(triggerRead);
         trigger.AddCommand(trigRename); trigger.AddCommand(trigEnabled);
         trigger.AddCommand(trigInitiallyOn); trigger.AddCommand(trigRunOnInit);
+        trigger.AddCommand(trigAddCat); trigger.AddCommand(trigAdd);
+        trigger.AddCommand(trigRemove);
         root.AddCommand(trigger);
         root.AddCommand(editor);
 
