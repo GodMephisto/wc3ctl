@@ -318,7 +318,9 @@ public static class Program
         var placeUnitRawcode = new Argument<string>("rawcode", "Four-character unit type rawcode.");
         var placeOwnerArg = new Argument<int>("owner", "Owning player id (0-based; 0 = red).");
         var placeUnit = new Command("unit",
-            "Place a unit at (x, y) and save the edited map. Writes war3mapUnits.doo.")
+            "Place a unit at (x, y) and save the edited map. Writes war3mapUnits.doo, and the map's "
+            + "script when a spawn call has to be wired (a preplaced unit no script creates "
+            + "never appears in the game).")
         { mapArg, placeUnitRawcode, placeOwnerArg, placeXArg, placeYArg, placeZOpt, placeRotOpt, placeScaleOpt, setOut };
         placeUnit.SetHandler(ctx => RunSafely(() =>
         {
@@ -352,7 +354,8 @@ public static class Program
         var placePlayerArg = new Argument<int>("player", "Player whose start location this is (0-based; 0 = red).");
         var placeStartLoc = new Command("start-location",
             "Place or move a player's start location at (x, y) and save the edited map. "
-            + "One per player — an existing one for this player is moved. Writes war3mapUnits.doo.")
+            + "One per player — an existing one for this player is moved. Writes war3mapUnits.doo, "
+            + "and the map's script when a spawn call has to be wired.")
         { mapArg, placePlayerArg, placeXArg, placeYArg, setOut };
         placeStartLoc.SetHandler(ctx => RunSafely(() =>
         {
@@ -381,7 +384,8 @@ public static class Program
 
         var placeItemRawcode = new Argument<string>("rawcode", "Four-character item type rawcode.");
         var placeItem = new Command("item",
-            "Place a preplaced item at (x, y) and save the edited map. Writes war3mapUnits.doo (item slot).")
+            "Place a preplaced item at (x, y) and save the edited map. Writes war3mapUnits.doo "
+            + "(item slot), and the map's script when a spawn call has to be wired.")
         { mapArg, placeItemRawcode, placeXArg, placeYArg, placeZOpt, placeRotOpt, placeScaleOpt, setOut };
         placeItem.SetHandler(ctx => RunSafely(() =>
         {
