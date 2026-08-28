@@ -92,7 +92,8 @@ public static class DebugWiringCommand
                 "found per-player spell-dispatch trigger(s) but could not instrument anything, see diagnostics",
                 targets, diagnostics);
 
-        doc.AddOrReplaceRawFile(PreplacedUnitsScript.ScriptFile, enc.GetBytes(NormalizeNewlines(jass, nl)));
+        // Back to the entry it was read from, see ScriptCommand.Write.
+        ScriptCommand.Write(doc, enc.GetBytes(NormalizeNewlines(jass, nl)));
         return new(true,
             $"instrumented {targets.Count} function(s) for {triggers.Count} dispatch trigger(s)",
             targets, diagnostics);

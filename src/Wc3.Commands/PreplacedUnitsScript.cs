@@ -229,7 +229,10 @@ public static class PreplacedUnitsScript
         jass = EnsureMainCall(jass, UnitsFunc, wanted: spawnable.Count > 0, nl);
         jass = EnsureMainCall(jass, ItemsFunc, wanted: items.Count > 0, nl);
 
-        doc.AddOrReplaceRawFile(ScriptFile, enc.GetBytes(jass));
+        // Back to the entry it was READ from, which is not always the root name. 13 of 34
+        // maps measured keep the script at scripts\\war3map.j, and writing to the hardcoded
+        // root left those maps with two disagreeing scripts.
+        ScriptCommand.Write(doc, enc.GetBytes(jass));
 
         string message = $"wired {spawnable.Count} unit(s) and {items.Count} item(s) into main()";
         if (heroSetup is not null && placedHeroes.Count > 0)

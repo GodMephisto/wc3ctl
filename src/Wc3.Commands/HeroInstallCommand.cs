@@ -175,7 +175,10 @@ public static class HeroInstallCommand
                 // war3map.j carried 103,572 non-ASCII bytes where the original had 51,779. The
                 // read was switched to Latin-1 earlier, the write was not, and half a fix here is
                 // still a corrupted map.
-                FileEditCommand.AddOrReplace(target, "war3map.j", ScriptBytes.GetBytes(
+                // Through ScriptCommand.Write, so it lands on the entry it was read from. The
+                // hardcoded root name left the 13 of 34 measured maps that keep their script at
+                // scripts\war3map.j holding two disagreeing scripts.
+                ScriptCommand.Write(target, ScriptBytes.GetBytes(
                     head + "\n\n// ==== wc3ctl hero: " + def.Name + " (" + def.Id + ") ====\n" + body));
             }
         }

@@ -39,6 +39,35 @@ public static class ScriptCommand
         return (entry.FileName!, Encoding.UTF8.GetString(entry.CurrentBytes));
     }
 
+    /// <summary>
+    /// Writes the script text back to the entry it came FROM, whatever that entry is named.
+    /// </summary>
+    /// <remarks>
+    /// The name matters and it is not always "war3map.j". 13 of 34 maps measured keep the script
+    /// at scripts\war3map.j, and three writers hardcoded the root name. On such a map, placing a
+    /// unit read the nested script, appended its spawn code, and wrote the result to the ROOT name,
+    /// leaving the map with TWO scripts, the original 249,947 byte one untouched under scripts\ and
+    /// a 250,245 byte edited copy at the root. Verified on Tom_and_Jerry_2014_v1.05.w3x, 71 entries
+    /// before and 73 after.
+    ///
+    /// ScriptPorter and ScriptRepairCommand already wrote back to entry.FileName, so the correct
+    /// pattern existed. This makes it the only reachable one.
+    /// </remarks>
+    public static string Write(MapDocument doc, string text, Encoding? encoding = null)
+    {
+        var entry = ScriptEntry(doc);
+        doc.AddOrReplaceRawFile(entry.FileName!, (encoding ?? Encoding.UTF8).GetBytes(text));
+        return entry.FileName!;
+    }
+
+    /// <summary>Writes already-encoded script bytes back to the entry they came from.</summary>
+    public static string Write(MapDocument doc, byte[] bytes)
+    {
+        var entry = ScriptEntry(doc);
+        doc.AddOrReplaceRawFile(entry.FileName!, bytes);
+        return entry.FileName!;
+    }
+
     /// <summary>The map's script entry, war3map.j first, else war3map.lua.</summary>
     private static MapFileEntry ScriptEntry(MapDocument doc) =>
         doc.GetFile("war3map.j")
