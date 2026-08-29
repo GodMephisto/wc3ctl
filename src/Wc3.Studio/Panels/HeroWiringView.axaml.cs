@@ -122,9 +122,14 @@ public partial class HeroWiringView : UserControl, IMapPanel
             return;
         if (results.Count == 0)
         {
+            // Same trap the catalog panels had. HeroWiringAudit returns empty when the
+            // war3mapUnits.doo model is null, so an absent doo, an unparseable doo and a map
+            // that genuinely places no heroes all arrived here as one confident sentence.
             Catalog.SetEmpty("No placed heroes to audit.",
-                "The audit reads war3mapUnits.doo and reports on units the map places as "
-                + "heroes. This map places none, so there is no wiring to check.");
+                _session?.Current is { } doc
+                    ? MapFilePresence.Describe(doc, "war3mapUnits.doo", "placed heroes",
+                        "The audit reports on units the map places as heroes.")
+                    : "No map is open.");
             return;
         }
 

@@ -77,32 +77,39 @@ public class LibrarySaveTests
     }
 
     /// <summary>
-    /// The two that still cannot be saved, with 65,534 of their 65,536 hash slots occupied. That
-    /// is map protection rather than a real archive shape, and the fix would have to be in the MPQ
-    /// library. What is pinned here is that the refusal EXPLAINS itself, since the failure used to
-    /// surface as a raw "Stream length must be non-negative" with nothing a reader could act on.
+    /// The two whose archive cannot be rebuilt, 22 and 8 of their 65,534 live entries carry
+    /// block rows protection has corrupted, and MpqArchiveBuilder opens every entry eagerly.
+    /// These used to be pinned as a refusal that explains itself. They now save through the
+    /// in-place salvage patch instead, and what is pinned here is the strongest form of that
+    /// claim, an UNMODIFIED save reproduces the input byte for byte, and the save says which
+    /// path it took. The edit-and-reload fidelity lives in ProtectedMapSalvageSaveTests.
     /// </summary>
     [Theory]
     [InlineData("ORDR_S2_2.305[R]_english.w3x")]
     [InlineData("PumpkinTD_v2.3b.w3x")]
     [Trait("Category", "Corpus")]
-    public void A_map_that_cannot_be_rebuilt_says_why(string mapName)
+    public void A_map_that_cannot_be_rebuilt_saves_via_the_salvage_patch(string mapName)
     {
         var path = Path.Combine(Dir, mapName);
         if (!File.Exists(path)) { _out.WriteLine($"{mapName} absent, skipped"); return; }
 
         var doc = MapDocument.Load(path);
-        // Reading it still works. That is worth pinning too, because "cannot save" must not
+        // Reading it still works. That is worth pinning too, because "salvage save" must not
         // quietly become "cannot open".
         Assert.NotEmpty(doc.Files);
         Assert.NotNull(doc.GetFile("war3map.w3i"));
 
-        var ex = Assert.Throws<NotSupportedException>(() => doc.SaveToBytes());
-        _out.WriteLine(ex.Message);
+        var original = File.ReadAllBytes(path);
+        var saved = doc.SaveToBytes();
+        _out.WriteLine($"{mapName}: {original.Length:N0} bytes in, {saved.Length:N0} out");
 
-        Assert.Contains("cannot be rebuilt", ex.Message);
-        Assert.Contains("protection", ex.Message);
-        Assert.Contains("65,536 entries", ex.Message);
-        Assert.NotNull(ex.InnerException);   // the underlying cause stays reachable
+        Assert.True(saved.AsSpan().SequenceEqual(original),
+            "an unmodified salvage save must reproduce the input byte for byte");
+
+        var notice = doc.Diagnostics.FirstOrDefault(
+            d => d.FileName == "(archive)" && d.Severity == DiagnosticSeverity.Info);
+        Assert.NotNull(notice);   // the save must say it took the salvage path
+        _out.WriteLine(notice!.Message);
+        Assert.Contains("patch", notice.Message);
     }
 }

@@ -66,8 +66,8 @@ public static class DefaultParsers
         // author names and localised strings). Decoding those as UTF-8 yields U+FFFD replacement
         // characters, so any later text scan is looking at content the map does not contain.
         // Latin-1 maps every byte 0..255 to the same code point and back, which is lossless.
-        MapFormatRegistry.Register("war3map.j", raw => Encoding.Latin1.GetString(raw));
-        MapFormatRegistry.Register("war3map.lua", raw => Encoding.Latin1.GetString(raw));
+        MapFormatRegistry.Register("war3map.j", raw => ScriptText.GetString(raw));
+        MapFormatRegistry.Register("war3map.lua", raw => ScriptText.GetString(raw));
     }
 
     /// <summary>

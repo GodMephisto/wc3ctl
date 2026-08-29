@@ -30,9 +30,25 @@ public static class AssetPathCandidates
     /// anywhere, or a backslash, an extensionless model, texture, or sound reference is still
     /// written as a path ("war3mapImported\Foo"), a bare identifier with neither is never an
     /// asset reference.</summary>
+    /// <remarks>
+    /// A token must also be short enough, and free of control characters, to BE a path. That is
+    /// not pedantry. A real map's object data carries 659 character multi-line tooltips full of
+    /// colour codes, they contain backslashes, and handing one to War3Net's name hashing throws
+    /// IndexOutOfRangeException. That took the entire name-recovery pass down on
+    /// U9_PumpkinZ_v4.7d, so the map recovered nothing, and any caller not wrapping the call in
+    /// a try/catch crashed outright. The script literal regex already applied this ceiling while
+    /// this test did not, so anything arriving from another source (object data field values,
+    /// notably) escaped it. The bound belongs here, in the one test every source goes through.
+    /// </remarks>
     public static bool LooksLikeAssetPath(string token) =>
         token.Length > 0 &&
+        token.Length <= MaxPathLength &&
+        !token.Any(char.IsControl) &&
         (token.Contains('\\') || AllExt.Any(ext => token.Contains(ext, StringComparison.OrdinalIgnoreCase)));
+
+    /// <summary>The longest a candidate may be. An MPQ path is short, and a token this long is
+    /// prose. Matches the ceiling the script literal regex has always used.</summary>
+    private const int MaxPathLength = 260;
 
     /// <summary>Un-escapes a JASS/Lua string literal captured raw out of a script (the inner text
     /// between the quotes, doubled backslash and all). A JASS source file writes one literal path

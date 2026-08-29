@@ -28,6 +28,7 @@ public class CliMcpParityTests
         ["search"] = "search",
         ["diff"] = "diff",
         ["script_functions"] = "script functions",
+        ["repair_generated"] = "repair-generated",
         ["trigger_add_category"] = "trigger add-category",
         ["trigger_add_eca"] = "trigger add-eca",
         ["trigger_remove_eca"] = "trigger remove-eca",

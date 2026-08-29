@@ -72,7 +72,10 @@ internal static class ScriptPorter
 
     /// <summary>Byte-faithful codec (Latin1 is a bijection on all 256 byte values), so decoding
     /// then re-encoding war3map.j preserves a legacy-codepage target's bytes exactly.</summary>
-    private static readonly Encoding ByteText = Encoding.Latin1;
+    // Kept as a local alias for readability, but no longer a second opinion. This was right
+    // privately while several other callers were wrong, which is why the decision moved to
+    // one shared place. See Wc3.Model.ScriptText.
+    private static readonly Encoding ByteText = ScriptText.Encoding;
 
     /// <summary>
     /// Splices the function closure into <paramref name="target"/> (mutated via

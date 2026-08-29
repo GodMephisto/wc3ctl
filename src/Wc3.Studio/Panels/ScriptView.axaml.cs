@@ -451,7 +451,9 @@ public partial class ScriptView : UserControl, IMapPanel
         var keep = (FunctionList.SelectedItem as FunctionItem)?.Fn.Name;
         int caret = Editor.CaretLine;
 
-        doc.AddOrReplaceRawFile(_scriptFile, Encoding.UTF8.GetBytes(edited));
+        // Latin-1 through the shared helper. UTF-8 here destroyed any byte the decoder could
+        // not interpret, on the panel's ordinary save path. See Wc3.Model.ScriptText.
+        doc.AddOrReplaceRawFile(_scriptFile, ScriptText.GetBytes(edited));
         _unsavedEdits++;
         LoadFromDoc(doc, keep);
         Editor.GoToLine(caret);

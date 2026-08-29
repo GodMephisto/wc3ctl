@@ -74,7 +74,7 @@ public static class TestLoadCommand
         var doc = MapDocument.Load(mapPath);
         var script = doc.GetFile("war3map.j") ?? doc.GetFile("scripts\\war3map.j")
             ?? throw new InvalidOperationException("Map has no war3map.j to instrument.");
-        var text = Encoding.UTF8.GetString(script.CurrentBytes);
+        var text = ScriptText.GetString(script.CurrentBytes);
         FileEditCommand.WriteText(doc, script.FileName!, InjectMarker(text, markerRelative));
         doc.Save(testMap);
 

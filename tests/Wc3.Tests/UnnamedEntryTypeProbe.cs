@@ -130,18 +130,31 @@ public class UnnamedEntryTypeProbe
         foreach (var kv in overall.OrderByDescending(k => k.Value))
             _out.WriteLine($"  {kv.Key,-22} {kv.Value,7:N0}");
 
-        // Judged against NON-EMPTY entries, not against all of them. A first pass compared with
-        // the raw total and concluded sniffing was not worth wiring in, which was an artifact:
-        // 100,194 of the 142,051 nameless entries are EMPTY, and about 50,000 of those sit in
-        // each of the two protected maps as padding (77 and 79 percent of their nameless entries
-        // respectively). Counting protection padding as a failure to identify content measures
-        // the wrong thing, and the wrong verdict would have killed a feature that works.
+        // Judged against entries that yielded bytes, not against all of them. A first pass
+        // compared with the raw total and concluded sniffing was not worth wiring in, which was
+        // an artifact: 100,194 of the 142,051 nameless entries report zero bytes, about 50,000 in
+        // each of the two protected maps. Counting those as a failure to identify CONTENT
+        // measures the wrong thing, and the wrong verdict would have killed a feature that works.
+        //
+        // A SECOND correction, because the first was still wrong about why. Zero bytes here does
+        // not mean the entry holds nothing. MapFileEntry.RawBytes returns an empty array both for
+        // a genuinely zero-length entry and for one the loader could not read, since an unreadable
+        // entry never gets a deferred reader and RawSize reports zero for it too. This probe
+        // cannot tell those apart, by construction.
+        //
+        // Measured against the archives directly rather than through MapDocument, only 5 entries
+        // in ORDR_S2 and 1 in PumpkinTD are literally zero length. The other ~50,000 per map are
+        // entries War3Net cannot read, roughly 41,000 unreadable plus 8,200 offset-encrypted in
+        // ORDR, whose block rows carry junk sizes that alias real data regions. Calling them
+        // padding, as the first correction did, understates them badly: they are precisely why a
+        // from-scratch rebuild of those archives is unsound and why the save path patches the
+        // original bytes in place instead. See MpqSalvagePatcher.
         int empties = overall.TryGetValue("empty", out int e) ? e : 0;
         int substantive = totalNameless - empties;
         double rate = substantive == 0 ? 0 : 100.0 * totalTyped / substantive;
-        _out.WriteLine($"\nof {substantive:N0} NON-EMPTY nameless entr(ies), {totalTyped:N0} "
-                     + $"({rate:F1}%) are identified. The other {empties:N0} are empty, "
-                     + "overwhelmingly protection padding in two maps.");
+        _out.WriteLine($"\nof {substantive:N0} nameless entr(ies) that yielded bytes, "
+                     + $"{totalTyped:N0} ({rate:F1}%) are identified. The other {empties:N0} "
+                     + "yielded no bytes, which means unreadable far more often than empty.");
         _out.WriteLine(rate > 90
             ? "VERDICT: nearly every nameless entry that holds anything can be described without "
             + "knowing its name, so the Files panel, previews and extraction can stop treating "

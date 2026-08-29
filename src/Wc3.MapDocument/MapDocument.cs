@@ -89,12 +89,12 @@ public sealed class MapDocument
             catch (Exception ex)
             {
                 // Unreadable entry (encrypted/unnamed/corrupt): keep a placeholder
-                // instead of aborting Load. The real bytes are preserved because
-                // Save rebuilds via MpqArchiveBuilder(originalArchive).
+                // instead of aborting Load. The real bytes are preserved either way on
+                // save, by the archive rebuild or by the in-place salvage patch.
                 readable = false;
                 lock (doc._diagnostics)
                     doc._diagnostics.Add(new Diagnostic(DiagnosticSeverity.Warning, name ?? "(unnamed)",
-                        $"Could not read file data, preserved via archive rebuild: {ex.Message}"));
+                        $"Could not read file data, original bytes are preserved on save ({ex.Message})"));
             }
 
             var file = new MapFileEntry
@@ -104,10 +104,13 @@ public sealed class MapDocument
                 IsKnown = readable && name is not null && MapFormatRegistry.IsKnown(name),
             };
             if (readable)
+            {
                 file.DeferRawBytes(new Lazy<byte[]>(
                         () => doc.ReadEntryBytes(entry),
                         LazyThreadSafetyMode.ExecutionAndPublication),
                     (int)entry.FileSize);
+                file.DeferPrefixRead(count => doc.ReadEntryPrefix(entry, count));
+            }
             doc._files.Add(file);
         }
 
@@ -137,7 +140,39 @@ public sealed class MapDocument
             {
                 lock (_diagnostics)
                     _diagnostics.Add(new Diagnostic(DiagnosticSeverity.Warning, entry.FileName ?? "(unnamed)",
-                        $"Could not read file data, preserved via archive rebuild: {ex.Message}"));
+                        $"Could not read file data, original bytes are preserved on save ({ex.Message})"));
+                return Array.Empty<byte>();
+            }
+        }
+    }
+
+    /// <summary>
+    /// The bounded read behind <see cref="MapFileEntry.ReadPrefix"/>. Reading N bytes from an
+    /// MpqStream decompresses only the sectors those bytes sit in, which is what lets a content
+    /// sniff sweep every entry of a 250 MB archive without paying the full decompression Load
+    /// deferred. Same lock as <see cref="ReadEntryBytes"/>, same shared underlying stream. A
+    /// failure returns empty without a diagnostic, the full read is the one that owns reporting.
+    /// </summary>
+    private byte[] ReadEntryPrefix(MpqEntry entry, int count)
+    {
+        lock (_archiveLock)
+        {
+            try
+            {
+                using var fs = _archive!.OpenFile(entry);
+                int want = (int)Math.Min(count, entry.FileSize);
+                var buffer = new byte[want];
+                int got = 0;
+                while (got < want)
+                {
+                    int n = fs.Read(buffer, got, want - got);
+                    if (n <= 0) break;
+                    got += n;
+                }
+                return got == want ? buffer : buffer[..got];
+            }
+            catch
+            {
                 return Array.Empty<byte>();
             }
         }
@@ -222,9 +257,20 @@ public sealed class MapDocument
             // candidate. That presents as a missing imported asset, not as a decoding fault, which
             // is a bad failure to debug. Nothing is written back here, so this only affects what
             // the scan can see.
-            var text = Encoding.Latin1.GetString(script.RawBytes);
-            foreach (Match m in AssetStringLiteral.Matches(text))
-                Harvest(AssetPathCandidates.Unescape(m.Groups[1].Value));
+            // Through the shared scanner, not a private regex. This used its own
+            // new("\"([^\"]*)\"") which had no length bound and allowed line breaks, so a
+            // 659 character multi-line UI string became a candidate "path" and War3Net's name
+            // hashing threw IndexOutOfRangeException on it. That took the whole harvest down
+            // after six candidates, so U9_PumpkinZ_v4.7d recovered no names at all and any
+            // caller not wrapping this in a try/catch crashed.
+            //
+            // AssetPathCandidates.NamedInScript applies the bound already documented there,
+            // three to 260 characters and no line break, because a multi-kilobyte literal is
+            // prose rather than a path. Two implementations of one rule, one of them right, is
+            // the same shape of defect as the script encoding disagreement.
+            foreach (var path in AssetPathCandidates.NamedInScript(
+                         ScriptText.GetString(script.RawBytes)))
+                Harvest(path);
         }
 
         // Source 2: path-like field values inside the map's own object data (all seven kinds,
@@ -253,6 +299,7 @@ public sealed class MapDocument
             if (entry.FileName is not null && byBlock.TryGetValue(i, out var mine) && mine.FileName is null)
             {
                 mine.FileName = entry.FileName;
+                mine.NameFromHarvest = true;
                 mine.IsKnown = MapFormatRegistry.IsKnown(entry.FileName);
                 if (mine.IsKnown) TryParse(mine);
                 named++;
@@ -261,10 +308,6 @@ public sealed class MapDocument
         }
         return named;
     }
-
-    /// <summary>A double-quoted JASS/Lua string literal (captures the inner text), used by
-    /// <see cref="HarvestAssetNames"/> to pull candidate asset paths out of the whole script.</summary>
-    private static readonly Regex AssetStringLiteral = new("\"([^\"]*)\"", RegexOptions.Compiled);
 
     // War3Net shape confirmed against the same three modification kinds Wc3.Commands.ObjectKinds
     // normalizes (Simple: w3u/w3t/w3b/w3h, Level: w3a/w3q, Variation: w3d); read directly here
@@ -352,11 +395,13 @@ public sealed class MapDocument
         catch (Exception ex)
         {
             // The builder reads every entry's stream header up front, including entries whose
-            // block table row is deliberate nonsense. Two of 34 maps measured cannot get past
-            // this, both with 65,534 of their 65,536 hash slots occupied, which is a protection
-            // technique rather than a real archive shape. Leaking War3Net's raw message told the
-            // reader nothing they could act on.
-            throw new NotSupportedException(DescribeUnrebuildable(ex), ex);
+            // block table row is deliberate nonsense. Two of 37 maps measured cannot get past
+            // this (22 and 8 corrupt rows among 65,534 live entries), a protection technique
+            // rather than a real archive shape. Those maps are saved by patching the original
+            // bytes in place instead, see MpqSalvagePatcher for why a rebuild can never work
+            // on them. The catch stays scoped to the constructor alone, a failure later in the
+            // rebuild (an unserializable dirty model, say) must keep its own message.
+            return SalvageSaveToBytes(ex);
         }
 
         // An added file with the same hashed name shadows the original at save;
@@ -430,9 +475,48 @@ public sealed class MapDocument
     }
 
     /// <summary>
-    /// Explains, in terms of this archive, why it could not be opened for rebuilding.
+    /// The fallback save for an archive the rebuild cannot even open. The original bytes
+    /// are kept whole, protection stuffing included, and only the edited entries' block
+    /// rows change, with their payloads appended after the archive's current end. Nothing
+    /// is dropped, which matters because the stuffed entries fill the hash probe chains
+    /// the game walks to resolve the map's real files (see <see cref="MpqSalvagePatcher"/>
+    /// for the measurements that ruled out every rebuild-shaped alternative).
     /// </summary>
-    private string DescribeUnrebuildable(Exception cause)
+    private byte[] SalvageSaveToBytes(Exception rebuildFailure)
+    {
+        // Serialize first, outside the patch try. A dirty entry without a byte-faithful
+        // writer must fail with SerializeEntry's own message on this map exactly as it
+        // does on a healthy one, not be re-attributed to protection.
+        var dirty = _files.Where(f => f.IsDirty)
+            .Select(f => (f.BlockIndex, f.FileName, SerializeEntry(f)))
+            .ToList();
+
+        MpqSalvagePatcher.Result result;
+        try
+        {
+            result = MpqSalvagePatcher.PatchSave(_originalBytes, PreArchiveData.Length, dirty);
+        }
+        catch (Exception salvageFailure)
+        {
+            throw new NotSupportedException(
+                DescribeUnrebuildable(rebuildFailure, salvageFailure), rebuildFailure);
+        }
+
+        lock (_diagnostics)
+            _diagnostics.Add(new Diagnostic(DiagnosticSeverity.Info, "(archive)",
+                $"The archive could not be rebuilt ({rebuildFailure.Message}), so it was saved "
+                + $"by patching the original bytes in place. All {_files.Count:N0} entries were "
+                + $"kept, {result.ReplacedEntries:N0} replaced, {result.AddedEntries:N0} added, "
+                + $"{result.AppendedBytes:N0} bytes appended."));
+
+        return result.Bytes;
+    }
+
+    /// <summary>
+    /// Explains, in terms of this archive, why neither the rebuild nor the in-place
+    /// salvage patch could save it.
+    /// </summary>
+    private string DescribeUnrebuildable(Exception rebuildFailure, Exception salvageFailure)
     {
         int unreadable = _diagnostics.Count;
         int unnamed = _files.Count(f => f.FileName is null);
@@ -440,9 +524,11 @@ public sealed class MapDocument
         if (unreadable > 0)
             shape += $", {unreadable:N0} unreadable at load";
 
-        return $"This map cannot be rebuilt, so it cannot be saved. Its archive has {shape}, "
-             + "a shape produced by map protection rather than by an editor. Reading it works, "
-             + $"writing it does not. The underlying failure was: {cause.Message}";
+        return $"This map cannot be rebuilt, and the in-place salvage patch also failed, so it "
+             + $"cannot be saved. Its archive has {shape}, a shape produced by map protection "
+             + "rather than by an editor. Reading it works, writing it does not. The rebuild "
+             + $"failed with \"{rebuildFailure.Message}\" and the salvage patch failed with "
+             + $"\"{salvageFailure.Message}\"";
     }
 
     // MPQ hash tables are power-of-two sized and resolve names by linear probing, so a
