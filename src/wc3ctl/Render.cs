@@ -30,7 +30,9 @@ public static class Render
 
     public static string List(FileListResult r) =>
         string.Join("\n", r.Files.Select(f =>
-            $"{f.Name ?? "(unnamed)",-28} {f.SizeBytes,10}  {(f.Known ? "known" : "unknown")}{(f.Parsed ? "/parsed" : "")}"));
+            $"{f.Name ?? "(unnamed)",-28} {f.SizeBytes,10}  {(f.Known ? "known" : "unknown")}{(f.Parsed ? "/parsed" : "")}"
+            + (f.ContentType is null ? "" : $"  {f.ContentType}")
+            + (f.NameFromHarvest ? "  (name from harvest)" : "")));
 
     public static string Info(MapInfoResult r) =>
         $"Name:    {r.Name}\nAuthor:  {r.Author}\nPlayers: {r.Players}\nSize:    {r.Width}x{r.Height}"

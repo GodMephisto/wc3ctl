@@ -52,24 +52,27 @@
                     <!-- Column widths MUST match the row template below so header and cells
                          line up; Name is star (min-0, ellipsis) so the fixed columns can
                          never squeeze it negative and overlap. -->
-                    <Grid Grid.Row="1" ColumnDefinitions="*,84,58,58" Margin="8,0,8,2">
+                    <Grid Grid.Row="1" ColumnDefinitions="*,84,92,58,58" Margin="8,0,8,2">
                         <Button Grid.Column="0" Name="NameHeader" Classes="columnHeader" Content="Name" Click="OnSortByName"/>
                         <Button Grid.Column="1" Name="SizeHeader" Classes="columnHeader" Content="Size" Click="OnSortBySize"/>
-                        <Button Grid.Column="2" Name="KnownHeader" Classes="columnHeader" Content="Known" Click="OnSortByKnown"/>
-                        <Button Grid.Column="3" Name="ParsedHeader" Classes="columnHeader" Content="Parsed" Click="OnSortByParsed"/>
+                        <Button Grid.Column="2" Name="TypeHeader" Classes="columnHeader" Content="Type" Click="OnSortByType"/>
+                        <Button Grid.Column="3" Name="KnownHeader" Classes="columnHeader" Content="Known" Click="OnSortByKnown"/>
+                        <Button Grid.Column="4" Name="ParsedHeader" Classes="columnHeader" Content="Parsed" Click="OnSortByParsed"/>
                     </Grid>
                     <ListBox Grid.Row="2" Name="FileList" SelectionMode="Multiple"
                              SelectionChanged="OnFileSelectionChanged"
                              DoubleTapped="OnFileDoubleTapped">
                         <ListBox.ItemTemplate>
                             <DataTemplate>
-                                <Grid ColumnDefinitions="*,84,58,58">
+                                <Grid ColumnDefinitions="*,84,92,58,58">
                                     <TextBlock Grid.Column="0" Text="{Binding DisplayName}"
                                                TextTrimming="CharacterEllipsis"
                                                ToolTip.Tip="{Binding DisplayName}"/>
                                     <TextBlock Grid.Column="1" Text="{Binding SizeText}" TextAlignment="Right" Margin="0,0,8,0"/>
-                                    <TextBlock Grid.Column="2" Text="{Binding KnownText}" TextTrimming="CharacterEllipsis"/>
-                                    <TextBlock Grid.Column="3" Text="{Binding ParsedText}" TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Grid.Column="2" Text="{Binding TypeText}" TextTrimming="CharacterEllipsis"
+                                               ToolTip.Tip="{Binding TypeText}"/>
+                                    <TextBlock Grid.Column="3" Text="{Binding KnownText}" TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Grid.Column="4" Text="{Binding ParsedText}" TextTrimming="CharacterEllipsis"/>
                                 </Grid>
                             </DataTemplate>
                         </ListBox.ItemTemplate>

@@ -26,10 +26,16 @@ public static class Wc3Tools
         => Run(() => InfoCommand.Execute(LoadMap(map)));
 
     [McpServerTool(Name = "list_files", ReadOnly = true, Idempotent = true, OpenWorld = false)]
-    [Description("List the map archive's internal files: name (null = unnamed/protected entry), size in bytes, and whether wc3ctl knows/parses the format.")]
+    [Description("List the map archive's internal files, each with its name (null = unnamed/protected entry), size in bytes, whether wc3ctl knows/parses the format, and for unnamed entries the content type sniffed from their leading bytes ('BLP texture', 'MDX model', 'empty', ...).")]
     public static FileListResult ListFiles(
-        [Description("Path to a .w3x/.w3m map file.")] string map)
-        => Run(() => ListCommand.Execute(LoadMap(map)));
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Recover unnamed entries' names from the map's own script and object data before listing (worth paying for on a protected map). Recovered names are flagged nameFromHarvest.")] bool harvest = false)
+        => Run(() =>
+        {
+            var doc = LoadMap(map);
+            if (harvest) doc.HarvestAssetNames();
+            return ListCommand.Execute(doc, typeUnnamed: true);
+        });
 
     [McpServerTool(Name = "object_list", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("List the map's custom/modified objects of one Object Editor kind: rawcode, base rawcode (null = created from scratch) and resolved name.")]
@@ -292,7 +298,7 @@ public static class Wc3Tools
     [Description("Set a field on an object of one Object Editor kind and save the edited map to out_path (only that kind's war3map.* file is re-serialized). The input map is NEVER modified in place. Field syntax: a bare 4-char field code, or 'code:N' to select level N (ability/upgrade) or variation N (doodad).")]
     public static ObjectSetToolResult ObjectSet(
         [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
-        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Four-character object rawcode, e.g. 'hfoo' or 'u000'.")] string rawcode,
         [Description("Field to set: a 4-char field code, optionally ':N' for level/variation.")] string field,
         [Description("New value (parsed to the field's type: int/real/bool/string).")] string value,
@@ -312,7 +318,7 @@ public static class Wc3Tools
     [Description("Create a new custom object derived from a base rawcode (a fresh unused rawcode is allocated) and save the edited map to out_path. The input map is NEVER modified in place. Returns the new rawcode.")]
     public static ObjectNewToolResult ObjectNew(
         [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
-        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Four-character base object rawcode to derive from, e.g. 'hfoo'.")] string base_rawcode,
         [Description("Object kind: " + KindValues + ".")] string kind = "unit")
         => Run(() =>
@@ -466,7 +472,7 @@ public static class Wc3Tools
     [Description("Place a doodad instance at (x, y) on the map's doodad layer (war3map.doo) and save the edited map to out_path. The input map is NEVER modified in place - out_path must differ from it. Returns the assigned creation number.")]
     public static PlacementToolResult PlaceDoodad(
         [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
-        [Description("Output map file path (must differ from the input map). Created/overwritten; parent directories are created as needed.")] string out_path,
+        [Description("Output map file path (must differ from the input map). Created/overwritten; parent directories are created as needed. To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Four-character doodad type rawcode from palette_doodad, e.g. 'ATtr'.")] string type_rawcode,
         [Description("World X coordinate.")] float x,
         [Description("World Y coordinate.")] float y,
@@ -484,7 +490,7 @@ public static class Wc3Tools
     [Description("Define a rectangular region on the map's region layer (war3map.w3r) and save the edited map to out_path. The input map is NEVER modified in place - out_path must differ from it. Bounds need right>left and top>bottom. Returns the assigned creation number.")]
     public static PlacementToolResult PlaceRegion(
         [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
-        [Description("Output map file path (must differ from the input map). Created/overwritten; parent directories are created as needed.")] string out_path,
+        [Description("Output map file path (must differ from the input map). Created/overwritten; parent directories are created as needed. To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Region name (non-empty).")] string name,
         [Description("West edge, min X (world coordinate).")] float left,
         [Description("South edge, min Y (world coordinate).")] float bottom,
@@ -500,7 +506,7 @@ public static class Wc3Tools
     [Description("Place a unit of the given type, owned by a player, at world (x, y) and save the edited map to out_path. The input map is NEVER modified in place. Returns the assigned creation number (the id triggers use to reference the unit).")]
     public static PlacementToolResult PlaceUnit(
         [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
-        [Description("Output map file path (must differ from the input map). Created/overwritten; parent directories are created as needed.")] string out_path,
+        [Description("Output map file path (must differ from the input map). Created/overwritten; parent directories are created as needed. To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Four-character unit type rawcode, e.g. 'hfoo' or 'u000'.")] string type_rawcode,
         [Description("Owning player id (0-based; 0 = red). Neutral players use the high ids (e.g. 24 = neutral hostile).")] int owner_id,
         [Description("World X coordinate.")] float x,
@@ -518,7 +524,7 @@ public static class Wc3Tools
     [Description("Place or move a player's start location at world (x, y) and save the edited map to out_path. The input map is NEVER modified in place. A start location is stored as a preplaced 'sloc' unit owned by the player; the World Editor permits exactly one per player, so if this player already has one it is moved (its creation number preserved) rather than duplicated. Returns the start location's creation number.")]
     public static PlacementToolResult PlaceStartLocation(
         [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
-        [Description("Output map file path (must differ from the input map). Created/overwritten; parent directories are created as needed.")] string out_path,
+        [Description("Output map file path (must differ from the input map). Created/overwritten; parent directories are created as needed. To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Player whose start location this is (0-based; 0 = red).")] int player,
         [Description("World X coordinate.")] float x,
         [Description("World Y coordinate.")] float y)
@@ -532,7 +538,7 @@ public static class Wc3Tools
     [Description("Place a preplaced item of the given type at world (x, y) and save the edited map to out_path. Items share war3mapUnits.doo with units (WC3 spawns a ground item because the rawcode is an item), so the item has no owning player. The input map is NEVER modified in place. Returns the assigned creation number.")]
     public static PlacementToolResult PlaceItem(
         [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
-        [Description("Output map file path (must differ from the input map). Created/overwritten; parent directories are created as needed.")] string out_path,
+        [Description("Output map file path (must differ from the input map). Created/overwritten; parent directories are created as needed. To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Four-character item type rawcode, e.g. 'bspd' (Boots of Speed).")] string type_rawcode,
         [Description("World X coordinate.")] float x,
         [Description("World Y coordinate.")] float y,
@@ -564,7 +570,7 @@ public static class Wc3Tools
     [Description("Raise/lower/set/flatten/smooth ground height over a circular or square brush, saving the edited map to out_path. The input map is NEVER modified in place.")]
     public static TerrainToolResult TerrainDeform(
         [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
-        [Description("Output map file path (must differ from the input map). Created/overwritten; parent directories are created as needed.")] string out_path,
+        [Description("Output map file path (must differ from the input map). Created/overwritten; parent directories are created as needed. To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Brush centre tile X (0-based column into war3map.w3e).")] int center_x,
         [Description("Brush centre tile Y (0-based row into war3map.w3e).")] int center_y,
         [Description("Brush radius in tiles (>= 0).")] int radius,
@@ -583,7 +589,7 @@ public static class Wc3Tools
     [Description("Raise/lower/set the cliff (stepped-terrain) level over a brush, saving the edited map to out_path. The input map is NEVER modified in place.")]
     public static TerrainToolResult TerrainCliff(
         [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
-        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Brush centre tile X.")] int center_x,
         [Description("Brush centre tile Y.")] int center_y,
         [Description("Brush radius in tiles (>= 0).")] int radius,
@@ -602,7 +608,7 @@ public static class Wc3Tools
     [Description("Toggle the ramp (sloped cliff transition) flag over a brush, saving the edited map to out_path. The input map is NEVER modified in place.")]
     public static TerrainToolResult TerrainRamp(
         [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
-        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Brush centre tile X.")] int center_x,
         [Description("Brush centre tile Y.")] int center_y,
         [Description("Brush radius in tiles (>= 0).")] int radius,
@@ -619,7 +625,7 @@ public static class Wc3Tools
     [Description("Paint a ground texture over a brush, saving the edited map to out_path. texture_index selects a slot in the map's tileset table. The input map is NEVER modified in place.")]
     public static TerrainToolResult TerrainPaint(
         [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
-        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Brush centre tile X.")] int center_x,
         [Description("Brush centre tile Y.")] int center_y,
         [Description("Brush radius in tiles (>= 0).")] int radius,
@@ -637,7 +643,7 @@ public static class Wc3Tools
     [Description("Set/raise/lower/remove water over a brush, saving the edited map to out_path. The input map is NEVER modified in place.")]
     public static TerrainToolResult TerrainWater(
         [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
-        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Brush centre tile X.")] int center_x,
         [Description("Brush centre tile Y.")] int center_y,
         [Description("Brush radius in tiles (>= 0).")] int radius,
@@ -656,7 +662,7 @@ public static class Wc3Tools
     [Description("Set or clear the blight (corrupted ground) flag over a brush, saving the edited map to out_path. The input map is NEVER modified in place.")]
     public static TerrainToolResult TerrainBlight(
         [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
-        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Brush centre tile X.")] int center_x,
         [Description("Brush centre tile Y.")] int center_y,
         [Description("Brush radius in tiles (>= 0).")] int radius,
@@ -679,7 +685,7 @@ public static class Wc3Tools
     [Description("Add a new sound definition (keyed by name) to the map's sound catalog and save the edited map to out_path. The input map is NEVER modified in place.")]
     public static SoundToolResult SoundAdd(
         [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
-        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Sound definition name (the label triggers/UI reference). Must be unique.")] string name,
         [Description("Sound file path, e.g. 'Sound\\Ambient\\...'. Optional.")] string? file = null)
         => Run(() => SaveSound(map, out_path, doc => SoundCommand.Add(doc, name, file)));
@@ -688,7 +694,7 @@ public static class Wc3Tools
     [Description("Set a field on a sound definition and save the edited map to out_path. The input map is NEVER modified in place. Editable fields: " + SoundFieldValues + ".")]
     public static SoundToolResult SoundSet(
         [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
-        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Sound definition name to edit.")] string name,
         [Description("Field to set: " + SoundFieldValues + ".")] string field,
         [Description("New value (parsed to the field's type: int/real/bool/string).")] string value)
@@ -698,7 +704,7 @@ public static class Wc3Tools
     [Description("Remove a sound definition from the map's sound catalog and save the edited map to out_path. The input map is NEVER modified in place.")]
     public static SoundToolResult SoundRemove(
         [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
-        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Sound definition name to remove.")] string name)
         => Run(() => SaveSound(map, out_path, doc => SoundCommand.Remove(doc, name)));
 
@@ -719,7 +725,7 @@ public static class Wc3Tools
     [Description("Add a camera at a target position and save the edited map to out_path. The input map is NEVER modified in place. Rejects a blank or duplicate name.")]
     public static EditToolResult CameraAdd(
         [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
-        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Camera name (unique).")] string name,
         [Description("Camera target X (world coordinate).")] float target_x,
         [Description("Camera target Y (world coordinate).")] float target_y)
@@ -733,7 +739,7 @@ public static class Wc3Tools
     [Description("Set a field on a camera and save the edited map to out_path. The input map is NEVER modified in place. Editable fields: " + CameraFieldValues + ".")]
     public static EditToolResult CameraSet(
         [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
-        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Camera name to edit.")] string name,
         [Description("Field to set: " + CameraFieldValues + ".")] string field,
         [Description("New value (parsed to the field's type).")] string value)
@@ -747,7 +753,7 @@ public static class Wc3Tools
     [Description("Remove a camera and save the edited map to out_path. The input map is NEVER modified in place.")]
     public static EditToolResult CameraRemove(
         [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
-        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Camera name to remove.")] string name)
         => Run(() => SaveEdit(map, out_path, doc =>
         {
@@ -763,7 +769,7 @@ public static class Wc3Tools
     [Description("Paint pathing bits over a circular or square brush and save the edited map to out_path. The input map is NEVER modified in place. Flags (comma-separated): " + PathingFlagValues + " - a SET bit RESTRICTS that capability (Walk set = ground units cannot walk there). op: set|clear|toggle.")]
     public static EditToolResult PathingPaint(
         [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
-        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Brush centre pathing-cell X (4 cells per terrain tile).")] int center_x,
         [Description("Brush centre pathing-cell Y.")] int center_y,
         [Description("Brush radius in pathing cells (>= 0).")] int radius,
@@ -798,7 +804,7 @@ public static class Wc3Tools
     [Description("Set a scenario field and save the edited map to out_path. The input map is NEVER modified in place. Editable fields: " + MapInfoFieldValues + " (and the map-option booleans).")]
     public static EditToolResult MapInfoSet(
         [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
-        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Field to set: " + MapInfoFieldValues + ".")] string field,
         [Description("New value (parsed to the field's type).")] string value)
         => Run(() => SaveEdit(map, out_path, doc =>
@@ -817,7 +823,7 @@ public static class Wc3Tools
     [Description("Move a player into a force (team) and save the edited map to out_path. The input map is NEVER modified in place.")]
     public static EditToolResult PlayerSetForce(
         [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
-        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Player id (0-based).")] int player_id,
         [Description("Force index (0-based).")] int force_index)
         => Run(() => SaveEdit(map, out_path, doc =>
@@ -836,7 +842,7 @@ public static class Wc3Tools
     [Description("Set a force's alliance/sharing flags and save the edited map to out_path. The input map is NEVER modified in place.")]
     public static EditToolResult ForceSetFlags(
         [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
-        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Force index (0-based).")] int force_index,
         [Description("Allied.")] bool allied,
         [Description("Allied victory.")] bool allied_victory,
@@ -881,7 +887,7 @@ public static class Wc3Tools
     [Description("Remove a region by name and save the edited map to out_path. The input map is NEVER modified in place.")]
     public static EditToolResult RegionRemove(
         [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
-        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Region name to remove.")] string name)
         => Run(() => SaveEdit(map, out_path, doc =>
         {
@@ -889,11 +895,121 @@ public static class Wc3Tools
             return (r.Ok, r.Message);
         }));
 
+    [McpServerTool(Name = "trigger_add_eca", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Add an event, condition or action to a GUI trigger and save the edited map to out_path. Parameters are given in the order the function declares them; any left off are filled from the World-Editor table's own defaults. This matters more than it looks: war3map.wtg stores a function's parameters but NOT how many there are, so a function written with the wrong number of parameters yields a map that nothing, including this tool, can read afterwards. Use trigger_catalog_list and trigger_catalog_describe to find a function name and its arguments. Custom-text (script) triggers are refused, since their body is JASS rather than a list of functions. IMPORTANT: this edits war3map.wtg, the World Editor's trigger SOURCE, not war3map.j, the compiled script Warcraft III actually runs. wc3ctl does not regenerate the compiled script, so a trigger authored this way is inert in game until the map is opened and saved in the World Editor. The input map is NEVER modified in place.")]
+    public static EditToolResult TriggerAddEca(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
+        [Description("Trigger item id, from triggers_read.")] int id,
+        [Description("One of: event, condition, action.")] string kind,
+        [Description("Function name from the World-Editor table, for example DisplayTextToForce.")] string name,
+        [Description("Parameter values in declared order. Omit to take the table's defaults.")] string[]? parameters = null)
+        => Run(() => SaveEdit(map, out_path, doc =>
+        {
+            if (!TryParseEcaKind(kind, out var parsed))
+                return (false, "kind must be event, condition or action.");
+            var r = TriggerCommand.AddFunction(doc, id, parsed, name, parameters);
+            return (r.Ok, r.Message);
+        }));
+
+    [McpServerTool(Name = "trigger_remove_eca", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = false)]
+    [Description("Remove one event, condition or action from a GUI trigger by its zero-based position, and save the edited map to out_path. Positions come from triggers_read, which lists a trigger's functions in order. The input map is NEVER modified in place.")]
+    public static EditToolResult TriggerRemoveEca(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
+        [Description("Trigger item id, from triggers_read.")] int id,
+        [Description("Zero-based position of the function within the trigger.")] int index)
+        => Run(() => SaveEdit(map, out_path, doc =>
+        {
+            var r = TriggerCommand.RemoveFunction(doc, id, index);
+            return (r.Ok, r.Message);
+        }));
+
+    [McpServerTool(Name = "trigger_set_eca_enabled", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Enable or disable ONE event, condition or action within a trigger, the World Editor's per-line toggle rather than the whole-trigger one, and save the edited map to out_path. The input map is NEVER modified in place.")]
+    public static EditToolResult TriggerSetEcaEnabled(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
+        [Description("Trigger item id, from triggers_read.")] int id,
+        [Description("Zero-based position of the function within the trigger.")] int index,
+        [Description("True to enable, false to disable.")] bool on)
+        => Run(() => SaveEdit(map, out_path, doc =>
+        {
+            var r = TriggerCommand.SetFunctionEnabled(doc, id, index, on);
+            return (r.Ok, r.Message);
+        }));
+
+    private static bool TryParseEcaKind(string text, out War3Net.Build.Script.TriggerFunctionType kind)
+    {
+        switch ((text ?? string.Empty).Trim().ToLowerInvariant())
+        {
+            case "event": kind = War3Net.Build.Script.TriggerFunctionType.Event; return true;
+            case "condition": kind = War3Net.Build.Script.TriggerFunctionType.Condition; return true;
+            case "action": kind = War3Net.Build.Script.TriggerFunctionType.Action; return true;
+            default: kind = default; return false;
+        }
+    }
+
+    [McpServerTool(Name = "repair_generated", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Repair a map that wc3ctl itself generated, whose preplaced-hero helper block is too narrow for the heroes installed into it, and save the repaired map to out_path. Widens the player slots, rewrites hero owners in the script, and brings war3map.w3i and the map header into line. This is NOT a general map repair: it looks for wc3ctl's own generated helper function and refuses any map that does not carry one. The input map is NEVER modified in place.")]
+    public static EditToolResult RepairGenerated(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the repaired copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path)
+        => Run(() => SaveEdit(map, out_path, doc =>
+        {
+            var r = GeneratedMapRepairCommand.RepairGeneratedHeroes(doc);
+            return (r.Ok, r.Ok
+                ? $"{r.Message} Player slots {r.PlayerSlotsBefore} to {r.PlayerSlotsAfter}, "
+                  + $"{r.Heroes.Count} hero(es) reassigned."
+                : r.Message);
+        }));
+
+    [McpServerTool(Name = "trigger_add_category", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Add a category to the map's GUI trigger tree and save the edited map to out_path. A category is a folder in the trigger tree, so this is always safe: categories hold no script and adding one moves nothing. The input map is NEVER modified in place. Writes war3map.wtg only.")]
+    public static EditToolResult TriggerAddCategory(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
+        [Description("Name for the new category.")] string name,
+        [Description("Id of the item to nest it under, or -1 for the top level. Ids come from triggers_read.")] int parent_id = -1)
+        => Run(() => SaveEdit(map, out_path, doc =>
+        {
+            var r = TriggerCommand.AddCategory(doc, name, parent_id);
+            return (r.Ok, r.Message);
+        }));
+
+    [McpServerTool(Name = "trigger_add", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Add a trigger to a category in the map's GUI trigger tree and save the edited map to out_path. The new trigger is created enabled and initially on, matching the World Editor, and has no events, conditions or actions yet. IMPORTANT: this edits war3map.wtg, the World Editor's trigger SOURCE, not the compiled war3map.j that Warcraft III runs, so the trigger is inert in game until the map is opened and saved in the World Editor. Custom-text (script) triggers cannot be added, because their body lives in war3map.wct, which has a lossy decoder and so is never rewritten. The input map is NEVER modified in place. Writes war3map.wtg only.")]
+    public static EditToolResult TriggerAdd(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
+        [Description("Name for the new trigger.")] string name,
+        [Description("Id of the category to add it to, or -1 for the top level. Ids come from triggers_read.")] int parent_id,
+        [Description("Create a comment rather than a GUI trigger.")] bool comment = false)
+        => Run(() => SaveEdit(map, out_path, doc =>
+        {
+            var r = TriggerCommand.AddTrigger(doc, name, parent_id,
+                comment ? TriggerCommand.NewTriggerKind.Comment : TriggerCommand.NewTriggerKind.Gui);
+            return (r.Ok, r.Message);
+        }));
+
+    [McpServerTool(Name = "trigger_remove", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = false)]
+    [Description("Remove a trigger item (a category, a trigger or a comment) from the GUI trigger tree and save the edited map to out_path. Refuses rather than risk two silent corruptions: removing a category that still holds children would orphan them (pass recursive to remove the subtree instead), and removing a trigger whose script body sits ahead of other bodies in war3map.wct would shift every later body onto the wrong trigger, since that file cannot be rewritten. The input map is NEVER modified in place.")]
+    public static EditToolResult TriggerRemove(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
+        [Description("Trigger item id, from triggers_read.")] int id,
+        [Description("Remove the item's descendants too, rather than refusing to orphan them.")] bool recursive = false)
+        => Run(() => SaveEdit(map, out_path, doc =>
+        {
+            var r = TriggerCommand.Remove(doc, id, recursive);
+            return (r.Ok, r.Message);
+        }));
+
     [McpServerTool(Name = "trigger_rename", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Rename a trigger item (a category, a trigger or a deleted stub) in the GUI trigger tree and save the edited map to out_path. The input map is NEVER modified in place. Ids come from triggers_read. Writes war3map.wtg only.")]
     public static EditToolResult TriggerRename(
         [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
-        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Trigger item id, from triggers_read.")] int id,
         [Description("New name.")] string name)
         => Run(() => SaveEdit(map, out_path, doc =>
@@ -906,7 +1022,7 @@ public static class Wc3Tools
     [Description("Enable or disable a GUI trigger and save the edited map to out_path. A disabled trigger is not compiled into the map script at all, so this is how you take one out of play without deleting it. The input map is NEVER modified in place.")]
     public static EditToolResult TriggerSetEnabled(
         [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
-        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Trigger item id, from triggers_read.")] int id,
         [Description("True to enable, false to disable.")] bool on)
         => Run(() => SaveEdit(map, out_path, doc =>
@@ -919,7 +1035,7 @@ public static class Wc3Tools
     [Description("Set whether a GUI trigger starts switched on, and save the edited map to out_path. A trigger that is off at map start never fires until something turns it on, which is a common reason a trigger looks correct and does nothing. The input map is NEVER modified in place.")]
     public static EditToolResult TriggerSetInitiallyOn(
         [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
-        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Trigger item id, from triggers_read.")] int id,
         [Description("True to start on, false to start off.")] bool on)
         => Run(() => SaveEdit(map, out_path, doc =>
@@ -932,7 +1048,7 @@ public static class Wc3Tools
     [Description("Set whether a GUI trigger runs on map initialization, and save the edited map to out_path. The input map is NEVER modified in place.")]
     public static EditToolResult TriggerSetRunOnMapInit(
         [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
-        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Trigger item id, from triggers_read.")] int id,
         [Description("True to run on map init.")] bool on)
         => Run(() => SaveEdit(map, out_path, doc =>

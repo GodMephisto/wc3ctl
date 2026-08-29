@@ -2,7 +2,12 @@ using Wc3.Model;
 
 namespace Wc3.Commands;
 
-public sealed record FileEntryInfo(string? Name, int SizeBytes, bool Known, bool Parsed);
+// ContentType is the sniffed kind of a NAMELESS entry ("BLP texture", "empty", ...),
+// null for named entries whose name already answers the question. NameFromHarvest marks
+// a name recovered from the map's own script or object data rather than stored.
+public sealed record FileEntryInfo(
+    string? Name, int SizeBytes, bool Known, bool Parsed,
+    string? ContentType = null, bool NameFromHarvest = false);
 public sealed record FileListResult(IReadOnlyList<FileEntryInfo> Files);
 public sealed record MapInfoResult(
     string Name, string Author, int Players, int? Width, int? Height, IReadOnlyList<string> Diagnostics);

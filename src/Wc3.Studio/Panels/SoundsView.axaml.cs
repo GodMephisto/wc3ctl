@@ -83,10 +83,12 @@ public partial class SoundsView : UserControl, IMapPanel
 
         if (sounds.Count == 0)
         {
+            // See CamerasView. This one was already softer than its siblings, but it still could
+            // not tell an absent war3map.w3s from an unreadable one.
             Catalog.SetEmpty("This map defines no sounds.",
-                "war3map.w3s lists none. Imported audio still plays from script without a "
-                + "definition, so an empty list is normal. Add one, or turn an imported "
-                + "file below into a sound.");
+                MapFilePresence.Describe(doc, "war3map.w3s", "sounds",
+                    "Imported audio still plays from script without a definition, so an empty "
+                    + "list is normal. Add one, or turn an imported file below into a sound."));
             return;
         }
 

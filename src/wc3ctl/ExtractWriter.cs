@@ -1,6 +1,7 @@
 // src/wc3ctl/ExtractWriter.cs — file writing lives in the CLI layer only;
 // Wc3.Commands selects entries, this class puts their bytes on disk.
 using Wc3.Commands;
+using Wc3.Model;
 
 namespace Wc3Ctl;
 
@@ -18,7 +19,7 @@ public static class ExtractWriter
         long total = 0;
         foreach (var item in r.Items)
         {
-            var dest = Path.GetFullPath(Path.Combine(root, SafeRelativePath(item.Name, item.BlockIndex)));
+            var dest = Path.GetFullPath(Path.Combine(root, SafeRelativePath(item.Name, item.BlockIndex, UnnamedExtension(item))));
             if (!dest.StartsWith(rootPrefix, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException($"refusing to write outside output directory: {item.Name}");
             Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
@@ -40,14 +41,20 @@ public static class ExtractWriter
             new[] { new ExtractManifestEntry(item.Name, item.Bytes.Length, dest) }, 1, item.Bytes.Length);
     }
 
+    /// <summary>The extension an unnamed entry's file should get, sniffed from the bytes the
+    /// extraction already holds ("bin" when the content matches nothing known).</summary>
+    private static string UnnamedExtension(ExtractedItem item) =>
+        item.Name is null ? ContentTypeSniffer.Sniff(item.Bytes).Extension : "bin";
+
     /// <summary>
     /// Maps an internal name to a safe relative path: splits on '\'/'/', drops
     /// '.'/'..'/empty segments, replaces invalid characters. Unnamed entries
-    /// (FileName == null) go to _unnamed\block_&lt;n&gt;.bin.
+    /// (FileName == null) go to _unnamed\block_&lt;n&gt;.&lt;ext&gt;, the extension taken
+    /// from the entry's sniffed content type so a nameless BLP extracts as a .blp.
     /// </summary>
-    public static string SafeRelativePath(string? name, int blockIndex)
+    public static string SafeRelativePath(string? name, int blockIndex, string unnamedExtension = "bin")
     {
-        if (name is null) return Path.Combine("_unnamed", $"block_{blockIndex}.bin");
+        if (name is null) return Path.Combine("_unnamed", $"block_{blockIndex}.{unnamedExtension}");
         var segments = name.Split('\\', '/')
             .Where(s => s.Length > 0 && s != "." && s != "..")
             .Select(Sanitize)

@@ -77,7 +77,7 @@ public static class ScriptStripCommand
         var entry = doc.GetFile("war3map.j") ?? doc.GetFile("scripts\\war3map.j")
             ?? throw new InvalidOperationException("Map has no war3map.j to strip.");
 
-        var text = Encoding.UTF8.GetString(entry.CurrentBytes);
+        var text = ScriptText.GetString(entry.CurrentBytes);
         var lines = text.Split('\n');
 
         // Function spans. Everything outside them (globals, comments, the header) is preserved

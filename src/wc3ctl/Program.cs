@@ -74,12 +74,17 @@ public static class Program
             Emit(json, r, () => Render.Info(r));
         }), mapArg, jsonOption);
 
-        var ls = new Command("ls", "List internal files.") { mapArg };
-        ls.SetHandler((string map, bool json) => RunSafely(() =>
+        var lsHarvestOption = new Option<bool>("--harvest",
+            "Recover unnamed entries' names from the map's own script and object data before listing "
+            + "(a second pass worth paying for on a protected map, wasted on a healthy one).");
+        var ls = new Command("ls", "List internal files.") { mapArg, lsHarvestOption };
+        ls.SetHandler((string map, bool harvest, bool json) => RunSafely(() =>
         {
-            var r = ListCommand.Execute(MapDocument.Load(map));
+            var doc = MapDocument.Load(map);
+            if (harvest) doc.HarvestAssetNames();
+            var r = ListCommand.Execute(doc, typeUnnamed: true);
             Emit(json, r, () => Render.List(r));
-        }), mapArg, jsonOption);
+        }), mapArg, lsHarvestOption, jsonOption);
 
         var rt = new Command("roundtrip", "Verify byte-faithful round-trip.") { mapArg };
         rt.SetHandler((string map, bool json) => RunSafely(() =>
@@ -1132,7 +1137,18 @@ public static class Program
 
         // Generic save-and-report for any (Ok, Message) mutation result. On failure emits the
         // message and sets exit 1; on success saves to --out (or a sibling .edited) and reports.
-        void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok, string message)
+        static bool TryParseEcaKind(string text, out War3Net.Build.Script.TriggerFunctionType kind)
+{
+    switch (text.Trim().ToLowerInvariant())
+    {
+        case "event": kind = War3Net.Build.Script.TriggerFunctionType.Event; return true;
+        case "condition": kind = War3Net.Build.Script.TriggerFunctionType.Condition; return true;
+        case "action": kind = War3Net.Build.Script.TriggerFunctionType.Action; return true;
+        default: kind = default; return false;
+    }
+}
+
+void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok, string message)
         {
             if (!ok)
             {
@@ -1449,13 +1465,45 @@ public static class Program
 
         var triggerRead = new Command("read",
             "Read the GUI trigger tree (war3map.wtg) plus the custom-text bodies (war3map.wct). "
-            + "Use the sibling verbs to edit a trigger's name and flags.")
+            + "Use the sibling verbs to add, remove, rename and re-flag triggers.")
         { mapArg, jsonOption };
         triggerRead.SetHandler(ctx => RunSafely(() =>
         {
             var p = ctx.ParseResult;
             var t = TriggerReadCommand.GetTriggers(MapDocument.Load(p.GetValueForArgument(mapArg)));
             Emit(p.GetValueForOption(jsonOption), t, () => Render.Triggers(t));
+        }));
+
+        // ---- repairing a map wc3ctl generated ----
+        // This existed complete and tested and was reachable from nothing, which is the same
+        // defect the four trigger edits had. It is deliberately narrow: it looks for the
+        // wc3ctl_WirePlacedHeroSpells helper, so it repairs maps this tool generated rather than
+        // maps in general, and it says so rather than appearing to be a general repair.
+        var repairHeroes = new Command("repair-generated",
+            "Repair a map that wc3ctl generated, whose preplaced-hero helper block is too narrow "
+            + "for the heroes installed into it. Widens the player slots, rewrites the hero "
+            + "owners in the script, and brings war3map.w3i and the map header into line. Only "
+            + "applies to maps carrying wc3ctl's own generated helper, and refuses others.")
+        { mapArg, setOut };
+        repairHeroes.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = GeneratedMapRepairCommand.RepairGeneratedHeroes(doc);
+
+            // The detail goes in the message rather than in a second print, so the --json shape
+            // and the human shape carry the same facts through the one shared helper.
+            string detail = r.Ok
+                ? $"{r.Message} Player slots {r.PlayerSlotsBefore} to {r.PlayerSlotsAfter}. "
+                  + $"Script {(r.ScriptUpdated ? "updated" : "unchanged")}, "
+                  + $"war3map.w3i {(r.MapInfoUpdated ? "updated" : "unchanged")}, "
+                  + $"header {(r.HeaderUpdated ? "updated" : "unchanged")}. "
+                  + $"{r.Heroes.Count} hero(es) reassigned."
+                : r.Message;
+
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut),
+                map, doc, r.Ok, detail);
         }));
 
         // ---- trigger edits ----
@@ -1465,6 +1513,132 @@ public static class Program
         var trigIdArg = new Argument<int>("id", "Trigger item id, as shown by 'trigger read'.");
         var trigOnArg = new Argument<bool>("on", "true or false.");
         var trigNewName = new Argument<string>("name", "New name.");
+        var trigParentOpt = new Option<int>(new[] { "-p", "--parent" },
+            () => -1, "Parent item id, or -1 for the top level.");
+        var trigParentReq = new Argument<int>("parent",
+            "Id of the category to add the trigger to, or -1 for the top level.");
+        var trigCommentOpt = new Option<bool>("--comment",
+            "Create a comment rather than a GUI trigger.");
+        var ecaKindArg = new Argument<string>("kind", "event, condition or action.");
+        var ecaNameArg = new Argument<string>("name",
+            "Function name from the World-Editor table, for example DisplayTextToForce. "
+            + "Use 'trigger catalog list' to find one.");
+        // An OPTION rather than a trailing variadic argument, because System.CommandLine binds a
+        // ZeroOrMore positional greedily: it swallowed the id, the kind and the name, and the
+        // command then reported "MapInitializationEvent takes 0 parameter(s), but 3 were given".
+        // Repeating -p is unambiguous and reads better for values that contain spaces.
+        var ecaParamsOpt = new Option<string[]>(new[] { "-p", "--param" },
+            "A parameter value, repeated once per parameter, in the order the function declares "
+            + "them. Any you leave off are filled from the World-Editor table's own defaults.")
+        { AllowMultipleArgumentsPerToken = false };
+        var ecaIndexArg = new Argument<int>("index",
+            "Zero-based position of the function within the trigger, as 'trigger read' lists it.");
+
+        var trigRecursiveOpt = new Option<bool>(new[] { "-r", "--recursive" },
+            "Remove the item's descendants too, rather than refusing to orphan them.");
+
+        // ---- events, conditions and actions ----
+        // war3map.wtg stores a function's parameters but not how many there are, so the count is
+        // taken from the World-Editor table on read. Writing the wrong number makes the file
+        // unreadable rather than merely wrong, which is why the arity is not negotiable here.
+        var ecaAdd = new Command("add-eca",
+            "Add an event, condition or action to a GUI trigger and save the edited map. "
+            + "Parameters you leave off are filled from the World-Editor table's own defaults, "
+            + "because a function written with the wrong number of parameters produces a map "
+            + "nothing can read. This edits the World Editor's trigger source (war3map.wtg), not "
+            + "the compiled script the game runs (war3map.j), so the trigger takes effect only "
+            + "after the map is opened and saved in the World Editor.")
+        { mapArg, trigIdArg, ecaKindArg, ecaNameArg, ecaParamsOpt, setOut };
+        ecaAdd.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            if (!TryParseEcaKind(p.GetValueForArgument(ecaKindArg), out var kind))
+            {
+                Console.Error.WriteLine("kind must be event, condition or action.");
+                Environment.ExitCode = 1;
+                return;
+            }
+            var doc = MapDocument.Load(map);
+            var r = TriggerCommand.AddFunction(doc, p.GetValueForArgument(trigIdArg), kind,
+                p.GetValueForArgument(ecaNameArg), p.GetValueForOption(ecaParamsOpt));
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message);
+        }));
+
+        var ecaRemove = new Command("remove-eca",
+            "Remove one event, condition or action from a GUI trigger by its position.")
+        { mapArg, trigIdArg, ecaIndexArg, setOut };
+        ecaRemove.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = TriggerCommand.RemoveFunction(doc, p.GetValueForArgument(trigIdArg),
+                p.GetValueForArgument(ecaIndexArg));
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message);
+        }));
+
+        var ecaEnabled = new Command("set-eca-enabled",
+            "Enable or disable ONE event, condition or action within a trigger, which is the "
+            + "World Editor's per-line toggle rather than the whole-trigger one.")
+        { mapArg, trigIdArg, ecaIndexArg, trigOnArg, setOut };
+        ecaEnabled.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = TriggerCommand.SetFunctionEnabled(doc, p.GetValueForArgument(trigIdArg),
+                p.GetValueForArgument(ecaIndexArg), p.GetValueForArgument(trigOnArg));
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message);
+        }));
+
+        var trigAddCat = new Command("add-category",
+            "Add a category to the trigger tree and save the edited map.")
+        { mapArg, trigNewName, trigParentOpt, setOut };
+        trigAddCat.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = TriggerCommand.AddCategory(doc, p.GetValueForArgument(trigNewName),
+                p.GetValueForOption(trigParentOpt));
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message);
+        }));
+
+        var trigAdd = new Command("add",
+            "Add a trigger under a category and save the edited map. The new trigger is enabled "
+            + "and initially on, matching the World Editor. Custom-text triggers cannot be added, "
+            + "because their body lives in war3map.wct, which cannot be written back. This edits "
+            + "the World Editor's trigger source, not the compiled war3map.j the game runs, so "
+            + "the trigger takes effect only after a World Editor save.")
+        { mapArg, trigNewName, trigParentReq, trigCommentOpt, setOut };
+        trigAdd.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = TriggerCommand.AddTrigger(doc, p.GetValueForArgument(trigNewName),
+                p.GetValueForArgument(trigParentReq),
+                p.GetValueForOption(trigCommentOpt)
+                    ? TriggerCommand.NewTriggerKind.Comment
+                    : TriggerCommand.NewTriggerKind.Gui);
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message);
+        }));
+
+        var trigRemove = new Command("remove",
+            "Remove a trigger item and save the edited map. Refuses to orphan a category's "
+            + "children (pass --recursive to take the subtree) and refuses when it would shift a "
+            + "war3map.wct code body onto the wrong trigger.")
+        { mapArg, trigIdArg, trigRecursiveOpt, setOut };
+        trigRemove.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = TriggerCommand.Remove(doc, p.GetValueForArgument(trigIdArg),
+                p.GetValueForOption(trigRecursiveOpt));
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message);
+        }));
 
         var trigRename = new Command("rename",
             "Rename a trigger item (a category, a trigger or a deleted stub) and save the edited map.")
@@ -2369,6 +2543,11 @@ public static class Program
         root.AddCommand(region); root.AddCommand(newMap); trigger.AddCommand(triggerRead);
         trigger.AddCommand(trigRename); trigger.AddCommand(trigEnabled);
         trigger.AddCommand(trigInitiallyOn); trigger.AddCommand(trigRunOnInit);
+        trigger.AddCommand(trigAddCat); trigger.AddCommand(trigAdd);
+        trigger.AddCommand(trigRemove);
+        trigger.AddCommand(ecaAdd); trigger.AddCommand(ecaRemove);
+        trigger.AddCommand(ecaEnabled);
+        root.AddCommand(repairHeroes);
         root.AddCommand(trigger);
         root.AddCommand(editor);
 

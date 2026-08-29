@@ -352,7 +352,7 @@ public static class BundleCommand
             return Array.Empty<BundleFunction>();
         }
 
-        var source = Encoding.UTF8.GetString(entry.CurrentBytes);
+        var source = ScriptText.GetString(entry.CurrentBytes);
         var index = JassFunctionIndex.Parse(source);
         if (index.Count == 0) return Array.Empty<BundleFunction>();
 
