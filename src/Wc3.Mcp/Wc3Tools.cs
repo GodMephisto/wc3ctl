@@ -950,6 +950,41 @@ public static class Wc3Tools
         }
     }
 
+    [McpServerTool(Name = "hero_lint", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Validate a hero definition folder before installing it: assets present and hash-matched, objects installable, declared script functions present, no dangling references. Reads a definition and returns findings, it writes nothing. Run this before hero_install, because an install that fails halfway leaves a map holding some of a hero.")]
+    public static HeroLintResult HeroLint(
+        [Description("Path to a hero definition directory, the folder holding hero.json.")] string definition)
+        => Run(() => HeroLintCommand.Run(definition));
+
+    [McpServerTool(Name = "hero_install", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Install a hero definition into a map and save the result to out_path. Remaps rawcodes that would collide, writes the hero's assets, and reports what the target map must still be wired with before the hero actually works, since a definition carries objects and script but not the target's own integration (roster registration, spell dispatch, per-player hero arrays). Refuses asset collisions unless force is set. The input map is NEVER modified in place.")]
+    public static EditToolResult HeroInstall(
+        [Description("Path to a hero definition directory, the folder holding hero.json.")] string definition,
+        [Description("Path to the target .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
+        [Description("Overwrite target assets that collide with the definition's, instead of refusing.")] bool force = false,
+        [Description("Warcraft III install directory, when the base game data is needed and auto-detection fails.")] string? game_dir = null,
+        [Description("Role to install the hero as, when the definition supports more than one.")] string? role = null,
+        [Description("Keep the source map's stat values rather than adapting them to the target.")] bool keep_source_stats = false)
+        => Run(() => SaveEdit(map, out_path, doc =>
+        {
+            var r = HeroInstallCommand.Run(definition, doc, force, game_dir, role, keep_source_stats);
+            string detail = r.Ok
+                ? $"{r.Message} {r.ObjectsCreated} object(s), {r.FieldsApplied} field(s), "
+                  + $"{r.AssetsWritten} asset(s) written, {r.AssetsSkippedIdentical} identical and skipped."
+                  + (r.UnmetRequirements.Count == 0
+                     ? string.Empty
+                     : " STILL UNWIRED: " + string.Join("; ", r.UnmetRequirements))
+                  + (r.NextSteps.Count == 0
+                     ? string.Empty
+                     : " Next: " + string.Join("; ", r.NextSteps))
+                : r.Message
+                  + (r.Collisions.Count == 0
+                     ? string.Empty
+                     : " Collisions: " + string.Join("; ", r.Collisions.Take(8)));
+            return (r.Ok, detail);
+        }));
+
     [McpServerTool(Name = "repair_generated", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Repair a map that wc3ctl itself generated, whose preplaced-hero helper block is too narrow for the heroes installed into it, and save the repaired map to out_path. Widens the player slots, rewrites hero owners in the script, and brings war3map.w3i and the map header into line. This is NOT a general map repair: it looks for wc3ctl's own generated helper function and refuses any map that does not carry one. The input map is NEVER modified in place.")]
     public static EditToolResult RepairGenerated(

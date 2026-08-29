@@ -43,7 +43,7 @@ public class NameRecoveryProbe
                      + $"{"still",7} {"imp",6} {"+imp",6}");
         _out.WriteLine(new string('-', 96));
 
-        int mapsHelped = 0, totalRecovered = 0, mapsSeen = 0;
+        int mapsHelped = 0, totalRecovered = 0, mapsSeen = 0, harvestFailures = 0;
 
         foreach (var path in Maps())
         {
@@ -57,8 +57,15 @@ public class NameRecoveryProbe
             int total = doc.Files.Count;
             int unnamedBefore = doc.Files.Count(f => f.FileName is null);
 
+            // Counted, not swallowed. This exact line, as a bare catch, recorded an
+            // IndexOutOfRangeException from HarvestAssetNames as "recovered 0 names", and that
+            // zero was reported as a fact about the map's script rather than a crash in the
+            // scanner. A sweep that hides the failure it exists to find is worse than no sweep.
             int harvested = 0;
-            try { harvested = doc.HarvestAssetNames(); } catch { }
+            string? harvestError = null;
+            try { harvested = doc.HarvestAssetNames(); }
+            catch (Exception ex) { harvestError = $"{ex.GetType().Name}: {ex.Message}"; }
+            if (harvestError is not null) harvestFailures++;
             int unnamedAfter = doc.Files.Count(f => f.FileName is null);
 
             // What the import list offers, spelled the way the archive would store it.
@@ -75,11 +82,17 @@ public class NameRecoveryProbe
 
             if (fromImp > 0) { mapsHelped++; totalRecovered += fromImp; }
 
-            _out.WriteLine($"{Trim(path),-44} {total,8:N0} {unnamedBefore,8:N0} {harvested,8:N0} "
-                         + $"{unnamedAfter,7:N0} {impPaths.Count,6:N0} {fromImp,6:N0}");
+            _out.WriteLine($"{Trim(path),-44} {total,8:N0} {unnamedBefore,8:N0} "
+                         + $"{(harvestError is null ? harvested.ToString("N0") : "THREW"),8} "
+                         + $"{unnamedAfter,7:N0} {impPaths.Count,6:N0} {fromImp,6:N0}"
+                         + (harvestError is null ? "" : "  " + harvestError));
         }
 
-        _out.WriteLine($"\n{mapsSeen} map(s) examined");
+        _out.WriteLine($"\n{mapsSeen} map(s) examined, "
+                     + $"{harvestFailures} where the harvest THREW rather than returning");
+        Assert.True(harvestFailures == 0,
+            $"name recovery threw on {harvestFailures} map(s); a crash here reads as "
+            + "\"recovered 0 names\" to every caller that guards it");
         _out.WriteLine($"{mapsHelped} map(s) would gain names from war3map.imp, "
                      + $"{totalRecovered:N0} entr(ies) in total");
         _out.WriteLine(totalRecovered == 0

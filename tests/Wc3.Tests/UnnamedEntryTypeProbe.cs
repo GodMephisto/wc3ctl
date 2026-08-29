@@ -86,7 +86,8 @@ public class UnnamedEntryTypeProbe
     {
         var overall = new Dictionary<string, int>(StringComparer.Ordinal);
         long overallBytes = 0;
-        int mapsWithNameless = 0, totalNameless = 0, totalTyped = 0;
+        int mapsWithNameless = 0, totalNameless = 0, totalTyped = 0, harvestFailures = 0;
+        int unreadable = 0;
 
         foreach (var path in Maps())
         {
@@ -95,7 +96,14 @@ public class UnnamedEntryTypeProbe
             MapDocument doc;
             try { doc = MapDocument.Load(path); }
             catch { continue; }
-            try { doc.HarvestAssetNames(); } catch { }
+            // Reported rather than swallowed, for the reason recorded in NameRecoveryProbe.
+            try { doc.HarvestAssetNames(); }
+            catch (Exception ex)
+            {
+                harvestFailures++;
+                _out.WriteLine($"{Path.GetFileName(path),-44} harvest THREW "
+                             + $"{ex.GetType().Name}: {ex.Message}");
+            }
 
             var nameless = doc.Files.Where(f => f.FileName is null).ToList();
             if (nameless.Count == 0) continue;
@@ -105,8 +113,14 @@ public class UnnamedEntryTypeProbe
             int typed = 0;
             foreach (var f in nameless)
             {
+                // A read failure is counted separately from a genuinely empty entry. Folding
+                // the two together is what produced the claim that these archives hold ~50,000
+                // empty padding entries, when in fact only a handful are empty and the rest are
+                // entries the loader cannot read at all. RawBytes returns an empty array for
+                // both, so the distinction has to be made here or not at all.
                 byte[] bytes;
-                try { bytes = f.RawBytes; } catch { bytes = Array.Empty<byte>(); }
+                try { bytes = f.RawBytes; }
+                catch { bytes = Array.Empty<byte>(); unreadable++; }
                 string kind = Sniff(bytes);
                 perMap[kind] = perMap.TryGetValue(kind, out int a) ? a + 1 : 1;
                 overall[kind] = overall.TryGetValue(kind, out int b) ? b + 1 : 1;
@@ -122,7 +136,9 @@ public class UnnamedEntryTypeProbe
                              .Take(4).Select(k => $"{k.Key}={k.Value}")));
         }
 
-        _out.WriteLine($"\n{mapsWithNameless} map(s) carry nameless entries, "
+        _out.WriteLine($"\n{harvestFailures} map(s) where the harvest threw, "
+                     + $"{unreadable:N0} entr(ies) whose bytes could not be read at all");
+        _out.WriteLine($"{mapsWithNameless} map(s) carry nameless entries, "
                      + $"{totalNameless:N0} entr(ies) in total, {overallBytes / 1024 / 1024:N0} MB");
         _out.WriteLine($"{totalTyped:N0} of them ({(totalNameless == 0 ? 0 : 100.0 * totalTyped / totalNameless):F1}%) "
                      + "can be typed from their leading bytes");

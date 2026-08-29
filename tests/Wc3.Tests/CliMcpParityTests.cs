@@ -29,6 +29,8 @@ public class CliMcpParityTests
         ["diff"] = "diff",
         ["script_functions"] = "script functions",
         ["repair_generated"] = "repair-generated",
+        ["hero_lint"] = "hero lint",
+        ["hero_install"] = "hero install",
         ["trigger_add_category"] = "trigger add-category",
         ["trigger_add_eca"] = "trigger add-eca",
         ["trigger_remove_eca"] = "trigger remove-eca",
@@ -142,10 +144,12 @@ public class CliMcpParityTests
         "debug trace-load",
         // Read-only analysis of a target map's hero integration requirements.
         "contract",
-        // Writes a definition folder to disk; local file output like 'extract'.
+        // Writes a definition folder to disk; local file output like 'extract'. That reason is
+        // true of export and was wrong about the other two, which are now wired. 'hero install'
+        // produces an edited MAP, which is exactly what the other write tools produce, and
+        // 'hero lint' returns findings rather than writing anything. If the hero definition
+        // format is the centre of this tool, an agent has to be able to check one and install it.
         "hero export",
-        "hero install",
-        "hero lint",
         // Launches the real game on this machine; inherently local.
         "test-load",
         // Heuristic script analysis for non-terminating loops. Reports candidates to read.
