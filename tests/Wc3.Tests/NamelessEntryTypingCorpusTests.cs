@@ -36,7 +36,7 @@ public class NamelessEntryTypingCorpusTests
     public void The_sniffer_identifies_over_ninety_percent_of_nonempty_nameless_entries()
     {
         var census = new Dictionary<string, int>(StringComparer.Ordinal);
-        int nameless = 0, empty = 0, identified = 0, materialized = 0;
+        int nameless = 0, empty = 0, identified = 0, materialized = 0, unreadable = 0;
         var clock = Stopwatch.StartNew();
 
         foreach (var path in Maps())
@@ -56,6 +56,7 @@ public class NamelessEntryTypingCorpusTests
                 var t = ContentTypeSniffer.Sniff(f);
                 census[t.DisplayName] = census.TryGetValue(t.DisplayName, out int n) ? n + 1 : 1;
                 if (t.IsEmpty) empty++;
+                else if (ReferenceEquals(t, SniffedContentType.Unreadable)) unreadable++;
                 else if (t.IsIdentified) identified++;
                 if (f.IsMaterialized) materialized++;
             }
@@ -67,10 +68,14 @@ public class NamelessEntryTypingCorpusTests
         foreach (var kv in census.OrderByDescending(k => k.Value))
             _out.WriteLine($"  {kv.Key,-22} {kv.Value,7:N0}");
 
-        int substantive = nameless - empty;
+        // Entries whose bytes could not be read are excluded from the denominator alongside the
+        // empty ones. Failing to identify content that was never available is not a failure of
+        // the sniffer, and counting it as one would make the rate a measure of how protected the
+        // library is rather than of how well the signatures work.
+        int substantive = nameless - empty - unreadable;
         double rate = substantive == 0 ? 0 : 100.0 * identified / substantive;
         _out.WriteLine($"\n{identified:N0} of {substantive:N0} non-empty ({rate:F1}%) identified, "
-                     + $"{empty:N0} empty");
+                     + $"{empty:N0} empty, {unreadable:N0} unreadable");
 
         Assert.Equal(0, materialized);
         Assert.True(rate > 90,

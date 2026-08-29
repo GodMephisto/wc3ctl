@@ -14,6 +14,22 @@ public sealed record SniffedContentType(string DisplayName, string Extension, bo
 {
     public static readonly SniffedContentType Empty = new("empty", "bin", true, false);
     public static readonly SniffedContentType Unknown = new("unknown", "bin", false, false);
+
+    /// <summary>
+    /// The entry declares a size but none of its bytes could be read.
+    ///
+    /// Distinct from <see cref="Empty"/> on purpose. A protected archive's stuffed entries pass
+    /// the loader's open probe, so they carry a real declared size, and then fail on actual
+    /// decompression, so the prefix read yields nothing. Reporting those as "empty" put entries
+    /// of 43 MB and 104 MB in a listing under the word empty, and it is the same conflation that
+    /// produced the claim these archives hold 50,000 empty padding entries when almost none of
+    /// them are empty.
+    ///
+    /// IsEmpty stays false, because the entry is not empty. IsIdentified stays false, because
+    /// nothing was identified. Callers measuring an identification RATE should exclude these
+    /// from the denominator, since no content was available to identify.
+    /// </summary>
+    public static readonly SniffedContentType Unreadable = new("unreadable", "bin", false, false);
 }
 
 /// <summary>
@@ -47,9 +63,15 @@ public static class ContentTypeSniffer
     {
         if (entry.OverrideBytes is { } pending)
             return Sniff(pending);
-        return entry.SniffCache ??= entry.CurrentSize == 0
-            ? SniffedContentType.Empty
-            : Sniff(entry.ReadPrefix(PrefixLength));
+        if (entry.CurrentSize == 0) return entry.SniffCache ??= SniffedContentType.Empty;
+
+        // A declared size with no readable bytes is not emptiness. The span overload cannot tell
+        // the difference, because both arrive as zero bytes, so the distinction has to be drawn
+        // here where the declared size is still in hand.
+        var prefix = entry.ReadPrefix(PrefixLength);
+        return entry.SniffCache ??= prefix.Length == 0
+            ? SniffedContentType.Unreadable
+            : Sniff(prefix);
     }
 
     /// <summary>Types content from its leading bytes. Pass the whole payload or any prefix
