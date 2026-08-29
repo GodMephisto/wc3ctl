@@ -257,9 +257,20 @@ public sealed class MapDocument
             // candidate. That presents as a missing imported asset, not as a decoding fault, which
             // is a bad failure to debug. Nothing is written back here, so this only affects what
             // the scan can see.
-            var text = Encoding.Latin1.GetString(script.RawBytes);
-            foreach (Match m in AssetStringLiteral.Matches(text))
-                Harvest(AssetPathCandidates.Unescape(m.Groups[1].Value));
+            // Through the shared scanner, not a private regex. This used its own
+            // new("\"([^\"]*)\"") which had no length bound and allowed line breaks, so a
+            // 659 character multi-line UI string became a candidate "path" and War3Net's name
+            // hashing threw IndexOutOfRangeException on it. That took the whole harvest down
+            // after six candidates, so U9_PumpkinZ_v4.7d recovered no names at all and any
+            // caller not wrapping this in a try/catch crashed.
+            //
+            // AssetPathCandidates.NamedInScript applies the bound already documented there,
+            // three to 260 characters and no line break, because a multi-kilobyte literal is
+            // prose rather than a path. Two implementations of one rule, one of them right, is
+            // the same shape of defect as the script encoding disagreement.
+            foreach (var path in AssetPathCandidates.NamedInScript(
+                         ScriptText.GetString(script.RawBytes)))
+                Harvest(path);
         }
 
         // Source 2: path-like field values inside the map's own object data (all seven kinds,
@@ -297,10 +308,6 @@ public sealed class MapDocument
         }
         return named;
     }
-
-    /// <summary>A double-quoted JASS/Lua string literal (captures the inner text), used by
-    /// <see cref="HarvestAssetNames"/> to pull candidate asset paths out of the whole script.</summary>
-    private static readonly Regex AssetStringLiteral = new("\"([^\"]*)\"", RegexOptions.Compiled);
 
     // War3Net shape confirmed against the same three modification kinds Wc3.Commands.ObjectKinds
     // normalizes (Simple: w3u/w3t/w3b/w3h, Level: w3a/w3q, Variation: w3d); read directly here
