@@ -1272,8 +1272,11 @@ public static class Wc3Tools
             string.Join(", ", Enum.GetNames<TEnum>()).ToLowerInvariant());
     }
 
-    /// <summary>Validate an out_path (required, must differ from the input) and return its full path.</summary>
-    private static string ResolveOutPath(string map, string outPath)
+    /// <summary>Validate an out_path (required, must differ from the input) and return its full
+    /// path. The parameter is nullable because every mutating tool takes out_path as an optional
+    /// argument and this method is what refuses a missing one. Declaring it non-null made the
+    /// callers warn instead, which is the same defect one call site further out.</summary>
+    private static string ResolveOutPath(string map, string? outPath)
     {
         if (string.IsNullOrWhiteSpace(outPath))
             throw new McpException("out_path is required");

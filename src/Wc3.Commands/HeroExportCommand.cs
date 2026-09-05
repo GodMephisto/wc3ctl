@@ -512,7 +512,7 @@ public static class HeroExportCommand
         foreach (var (_, start, end) in carriedSpans)
         {
             var named = AssetPathCandidates
-                .NamedInScript(string.Join("\n", _scriptLines[start..(end + 1)]))
+                .NamedInScript(string.Join("\n", _scriptLines![start..(end + 1)]))
                 .ToList();
             if (named.Count > BundleCommand.SharedAssetBankCount)
             {

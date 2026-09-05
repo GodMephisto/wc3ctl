@@ -329,18 +329,23 @@ public static class TriggerCommand
         var (triggers, td, refusal) = ResolveGuiTrigger(doc, id);
         if (refusal is not null) return new TriggerOpResult(false, refusal);
 
-        if (index < 0 || index >= td!.Functions.Count)
-            return new TriggerOpResult(false,
-                td.Functions.Count == 0
-                    ? $"'{td.Name}' has no events, conditions or actions to remove."
-                    : $"'{td.Name}' has {td.Functions.Count} function(s), so index {index} is out "
-                      + $"of range (0 to {td.Functions.Count - 1}).");
+        // ResolveGuiTrigger hands back a trigger whenever it does not refuse. Binding it once
+        // states that, where a null-forgiving operator on the first use only silences the first
+        // use and leaves every later one warning.
+        var trigger = td!;
 
-        var removed = td.Functions[index];
-        td.Functions.RemoveAt(index);
+        if (index < 0 || index >= trigger.Functions.Count)
+            return new TriggerOpResult(false,
+                trigger.Functions.Count == 0
+                    ? $"'{trigger.Name}' has no events, conditions or actions to remove."
+                    : $"'{trigger.Name}' has {trigger.Functions.Count} function(s), so index "
+                      + $"{index} is out of range (0 to {trigger.Functions.Count - 1}).");
+
+        var removed = trigger.Functions[index];
+        trigger.Functions.RemoveAt(index);
         return Persist(doc, triggers!,
             $"Removed {removed.Type.ToString().ToLowerInvariant()} '{removed.Name}' from "
-            + $"'{td.Name}'.");
+            + $"'{trigger.Name}'.");
     }
 
     /// <summary>Enables or disables one function within a trigger, the World Editor's per-line
@@ -350,14 +355,17 @@ public static class TriggerCommand
     {
         var (triggers, td, refusal) = ResolveGuiTrigger(doc, id);
         if (refusal is not null) return new TriggerOpResult(false, refusal);
-        if (index < 0 || index >= td!.Functions.Count)
+        var trigger = td!;   // see RemoveFunction, the tuple is non-null whenever refusal is
+        if (index < 0 || index >= trigger.Functions.Count)
             return new TriggerOpResult(false,
-                $"'{td.Name}' has {td.Functions.Count} function(s), so index {index} is out of range.");
+                $"'{trigger.Name}' has {trigger.Functions.Count} function(s), so index {index} "
+                + "is out of range.");
 
-        td.Functions[index].IsEnabled = on;
+        trigger.Functions[index].IsEnabled = on;
         return Persist(doc, triggers!,
-            $"{(on ? "Enabled" : "Disabled")} {td.Functions[index].Type.ToString().ToLowerInvariant()} "
-            + $"'{td.Functions[index].Name}' in '{td.Name}'.");
+            $"{(on ? "Enabled" : "Disabled")} "
+            + $"{trigger.Functions[index].Type.ToString().ToLowerInvariant()} "
+            + $"'{trigger.Functions[index].Name}' in '{trigger.Name}'.");
     }
 
     /// <summary>Resolves an id to a GUI trigger, or explains why it is not one.</summary>
