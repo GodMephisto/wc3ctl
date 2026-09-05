@@ -31,13 +31,13 @@ public partial class DependencyGraphView : UserControl, IMapPanel
     // Palette shared by the canvas and the detail lists: gold accent = custom
     // to this map (matches the object editor's modified-field highlight),
     // grey = base game, steel blue = file assets, red tint = not in the map.
-    private static readonly IBrush AccentText = new SolidColorBrush(Color.Parse("#E8C56A"));
-    private static readonly IBrush NormalText = new SolidColorBrush(Color.Parse("#C8CDD3"));
-    private static readonly IBrush MutedText = new SolidColorBrush(Color.Parse("#8FA3B8"));
-    private static readonly IBrush MissingText = new SolidColorBrush(Color.Parse("#D98C8C"));
+    private static readonly IBrush AccentText = StudioPalette.Accent;
+    private static readonly IBrush NormalText = StudioPalette.Normal;
+    private static readonly IBrush MutedText = StudioPalette.Muted;
+    private static readonly IBrush MissingText = StudioPalette.Missing;
 
     // Canvas node fills/borders.
-    private static readonly IBrush CustomBorder = new SolidColorBrush(Color.Parse("#E8C56A"));
+    private static readonly IBrush CustomBorder = StudioPalette.Accent;
     private static readonly IBrush CustomFill = new SolidColorBrush(Color.Parse("#26E8C56A"));
     private static readonly IBrush BaseBorder = new SolidColorBrush(Color.Parse("#66808893"));
     private static readonly IBrush BaseFill = new SolidColorBrush(Color.Parse("#14808893"));
@@ -359,13 +359,23 @@ public partial class DependencyGraphView : UserControl, IMapPanel
     /// <summary>Raised whenever a node's excluded state toggles.</summary>
     public event EventHandler? ExclusionChanged;
 
+    /// <summary>The only writer of the status line, so a message can never land in the wrong
+    /// colour by being set somewhere that forgot. The line used to be described as unobtrusive
+    /// and carried one uniform grey, which is right for a resolver note and wrong for "this
+    /// result is incomplete".</summary>
+    private void SetStatus(string text, IBrush? brush = null)
+    {
+        StatusText.Text = text;
+        StatusText.Foreground = brush ?? StudioPalette.Muted;
+    }
+
     public void ShowMap(MapSession session)
     {
         _session = session;
         int gen = ++_generation; // drop anything still in flight for the old map
         ClearSelection();
         ClearRendered();
-        StatusText.Text = "";
+        SetStatus("");
         SummaryText.Text = "";
         _listDoc = null;
 
@@ -463,7 +473,7 @@ public partial class DependencyGraphView : UserControl, IMapPanel
                 if (items is null)
                 {
                     SummaryText.Text = "";
-                    StatusText.Text = $"Failed to list {kindWord}: {error}";
+                    SetStatus($"Failed to list {kindWord}. {error}", StudioPalette.Problem);
                     return;
                 }
                 _options = items;
@@ -564,8 +574,8 @@ public partial class DependencyGraphView : UserControl, IMapPanel
                 if (bundle is null)
                 {
                     SummaryText.Text = "";
-                    GraphHint.Text = "Resolve failed - see the status line below.";
-                    StatusText.Text = $"Failed to resolve {rawcode}: {error}";
+                    GraphHint.Text = "Resolve failed, see the status line below.";
+                    SetStatus($"Failed to resolve {rawcode}. {error}", StudioPalette.Problem);
                     return;
                 }
                 RenderBundle(bundle);
@@ -585,10 +595,22 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         int realFiles = BundleStructure.RealFiles(bundle).Count;
         int realStrings = bundle.Strings.Count(BundleStructure.RealStrings(bundle).Contains);
         int custom = bundle.Objects.Count(o => realObjects.Contains(o.Rawcode) && o.CustomToMap);
+        // Naming whose counts these are, because a hero whose bundle holds five hundred objects
+        // showing "8 objects" here reads like a failed resolve unless the line says otherwise.
+        // Reporting the over-carry itself was tried and reverted, see the note above and
+        // DependencyGraphTreeStructureTests, which pin its absence.
+        var shape = BundleStructure.Summarize(bundle);
         SummaryText.Text =
             $"{realObjects.Count} objects, {realFiles} files, {realStrings} strings"
-            + $", {custom} custom to this map";
-        StatusText.Text = bundle.Diagnostics.Count > 0 ? string.Join("; ", bundle.Diagnostics) : "";
+            + $", {custom} custom to this map  (this unit's own)";
+
+        // A carry cap means the bundle is INCOMPLETE, which matters more than every other
+        // diagnostic and used to be one entry in a joined list of four, in the same grey.
+        if (shape.Truncated)
+            SetStatus(BundleStructure.TruncatedWarning + " " + string.Join("; ", bundle.Diagnostics),
+                StudioPalette.Problem);
+        else
+            SetStatus(bundle.Diagnostics.Count > 0 ? string.Join("; ", bundle.Diagnostics) : "");
         BuildTree(bundle);
         BuildFilesList(bundle);
         BuildStringsList(bundle);

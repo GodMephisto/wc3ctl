@@ -19,10 +19,10 @@ namespace Wc3.Studio.Panels;
 /// </summary>
 public partial class HeroWiringView : UserControl, IMapPanel
 {
-    private static readonly IBrush OkBrush = new SolidColorBrush(Color.Parse("#6FBE7A"));
-    private static readonly IBrush PassiveBrush = new SolidColorBrush(Color.Parse("#5F9FD1"));
-    private static readonly IBrush ProblemBrush = new SolidColorBrush(Color.Parse("#D9756B"));
-    private static readonly IBrush DimBrush = new SolidColorBrush(Color.Parse("#8FA3B8"));
+    private static readonly IBrush OkBrush = StudioPalette.Ok;
+    private static readonly IBrush PassiveBrush = StudioPalette.Info;
+    private static readonly IBrush ProblemBrush = StudioPalette.Problem;
+    private static readonly IBrush DimBrush = StudioPalette.Muted;
 
     /// <summary>The focus picker's sentinel id for "show every hero" (a real hero rawcode
     /// is always exactly 4 characters, so an empty id never collides with one).</summary>

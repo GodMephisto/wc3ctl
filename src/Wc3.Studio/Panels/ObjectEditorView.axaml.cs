@@ -1787,9 +1787,9 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     /// </summary>
     public sealed class FieldRow
     {
-        private static readonly IBrush BaseBrush = new SolidColorBrush(Color.Parse("#C8CDD3"));
-        private static readonly IBrush MapBrush = new SolidColorBrush(Color.Parse("#E8C56A"));
-        private static readonly IBrush HeaderBrush = new SolidColorBrush(Color.Parse("#7FB2E5"));
+        private static readonly IBrush BaseBrush = StudioPalette.Normal;
+        private static readonly IBrush MapBrush = StudioPalette.Accent;
+        private static readonly IBrush HeaderBrush = StudioPalette.Header;
 
         private readonly bool _mapSource;
 

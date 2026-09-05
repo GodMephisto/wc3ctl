@@ -35,7 +35,7 @@ public partial class TriggerView : UserControl, IMapPanel
     private const string SelectHint = "Select a trigger to see its events, conditions and actions.";
 
     /// <summary>Dim ink for hints and secondary text, the shade the other panels use.</summary>
-    private static readonly IBrush DimBrush = new SolidColorBrush(Color.Parse("#8FA3B8"));
+    private static readonly IBrush DimBrush = StudioPalette.Muted;
 
     private MapSession? _session;
 
@@ -545,7 +545,7 @@ public partial class TriggerView : UserControl, IMapPanel
 
     /// <summary>Ink for a refusal, so "cannot remove this without moving code" does not read
     /// like the same dim aside as a success.</summary>
-    private static readonly IBrush WarnBrush = new SolidColorBrush(Color.Parse("#E8B339"));
+    private static readonly IBrush WarnBrush = StudioPalette.Warn;
 
     private void ShowTrigger(TriggerInfo trig)
     {
