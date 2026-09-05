@@ -59,6 +59,18 @@ public static class TerrainRenderer
                 int idx = y * w + x;
                 var tile = tiles[idx];
 
+                // A boundary tile is outside the playable area. The game does not draw it and
+                // its own minimap shows it as void, so painting it as ground was what made a
+                // rendered map read as "not on a proper map", with real terrain marooned in a
+                // field of dirt. Measured on Anime_WOS2_0.29d, a tile inside the arena carries
+                // IsBoundary false and grass, while the surrounding field carries IsBoundary
+                // true and dirt. This is the flag, not fog of war, which was the first guess.
+                if (tile.IsBoundary)
+                {
+                    Paint(image, x, y, h, scale, VoidColor);
+                    continue;
+                }
+
                 // Base color from the tile's ground type.
                 Rgba32 c;
                 if (typeColors.Length > 0 && tile.Texture >= 0 && tile.Texture < typeColors.Length)
@@ -93,12 +105,7 @@ public static class TerrainRenderer
                 if (tile.IsBlighted)
                     c = Lerp(c, new Rgba32(104, 66, 54), 0.7f);
 
-                // Tilepoints are stored row-major from the south-west corner;
-                // flip vertically so north ends up at the top of the image.
-                int px = x * scale, py = (h - 1 - y) * scale;
-                for (int dy = 0; dy < scale; dy++)
-                    for (int dx = 0; dx < scale; dx++)
-                        image[px + dx, py + dy] = c;
+                Paint(image, x, y, h, scale, c);
             }
         }
 
@@ -454,6 +461,21 @@ public static class TerrainRenderer
     /// inspecting its enum name (e.g. "L_GrassCliff" → green). Names carry a
     /// tileset-letter prefix and a descriptive suffix; we match the suffix.
     /// </summary>
+    /// <summary>What a tile outside the playable area is drawn as. The game shows void there.</summary>
+    internal static readonly Rgba32 VoidColor = new(10, 10, 12, 255);
+
+    /// <summary>
+    /// Fills one tilepoint's cell. Tilepoints are stored row-major from the south-west corner,
+    /// so rows are flipped to put north at the top of the image.
+    /// </summary>
+    private static void Paint(Image<Rgba32> image, int x, int y, int h, int scale, Rgba32 c)
+    {
+        int px = x * scale, py = (h - 1 - y) * scale;
+        for (int dy = 0; dy < scale; dy++)
+            for (int dx = 0; dx < scale; dx++)
+                image[px + dx, py + dy] = c;
+    }
+
     /// <summary>
     /// One base colour per ground tile type, taken from the tileset's OWN art where the base
     /// game is available and from the built-in table otherwise.
