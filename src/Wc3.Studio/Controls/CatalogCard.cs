@@ -17,7 +17,7 @@ namespace Wc3.Studio.Controls;
 /// </summary>
 public static class CatalogCard
 {
-    private static readonly IBrush DimBrush = new SolidColorBrush(Color.Parse("#8FA3B8"));
+    private static readonly IBrush DimBrush = StudioPalette.Muted;
 
     public static Border Build(
         string title,

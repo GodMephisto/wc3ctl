@@ -126,4 +126,76 @@ public static class BundleStructure
         }
         return reached;
     }
+
+    /// <summary>
+    /// What a bundle is made of, before anybody reads nine thousand edges one at a time.
+    /// </summary>
+    /// <remarks>
+    /// Measured on GGGA_V0.05 hero H005, resolving one hero produces 9,145 edges and 5,478 lines
+    /// of human output, made of 2,168 object-field edges (the kit), 4,334 assets, 2,131 display
+    /// strings and 512 script closure. A reader wanting to know what that hero depends on has to
+    /// find two thousand relevant rows inside nine thousand. BundleSummaryTests re-measures the
+    /// split against that map and prints it, so a drift is visible rather than left to a comment
+    /// nobody re-checks.
+    ///
+    /// The truncation matters more than the volume. The closure carries at most 512 objects and
+    /// the overflow is reported in a note printed AFTER everything else, so a bundle can be
+    /// silently incomplete while looking exhaustive. That belongs at the top, not the bottom.
+    /// </remarks>
+    public sealed record BundleSummary(
+        int Objects,
+        int Files,
+        int Strings,
+        int Functions,
+        int Edges,
+        /// <summary>Edges through a real object field code, which is the kit itself.</summary>
+        int ObjectFieldEdges,
+        /// <summary>Edges to a model, texture, icon or sound.</summary>
+        int AssetEdges,
+        /// <summary>Edges to a display string.</summary>
+        int StringEdges,
+        /// <summary>Edges the script closure added. Carried, and not the kit.</summary>
+        int ScriptClosureEdges,
+        /// <summary>True when a diagnostic says a cap was hit, so the bundle is INCOMPLETE.</summary>
+        bool Truncated,
+        IReadOnlyList<string> Notes);
+
+    /// <summary>The sentence every front end leads with when a carry cap truncated the closure.
+    /// One constant rather than one phrasing per front end, because the whole point is that a
+    /// reader recognises it wherever it appears.</summary>
+    public const string TruncatedWarning =
+        "INCOMPLETE, a carry cap was reached so some dependencies are missing.";
+
+    /// <summary>One line naming what the edges actually are, so a nine thousand edge total stops
+    /// reading as a dependency count.</summary>
+    public static string DescribeEdges(BundleSummary s) =>
+        $"{s.Edges} edge(s), {s.ObjectFieldEdges} object-field (the kit), "
+        + $"{s.AssetEdges} asset, {s.StringEdges} string, {s.ScriptClosureEdges} script-closure";
+
+    /// <summary>Summarises a resolved bundle. Never throws, because a summary is a reading aid.</summary>
+    public static BundleSummary Summarize(UnitBundle bundle)
+    {
+        var files = bundle.Files.Select(f => f.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        int closure = 0, strings = 0, assets = 0, fields = 0;
+        foreach (var e in bundle.Edges)
+        {
+            if (e.Via == ScriptClosureVia) closure++;
+            else if (e.Via == StringVia) strings++;
+            else if (files.Contains(e.To)) assets++;
+            else fields++;
+        }
+
+        // A cap is reported in prose by the resolver, so this looks for that rather than
+        // re-deriving a limit which would then have two places to drift apart.
+        bool truncated = bundle.Diagnostics.Any(d =>
+            d.Contains("cap", StringComparison.OrdinalIgnoreCase)
+            && d.Contains("not carried", StringComparison.OrdinalIgnoreCase));
+
+        return new BundleSummary(
+            bundle.Objects.Count, bundle.Files.Count, bundle.Strings.Count,
+            bundle.Functions.Count, bundle.Edges.Count,
+            fields, assets, strings, closure,
+            truncated, bundle.Diagnostics);
+    }
 }

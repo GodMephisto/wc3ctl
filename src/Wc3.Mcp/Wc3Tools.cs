@@ -282,6 +282,12 @@ public static class Wc3Tools
         [Description("Path to a .w3x/.w3m map file.")] string map)
         => Run(() => TriggerReadCommand.GetTriggers(LoadMap(map)));
 
+    [McpServerTool(Name = "hero_roster", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("List the playable heroes a map registers, with each hero's rawcode, display name, the string tags from its registration call (typically a role and a portrait path), and which trigger's custom-text body holds its code. A HERO IS NOT A TRIGGER and counting one does not count the other: measured on a real map, 170 registered heroes are spread across 39 Character triggers, because a few grouped triggers each bundle many heroes while a minority get a trigger of their own. Use this rather than counting triggers when asked how many heroes a map has. Returns Ok=false for maps that create heroes inline instead of registering them, since those have no roster to read.")]
+    public static HeroRosterCommand.RosterResult HeroRoster(
+        [Description("Path to a .w3x/.w3m map file.")] string map)
+        => Run(() => HeroRosterCommand.Run(LoadMap(map)));
+
     [McpServerTool(Name = "strings_list", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("List the map's string table (war3map.wts). Every TRIGSTR_ reference in object data and in scripts resolves through here, so this is how to read what a tooltip or a unit name actually says.")]
     public static StringsListResult StringsList(

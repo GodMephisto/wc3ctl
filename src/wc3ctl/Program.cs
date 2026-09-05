@@ -37,6 +37,13 @@ public static class Program
         void Emit(bool json, object result, Func<string> human) =>
             Console.WriteLine(json ? Render.AsJson(result) : human());
 
+        // Column-safe shortening for table output. Only the human rendering uses it, the JSON
+        // carries the full value, so a truncated column can never become a truncated result.
+        static string Trunc(string s, int max) =>
+            string.IsNullOrEmpty(s) ? string.Empty
+            : s.Length <= max ? s
+            : s[..Math.Max(0, max - 1)] + "…";
+
         // Run a command body, turning expected failures into a clean one-line
         // message on stderr + a non-zero exit code (never a raw stack trace).
         void RunSafely(Action body)
@@ -2483,10 +2490,42 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
             Emit(pa.GetValueForOption(jsonOption), ra, () => Render.HeroLint(ra));
         }));
 
+        // Counting triggers is not counting heroes, and on a bundled map the two differ by a
+        // factor of four. This reports the roster the map actually registers, with the trigger
+        // that holds each hero's code beside it.
+        var heroRoster = new Command("roster",
+            "List the playable heroes the map registers, and which trigger holds each one's "
+            + "code. A hero is not a trigger: a map can register 170 heroes whose code is "
+            + "bundled into a handful of triggers, so counting triggers under-counts heroes.")
+        { mapArg, gameDirOption };
+        heroRoster.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var doc = MapDocument.Load(p.GetValueForArgument(mapArg));
+            var r = HeroRosterCommand.Run(doc, p.GetValueForOption(gameDirOption));
+            Emit(p.GetValueForOption(jsonOption), r, () =>
+            {
+                if (!r.Ok) return r.Message;
+                // Only the tags that read as labels. A registration call usually carries a role
+                // and an asset path, and the path is both the longer and the less useful of the
+                // two, so it would push the role out of the column. The JSON keeps every tag.
+                var lines = r.Heroes.Select(h =>
+                    $"{h.Rawcode}  {Trunc(h.Name, 28),-28} "
+                    + $"{Trunc(string.Join("/", h.Tags.Where(t => !t.Contains('.') && !t.Contains('\\') && !t.Contains('/'))), 16),-16} "
+                    + (h.Trigger is null
+                        ? "(not in any trigger)"
+                        : h.TriggerMatches > 1
+                            ? $"{h.Trigger} (+{h.TriggerMatches - 1} more)"
+                            : h.Trigger));
+                return string.Join("\n", lines) + "\n\n" + r.Message;
+            });
+        }));
+
         var hero = new Command("hero", "Hero definitions: the portable, reviewable form of a hero.");
         hero.AddCommand(heroExport);
         hero.AddCommand(heroInstall);
         hero.AddCommand(heroLint);
+        hero.AddCommand(heroRoster);
         root.AddCommand(hero);
 
         // Records HOW FAR initialisation gets, not just whether it finished. A hang on the loading

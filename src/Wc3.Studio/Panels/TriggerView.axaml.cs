@@ -35,7 +35,7 @@ public partial class TriggerView : UserControl, IMapPanel
     private const string SelectHint = "Select a trigger to see its events, conditions and actions.";
 
     /// <summary>Dim ink for hints and secondary text, the shade the other panels use.</summary>
-    private static readonly IBrush DimBrush = new SolidColorBrush(Color.Parse("#8FA3B8"));
+    private static readonly IBrush DimBrush = StudioPalette.Muted;
 
     private MapSession? _session;
 
@@ -214,21 +214,32 @@ public partial class TriggerView : UserControl, IMapPanel
         TriggerTree.Items.Add(varsItem);
     }
 
+    /// <summary>The document the cached global count belongs to, so a different map recounts.</summary>
+    private MapDocument? _globalsCountedFor;
+    private int _globalsCount;
+
     /// <summary>
     /// How many globals the loaded map's script declares. Never throws and never stops the
     /// tree rendering, because this is a caption detail and a panel that fails to draw over
     /// one is worse than a panel that omits the number.
     /// </summary>
+    /// <remarks>
+    /// Cached per document because the tree is rebuilt after every edit, not just on open, and
+    /// the read is not free. Measured across the four largest maps here it costs 33ms to 172ms,
+    /// the worst on a 472MB map whose script is 10,610 globals long. Paying that on each rename
+    /// or flag toggle would make the panel feel broken, which is the opposite of the point.
+    /// The count is a property of the script, and nothing in this panel edits the script.
+    /// </remarks>
     private int ScriptGlobalCount()
     {
-        try
-        {
-            return _session is { Current: { } doc } ? ScriptGlobalsCommand.Count(doc) : 0;
-        }
-        catch
-        {
-            return 0;
-        }
+        if (_session is not { Current: { } doc }) return 0;
+        if (ReferenceEquals(doc, _globalsCountedFor)) return _globalsCount;
+
+        try { _globalsCount = ScriptGlobalsCommand.Count(doc); }
+        catch { _globalsCount = 0; }
+
+        _globalsCountedFor = doc;
+        return _globalsCount;
     }
 
     /// <summary>One trigger row: its name plus a dim state hint. A GUI trigger with
@@ -534,7 +545,7 @@ public partial class TriggerView : UserControl, IMapPanel
 
     /// <summary>Ink for a refusal, so "cannot remove this without moving code" does not read
     /// like the same dim aside as a success.</summary>
-    private static readonly IBrush WarnBrush = new SolidColorBrush(Color.Parse("#E8B339"));
+    private static readonly IBrush WarnBrush = StudioPalette.Warn;
 
     private void ShowTrigger(TriggerInfo trig)
     {

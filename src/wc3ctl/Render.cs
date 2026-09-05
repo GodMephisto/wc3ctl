@@ -224,6 +224,20 @@ public static class Render
     public static string BundleUnit(UnitBundle r)
     {
         var sb = new StringBuilder();
+
+        // The shape first. A bundle for one hero on a large map runs to thousands of lines, and
+        // the fact that the closure hit its cap used to be a note printed after all of them. An
+        // incomplete result that reads as exhaustive is the worst way to be wrong, so the
+        // warning goes where it will actually be seen.
+        var sum = BundleStructure.Summarize(r);
+        sb.Append($"{sum.Objects} object(s), {sum.Files} file(s), {sum.Strings} string(s), ")
+          .Append($"{sum.Functions} function(s)\n")
+          .Append("  ").Append(BundleStructure.DescribeEdges(sum)).Append('\n');
+        if (sum.Truncated)
+            sb.Append("  ").Append(BundleStructure.TruncatedWarning)
+              .Append(" See the notes at the end.\n");
+        sb.Append('\n');
+
         var byCode = r.Objects.ToDictionary(o => o.Rawcode, StringComparer.Ordinal);
         // Real references only. The script closure seed edges are the deliberate over-carry
         // (other heroes' kits), shown in their own group below rather than as the hero's own.

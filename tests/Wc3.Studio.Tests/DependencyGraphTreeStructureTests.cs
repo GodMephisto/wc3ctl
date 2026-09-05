@@ -17,8 +17,13 @@ namespace Wc3.Studio.Tests;
 /// over-carry stays in the bundle and still ports, but it is NOT this unit's dependency, so
 /// this panel never lists it, in the tree, the graph, the file list or the string list. What
 /// the unit shows is only what its own object data references (uhab, uabi, abuf and the like),
-/// plus, for files, the textures its own models name. The closure's size stays visible on the
-/// summary line so its cost on a port is not silently hidden.
+/// plus, for files, the textures its own models name.
+///
+/// The summary line does NOT report the closure's size, and the assertions below pin that. Adding
+/// it was tried and reverted, because the panel lists none of those objects, so a count of them
+/// describes something the reader cannot see. The over-carry's cost is accounted for in the port
+/// report, which is where it is actually paid. What the status line does carry is whether a carry
+/// cap truncated the bundle, see DependencyGraphStatusTests.
 /// </summary>
 public class DependencyGraphTreeStructureTests
 {

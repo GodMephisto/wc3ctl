@@ -205,8 +205,13 @@ public class BundleStructureAndRenderTests
         var lines = Wc3Ctl.Render.BundleUnit(SampleBundle())
             .Split('\n').Select(l => l.TrimEnd('\r')).ToList();
 
+        // A shape header comes first now, because a real bundle runs to thousands of lines and
+        // whether a carry cap truncated it has to be readable before any of them. Tree after.
+        int root = lines.FindIndex(l => l.StartsWith("H001"));
+        Assert.True(root > 0, "the hero should head the tree, below the shape header");
+        Assert.Contains(lines.Take(root), l => l.Contains("object-field (the kit)"));
+
         // The hero, then its two real abilities at depth one, the real buff nested under A001.
-        Assert.StartsWith("H001", lines[0]);
         Assert.Contains(lines, l => l.StartsWith("  A001"));
         Assert.Contains(lines, l => l.StartsWith("  A002"));
         Assert.Contains(lines, l => l.StartsWith("    B001"));
