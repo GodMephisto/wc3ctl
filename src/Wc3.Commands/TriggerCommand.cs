@@ -110,7 +110,12 @@ public static class TriggerCommand
     public const string NotCompiledNote =
         " Note that this changes the World Editor's trigger source only. Warcraft III runs the "
         + "compiled war3map.j, which wc3ctl does not regenerate, so this trigger does nothing in "
-        + "game until the map is opened and saved in the World Editor.";
+        + "game until the map is opened and saved in the World Editor. That is a deliberate "
+        + "refusal rather than a gap: regenerating the script from the tree overwrites whatever "
+        + "compiled or hand-written code the map already carries, which is a known way to "
+        + "destroy a map built by external tooling. The safe direction is the reverse, and "
+        + "'trigger recover-from-script' takes it, rebuilding a tree from the script for maps "
+        + "that have no tree at all.";
 
     /// <summary>What kind of trigger to create. Custom-text triggers are deliberately absent:
     /// their body lives in war3map.wct, which cannot be written (see <see cref="Remove"/>), so
