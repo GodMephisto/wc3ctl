@@ -999,6 +999,26 @@ public static class Wc3Tools
                 : r.Message);
         }));
 
+    [McpServerTool(Name = "terrain_fill", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Apply a terrain tool over an inclusive RECTANGLE of corners and save the edited map to out_path, instead of one brush dab at a time. Corners may be given in any order and a rectangle that runs off the grid is clipped rather than refused. tool is one of Raise, Lower, SetHeight, Flatten, Paint, CliffRaise, CliffLower, CliffSet, Ramp, RampOff, Water, WaterRemove, Blight, BlightOff. value means height for Raise/Lower/SetHeight/Water, a ground tile index for Paint (see terrain_info for the map's tile list), and a step count for the Cliff tools; it is ignored by Flatten, Ramp, RampOff, WaterRemove, Blight and BlightOff. The input map is NEVER modified in place.")]
+    public static EditToolResult TerrainFill(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
+        [Description("First corner column, 0-based.")] int x0,
+        [Description("First corner row, 0-based.")] int y0,
+        [Description("Second corner column, 0-based and inclusive.")] int x1,
+        [Description("Second corner row, 0-based and inclusive.")] int y1,
+        [Description("Raise, Lower, SetHeight, Flatten, Paint, CliffRaise, CliffLower, CliffSet, Ramp, RampOff, Water, WaterRemove, Blight or BlightOff.")] string tool,
+        [Description("Height, ground tile index or cliff step count, depending on the tool. Defaults to 1.")] float value = 1f)
+        => Run(() => SaveEdit(map, out_path, doc =>
+        {
+            if (!Enum.TryParse<TerrainFillCommand.FillTool>(tool, ignoreCase: true, out var parsed))
+                return (false, $"unknown tool '{tool}'. Valid tools are "
+                             + string.Join(", ", Enum.GetNames<TerrainFillCommand.FillTool>()) + ".");
+            var r = TerrainFillCommand.Fill(doc, x0, y0, x1, y1, parsed, value);
+            return (r.Ok, r.Message);
+        }));
+
     [McpServerTool(Name = "trigger_recover_from_script", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Rebuild a browsable GUI trigger tree (war3map.wtg) for a map that has NONE, by decompiling the compiled script the game runs, and save the result to out_path. The script itself is never modified, so this only ever ADDS a tree. It REFUSES any map that already carries a trigger tree, because a decompiled tree cannot be trusted to replace a real one: measured across the map library the decompiler reported success on a map holding 626 trigger items while producing 1, at zero percent name recall. Use this on protected or stripped maps whose trigger tree was removed but whose compiled script survives. The recovered tree DESCRIBES the script, it does not drive it, so editing the tree afterwards changes what the World Editor shows and not what the game runs. The input map is NEVER modified in place.")]
     public static EditToolResult TriggerRecoverFromScript(

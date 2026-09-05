@@ -1277,8 +1277,41 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
             FinishTerrain(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message, r.TilesChanged);
         }));
 
+        // Fill: the rectangle counterpart to the brush commands above. Every bulk terrain
+        // operation lived in Wc3.Commands with no caller at all, so filling a region meant
+        // clicking a brush repeatedly. They go behind ONE verb rather than a rectangle variant
+        // of each, because selecting a region and acting on it is one concept.
+        var fX0 = new Argument<int>("x0", "First corner column, 0-based.");
+        var fY0 = new Argument<int>("y0", "First corner row, 0-based.");
+        var fX1 = new Argument<int>("x1", "Second corner column, 0-based (inclusive, any order).");
+        var fY1 = new Argument<int>("y1", "Second corner row, 0-based (inclusive, any order).");
+        var fTool = new Argument<TerrainFillCommand.FillTool>("tool",
+            "What to apply over the rectangle.");
+        var fValue = new Option<float>("--value",
+            () => 1f,
+            "Height, cliff step count, or ground tile index, depending on the tool. Ignored by "
+            + "Flatten, Ramp, RampOff, WaterRemove, Blight and BlightOff.");
+
+        var terrainFill = new Command("fill",
+            "Apply a tool over an inclusive rectangle of corners, instead of one brush dab at a "
+            + "time. Corners may be given in any order and an off-grid rectangle is clipped.")
+        { mapArg, fX0, fY0, fX1, fY1, fTool, fValue, setOut };
+        terrainFill.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = TerrainFillCommand.Fill(doc,
+                p.GetValueForArgument(fX0), p.GetValueForArgument(fY0),
+                p.GetValueForArgument(fX1), p.GetValueForArgument(fY1),
+                p.GetValueForArgument(fTool), p.GetValueForOption(fValue));
+            FinishTerrain(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message, r.TilesChanged);
+        }));
+
         var terrain = new Command("terrain",
-            "Terrain editing: height, cliffs, ramps, textures, water, blight.");
+            "Terrain editing: height, cliffs, ramps, textures, water, blight. Brush commands "
+            + "work a radius at a time, 'fill' works a rectangle at a time.");
+        terrain.AddCommand(terrainFill);
         terrain.AddCommand(terrainStats);
         terrain.AddCommand(terrainDeform);
         terrain.AddCommand(terrainCliff);
