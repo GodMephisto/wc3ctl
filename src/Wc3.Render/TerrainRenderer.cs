@@ -34,9 +34,7 @@ public static class TerrainRenderer
         // Precompute one base color per ground tile type so we only parse each
         // enum name once (a map has at most a handful of ground types). Blank
         // maps have an empty TerrainTypes list, so fall back to a neutral color.
-        var typeColors = new Rgba32[env.TerrainTypes.Count];
-        for (int i = 0; i < typeColors.Length; i++)
-            typeColors[i] = ColorForTerrainType(env.TerrainTypes[i]);
+        var typeColors = BuildTypeColors(doc, env);
         var fallback = new Rgba32(96, 108, 84); // muted grass-green
 
         // TerrainTile.Height excludes cliff level; one cliff step equals 1.0 in
@@ -134,9 +132,7 @@ public static class TerrainRenderer
         if (tiles is null || tiles.Count < w * h)
             throw new InvalidDataException("terrain tilepoint data is incomplete");
 
-        var typeColors = new Rgba32[env.TerrainTypes.Count];
-        for (int i = 0; i < typeColors.Length; i++)
-            typeColors[i] = ColorForTerrainType(env.TerrainTypes[i]);
+        var typeColors = BuildTypeColors(doc, env);
 
         const float TileWorld = TerrainTransform.TileWorld; // 128 world units per tile
         const float StepWorld = 128f;                        // one cliff step in world Z
@@ -458,6 +454,32 @@ public static class TerrainRenderer
     /// inspecting its enum name (e.g. "L_GrassCliff" → green). Names carry a
     /// tileset-letter prefix and a descriptive suffix; we match the suffix.
     /// </summary>
+    /// <summary>
+    /// One base colour per ground tile type, taken from the tileset's OWN art where the base
+    /// game is available and from the built-in table otherwise.
+    /// </summary>
+    /// <remarks>
+    /// Both renderers here used to build this from <see cref="ColorForTerrainType"/> alone,
+    /// while the Studio viewport drew real tile art through <see cref="TerrainArtCatalog"/>.
+    /// That is why a rendered map did not look like the map in game, and why the fix belongs
+    /// in one shared place rather than copied into each renderer. With no game install
+    /// sampling returns null and the built-in colours stand, so both paths stay headless.
+    /// </remarks>
+    internal static Rgba32[] BuildTypeColors(Wc3.Model.MapDocument doc, MapEnvironment env)
+    {
+        var colors = new Rgba32[env.TerrainTypes.Count];
+        for (int i = 0; i < colors.Length; i++)
+            colors[i] = ColorForTerrainType(env.TerrainTypes[i]);
+
+        var sampled = TerrainArtCatalog.AverageColorsForMap(doc);
+        if (sampled is null) return colors;
+
+        for (int i = 0; i < colors.Length && i < sampled.Length; i++)
+            if (sampled[i] is { } s)
+                colors[i] = new Rgba32(s.R, s.G, s.B);
+        return colors;
+    }
+
     internal static Rgba32 ColorForTerrainType(TerrainType type)
     {
         string name = type.ToString();
