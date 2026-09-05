@@ -32,6 +32,7 @@ public class McpServerTests
         "terrain_corner_set", "terrain_deform", "terrain_info", "terrain_paint", "terrain_ramp",
         "terrain_stats", "terrain_water", "trigger_add", "trigger_add_category",
         "trigger_add_eca", "trigger_catalog_describe", "trigger_catalog_list",
+        "trigger_recover_from_script",
         "trigger_remove", "trigger_remove_eca", "trigger_rename",
         "trigger_set_eca_enabled", "trigger_set_enabled", "trigger_set_initially_on",
         "trigger_set_run_on_map_init",

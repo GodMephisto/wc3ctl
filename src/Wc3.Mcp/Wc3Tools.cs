@@ -999,6 +999,17 @@ public static class Wc3Tools
                 : r.Message);
         }));
 
+    [McpServerTool(Name = "trigger_recover_from_script", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Rebuild a browsable GUI trigger tree (war3map.wtg) for a map that has NONE, by decompiling the compiled script the game runs, and save the result to out_path. The script itself is never modified, so this only ever ADDS a tree. It REFUSES any map that already carries a trigger tree, because a decompiled tree cannot be trusted to replace a real one: measured across the map library the decompiler reported success on a map holding 626 trigger items while producing 1, at zero percent name recall. Use this on protected or stripped maps whose trigger tree was removed but whose compiled script survives. The recovered tree DESCRIBES the script, it does not drive it, so editing the tree afterwards changes what the World Editor shows and not what the game runs. The input map is NEVER modified in place.")]
+    public static EditToolResult TriggerRecoverFromScript(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the result is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path)
+        => Run(() => SaveEdit(map, out_path, doc =>
+        {
+            var r = TriggerRecoverCommand.Recover(doc);
+            return (r.Ok, r.Message);
+        }));
+
     [McpServerTool(Name = "trigger_add_category", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Add a category to the map's GUI trigger tree and save the edited map to out_path. A category is a folder in the trigger tree, so this is always safe: categories hold no script and adding one moves nothing. The input map is NEVER modified in place. Writes war3map.wtg only.")]
     public static EditToolResult TriggerAddCategory(

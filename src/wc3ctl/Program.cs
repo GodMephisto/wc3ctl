@@ -2185,9 +2185,27 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         trigCatalog.AddCommand(trigList);
         trigCatalog.AddCommand(trigDescribe);
 
+        // Recovery goes one way only. Regenerating the script from a tree is destructive, so
+        // this rebuilds the TREE from the script the game already runs, and refuses any map
+        // that still has a tree of its own. See TriggerRecoverCommand for the measurements.
+        var trigRecover = new Command("recover-from-script",
+            "Rebuild a browsable GUI trigger tree for a map that has NONE, by decompiling the "
+            + "compiled script. The script is not modified. Refuses when the map already has a "
+            + "tree, because a decompiled tree cannot be trusted to replace a real one.")
+        { mapArg, setOut };
+        trigRecover.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = TriggerRecoverCommand.Recover(doc);
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message);
+        }));
+
         var trigger = new Command("trigger", "GUI triggers: read the tree, edit a trigger's name "
-            + "and flags, and browse the World-Editor catalog.");
+            + "and flags, browse the World-Editor catalog, and recover a tree from the script.");
         trigger.AddCommand(trigCatalog);
+        trigger.AddCommand(trigRecover);
 
         // ---- editor, the World Editor's catalogs (UI\WorldEditData.txt, read-only) ----
         var editorCatalogList = new Command("list",
