@@ -31,6 +31,7 @@ public class CliMcpParityTests
         ["repair_generated"] = "repair-generated",
         ["hero_lint"] = "hero lint",
         ["hero_install"] = "hero install",
+        ["hero_roster"] = "hero roster",
         ["terrain_fill"] = "terrain fill",
         ["trigger_recover_from_script"] = "trigger recover-from-script",
         ["trigger_add_category"] = "trigger add-category",
