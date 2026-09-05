@@ -176,20 +176,58 @@ public partial class TriggerView : UserControl, IMapPanel
             TriggerTree.Items.Add(orphanItem);
         }
 
-        if (model.Variables.Count > 0)
+        // The Variables node is ALWAYS built, even at zero. It used to be omitted entirely
+        // when the tree declared none, which on a script-driven map reads as the panel having
+        // lost something. Anime_WOS2_0.29d declares zero GUI variables and 12,543 globals in
+        // its script, so the honest answer is "none here, and 12,543 over there" rather than
+        // no section at all. Same lesson as the Regions and Cameras panels, a panel can be
+        // correct and still read as broken.
+        int scriptGlobals = ScriptGlobalCount();
+        string varHeader = model.Variables.Count > 0
+            ? $"Variables ({model.Variables.Count})"
+            : scriptGlobals > 0
+                ? $"Variables (none in the trigger tree, {scriptGlobals:N0} in the script)"
+                : "Variables (none)";
+
+        var varsItem = new TreeViewItem
         {
-            var varsItem = new TreeViewItem
+            Header = MakeLabel(varHeader, bold: true),
+            IsExpanded = false,
+        };
+        foreach (var v in model.Variables)
+            varsItem.Items.Add(new TreeViewItem
             {
-                Header = MakeLabel($"Variables ({model.Variables.Count})", bold: true),
-                IsExpanded = false,
-            };
-            foreach (var v in model.Variables)
-                varsItem.Items.Add(new TreeViewItem
-                {
-                    Header = MakeLabel(VariableLabel(v)),
-                    Tag = v,
-                });
-            TriggerTree.Items.Add(varsItem);
+                Header = MakeLabel(VariableLabel(v)),
+                Tag = v,
+            });
+
+        if (model.Variables.Count == 0 && scriptGlobals > 0)
+            varsItem.Items.Add(new TreeViewItem
+            {
+                Header = MakeLabel(
+                    "This map declares its variables in the compiled script rather than in the "
+                    + "trigger tree, so the World Editor's variable list is empty too. "
+                    + "See the Script tab."),
+                IsEnabled = false,
+            });
+
+        TriggerTree.Items.Add(varsItem);
+    }
+
+    /// <summary>
+    /// How many globals the loaded map's script declares. Never throws and never stops the
+    /// tree rendering, because this is a caption detail and a panel that fails to draw over
+    /// one is worse than a panel that omits the number.
+    /// </summary>
+    private int ScriptGlobalCount()
+    {
+        try
+        {
+            return _session is { Current: { } doc } ? ScriptGlobalsCommand.Count(doc) : 0;
+        }
+        catch
+        {
+            return 0;
         }
     }
 
