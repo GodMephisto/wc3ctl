@@ -64,6 +64,11 @@ public class CliMcpParityTests
         "roundtrip", "search", "diff", "render", "bundle object",
         "script functions", "extract", "convert", "validate",
         "repair generated-heroes", "repair reforged-3",
+        // Writes roughly 1,200 files of base game data to a directory the operator names, to be
+        // committed and diffed across patches. It is about the install rather than about a map,
+        // and it is a bulk filesystem write, which is the same reason extract and convert sit
+        // here rather than on the agent surface.
+        "gamedata snapshot",
     };
 
     // The real MCP tool names, read straight from the [McpServerTool] attributes the

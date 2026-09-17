@@ -261,4 +261,23 @@ public static class Render
 
     public static string Extract(ExtractManifest m, string dest) =>
         $"Extracted {m.Count} file(s) ({m.TotalBytes:N0} bytes) to {dest}";
+
+    public static string GameDataSnapshot(SnapshotResult r)
+    {
+        var sb = new StringBuilder();
+        if (r.FilesWritten == 0)
+        {
+            sb.AppendLine("nothing written");
+            foreach (var d in r.Diagnostics) sb.AppendLine($"  {d}");
+            return sb.ToString().TrimEnd('\r', '\n');
+        }
+
+        sb.AppendLine($"build {r.Build ?? "unknown"}");
+        sb.AppendLine($"  {r.FilesWritten:N0} file(s), {r.BytesWritten:N0} bytes -> {r.OutDir}");
+        if (r.FilesSkipped > 0) sb.AppendLine($"  {r.FilesSkipped} skipped");
+        foreach (var d in r.Diagnostics) sb.AppendLine($"  {d}");
+        sb.AppendLine();
+        sb.AppendLine("commit this directory now, then re-run after the next patch and diff it.");
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
 }

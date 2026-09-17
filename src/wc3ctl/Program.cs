@@ -1261,6 +1261,30 @@ public static class Program
         var trigger = new Command("trigger", "GUI trigger tooling (World-Editor catalog).");
         trigger.AddCommand(trigCatalog);
 
+        // Blizzard publishes no diff of what a patch changes inside the game data, so the only
+        // way to see it is to have kept the previous copy. Snapshot, commit, re-run after every
+        // update, and git shows every added native, changed default and retuned constant.
+        var snapOut = new Argument<string>("out-dir", "Directory to write the snapshot into.");
+        var snapLocales = new Option<bool>("--locales",
+            "Include the per-locale string tables (much larger, rarely what a diff needs).");
+        var snapNoStrings = new Option<bool>("--no-binary-strings",
+            "Skip the client/editor string dump. That dump is the only place editor-only "
+            + "changes show up, since the World Editor's behaviour is not in the game data.");
+        var gamedataSnapshot = new Command("snapshot",
+            "Dump the base game's text/data files (plus client and editor strings) for diffing across patches.")
+            { snapOut, snapLocales, snapNoStrings };
+        gamedataSnapshot.SetHandler(
+            (string outDir, bool locales, bool noStrings, string? gameDir, bool json) => RunSafely(() =>
+            {
+                var r = GameDataSnapshotCommand.Run(gameDir, outDir,
+                    includeLocales: locales, includeBinaryStrings: !noStrings);
+                Emit(json, r, () => Render.GameDataSnapshot(r));
+            }),
+            snapOut, snapLocales, snapNoStrings, gameDirOption, jsonOption);
+
+        var gamedata = new Command("gamedata", "Base game data, for tracking what a patch changes.");
+        gamedata.AddCommand(gamedataSnapshot);
+
         root.AddCommand(info); root.AddCommand(ls); root.AddCommand(rt);
         root.AddCommand(search); root.AddCommand(diff); root.AddCommand(obj);
         root.AddCommand(extract); root.AddCommand(render); root.AddCommand(renderModel);
@@ -1270,7 +1294,7 @@ public static class Program
         root.AddCommand(sound); root.AddCommand(camera); root.AddCommand(pathing);
         root.AddCommand(mapInfo); root.AddCommand(player); root.AddCommand(force);
         root.AddCommand(repair);
-        root.AddCommand(newMap); root.AddCommand(trigger);
+        root.AddCommand(newMap); root.AddCommand(trigger); root.AddCommand(gamedata);
 
         return root;
     }
