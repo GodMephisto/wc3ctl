@@ -44,13 +44,17 @@ public static class ImportsCommand
     public static ImportsListResult Execute(MapDocument doc)
     {
         var manifest = doc.GetFile(ImpFileName)?.Model as ImportedFiles;
-        var manifestPaths = manifest?.Files.Select(f => f.FullPath).ToList()
+        // The same engine-file test has to run on both sides. Blizzard's own (2)EchoIsles.w3x
+        // lists its thirteen locale string tables in war3map.imp, so filtering only the archive
+        // side left thirteen manifest rows claiming an import was missing from the archive when
+        // it was simply engine data that had been correctly excluded a moment earlier.
+        var manifestPaths = manifest?.Files.Select(f => f.FullPath).Where(p => !IsEngineFile(p)).ToList()
                             ?? new List<string>();
 
         var archiveFiles = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         foreach (var f in doc.Files)
         {
-            if (f.FileName is null || MapFormatRegistry.IsKnown(f.FileName) || NonImportFiles.Contains(f.FileName))
+            if (f.FileName is null || IsEngineFile(f.FileName))
                 continue;
             // Pending in-memory replacement wins over the original bytes for the size.
             archiveFiles[f.FileName] = (f.OverrideBytes ?? f.RawBytes).Length;
@@ -73,12 +77,24 @@ public static class ImportsCommand
         var claimed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+        // An MPQ name uses a backslash, and war3map.imp does not always agree. Blizzard's own
+        // FaceFXCinematicsTest.w3x lists its locale string tables with forward slashes while the
+        // archive stores backslashes, so a literal compare reported each of those files twice,
+        // once as a manifest row with no size and once as an unlisted archive orphan. Matching on
+        // a separator-normalised key keeps one row per file without loosening anything else.
+        var byNormalized = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var name in archiveFiles.Keys)
+            byNormalized.TryAdd(Normalize(name), name);
+
+        string? Resolve(string path) =>
+            byNormalized.TryGetValue(Normalize(path), out var direct) ? direct
+            : byNormalized.TryGetValue(Normalize(DefaultImportPrefix + path), out var prefixed) ? prefixed
+            : null;
+
         foreach (var path in manifestPaths)
         {
             if (string.IsNullOrEmpty(path) || !seen.Add(path)) continue;
-            string? archiveName = null;
-            if (archiveFiles.ContainsKey(path)) archiveName = path;
-            else if (archiveFiles.ContainsKey(DefaultImportPrefix + path)) archiveName = DefaultImportPrefix + path;
+            string? archiveName = Resolve(path);
             if (archiveName is not null) claimed.Add(archiveName);
             entries.Add(new ImportEntry(
                 path,
@@ -93,5 +109,18 @@ public static class ImportsCommand
 
         entries.Sort((a, b) => string.Compare(a.Path, b.Path, StringComparison.OrdinalIgnoreCase));
         return entries;
+    }
+
+    /// <summary>Separator-insensitive form of an internal path, for matching only. The reported
+    /// path stays exactly as the manifest or the archive spelled it.</summary>
+    private static string Normalize(string path) => path.Replace('/', '\\');
+
+    /// <summary>True when the path names engine data rather than something the author imported.
+    /// Applied to the manifest and the archive alike, on the separator-normalised path, because
+    /// war3map.imp does not always spell its separators the way the archive does.</summary>
+    private static bool IsEngineFile(string path)
+    {
+        string p = Normalize(path);
+        return MapFormatRegistry.IsKnown(p) || NonImportFiles.Contains(p);
     }
 }
