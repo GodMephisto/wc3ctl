@@ -1123,6 +1123,56 @@ public static class Program
         }));
         repair.AddCommand(repairGeneratedHeroes);
 
+        var repairApply = new Option<bool>("--apply",
+            "Apply the detected Warcraft III 3.0.0 compatibility repairs and save a new map.");
+        var repairReforged3 = new Command("reforged-3",
+            "Detect or repair legacy SLK-map incompatibilities introduced by Reforged 3.0.0 (build 24268).")
+        { mapArg, repairApply, setOut };
+        repairReforged3.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            bool apply = p.GetValueForOption(repairApply);
+            string? requestedOut = p.GetValueForOption(setOut);
+            if (!apply && requestedOut is not null)
+            {
+                const string message = "--out requires --apply; without --apply this command is a read-only check";
+                Emit(p.GetValueForOption(jsonOption), new { Ok = false, Message = message }, () => message);
+                exitCode[0] = 1;
+                return;
+            }
+
+            var doc = MapDocument.Load(map);
+            var r = Reforged3RepairCommand.Execute(doc, apply);
+            string? savedTo = null;
+            if (apply)
+            {
+                savedTo = requestedOut ?? Path.Combine(
+                    Path.GetDirectoryName(map) ?? "",
+                    Path.GetFileNameWithoutExtension(map) + ".reforged-3-fixed" + Path.GetExtension(map));
+                doc.Save(savedTo);
+            }
+
+            Emit(p.GetValueForOption(jsonOption),
+                new
+                {
+                    r.Ok,
+                    r.Message,
+                    r.Applied,
+                    r.IssueCount,
+                    r.FileColumnsRemoved,
+                    r.ModelsMoved,
+                    r.NumericCellsNormalized,
+                    r.ButtonPositionsCompleted,
+                    r.StrayCommentTerminatorsRemoved,
+                    r.AbilityLevelColumnsAdded,
+                    r.ChangedFiles,
+                    SavedTo = savedTo,
+                },
+                () => Render.Reforged3Repair(r, savedTo));
+        }));
+        repair.AddCommand(repairReforged3);
+
         // ---- new: create a blank, World-Editor-openable map ----
         var newOut = new Argument<string>("out", "Path to write the new .w3x/.w3m map.");
         var newNameOpt = new Option<string?>("--name", "Map name (default: Blank Map).");

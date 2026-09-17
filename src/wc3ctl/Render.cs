@@ -239,6 +239,26 @@ public static class Render
         return sb.ToString().TrimEnd('\r', '\n');
     }
 
+    public static string Reforged3Repair(Reforged3RepairResult r, string? savedTo)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine(r.Message);
+        sb.AppendLine($"  obsolete file columns : {r.FileColumnsRemoved}");
+        sb.AppendLine($"  model paths migrated  : {r.ModelsMoved}");
+        sb.AppendLine($"  numeric cells cleaned : {r.NumericCellsNormalized}");
+        sb.AppendLine($"  button positions fixed: {r.ButtonPositionsCompleted}");
+        sb.AppendLine($"  FDF terminators removed: {r.StrayCommentTerminatorsRemoved}");
+        sb.AppendLine($"  ability columns added : {r.AbilityLevelColumnsAdded}");
+        if (r.ChangedFiles.Count > 0)
+        {
+            sb.AppendLine("files:");
+            foreach (string file in r.ChangedFiles)
+                sb.AppendLine($"  {file}");
+        }
+        sb.AppendLine(r.Applied ? $"saved: {savedTo}" : "DRY RUN - use --apply to write a repaired copy");
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
     public static string Extract(ExtractManifest m, string dest) =>
         $"Extracted {m.Count} file(s) ({m.TotalBytes:N0} bytes) to {dest}";
 }

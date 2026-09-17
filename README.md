@@ -38,9 +38,26 @@ wc3ctl diff <mapA> <mapB>                   Compare two maps (added/removed/modi
 wc3ctl object get <map> <rawcode> [--field CODE] [--game-dir PATH]
                                             Full merged unit stats (base game data ⊕ map deltas)
 wc3ctl object list <map> [--game-dir PATH]  List the map's custom/modified units
+wc3ctl repair reforged-3 <map>               Check for Reforged 3.0.0 SLK incompatibilities
+wc3ctl repair reforged-3 <map> --apply [-o FIXED.w3x]
+                                            Repair them and save a new map
 ```
 
 Add `--json` to any command for machine-readable output.
+
+### Reforged 3.0.0 legacy-map repair
+
+Reforged 3.0.0 (build 24268) rejects or misreads several data shapes emitted by
+older SLK-mode editors such as KKWE and YDWE. `repair reforged-3` checks a map
+without changing it by default. With `--apply`, it writes a separate
+`.reforged-3-fixed.w3x`/`.w3m` copy unless `--out` is supplied.
+
+The repair removes obsolete `file` columns from `Units\\UnitUI.slk` and
+`Units\\ItemData.slk` while preserving their model paths in the corresponding
+`*Skin.txt` profiles, normalizes quoted numeric cells and incomplete button
+positions, removes unmatched `*/` tokens from FDF files, and adds missing
+ability level 5/6 columns copied from level 4. Keep the original map and test
+the repaired copy in Warcraft III before distributing it.
 
 ### Object data (`object get` / `object list`)
 

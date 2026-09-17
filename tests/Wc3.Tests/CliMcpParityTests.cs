@@ -63,6 +63,7 @@ public class CliMcpParityTests
     {
         "roundtrip", "search", "diff", "render", "bundle object",
         "script functions", "extract", "convert", "validate",
+        "repair generated-heroes", "repair reforged-3",
     };
 
     // The real MCP tool names, read straight from the [McpServerTool] attributes the
