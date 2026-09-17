@@ -37,10 +37,23 @@ public sealed class MapDocument
         using var stream = new MemoryStream(fileBytes);
         using var archive = MpqArchive.Open(stream, loadListFile: true);
 
+        // The locale of the hash slot each block is reached through. Needed because a protected
+        // map can point two slots at two different blocks under one name, and an edit written
+        // under the wrong locale lands in a slot the name does not resolve to.
+        // Deliberately NOT filtered on IsAvailable. The slot carrying the odd locale in a
+        // protected map does not report as available, and filtering it out made every entry read
+        // back as Neutral, which is exactly the bug this exists to fix. Empty and deleted slots
+        // hold a block index of 0xFFFFFFFF or 0xFFFFFFFE, which never matches a real block, so
+        // letting them through costs nothing.
+        var localeByBlock = new Dictionary<uint, uint>();
+        foreach (var hash in archive.EnumerateHashes())
+            localeByBlock.TryAdd(hash.BlockIndex, (uint)hash.Locale);
+
         int block = 0;
         foreach (var entry in archive)
         {
             string? name = entry.FileName;
+            uint locale = localeByBlock.TryGetValue((uint)block, out var l) ? l : 0u;
             try
             {
                 byte[] raw;
@@ -58,6 +71,7 @@ public sealed class MapDocument
                     BlockIndex = block++,
                     RawBytes = raw,
                     IsKnown = known,
+                    Locale = locale,
                 });
             }
             catch (Exception ex)
@@ -73,6 +87,7 @@ public sealed class MapDocument
                     BlockIndex = block++,
                     RawBytes = Array.Empty<byte>(),
                     IsKnown = false,
+                    Locale = locale,
                 });
             }
         }
@@ -111,11 +126,18 @@ public sealed class MapDocument
         using var archive = MpqArchive.Open(source, loadListFile: true);
         var builder = new MpqArchiveBuilder(archive);
 
-        // An added file with the same hashed name shadows the original at save;
-        // RemoveFile must NOT be called first — its removal set also filters the
-        // replacement, dropping the file from the archive entirely.
+        // An added file with the same hashed name shadows the original at save. RemoveFile must
+        // NOT be called first, because its removal set also filters the replacement, dropping the
+        // file from the archive entirely.
+        //
+        // The hash covers the locale as well as the name, so the entry's own locale has to go with
+        // it. A protected map can hold two slots for one name, one Neutral and one carrying
+        // 0xFF000000, and adding under Neutral alone shadowed only one of them. The other kept its
+        // original bytes, the name resolved to that stale copy, and the edit vanished on reload
+        // while every command still reported it applied.
         foreach (var entry in _files.Where(f => f.IsDirty && f.FileName is not null))
-            builder.AddFile(MpqFile.New(new MemoryStream(SerializeEntry(entry)), entry.FileName!));
+            builder.AddFile(MpqFile.New(
+                new MemoryStream(SerializeEntry(entry)), entry.FileName!, (MpqLocale)entry.Locale));
 
         using var mpq = new MemoryStream();
         // SaveTo disposes the target stream unless leaveOpen — we still need to read it back.
@@ -146,14 +168,37 @@ public sealed class MapDocument
     /// verbatim (the payload is written unchanged on Save). Used for imported assets,
     /// script text, or any format without a byte-faithful model writer.
     /// </summary>
+    /// <summary>
+    /// Writes a raw payload under <paramref name="fileName"/>, adding the file when it is absent.
+    /// </summary>
+    /// <remarks>
+    /// An MPQ addresses a file by the hash of its name AND its locale, so one archive can hold
+    /// several entries that all report this same name. This used to resolve the name with GetFile,
+    /// which is FirstOrDefault, attach the override to whichever entry loaded first, and leave the
+    /// rest holding their original bytes. Save writes every entry, the name then resolves to one of
+    /// the untouched copies, and the edit is gone while having been reported as applied.
+    ///
+    /// Measured on Naruto Autobattle ENGv3ch11.w3x, where six files are duplicated this way. The
+    /// Reforged 3.0.0 repair reported 973 button positions completed, saved, and a second pass over
+    /// its own output found the same 973 still malformed.
+    ///
+    /// So every entry sharing the name is written. Which one the game resolves to depends on its
+    /// locale, which is not knowable here, and the only safe answer is that they all agree.
+    /// </remarks>
     public MapFileEntry AddOrReplaceRawFile(string fileName, byte[] bytes)
     {
-        if (GetFile(fileName) is { } existing)
+        var existing = _files
+            .Where(f => string.Equals(f.FileName, fileName, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        if (existing.Count > 0)
         {
-            existing.OverrideBytes = bytes;
-            existing.Model = null; // raw payload wins; drop any stale parsed model
-            existing.IsDirty = true;
-            return existing;
+            foreach (var duplicate in existing)
+            {
+                duplicate.OverrideBytes = bytes;
+                duplicate.Model = null; // raw payload wins; drop any stale parsed model
+                duplicate.IsDirty = true;
+            }
+            return existing[0];
         }
         var entry = new MapFileEntry
         {
