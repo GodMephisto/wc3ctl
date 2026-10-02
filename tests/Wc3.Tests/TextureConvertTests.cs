@@ -150,8 +150,8 @@ public class TextureConvertTests
     {
         // Ground truth for the channel order: a real map asset with skin tones.
         // Without the JPEG-content BGRA swap in BlpDecoder this face decodes blue.
-        const string path =
-            @"C:\Users\GodMephisto\AppData\Local\Temp\wc3x_modelsamples\blp\war3mapImported\Emoji_KEKW.blp";
+        string path =
+            System.IO.Path.Combine(System.IO.Path.GetTempPath(), @"wc3x_modelsamples\blp\war3mapImported\Emoji_KEKW.blp");
         if (!File.Exists(path)) return; // samples-optional
 
         var tex = BlpDecoder.Decode(File.ReadAllBytes(path));

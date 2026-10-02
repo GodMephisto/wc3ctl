@@ -135,7 +135,7 @@ public class ObjectSetCommandTests
     [Trait("Category", "Corpus")]
     public void Real_map_edit_changes_only_w3u_and_the_edit_sticks()
     {
-        const string path = @"C:\Users\GodMephisto\Documents\Warcraft III\Maps\Download\Anime_WOS2_0.25c1.w3x";
+        string path = TestCorpus.Map(@"Anime_WOS2_0.25c1.w3x");
         if (!File.Exists(path)) return;
 
         var original = MapDocument.Load(path);

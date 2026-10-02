@@ -5,7 +5,7 @@ namespace Wc3.Tests;
 public class ParseCoverageTests
 {
     // The real map lives outside the repo; skip cleanly if absent.
-    private const string CorpusMap = @"C:\Users\GodMephisto\Downloads\ggg_en_1.11r_slk.w3x";
+    private static readonly string CorpusMap = TestCorpus.Map(@"ggg_en_1.11r_slk.w3x");
 
     [Fact]
     [Trait("Category", "Corpus")]

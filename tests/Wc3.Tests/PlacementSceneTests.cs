@@ -284,7 +284,7 @@ public class PlacementSceneTests
     [Trait("Category", "Corpus")]
     public void Build_RealMap_ProducesInstancesForItsPlacements()
     {
-        const string path = @"C:\Users\GodMephisto\Downloads\ggg_en_1.11r_slk.w3x";
+        string path = TestCorpus.Map(@"ggg_en_1.11r_slk.w3x");
         if (!File.Exists(path)) return;
 
         var doc = MapDocument.Load(path);

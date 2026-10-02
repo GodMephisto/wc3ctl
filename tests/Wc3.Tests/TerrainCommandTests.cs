@@ -162,7 +162,7 @@ public class TerrainCommandTests
     [Trait("Category", "Corpus")]
     public void Stats_reads_a_real_map_terrain_range()
     {
-        const string path = @"C:\Users\GodMephisto\Downloads\ggg_en_1.11r_slk.w3x";
+        string path = TestCorpus.Map(@"ggg_en_1.11r_slk.w3x");
         if (!File.Exists(path)) return;
 
         var s = TerrainCommand.Stats(MapDocument.Load(path));

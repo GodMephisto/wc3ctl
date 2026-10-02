@@ -9,8 +9,8 @@ namespace Wc3.Tests;
 
 public class PlayerForceCommandTests
 {
-    private const string CorpusMapPath =
-        @"C:\Users\GodMephisto\Documents\Warcraft III\Maps\Download\GGGA_V0.02a.w3x";
+    private static readonly string CorpusMapPath =
+        TestCorpus.Map(@"GGGA_V0.02a.w3x");
 
     /// <summary>Blank map whose parsed MapInfo is seeded with three players and two
     /// forces (players 0+1 in force 0, player 2 in force 1) — BlankMap itself

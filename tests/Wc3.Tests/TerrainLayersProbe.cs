@@ -16,7 +16,7 @@ namespace Wc3.Tests;
 /// </summary>
 public class TerrainLayersProbe
 {
-    private const string MapsRoot = @"C:\Users\GodMephisto\Documents\Warcraft III\Maps";
+    private static readonly string MapsRoot = TestCorpus.MapsRoot;
     private readonly ITestOutputHelper _out;
 
     public TerrainLayersProbe(ITestOutputHelper output) => _out = output;

@@ -95,7 +95,7 @@ public class ModelRendererTests
     [Trait("Category", "Corpus")]
     public void Renders_map_imported_model_end_to_end()
     {
-        const string map = @"C:\Users\GodMephisto\Documents\Warcraft III\Maps\Download\Anime_WOS2_0.25c1.w3x";
+        string map = TestCorpus.Map(@"Anime_WOS2_0.25c1.w3x");
         if (!File.Exists(map)) return; // corpus-optional
 
         // The object field says .mdl but the import is binary .mdx — exercises

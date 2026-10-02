@@ -21,8 +21,8 @@ namespace Wc3.Tests;
 public class PlacementResolveTests
 {
     private const string Install = @"C:\Warcraft III";
-    private const string MapPath =
-        @"C:\Users\GodMephisto\Documents\Warcraft III\Maps\Download\GGGA_V0.02a.w3x";
+    private static readonly string MapPath =
+        TestCorpus.Map(@"GGGA_V0.02a.w3x");
 
     private readonly ITestOutputHelper _output;
     public PlacementResolveTests(ITestOutputHelper output) => _output = output;

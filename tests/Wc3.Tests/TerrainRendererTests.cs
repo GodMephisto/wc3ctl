@@ -26,7 +26,7 @@ public class TerrainRendererTests
     [Trait("Category", "Corpus")]
     public void Renders_real_map_terrain_to_png()
     {
-        const string path = @"C:\Users\GodMephisto\Downloads\ggg_en_1.11r_slk.w3x";
+        string path = TestCorpus.Map(@"ggg_en_1.11r_slk.w3x");
         if (!File.Exists(path)) return;
 
         var png = TerrainRenderer.RenderTerrainPng(MapDocument.Load(path));

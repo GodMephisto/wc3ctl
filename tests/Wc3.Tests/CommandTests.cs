@@ -41,7 +41,7 @@ public class CommandTests
     [Trait("Category", "Corpus")]
     public void Roundtrip_command_reports_faithful_for_unedited_real_map()
     {
-        const string path = @"C:\Users\GodMephisto\Downloads\ggg_en_1.11r_slk.w3x";
+        string path = TestCorpus.Map(@"ggg_en_1.11r_slk.w3x");
         if (!File.Exists(path)) return;
 
         var result = Wc3.Commands.RoundtripCommand.Execute(MapDocument.Load(path));

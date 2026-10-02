@@ -12,8 +12,8 @@ namespace Wc3.Tests;
 /// </summary>
 public class BundleCorpusTests
 {
-    private const string MapPath =
-        @"C:\Users\GodMephisto\Documents\Warcraft III\Maps\Download\Anime_WOS2_0.25c1.w3x";
+    private static readonly string MapPath =
+        TestCorpus.Map(@"Anime_WOS2_0.25c1.w3x");
 
     [Fact]
     [Trait("Category", "Corpus")]

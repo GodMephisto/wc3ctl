@@ -17,7 +17,7 @@ namespace Wc3.Tests;
 /// </summary>
 public class NameRecoveryTests
 {
-    private const string MapPath = @"C:\playground\Programming\bvo15-repair\BVO16g.w3x";
+    private static readonly string MapPath = TestCorpus.Map(@"BVO16g.w3x");
 
     [Fact]
     public void Spellings_covers_the_extension_and_prefix_a_map_actually_disagrees_on()

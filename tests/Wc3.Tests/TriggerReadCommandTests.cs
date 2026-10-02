@@ -282,8 +282,8 @@ public class TriggerReadCommandTests
 
     // ---- corpus: a real map's trigger file through the full load path ----
 
-    private const string CorpusMap =
-        @"C:\Users\GodMephisto\Documents\Warcraft III\Maps\Download\GGGA_V0.02a.w3x";
+    private static readonly string CorpusMap =
+        TestCorpus.Map(@"GGGA_V0.02a.w3x");
 
     [Fact]
     [Trait("Category", "Corpus")]

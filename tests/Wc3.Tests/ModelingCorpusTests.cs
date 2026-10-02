@@ -11,11 +11,11 @@ namespace Wc3.Tests;
 /// </summary>
 public class ModelingCorpusTests
 {
-    private const string AnimeMap =
-        @"C:\Users\GodMephisto\Documents\Warcraft III\Maps\Download\Anime_WOS2_0.25c1.w3x";
+    private static readonly string AnimeMap =
+        TestCorpus.Map(@"Anime_WOS2_0.25c1.w3x");
 
-    private const string BlpSamplesDir =
-        @"C:\Users\GodMephisto\AppData\Local\Temp\wc3x_modelsamples\blp";
+    private static readonly string BlpSamplesDir =
+        System.IO.Path.Combine(System.IO.Path.GetTempPath(), @"wc3x_modelsamples\blp");
 
     [Fact]
     [Trait("Category", "Corpus")]

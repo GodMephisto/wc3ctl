@@ -109,7 +109,7 @@ public class PaletteIconTests
     [Trait("Category", "Corpus")]
     public void UnitPalette_CorpusMap_WithInstall_EntriesCarryIcons()
     {
-        const string map = @"C:\Users\GodMephisto\Documents\Warcraft III\Maps\Download\Anime_WOS2_0.27d3.w3x";
+        string map = TestCorpus.Map(@"Anime_WOS2_0.27d3.w3x");
         if (!File.Exists(map)) return;                                    // map not on this machine
         if (!GameData.GameData.TryOpen(null, out var ctx, out _)) return; // no install → skip
 

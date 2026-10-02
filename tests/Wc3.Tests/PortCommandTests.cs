@@ -145,7 +145,7 @@ public class PortCommandTests
     [Trait("Category", "Corpus")]
     public void Real_map_self_port_remaps_the_whole_hero_and_rewrites_references()
     {
-        const string path = @"C:\Users\GodMephisto\Documents\Warcraft III\Maps\Download\Anime_WOS2_0.25c1.w3x";
+        string path = TestCorpus.Map(@"Anime_WOS2_0.25c1.w3x");
         if (!File.Exists(path)) return;
 
         var source = MapDocument.Load(path);

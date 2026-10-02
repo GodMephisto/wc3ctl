@@ -19,8 +19,8 @@ namespace Wc3.Tests;
 /// </summary>
 public class ProtectedMapNameLookupTests
 {
-    private const string MapPath =
-        @"C:\playground\Programming\bvo15-repair\BVO16g.w3x";
+    private static readonly string MapPath =
+        TestCorpus.Map(@"BVO16g.w3x");
 
     [Fact]
     [Trait("Category", "Corpus")]

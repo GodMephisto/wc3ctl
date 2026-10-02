@@ -17,8 +17,8 @@ namespace Wc3.Tests;
 /// </summary>
 public class ModelAnimationTests(ITestOutputHelper output)
 {
-    private const string AnimeMap =
-        @"C:\Users\GodMephisto\Documents\Warcraft III\Maps\Download\Anime_WOS2_0.25c1.w3x";
+    private static readonly string AnimeMap =
+        TestCorpus.Map(@"Anime_WOS2_0.25c1.w3x");
 
     private static readonly byte[] PngSignature = { 0x89, (byte)'P', (byte)'N', (byte)'G', 0x0D, 0x0A, 0x1A, 0x0A };
 

@@ -14,8 +14,8 @@ namespace Wc3.Tests;
 /// </summary>
 public class MapWriteTests
 {
-    private const string CorpusPath =
-        @"C:\Users\GodMephisto\Documents\Warcraft III\Maps\Download\Anime_WOS2_0.25c1.w3x";
+    private static readonly string CorpusPath =
+        TestCorpus.Map(@"Anime_WOS2_0.25c1.w3x");
 
     // Object-data + imports: formats with a byte-faithful War3Net model writer.
     private static readonly string[] ModelSerializableFiles =

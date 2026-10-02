@@ -15,10 +15,10 @@ namespace Wc3.Tests;
 /// </summary>
 public class ProtectedMapLoadTests
 {
-    private const string V13 =
-        @"C:\Users\GodMephisto\Documents\Warcraft III\Maps\Download\BleachVsOnepiece13.w3x";
-    private const string V15 =
-        @"C:\Users\GodMephisto\Documents\Warcraft III\Maps\Download\BleachVsOnepiece15.w3x";
+    private static readonly string V13 =
+        TestCorpus.Map(@"BleachVsOnepiece13.w3x");
+    private static readonly string V15 =
+        TestCorpus.Map(@"BleachVsOnepiece15.w3x");
 
     [Fact]
     [Trait("Category", "Corpus")]

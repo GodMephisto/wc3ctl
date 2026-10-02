@@ -164,7 +164,7 @@ public class ConvertCommandTests
     [Trait("Category", "Corpus")]
     public void Corpus_model_exports_valid_obj_with_bounded_indices()
     {
-        const string map = @"C:\Users\GodMephisto\Documents\Warcraft III\Maps\Download\Anime_WOS2_0.25c1.w3x";
+        string map = TestCorpus.Map(@"Anime_WOS2_0.25c1.w3x");
         if (!File.Exists(map)) return; // corpus-optional
 
         var doc = MapDocument.Load(map);

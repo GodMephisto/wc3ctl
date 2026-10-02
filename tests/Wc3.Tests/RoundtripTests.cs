@@ -71,7 +71,7 @@ public class RoundtripTests
     [Trait("Category", "Corpus")]
     public void Real_map_roundtrips_every_file()
     {
-        const string path = @"C:\Users\GodMephisto\Downloads\ggg_en_1.11r_slk.w3x";
+        string path = TestCorpus.Map(@"ggg_en_1.11r_slk.w3x");
         if (!File.Exists(path)) return;
 
         var original = MapDocument.Load(path);
