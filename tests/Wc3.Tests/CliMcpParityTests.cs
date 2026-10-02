@@ -16,6 +16,11 @@ public class CliMcpParityTests
     // Every MCP tool -> the CLI command path that performs the same operation.
     private static readonly Dictionary<string, string> ToolToCliPath = new(StringComparer.Ordinal)
     {
+        ["audit_map"] = "audit",
+        ["deprotect_map"] = "deprotect",
+        ["file_list"] = "file list",
+        ["file_get_text"] = "file get-text",
+        ["file_set"] = "file set",
         ["map_info"] = "info",
         ["list_files"] = "ls",
         ["object_get"] = "object get",
@@ -24,6 +29,9 @@ public class CliMcpParityTests
         ["object_new"] = "object new",
         ["bundle_unit"] = "bundle unit",
         ["render_model"] = "render-model",
+        ["replay_summary"] = "replay",
+        ["uabi_profile"] = "uabi-profile",
+        ["script_leaks"] = "script leaks",
         ["port_unit"] = "port unit",
         ["palette_doodad"] = "palette",
         ["place_doodad"] = "place doodad",
@@ -64,6 +72,24 @@ public class CliMcpParityTests
         "roundtrip", "search", "diff", "render", "bundle object",
         "script functions", "extract", "convert", "validate",
         "repair generated-heroes", "repair reforged-3",
+        // A structural edit to binary model assets, deliberately kept off the agent surface.
+        // It rewrites imported .mdx files, a clean parse is not proof the game renders them,
+        // and the result has to be play-tested before it is distributed.
+        "repair portraits",
+        // Rewrites the DataA to DataF selector on levelled object data across the whole map in
+        // one pass. It exists to undo damage an earlier version of this tool did, so it is an
+        // operator's repair with a blast radius rather than an edit an agent should reach for,
+        // and its result belongs in a diff before it is shipped.
+        "repair data-pointers",
+        // Rewrites the map script and adds a bundled model, a whole-map repair whose result has to
+        // be play-tested. Agents see the same findings read-only through audit_map's missing-model
+        // check, so nothing is hidden from the agent surface, only the bulk write is.
+        "repair model-paths",
+        // Rewrites every unit type's ability list and injects code into main, a whole-map change
+        // to how units get their abilities that has to be play-tested in multiplayer.
+        "repair uabi-runtime",
+        "repair audit-errors",
+        "repair preload",
         // Writes roughly 1,200 files of base game data to a directory the operator names, to be
         // committed and diffed across patches. It is about the install rather than about a map,
         // and it is a bulk filesystem write, which is the same reason extract and convert sit

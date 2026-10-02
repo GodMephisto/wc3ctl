@@ -11,7 +11,7 @@ namespace Wc3.Tests;
 /// </summary>
 public class BaseModelRenderTests
 {
-    private const string Install = @"D:\Warcraft III";
+    private const string Install = @"C:\Warcraft III";
 
     private static MapDocument EmptyMap() =>
         MapDocument.Load(SyntheticMap.Build(new Dictionary<string, byte[]>

@@ -26,7 +26,7 @@ public static class GameInstall
                 catch { /* ignore, fall through */ }
             }
         }
-        foreach (var p in new[] { @"D:\Warcraft III", @"C:\Program Files (x86)\Warcraft III", @"C:\Program Files\Warcraft III" })
+        foreach (var p in new[] { @"C:\Warcraft III", @"C:\Program Files (x86)\Warcraft III", @"C:\Program Files\Warcraft III" })
             if (Directory.Exists(p)) return p;
         return null;
     }

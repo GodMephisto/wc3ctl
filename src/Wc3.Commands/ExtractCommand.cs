@@ -39,6 +39,10 @@ public static class ExtractCommand
         IEnumerable<MapFileEntry> picked;
         if (selector.All)
             picked = doc.Files;                              // includes unnamed (protected) entries
+        else if (selector.ExactName is { } byBlock && byBlock.StartsWith('#')
+                 && int.TryParse(byBlock.AsSpan(1), out int block))
+            // "#1155" is block 1155, the way deprotect lists an entry no dictionary could name.
+            picked = doc.Files.Where(f => f.BlockIndex == block);
         else if (selector.ExactName is { } exact)
             picked = doc.Files.Where(f => string.Equals(f.FileName, exact, StringComparison.OrdinalIgnoreCase));
         else

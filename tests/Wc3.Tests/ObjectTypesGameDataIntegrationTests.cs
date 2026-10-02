@@ -9,7 +9,7 @@ namespace Wc3.Tests;
 /// </summary>
 public class ObjectTypesGameDataIntegrationTests
 {
-    private const string Install = @"D:\Warcraft III";
+    private const string Install = @"C:\Warcraft III";
 
     private static ObjectDataStore? Open(Func<IGameDataSource, ObjectDataStore> build)
     {

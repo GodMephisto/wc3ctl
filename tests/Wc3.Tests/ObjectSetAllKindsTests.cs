@@ -236,6 +236,34 @@ public class ObjectSetAllKindsTests
     }
 
     [Fact]
+    public void Field_the_skin_layer_holds_is_edited_in_the_skin_layer()
+    {
+        // The skin layer wins field by field, so a value it holds shadows any edit to
+        // war3map.*. Anime WOS2 0.32d keeps destructable B017's model as ".mdl .mdl" in
+        // war3mapSkin.w3b, and writing bfil to the map layer saved, reported success,
+        // and left the merged value exactly as broken as before.
+        var skin = new DestructableObjectData(ObjectDataFormatVersion.v2);
+        var dest = new SimpleObjectModification { OldId = "YTct".FromRawcode(), NewId = "B017".FromRawcode() };
+        dest.Modifications.Add(new SimpleObjectDataModification
+        { Id = "bfil".FromRawcode(), Type = ObjectDataType.String, Value = ".mdl .mdl" });
+        skin.NewDestructables.Add(dest);
+        var map = SyntheticMap.Build(new Dictionary<string, byte[]>
+        {
+            ["war3mapSkin.w3b"] = Serialize(w => w.Write(skin)),
+            ["war3map.j"] = System.Text.Encoding.UTF8.GetBytes("// noop\n"),
+        });
+
+        var doc = MapDocument.Load(map);
+        var r = ObjectSetCommand.Execute(doc, ObjectKind.Destructable, "B017", "bfil", "war3mapImported\\x.mdl");
+        Assert.True(r.Ok, r.Message);
+
+        var rebuilt = MapDocument.Load(doc.SaveToBytes());
+        var merged = ObjectKinds.MergedEntries(rebuilt, ObjectKinds.Info(ObjectKind.Destructable))
+            .Single(e => e.Id == "B017".FromRawcode());
+        Assert.Equal("war3mapImported\\x.mdl", ObjectKinds.ModsToDict(merged.Mods)["bfil"]);
+    }
+
+    [Fact]
     public void Unknown_object_reports_kind_specific_not_found()
     {
         var doc = MapDocument.Load(Sample());

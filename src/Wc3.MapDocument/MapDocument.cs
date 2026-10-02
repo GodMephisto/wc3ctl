@@ -92,16 +92,79 @@ public sealed class MapDocument
             }
         }
 
+        doc.RecoverInternalNames();
         doc.ParseKnownFiles();
         return doc;
+    }
+
+    // The fixed internal names every map has. Nothing else can be guessed, but these never vary.
+    private static readonly string[] InternalNames =
+    {
+        // BOTH script paths. Reforged moved the script under scripts\, and a map may use either.
+        // BleachVsOnepiece13 holds a 4.4 MB script at scripts\war3map.j and nothing at
+        // war3map.j, so omitting the second spelling made the audit report 166 orphan abilities
+        // that are all implemented, purely because the script it searched was empty.
+        "war3map.w3i", "war3map.j", "war3map.lua",
+        @"scripts\war3map.j", @"scripts\war3map.lua",
+        "war3map.w3e", "war3map.wpm", "war3map.doo",
+        "war3mapUnits.doo", "war3map.w3r", "war3map.w3c", "war3map.w3s", "war3map.w3u",
+        "war3map.w3t", "war3map.w3a", "war3map.w3b", "war3map.w3d", "war3map.w3h", "war3map.w3q",
+        "war3map.wts", "war3map.wtg", "war3map.wct", "war3map.shd", "war3map.imp",
+        "war3mapSkin.txt", "war3mapMisc.txt", "war3mapExtra.txt", "war3mapMap.blp",
+        "war3map.mmp", "war3map.w3o", "war3map.w3v",
+    };
+
+    /// <summary>
+    /// Names the standard <c>war3map.*</c> entries a protected map stripped from its listfile.
+    ///
+    /// <para>Without this the toolkit reads a heavily protected map as EMPTY and says so
+    /// cleanly. Measured on one real map, BleachVsOnepiece13 names 2 of its 851 entries, so
+    /// every known file lookup missed, nothing was parsed, and the audit reported "OK, 0
+    /// abilities checked, 0 errors" for a map holding 897 abilities. A clean pass on a map that
+    /// was never read is the most dangerous result this toolkit can produce.</para>
+    ///
+    /// <para>Only the fixed names are recovered here. Imported assets need the full recovery in
+    /// <see cref="RecoverNames"/>, which takes a dictionary.</para>
+    /// </summary>
+    private void RecoverInternalNames()
+    {
+        var missing = InternalNames
+            .Where(n => _files.All(f => !string.Equals(f.FileName, n, StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+        if (missing.Count == 0) return;
+
+        var byBlock = _files.ToDictionary(f => f.BlockIndex);
+        using var stream = new MemoryStream(_originalBytes);
+        using var archive = MpqArchive.Open(stream, loadListFile: false);
+        var blockByName = new Dictionary<ulong, uint>();
+        foreach (var hash in archive.EnumerateHashes())
+            blockByName.TryAdd(hash.Name, hash.BlockIndex);
+
+        int found = 0;
+        foreach (var name in missing)
+        {
+            if (!blockByName.TryGetValue(MpqHash.GetHashedFileName(name), out var blk)) continue;
+            if (!byBlock.TryGetValue((int)blk, out var entry)) continue;
+            if (entry.FileName is not null || entry.RecoveredFileName is not null) continue;
+            entry.RecoveredFileName = name;
+            found++;
+        }
+        if (found > 0)
+            _diagnostics.Add(new Diagnostic(DiagnosticSeverity.Info, "(listfile)",
+                $"Listfile is stripped or incomplete, recovered {found} standard war3map.* "
+                + "name(s) by hash so the map could be read at all."));
     }
 
     private void ParseKnownFiles()
     {
         foreach (var entry in _files)
         {
-            if (!entry.IsKnown) continue; // unreadable/placeholder entries have empty bytes
-            if (entry.FileName is null || !MapFormatRegistry.TryGetParser(entry.FileName, out var parse))
+            // A recovered name counts. On a protected map the listfile names almost nothing, and
+            // gating on IsKnown alone left every war3map.* file unparsed while reporting success.
+            string? name = entry.FileName ?? entry.RecoveredFileName;
+            if (name is null) continue;
+            if (entry.FileName is not null && !entry.IsKnown) continue;
+            if (!MapFormatRegistry.TryGetParser(name, out var parse))
                 continue;
             try
             {
@@ -109,14 +172,248 @@ public sealed class MapDocument
             }
             catch (Exception ex)
             {
-                _diagnostics.Add(new Diagnostic(DiagnosticSeverity.Warning, entry.FileName,
+                _diagnostics.Add(new Diagnostic(DiagnosticSeverity.Warning, name,
                     $"Parse failed, preserved as raw: {ex.Message}"));
             }
         }
     }
 
     public MapFileEntry? GetFile(string fileName) =>
-        _files.FirstOrDefault(f => string.Equals(f.FileName, fileName, StringComparison.OrdinalIgnoreCase));
+        _files.FirstOrDefault(f => string.Equals(f.FileName, fileName, StringComparison.OrdinalIgnoreCase))
+        ?? _files.FirstOrDefault(f => string.Equals(f.RecoveredFileName, fileName, StringComparison.OrdinalIgnoreCase));
+
+    // Bytes resolved by MPQ name hash, cached per name. null means the archive does not hold it.
+    private readonly Dictionary<string, byte[]?> _byNameCache = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Reads a file by name through the archive's HASH table rather than through the listfile.
+    ///
+    /// <para><see cref="GetFile"/> matches on <see cref="MapFileEntry.FileName"/>, which comes
+    /// from the listfile, and a protected map has no listfile. Measured on one real map, 793 of
+    /// its 851 entries carry no name at all, so <c>GetFile("Robin.mdl")</c> returns null for a
+    /// file the archive plainly contains. That is not an error and reads exactly like absence,
+    /// which is how an audit of imported models reported 3 affected units out of 113.</para>
+    ///
+    /// <para>MPQ addresses a file by the hash of its name, so a lookup by name works with no
+    /// listfile whatsoever. Prefer this over <see cref="GetFile"/> for any file the MAP names
+    /// (a model path, an icon, an imported asset), and keep <see cref="GetFile"/> for the known
+    /// <c>war3map.*</c> entries, which are always named.</para>
+    ///
+    /// <para>It reads the ORIGINAL archive, so a pending <see cref="MapFileEntry.OverrideBytes"/>
+    /// replacement is checked first and wins, matching what a later Save will write.</para>
+    /// </summary>
+    public bool TryReadFileByName(string fileName, out byte[] bytes)
+    {
+        bytes = Array.Empty<byte>();
+        if (string.IsNullOrWhiteSpace(fileName)) return false;
+
+        var named = GetFile(fileName);
+        if (named is not null)
+        {
+            bytes = named.OverrideBytes ?? named.RawBytes;
+            return bytes.Length > 0;
+        }
+
+        if (!_byNameCache.TryGetValue(fileName, out var cached))
+        {
+            cached = null;
+            try
+            {
+                using var source = new MemoryStream(_originalBytes);
+                using var archive = MpqArchive.Open(source, loadListFile: false);
+                using var fs = archive.OpenFile(fileName);
+                using var ms = new MemoryStream();
+                fs.CopyTo(ms);
+                cached = ms.ToArray();
+            }
+            catch (Exception)
+            {
+                // Not present, or unreadable. Both are "the archive cannot give you this name",
+                // and neither is worth a diagnostic, because callers probe several candidate
+                // spellings of a model path and most probes are expected to miss.
+                cached = null;
+            }
+            _byNameCache[fileName] = cached;
+        }
+
+        if (cached is null) return false;
+        bytes = cached;
+        return bytes.Length > 0;
+    }
+
+    // Hashed names of every entry in the ORIGINAL archive, built on first use.
+    private HashSet<ulong>? _hashedNames;
+
+    /// <summary>
+    /// Whether the archive holds a file under this name, answered from the hash table alone.
+    ///
+    /// <para><see cref="TryReadFileByName"/> answers the same question by DECOMPRESSING the file,
+    /// which is the wrong price for an existence test. Anime WOS2 0.32d references 3,740 model
+    /// paths against 1,116 imported models in a 285 MB archive, and a reference check probes
+    /// several spellings of each. This builds one set of hashed names and never reads a byte of
+    /// payload. Names are matched the way the engine looks them up, case-insensitive and with a
+    /// forward slash treated as a backslash. A file added since load counts as present.</para>
+    /// </summary>
+    public bool HasFileByName(string fileName)
+    {
+        if (string.IsNullOrWhiteSpace(fileName)) return false;
+        string name = fileName.Replace('/', '\\');
+        if (GetFile(name) is not null) return true;
+        if (!System.Text.Ascii.IsValid(name)) return false;
+        if (_hashedNames is null)
+        {
+            _hashedNames = new HashSet<ulong>();
+            using var stream = new MemoryStream(_originalBytes);
+            using var archive = MpqArchive.Open(stream, loadListFile: false);
+            // 0xFFFFFFFF marks an empty slot and 0xFFFFFFFE a deleted one, neither is a file.
+            foreach (var hash in archive.EnumerateHashes())
+                if (hash.BlockIndex < 0xFFFFFFFE) _hashedNames.Add(hash.Name);
+        }
+        return _hashedNames.Contains(MpqHash.GetHashedFileName(name));
+    }
+
+    /// <summary>
+    /// Matches candidate file names against the archive's hash table and returns the block index
+    /// of every one that hits. This is name recovery, the readable half of deprotection.
+    ///
+    /// <para>A protected map ships no <c>(listfile)</c>, so most entries have no
+    /// <see cref="MapFileEntry.FileName"/>. Worse, most blocks are ENCRYPTED and an MPQ block's
+    /// key is derived from its own basename, so such a block cannot be read, or even identified,
+    /// without its name. Measured on one real map, 833 of 851 blocks are encrypted. No scan of
+    /// the bytes can ever recover those, which is why a name dictionary is the only route.</para>
+    ///
+    /// <para>The caller supplies the dictionary. Useful sources are the map's own object data and
+    /// script literals, a community listfile, and the listfiles of sibling maps.</para>
+    /// </summary>
+    /// <returns>Block index to the name that resolved it, for blocks that had no name before.</returns>
+    public IReadOnlyDictionary<int, string> RecoverNames(IEnumerable<string> candidates)
+    {
+        ArgumentNullException.ThrowIfNull(candidates);
+        var already = _files.Where(f => f.FileName is not null)
+            .Select(f => f.BlockIndex).ToHashSet();
+
+        using var stream = new MemoryStream(_originalBytes);
+        using var archive = MpqArchive.Open(stream, loadListFile: false);
+
+        var blockByName = new Dictionary<ulong, uint>();
+        foreach (var hash in archive.EnumerateHashes())
+            blockByName.TryAdd(hash.Name, hash.BlockIndex);
+
+        var found = new Dictionary<int, string>();
+        foreach (var candidate in candidates)
+        {
+            if (string.IsNullOrWhiteSpace(candidate)) continue;
+            // The hasher throws on any character at or above 0x200, and candidates harvested
+            // from script literals and raw block bytes routinely contain one. A real MPQ path
+            // is ASCII, so skipping the rest costs nothing and a throw here would abort the
+            // whole recovery over a single stray byte.
+            if (!System.Text.Ascii.IsValid(candidate)) continue;
+            if (!blockByName.TryGetValue(MpqHash.GetHashedFileName(candidate), out var blk))
+                continue;
+            int index = (int)blk;
+            if (already.Contains(index) || found.ContainsKey(index)) continue;
+            found[index] = candidate;
+        }
+        return found;
+    }
+
+    /// <summary>
+    /// Replaces the bytes of an entry resolved by MPQ name hash, which is the only way to edit
+    /// a file in a protected map whose listfile was stripped.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="AddOrReplaceRawFile"/> matches on <see cref="MapFileEntry.FileName"/> and so
+    /// cannot see a nameless entry at all. It would silently ADD a second entry under the same
+    /// hashed name instead of replacing the payload, which reads as success. This resolves the
+    /// real entry through the hash table and stamps the name on it so Save writes it back under
+    /// that name. Returns false when the archive does not hold the name.
+    /// </remarks>
+    public bool TryReplaceFileByName(string fileName, byte[] bytes)
+    {
+        ArgumentNullException.ThrowIfNull(bytes);
+        if (string.IsNullOrWhiteSpace(fileName)) return false;
+        if (!System.Text.Ascii.IsValid(fileName)) return false;
+
+        var named = GetFile(fileName);
+        if (named is not null)
+        {
+            named.OverrideBytes = bytes;
+            named.Model = null;
+            named.IsDirty = true;
+            _byNameCache.Remove(fileName);
+            return true;
+        }
+
+        using var stream = new MemoryStream(_originalBytes);
+        using var archive = MpqArchive.Open(stream, loadListFile: false);
+        ulong key = MpqHash.GetHashedFileName(fileName);
+        foreach (var hash in archive.EnumerateHashes())
+        {
+            if (hash.Name != key) continue;
+            var entry = _files.FirstOrDefault(f => f.BlockIndex == (int)hash.BlockIndex);
+            if (entry is null) continue;
+            entry.OverrideBytes = bytes;
+            entry.Model = null;
+            entry.IsDirty = true;
+            entry.RecoveredFileName ??= fileName;
+            _byNameCache.Remove(fileName);
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>Block index to payload size, for every entry with no name.</summary>
+    public IReadOnlyDictionary<int, int> UnnamedBlocks() =>
+        _files.Where(f => f.FileName is null)
+            .ToDictionary(f => f.BlockIndex, f => f.RawBytes.Length);
+
+    /// <summary>
+    /// What an entry actually is, read from its own bytes rather than from its name.
+    /// </summary>
+    /// <remarks>
+    /// Useful precisely where the name is missing. The four byte magic identifies every asset
+    /// type a map carries, and an MDX additionally states its own model name in its MODL chunk,
+    /// so a nameless model can still say what it is called.
+    /// </remarks>
+    public static (string Kind, string SelfName) IdentifyBytes(ReadOnlySpan<byte> data)
+    {
+        if (data.Length < 4) return ("empty", "");
+        if (data[..4].SequenceEqual("MDLX"u8)) return ("MDX model", MdxModelName(data));
+        if (data[..4].SequenceEqual("BLP1"u8) || data[..4].SequenceEqual("BLP2"u8))
+            return ("BLP texture", "");
+        if (data[..4].SequenceEqual("RIFF"u8)) return ("WAV audio", "");
+        if (data[..4].SequenceEqual("DDS "u8)) return ("DDS texture", "");
+        if (data.Length >= 3 && data[0] == 'I' && data[1] == 'D' && data[2] == '3')
+            return ("MP3 audio", "");
+        if (data[0] == 'B' && data[1] == 'M') return ("BMP image", "");
+        bool text = true;
+        for (int i = 0; i < Math.Min(data.Length, 120); i++)
+            if (data[i] is not ((>= 0x20 and < 0x7f) or (byte)'\r' or (byte)'\n' or (byte)'\t'))
+            {
+                text = false;
+                break;
+            }
+        return (text ? "text" : "unknown", "");
+    }
+
+    private static string MdxModelName(ReadOnlySpan<byte> data)
+    {
+        int p = 4;
+        while (p + 8 <= data.Length)
+        {
+            var tag = data.Slice(p, 4);
+            uint size = BitConverter.ToUInt32(data.Slice(p + 4, 4));
+            if (tag.SequenceEqual("MODL"u8) && p + 8 + 0x50 <= data.Length)
+            {
+                var body = data.Slice(p + 8, 0x50);
+                int end = body.IndexOf((byte)0);
+                return System.Text.Encoding.Latin1.GetString(end < 0 ? body : body[..end]);
+            }
+            if (size == 0) break;
+            p += 8 + (int)size;
+        }
+        return "";
+    }
 
     public void Save(string path) => File.WriteAllBytes(path, SaveToBytes());
 
@@ -138,6 +435,19 @@ public sealed class MapDocument
         foreach (var entry in _files.Where(f => f.IsDirty && f.FileName is not null))
             builder.AddFile(MpqFile.New(
                 new MemoryStream(SerializeEntry(entry)), entry.FileName!, (MpqLocale)entry.Locale));
+
+        // Entries whose name was recovered by a deprotect pass. Re-added under that name so the
+        // builder's regenerated listfile carries it, which is the only route that works, since
+        // a (listfile) supplied as an ordinary file is discarded.
+        //
+        // These bytes are re-added rather than passed through, so those entries are recompressed
+        // and are NOT byte-faithful afterwards. That is the deliberate cost of naming them and
+        // it applies only to entries the caller explicitly asked to name.
+        foreach (var entry in _files.Where(f => f.FileName is null
+                                               && f.RecoveredFileName is not null))
+            builder.AddFile(MpqFile.New(
+                new MemoryStream(entry.OverrideBytes ?? entry.RawBytes),
+                entry.RecoveredFileName!, (MpqLocale)entry.Locale));
 
         using var mpq = new MemoryStream();
         // SaveTo disposes the target stream unless leaveOpen — we still need to read it back.

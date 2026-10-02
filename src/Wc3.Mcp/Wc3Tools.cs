@@ -31,6 +31,36 @@ public static class Wc3Tools
         [Description("Path to a .w3x/.w3m map file.")] string map)
         => Run(() => ListCommand.Execute(LoadMap(map)));
 
+    [McpServerTool(Name = "script_leaks", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Find handle leaks in a map's war3map.j (locations, groups, forces, effects, timers, "
+        + "text tags, lightning and triggers created and never destroyed), each ranked by how often "
+        + "its code runs, hot (periodic), repeat (any callback) or once (init), plus every periodic "
+        + "timer and trigger with its period. Read-only.")]
+    public static ScriptLeaksResult ScriptLeaks(
+        [Description("Path to a .w3x/.w3m map file.")] string map)
+        => Run(() => ScriptLeaksCommand.Execute(LoadMap(map)));
+
+    [McpServerTool(Name = "uabi_profile", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Measure unit ability lists (uabi) across many maps at once, one row per map: unit "
+        + "types, references, distinct ids, hero and item abilities in normal lists, ids neither the "
+        + "map nor the game defines, duplicates, and a per-race breakdown. Built to compare the "
+        + "variants of a disconnect bisection without starting the game.")]
+    public static UabiProfileReport UabiProfile(
+        [Description("Maps, or folders searched recursively.")] string[] paths,
+        [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Without it hero, item, race and dangling columns use the map's own fields only.")] string? game_dir = null)
+        => Run(() => UabiProfileCommand.Execute(paths, ResolveGameDir(game_dir)));
+
+    [McpServerTool(Name = "replay_summary", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Read recorded games (.w3g) and report each one's map, length, players, and how "
+        + "and when every player left. A game where any player left with result 0x01 is flagged "
+        + "as a disconnect, which is how a dropped or desynced game is scored without anyone "
+        + "writing results down. Reforged autosaves every game under Documents\\Warcraft III\\"
+        + "BattleNet\\<account>\\Replays\\Autosaved.")]
+    public static ReplayReport ReplaySummary(
+        [Description("A .w3g file, or a folder searched recursively. Default: every Battle.net account's replays.")] string? path = null,
+        [Description("Only games whose map path contains this text.")] string? map = null)
+        => Run(() => ReplayCommand.Execute(path, map));
+
     [McpServerTool(Name = "object_list", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("List the map's custom/modified objects of one Object Editor kind: rawcode, base rawcode (null = created from scratch) and resolved name.")]
     public static ObjectListResult ObjectList(
@@ -373,6 +403,85 @@ public static class Wc3Tools
                 ParseEnum<TerrainCommand.BrushShape>(shape, "shape"));
             return (r.Ok, r.Message, r.TilesChanged);
         }));
+
+    [McpServerTool(Name = "deprotect_map", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Recover the file names a protected map stripped. A protected map ships no "
+        + "(listfile), so most entries have no name and cannot be looked up by name at all. "
+        + "Measured on one real map, 793 of 851 entries were nameless and recovery reached 832. "
+        + "Names come from the map's own object data, its script literals, the texture paths its "
+        + "models declare, any listfiles supplied, and an asset-name sweep of every block. "
+        + "Read-only. Pass out_path to write a copy whose listfile carries the recovered names.")]
+    public static NameRecoveryResult DeprotectMap(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Optional output map path. When given, the recovered names are written into a copy; the input map is NEVER modified in place. Named entries are recompressed, every other entry stays byte-faithful.")] string? out_path = null,
+        [Description("Paths to extra name dictionaries, one name per line. Community listfiles and sibling maps' listfiles both work.")] string[]? listfiles = null)
+        => Run(() =>
+        {
+            var doc = LoadMap(map);
+            var r = NameRecoveryCommand.Execute(doc, listfiles ?? Array.Empty<string>());
+            if (!string.IsNullOrWhiteSpace(out_path))
+            {
+                NameRecoveryCommand.ApplyNames(doc, r);
+                doc.Save(ResolveOutPath(map, out_path));
+            }
+            return r;
+        });
+
+    [McpServerTool(Name = "file_list", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("List the archive's internal entries with their CURRENT size, which reflects a "
+        + "pending replacement rather than the stale original. Name is null for an unnamed entry, "
+        + "which is what a protected map produces.")]
+    public static IReadOnlyList<FileState> FileList(
+        [Description("Path to a .w3x/.w3m map file.")] string map)
+        => Run(() => FileEditCommand.ListFiles(LoadMap(map)));
+
+    [McpServerTool(Name = "file_get_text", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Read one internal file decoded as UTF-8, with any leading BOM stripped. Use it "
+        + "for the override text files, war3mapSkin.txt and friends, that carry a map's string and "
+        + "art overrides.")]
+    public static FileTextResult FileGetText(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Internal archive path, for example 'war3mapSkin.txt'.")] string internal_path)
+        => Run(() => new FileTextResult(internal_path,
+            FileEditCommand.ReadText(LoadMap(map), internal_path)));
+
+    [McpServerTool(Name = "file_set", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Replace an internal file's bytes verbatim from a disk file and save the edited "
+        + "map to out_path. The input map is NEVER modified in place. Bytes are staged unchanged, "
+        + "so a file carrying a BOM or CRLF round-trips exactly, which is what keeps the archive "
+        + "byte-faithful. Content comes from a disk path rather than an argument because these "
+        + "payloads are multi-line and full of pipes and colour codes.")]
+    public static FileSetResult FileSet(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Internal archive path to replace or add, for example 'war3mapSkin.txt'.")] string internal_path,
+        [Description("Disk file whose exact bytes become the new payload.")] string from)
+        => Run(() =>
+        {
+            string full = ResolveOutPath(map, out_path);
+            var doc = LoadMap(map);
+            var r = FileEditCommand.AddOrReplace(doc, internal_path, File.ReadAllBytes(from));
+            doc.Save(full);
+            return new FileSetResult(full, r.Name, r.Replaced, r.SizeBytes);
+        });
+
+    [McpServerTool(Name = "audit_map", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Behavioural audit of a map's object data, read-only. Where 'validate' answers "
+        + "whether a map can LOAD, this answers whether its abilities do what they CLAIM, by "
+        + "comparing the author's own tooltips against the data and by resolving every object "
+        + "reference. Checks: level-gap, level-tooltip, tooltip-claim, orphan-ability, "
+        + "requirement, portrait-risk, dangling-reference, missing-model (model paths in the script "
+        + "or object data that load no file, which the engine logs and retries on every creation). "
+        + "'requirement' and 'dangling-reference' "
+        + "need an installed game and say so in a diagnostic rather than reporting a false clean. "
+        + "It CANNOT see a trigger's damage formula, whether a status effect lands, or timing, so "
+        + "a clean result means no claim in the map contradicts its data, not that the map is correct.")]
+    public static AuditResult AuditMap(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Restrict to one check by name. Default: run all eight.")] string? check = null,
+        [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Without it the requirement and dangling-reference checks are skipped, with a diagnostic.")] string? game_dir = null)
+        => Run(() => AuditCommand.Execute(LoadMap(map), ResolveGameDir(game_dir),
+            check is null ? null : new[] { check }));
 
     [McpServerTool(Name = "sound_list", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("List the map's sound catalog (war3map.w3s): each definition's name, file path, channel, flags, volume, pitch, priority and min/max distance.")]
@@ -751,6 +860,13 @@ public sealed record ObjectNewToolResult(string SavedTo, string Message, string?
 
 /// <summary>sound_* write outcome: where the edited map was written plus a human-readable message.</summary>
 public sealed record SoundToolResult(string SavedTo, string Message);
+
+/// <summary>file_get_text outcome, the internal path asked for and its decoded text.</summary>
+public sealed record FileTextResult(string Name, string Text);
+
+/// <summary>file_set outcome. Replaced is true when an existing entry's payload was
+/// superseded and false when a new entry was added, which the caller cannot otherwise tell.</summary>
+public sealed record FileSetResult(string SavedTo, string Name, bool Replaced, int SizeBytes);
 
 /// <summary>Generic write outcome for camera/pathing/map-info/player/force/new tools:
 /// where the edited (or created) map was written plus a human-readable message.</summary>

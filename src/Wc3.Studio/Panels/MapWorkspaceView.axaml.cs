@@ -58,6 +58,7 @@ public partial class MapWorkspaceView : UserControl
         RegionsPanel.MapEdited += OnMapEdited;
         CamerasPanel.MapEdited += OnMapEdited;
         SoundsPanel.MapEdited += OnMapEdited;
+        TriggersPanel.MapEdited += OnTriggerMapEdited;
     }
 
     /// <summary>Dev/QA: select a top-level tab by its header text (drives the --tab startup
@@ -220,6 +221,13 @@ public partial class MapWorkspaceView : UserControl
     {
         SaveButton.IsEnabled = true;
         StatusText.Text = "Edited players/forces (unsaved) - click Save to write it to the map.";
+    }
+
+    /// <summary>A Trigger-tab edit mutated the in-memory map â†’ enable Save.</summary>
+    private void OnTriggerMapEdited(object? sender, EventArgs e)
+    {
+        SaveButton.IsEnabled = true;
+        StatusText.Text = "Edited triggers (unsaved) - click Save to write it to the map.";
     }
 
     /// <summary>

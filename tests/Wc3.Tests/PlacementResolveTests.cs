@@ -20,7 +20,7 @@ namespace Wc3.Tests;
 /// </summary>
 public class PlacementResolveTests
 {
-    private const string Install = @"D:\Warcraft III";
+    private const string Install = @"C:\Warcraft III";
     private const string MapPath =
         @"C:\Users\GodMephisto\Documents\Warcraft III\Maps\Download\GGGA_V0.02a.w3x";
 

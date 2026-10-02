@@ -2,7 +2,7 @@ using Wc3.GameData;
 namespace Wc3.Tests;
 public class GameDataIntegrationTests
 {
-    private const string Install = @"D:\Warcraft III";
+    private const string Install = @"C:\Warcraft III";
 
     [Fact]
     [Trait("Category", "GameData")]

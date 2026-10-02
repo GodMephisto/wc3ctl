@@ -54,6 +54,13 @@ public static class ObjectSetCommand
         if (merged is null)
             return new(false, $"{kindName} {rawcode} not found in map");
 
+        // A field the skin layer already holds on this object is edited THERE. The skin wins
+        // field by field (see ObjectKinds.MergedEntries), so writing the map layer instead
+        // saves, reports success, and changes nothing. That happened on Anime WOS2 0.32d,
+        // whose broken destructable model lives only in war3mapSkin.w3b.
+        if (TrySetInSkin(doc, info, shape, id, code.FromRawcode(), level, value) is { } skinResult)
+            return skinResult;
+
         var model = ObjectDataWriter.GetOrCreateMapModel(doc, kind);
         var access = model is null ? null : ObjectDataWriter.AccessFor(model);
         if (access is null)
@@ -84,10 +91,15 @@ public static class ObjectSetCommand
         }
         else if (shape == ObjectDataShape.Level)
         {
-            // Bare code on a leveled kind: non-leveled fields live at level 0,
-            // per-level data starts at 1 — prefer whichever already exists.
+            // Bare code on a leveled kind. A whole-object field (Requirements, Levels,
+            // Hotkey) lives at level 0 and per-level data starts at 1, so prefer
+            // whichever this object already carries.
             mod = access.FindMod(group, fieldId, 0) ?? access.FindMod(group, fieldId, 1);
-            slot = 1;
+            // Nothing on this object yet, so fall back to how the map stores the same
+            // field on other objects. Defaulting to 1 writes a whole-object field where
+            // the game never looks, and still reports success.
+            var used = ObjectDataWriter.SlotsUsedFor(model!, fieldId);
+            slot = used.Count > 0 && used.All(s => s == 0) ? 0 : 1;
         }
         else // Variation with a bare code → variation 0
         {
@@ -116,6 +128,37 @@ public static class ObjectSetCommand
 
         doc.AddOrReplaceModelFile(info.MapFile, model!);
         return new(true, $"set {field}={value} on {rawcode}", warning);
+    }
+
+    /// <summary>
+    /// Sets the value in the war3mapSkin.* layer when that layer already carries this field on
+    /// this object at the addressed slot. Null when it does not, so the caller falls through to
+    /// the map layer as before. Only an existing modification is edited, the skin file never
+    /// gains a new one, so a field the skin does not hold keeps landing in war3map.*.
+    /// </summary>
+    private static ObjectSetResult? TrySetInSkin(
+        MapDocument doc, ObjectKindInfo info, ObjectDataShape shape, int id, int fieldId,
+        int? level, string value)
+    {
+        if (doc.GetFile(info.SkinFile)?.Model is not { } skinModel) return null;
+        var access = ObjectDataWriter.AccessFor(skinModel);
+        var group = access?.FindGroup(id);
+        if (access is null || group is null) return null;
+
+        var mod = shape switch
+        {
+            ObjectDataShape.Simple => access.FindMod(group, fieldId, 0),
+            _ when level is int n => access.FindMod(group, fieldId, n),
+            ObjectDataShape.Level => access.FindMod(group, fieldId, 0) ?? access.FindMod(group, fieldId, 1),
+            _ => access.FindMod(group, fieldId, 0),
+        };
+        if (mod is null) return null;
+        if (!TryParseAs(value, mod.Type, out var typed))
+            return new(false, $"'{value}' is not a valid {mod.Type} (field is typed {mod.Type})");
+        mod.Value = typed;
+        doc.AddOrReplaceModelFile(info.SkinFile, skinModel);
+        return new(true, $"set {fieldId.ToRawcode()}={value} on {id.ToRawcode()} in {info.SkinFile}, "
+            + $"the layer that held it and overrides {info.MapFile}");
     }
 
     /// <summary>Splits "code" / "code:N" (N ≥ 0, digits only).</summary>

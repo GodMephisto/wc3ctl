@@ -82,6 +82,44 @@ internal static class ObjectDataWriter
         _ => null,
     };
 
+    /// <summary>
+    /// The distinct slots (ability/upgrade Level, doodad Variation) at which
+    /// <paramref name="fieldId"/> already appears anywhere in this model, across every
+    /// object, empty when the map never sets it.
+    ///
+    /// This exists because a leveled table stores two different kinds of field side by
+    /// side. A per-level field (Cast Range, Cooldown) starts at level 1, while a field
+    /// that is one value for the whole object (Requirements, Levels, Hotkey) is stored
+    /// at level 0, and the binary records no flag saying which a field is. Writing a
+    /// whole-object field to level 1 produces a modification the game never reads, and
+    /// nothing reports a problem, so the map's own usage of the same field is the most
+    /// reliable signal available without game-data metadata loaded.
+    /// </summary>
+    internal static IReadOnlyCollection<int> SlotsUsedFor(object model, int fieldId)
+    {
+        var slots = new HashSet<int>();
+        switch (model)
+        {
+            case AbilityObjectData m:
+                Scan(m.BaseAbilities, m.NewAbilities); break;
+            case UpgradeObjectData m:
+                Scan(m.BaseUpgrades, m.NewUpgrades); break;
+            case DoodadObjectData m:
+                foreach (var g in m.BaseDoodads.Concat(m.NewDoodads))
+                    foreach (var mod in g.Modifications)
+                        if (mod.Id == fieldId) slots.Add(mod.Variation);
+                break;
+        }
+        return slots;
+
+        void Scan(List<LevelObjectModification> bases, List<LevelObjectModification> news)
+        {
+            foreach (var g in bases.Concat(news))
+                foreach (var mod in g.Modifications)
+                    if (mod.Id == fieldId) slots.Add(mod.Level);
+        }
+    }
+
     private static ObjectDataAccess Simple(
         object model, List<SimpleObjectModification> bases, List<SimpleObjectModification> news) => new(
         model,
@@ -109,9 +147,45 @@ internal static class ObjectDataWriter
         },
         (group, fieldId, level) => ((LevelObjectModification)group).Modifications
             .FirstOrDefault(m => m.Id == fieldId && m.Level == level),
-        (group, fieldId, level, type, value) => ((LevelObjectModification)group).Modifications
-            .Add(new LevelObjectDataModification
-            { Level = level, Pointer = 0, Id = fieldId, Type = type, Value = value }));
+        (group, fieldId, level, type, value) =>
+        {
+            var mods = ((LevelObjectModification)group).Modifications;
+            mods.Add(new LevelObjectDataModification
+            {
+                Level = level,
+                Pointer = PointerFor(mods, fieldId),
+                Id = fieldId,
+                Type = type,
+                Value = value,
+            });
+        });
+
+    /// <summary>
+    /// The data pointer an added level must carry, taken from the SAME field at any other level.
+    /// </summary>
+    /// <remarks>
+    /// This is the DataA to DataF selector, and it was hardcoded to 0 here. Editing an existing
+    /// level kept its pointer because the lookup found the entry, while ADDING a level wrote 0,
+    /// so a repair that filled a missing top level produced a field whose levels disagree about
+    /// which column they mean.
+    ///
+    /// Measured on one real map. Across 897 abilities the original carries ZERO Data fields that
+    /// mix pointer 0 with a real one, and the build this writer produced carried exactly five,
+    /// every one of them the level the repair had added. The player found it before the toolkit
+    /// did, reporting a level 6 passive that still did nothing, because nothing in this
+    /// repository ever read Pointer back. A read-back through a route that ignores the field
+    /// deciding the outcome is not a verification.
+    ///
+    /// Falls back to 0 only when the field has no other level, which is the genuinely new field
+    /// case where there is nothing to copy and 0 is what a fresh non-Data field carries anyway.
+    /// </remarks>
+    private static int PointerFor(IEnumerable<LevelObjectDataModification> mods, int fieldId)
+    {
+        foreach (var m in mods)
+            if (m.Id == fieldId && m.Pointer != 0)
+                return m.Pointer;
+        return 0;
+    }
 
     private static ObjectDataAccess Variation(
         object model, List<VariationObjectModification> bases, List<VariationObjectModification> news) => new(

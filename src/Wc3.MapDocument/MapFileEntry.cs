@@ -37,4 +37,17 @@ public sealed class MapFileEntry
     /// original bytes; this is the pending replacement.
     /// </summary>
     public byte[]? OverrideBytes { get; set; }
+
+    /// <summary>
+    /// A name recovered for an entry the archive lists without one, set by a deprotect pass.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="FileName"/> stays null, because it records what the archive's own listfile
+    /// said and that is a fact about the file rather than about our analysis. Save re-adds an
+    /// entry carrying this under the recovered name, which is the only way the name survives.
+    /// Writing a <c>(listfile)</c> as a normal file does NOT work, because MpqArchiveBuilder
+    /// regenerates that from the names it knows and discards the supplied one. That was tried
+    /// first and reported 58 named entries before and after, a clean silent no-op.
+    /// </remarks>
+    public string? RecoveredFileName { get; set; }
 }

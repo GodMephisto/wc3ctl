@@ -168,11 +168,26 @@ public sealed class ObjectDataStore
         if (_levelColumn is not null && row.TryGetValue(_levelColumn, out var count)
             && int.TryParse(count, out var n) && n > 0)
             levels = Math.Min(levels, n);
+        string? last = null;
         for (int level = 1; level <= levels; level++)
         {
             if (!row.TryGetValue(column + level, out var v) || v.Length == 0) continue;
             if (level == 1) result[fm.Code] = v;
             if (levels > 1) result[$"{fm.Code}:{level}"] = v;
+            last = v;
+        }
+        // Past the row's own level count the trailing columns are normally padding, copies of
+        // the last real level, which is why they are dropped. Reforged 3.0.0 broke that
+        // assumption. Breath of Fire (ANbf) declares 3 levels and its Area columns read
+        // 90, 90, 90, 90 in 2.0.4 but 90, 90, 90, 60 in 3.0.0, so Area4 now carries a value
+        // that is NOT a copy. Dropping it hid a real change from every caller, including a
+        // custom ability that declares more levels than its base and therefore reaches it.
+        // Padding is still dropped; a trailing column that DIFFERS is surfaced.
+        for (int level = levels + 1; level <= fm.Repeat; level++)
+        {
+            if (!row.TryGetValue(column + level, out var v) || v.Length == 0) continue;
+            if (last is not null && v == last) continue;      // genuine padding, stays hidden
+            result[$"{fm.Code}:{level}"] = v;
         }
     }
 

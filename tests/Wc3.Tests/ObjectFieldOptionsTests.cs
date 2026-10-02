@@ -13,7 +13,7 @@ namespace Wc3.Tests;
 /// </summary>
 public class ObjectFieldOptionsTests
 {
-    private const string Install = @"D:\Warcraft III";
+    private const string Install = @"C:\Warcraft III";
 
     // Pure unit test (no install needed): a null context can resolve nothing, so the caller
     // must be told to fall back to a plain text editor — empty options, not a crash.

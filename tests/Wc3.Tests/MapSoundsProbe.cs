@@ -71,7 +71,7 @@ public class MapSoundsProbe
                     sb.AppendLine($"  {mt!.Name}.{m.Name}({string.Join(", ", m.GetParameters().Select(p => p.ParameterType.Name))})");
 
         System.IO.File.WriteAllText(
-            @"D:\playground\Programming\Wc3_CLI\tests\Wc3.Tests\mapsounds-probe.txt",
+            System.IO.Path.Combine(System.IO.Path.GetTempPath(), "mapsounds-probe.txt"),
             sb.ToString());
     }
 

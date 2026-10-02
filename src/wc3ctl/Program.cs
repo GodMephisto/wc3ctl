@@ -490,6 +490,20 @@ public static class Program
         }), mapArg, jsonOption);
         script.AddCommand(scriptFunctions);
 
+        var leaksAll = new Option<bool>("--all", "List every finding, including code that runs only once at init.");
+        var scriptLeaks = new Command("leaks",
+            "Find handle leaks in war3map.j (locations, groups, forces, effects, timers, text tags, "
+            + "lightning, triggers created and never destroyed), ranked by how often the code runs, and "
+            + "list the periodic timers. Read-only.") { mapArg, leaksAll };
+        scriptLeaks.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = ScriptLeaksCommand.Execute(MapDocument.Load(p.GetValueForArgument(mapArg)));
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.ScriptLeaks(r, p.GetValueForOption(leaksAll)));
+            if (!r.Ok) exitCode[0] = 1;
+        }));
+        script.AddCommand(scriptLeaks);
+
         var internalPathArg = new Argument<string?>("internal-path", () => null, "Exact internal file path to extract.");
         var outOption = new Option<string?>(new[] { "-o", "--out" },
             "Output directory (or output file for a single named extraction). Default: current directory.");
@@ -648,6 +662,289 @@ public static class Program
             Emit(json, r, () => Render.Validate(r));
             if (!r.Valid) exitCode[0] = 2;
         }), mapArg, jsonOption);
+
+        // Behavioural audit. validate answers whether a map LOADS, audit answers whether its
+        // abilities do what they claim, by checking the object data against the tooltips the
+        // author wrote. Exits 2 when a check finds something that cannot work at all.
+        var auditCheck = new Option<string[]>("--check",
+            "Limit to named checks. Repeatable. Default runs all: "
+            + string.Join(", ", AuditCommand.AllChecks))
+        { AllowMultipleArgumentsPerToken = true };
+        var audit = new Command("audit",
+            "Check abilities against the map's own tooltips, plus inherited requirements, "
+            + "portrait-risk models, dangling object references and model paths that load no file. "
+            + "Read-only. Exits 2 if any error-level issue is found.")
+            { mapArg, auditCheck };
+        audit.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = AuditCommand.Execute(
+                MapDocument.Load(p.GetValueForArgument(mapArg)),
+                p.GetValueForOption(gameDirOption),
+                p.GetValueForOption(auditCheck));
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.Audit(r));
+            if (!r.Ok) exitCode[0] = 2;
+        }));
+
+        // ---- deprotect: recover the file names a protected map stripped ----
+        // A protected map ships no (listfile), so most entries have no name and GetFile can
+        // never find them. On one real map that was 793 of 851 entries, and it made an audit
+        // of imported models report 3 affected units when the real number was 178.
+        var deprotDict = new Option<string[]>(new[] { "--listfile" },
+            "Extra name dictionary, one name per line. Repeatable. Community listfiles and the "
+            + "listfiles of sibling maps both work.")
+        { AllowMultipleArgumentsPerToken = false };
+        var deprotApply = new Option<bool>("--apply",
+            "Write the recovered names into the map as a real (listfile), so every later load "
+            + "names those entries. Changes no other byte.");
+        var deprotect = new Command("deprotect",
+            "Recover the file names a protected map stripped, from its own data, its script, its "
+            + "models' texture declarations, and any listfiles supplied. Read-only without --apply.")
+        { mapArg, deprotDict, deprotApply, setOut };
+        deprotect.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = NameRecoveryCommand.Execute(
+                doc, p.GetValueForOption(deprotDict) ?? Array.Empty<string>());
+            bool json = p.GetValueForOption(jsonOption);
+            if (!p.GetValueForOption(deprotApply))
+            {
+                Emit(json, r, () => Render.NameRecovery(r));
+                return;
+            }
+            int stamped = NameRecoveryCommand.ApplyNames(doc, r);
+            FinishEdit(json, p.GetValueForOption(setOut), map, doc, true,
+                $"recovered {r.NamedAfter - r.NamedBefore} name(s), naming {stamped} entries "
+                + "(those are recompressed, every other entry is byte-faithful)");
+        }));
+
+        // ---- repair portraits: strip the camera from pre-900 models ----
+        var portraitApply = new Option<bool>("--apply",
+            "Rewrite the affected models. Without it, nothing is changed.");
+        var portraitStamp = new Option<int?>("--stamp-version",
+            "After removing the camera, rewrite the model's VERS to this value, for example 1800. "
+            + "Removing the camera alone is not enough on its own.");
+        var portraitWiden = new Option<bool>("--upgrade-geometry",
+            "With --stamp-version, also insert the fields a version 900 or above model carries "
+            + "that an 800 era one does not, a u32 lod plus char[80] lod name per geoset and a "
+            + "char[80] shader name per material, so the declared version and the actual layout "
+            + "agree. Without it only the version number changes.");
+        var repairPortraits = new Command("portraits",
+            "Remove the camera chunk from models below version 900, which is what makes Reforged "
+            + "3.0.0 render a black portrait pane. Models with no camera already render correctly.")
+        { mapArg, portraitApply, portraitStamp, portraitWiden, setOut };
+        repairPortraits.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            bool apply = p.GetValueForOption(portraitApply);
+            var r = PortraitRepairCommand.Execute(doc, apply,
+                p.GetValueForOption(portraitStamp), p.GetValueForOption(portraitWiden));
+            bool json = p.GetValueForOption(jsonOption);
+            if (!apply)
+            {
+                Emit(json, r, () => Render.PortraitRepair(r));
+                return;
+            }
+            FinishEdit(json, p.GetValueForOption(setOut), map, doc, true,
+                $"{r.ModelsRepaired} of {r.ModelsAtRisk} at-risk model(s) rewritten. "
+                + "TEST THIS BUILD before distributing it, a clean parse is not proof the game "
+                + "renders it.");
+        }));
+
+        // ---- repair data-pointers: levels that name the wrong Data column ----
+        var ptrApply = new Option<bool>("--apply",
+            "Correct the pointers. Without it, nothing is changed.");
+        var repairPointers = new Command("data-pointers",
+            "Correct a levelled field whose data pointer is 0 on some levels and a real DataA to "
+            + "DataF selector on others, which makes those levels name a different column than "
+            + "the author meant. Caused by a level ADDED by an earlier version of this tool.")
+        { mapArg, ptrApply, setOut };
+        repairPointers.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            bool apply = p.GetValueForOption(ptrApply);
+            var r = DataPointerRepairCommand.Execute(doc, apply);
+            bool json = p.GetValueForOption(jsonOption);
+            if (!apply)
+            {
+                Emit(json, r, () => Render.DataPointerRepair(r));
+                return;
+            }
+            FinishEdit(json, p.GetValueForOption(setOut), map, doc, true,
+                $"{r.LevelsFixed} level(s) across {r.FieldsFixed} field(s) corrected.");
+        }));
+
+        // ---- repair model-paths: models the engine fails to load, and retries forever ----
+        var mpApply = new Option<bool>("--apply",
+            "Rewrite the paths that have exactly one intended file. Without it, nothing is changed.");
+        var mpNoEmpty = new Option<bool>("--keep-placeholders",
+            "Leave placeholder models such as '.mdl' untouched. By default they are pointed at a "
+            + "bundled model with no geometry, which still draws nothing but loads.");
+        var repairModels = new Command("model-paths",
+            "Find model paths in the script and object data that resolve to no file, which the "
+            + "engine logs as 'model creation failed' and retries on every creation. Fixes the "
+            + "ones with a single obvious target, reports the rest.")
+        { mapArg, mpApply, mpNoEmpty, setOut };
+        repairModels.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            bool json = p.GetValueForOption(jsonOption);
+            string? gameDir = p.GetValueForOption(gameDirOption);
+            if (!p.GetValueForOption(mpApply))
+            {
+                var scan = ModelPathCommand.Scan(doc, gameDir);
+                Emit(json, scan, () => Render.ModelPaths(scan));
+                return;
+            }
+            var r = ModelPathCommand.Repair(doc, gameDir, !p.GetValueForOption(mpNoEmpty));
+            if (!json) Console.WriteLine(Render.ModelPathRepair(r));
+            FinishEdit(json, p.GetValueForOption(setOut), map, doc, r.Changes.Count > 0,
+                $"{r.Changes.Count} change(s), {r.LeftAlone.Count} path(s) left for the author. "
+                + "TEST THIS BUILD before distributing it.");
+        }));
+
+        // ---- repair audit-errors, the audit's dangling-reference and requirement errors ----
+        var auditApply = new Option<bool>("--apply",
+            "Make the edits. Without it, every edit is listed and nothing is changed.");
+        var repairAudit = new Command("audit-errors",
+            "Fix what audit reports as dangling-reference and requirement errors, with the same "
+            + "detection. Dead ids leave unit and item ability lists, a missing buff gets its base "
+            + "ability's value back, and an inherited requirement the map never defines is cleared.")
+        { mapArg, auditApply, setOut };
+        repairAudit.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            bool json = p.GetValueForOption(jsonOption);
+            bool apply = p.GetValueForOption(auditApply);
+            var r = AuditRepairCommand.Execute(doc, apply, p.GetValueForOption(gameDirOption));
+            if (!apply || !r.Ok || r.Edits.Count == 0)
+            {
+                Emit(json, r, () => Render.AuditRepair(r));
+                if (!r.Ok) exitCode[0] = 1;
+                return;
+            }
+            if (!json) Console.WriteLine(Render.AuditRepair(r));
+            FinishEdit(json, p.GetValueForOption(setOut), map, doc, true,
+                $"{r.Edits.Count} field(s) changed. Run audit on the result to confirm both checks are clean.");
+        }));
+
+        // ---- repair preload, the first-seconds asset load moved under the loading screen ----
+        var preApply = new Option<bool>("--apply",
+            "Write the preload into the script. Without it, only what would be preloaded is shown.");
+        var preWithin = new Option<double>("--within", () => 5,
+            "A trigger on a single timer at or below this many seconds counts as early.");
+        var preFunctions = new Option<string[]>("--function",
+            "Also walk from these script functions, for a map that starts its heavy work another way.")
+        { AllowMultipleArgumentsPerToken = true };
+        var repairPreload = new Command("preload",
+            "Find the unit types and abilities a map touches in its first seconds of play, from "
+            + "triggers on an early single timer, and load them while the loading screen is still up. "
+            + "Fixes the freeze right after loading. The map's own code is not changed.")
+        { mapArg, preApply, preWithin, preFunctions, setOut };
+        var preAllUnits = new Option<bool>("--all-units",
+            "Also preload every unit type the map defines that the script names anywhere, for a map "
+            + "that spawns new types all game, such as a tower defense's waves.");
+        repairPreload.AddOption(preAllUnits);
+        repairPreload.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            bool json = p.GetValueForOption(jsonOption);
+            bool apply = p.GetValueForOption(preApply);
+            var fns = (p.GetValueForOption(preFunctions) ?? Array.Empty<string>())
+                .SelectMany(v => v.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)).ToList();
+            var r = PreloadRepairCommand.Execute(doc, apply, p.GetValueForOption(preWithin), fns,
+                p.GetValueForOption(preAllUnits));
+            bool changed = r.UnitTypes.Count + r.Abilities.Count > 0;
+            if (!apply || !r.Ok || !changed)
+            {
+                Emit(json, r, () => Render.Preload(r));
+                if (!r.Ok) exitCode[0] = 1;
+                return;
+            }
+            if (!json) Console.WriteLine(Render.Preload(r));
+            FinishEdit(json, p.GetValueForOption(setOut), map, doc, true,
+                $"{r.UnitTypes.Count} unit type(s) and {r.Abilities.Count} abilit(ies) now load under the "
+                + "loading screen. TEST THIS BUILD before distributing it.");
+        }));
+
+        // ---- repair uabi-runtime: unit ability lists moved into the script ----
+        var uabiApply = new Option<bool>("--apply",
+            "Move the lists and write the adder into the script. Without it, only the counts are shown.");
+        var repairUabi = new Command("uabi-runtime",
+            "Move each unit type's normal ability list (uabi) out of the object data and add the same "
+            + "abilities by script the moment each unit is created. Hero abilities and morph targets "
+            + "stay. Reported fix for disconnects on maps with thousands of distinct uabi ids.");
+        var uabiIds = new Option<string[]>("--ids",
+            "Move only these ability ids, comma or space separated, and leave every other uabi entry in place.")
+        { AllowMultipleArgumentsPerToken = true };
+        repairUabi.AddOption(uabiIds);
+        repairUabi.AddArgument(mapArg); repairUabi.AddOption(uabiApply); repairUabi.AddOption(setOut);
+        repairUabi.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            bool json = p.GetValueForOption(jsonOption);
+            bool apply = p.GetValueForOption(uabiApply);
+            var ids = (p.GetValueForOption(uabiIds) ?? Array.Empty<string>())
+                .SelectMany(v => v.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)).ToList();
+            var r = UabiRuntimeRepairCommand.Execute(doc, apply, ids);
+            if (!apply || !r.Ok || r.UnitTypesMoved == 0)
+            {
+                Emit(json, r, () => Render.UabiRuntime(r));
+                if (!r.Ok) exitCode[0] = 1;
+                return;
+            }
+            if (!json) Console.WriteLine(Render.UabiRuntime(r));
+            FinishEdit(json, p.GetValueForOption(setOut), map, doc, true,
+                $"{r.ReferencesMoved} ability reference(s) on {r.UnitTypesMoved} unit type(s) now added by script. "
+                + "TEST THIS BUILD before distributing it.");
+        }));
+
+        // ---- replay: score recorded games, for disconnect testing ----
+        var replayPath = new Argument<string?>("path",
+            () => null, "A .w3g file or a folder searched recursively. Default: every Battle.net "
+            + "account's replays under Documents\\Warcraft III\\BattleNet.");
+        var replayMap = new Option<string?>("--map", "Only games whose map path contains this text.");
+        var replay = new Command("replay",
+            "Read recorded games (.w3g) and list each one's map, length, and how every player left, "
+            + "flagging games where someone disconnected. Read-only.")
+        { replayPath, replayMap };
+        replay.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = ReplayCommand.Execute(p.GetValueForArgument(replayPath), p.GetValueForOption(replayMap));
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.Replays(r));
+        }));
+        root.AddCommand(replay);
+
+        // ---- uabi-profile: compare unit ability lists across many maps at once ----
+        var profilePaths = new Argument<string[]>("paths", "Maps, or folders searched recursively.")
+        { Arity = ArgumentArity.OneOrMore };
+        var uabiProfile = new Command("uabi-profile",
+            "Measure every map's unit ability lists (uabi) side by side, without starting the game. "
+            + "Counts, distinct ids, hero and item abilities in normal lists, dangling ids, "
+            + "duplicates, and a per-race breakdown. Read-only.")
+        { profilePaths };
+        uabiProfile.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = UabiProfileCommand.Execute(p.GetValueForArgument(profilePaths), p.GetValueForOption(gameDirOption));
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.UabiProfiles(r));
+        }));
+        root.AddCommand(uabiProfile);
 
         // ---- terrain editing ----
         void FinishTerrain(bool json, string? outOpt, string map, MapDocument doc,
@@ -1084,6 +1381,64 @@ public static class Program
         force.AddCommand(forceList);
         force.AddCommand(forceSetFlags);
 
+        // ---- file: raw/text editing of an internal archive entry ----
+        // Wc3.Commands.FileEditCommand already carried this and no front-end exposed it, so
+        // editing an override file like war3mapSkin.txt meant leaving the toolkit. Writes go
+        // through the raw byte path rather than a text path, because a map's override files
+        // vary in encoding (some carry a UTF-8 BOM, some do not) and round-tripping the exact
+        // bytes is the only way to stay byte-faithful. Content comes from a file on disk, not
+        // from an argument, because these payloads are multi-line and full of pipes and
+        // colour codes that no shell quotes cleanly.
+        var feNameArg = new Argument<string>("internal-path",
+            "Internal archive path, for example war3mapSkin.txt.");
+        var feFrom = new Option<string>(new[] { "--from" },
+            "Disk file whose exact bytes become the new payload.") { IsRequired = true };
+
+        var fileList = new Command("list",
+            "List archive entries with their CURRENT size, reflecting pending replacements.")
+        { mapArg };
+        fileList.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var files = FileEditCommand.ListFiles(MapDocument.Load(p.GetValueForArgument(mapArg)));
+            Emit(p.GetValueForOption(jsonOption), files,
+                () => string.Join("\n", files.Select(f =>
+                    $"{f.Name ?? "(unnamed)",-58} {f.SizeBytes,10}  dirty={f.IsDirty}")));
+        }));
+
+        var fileGetText = new Command("get-text",
+            "Print an internal file decoded as UTF-8, with any leading BOM stripped.")
+        { mapArg, feNameArg };
+        fileGetText.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string text = FileEditCommand.ReadText(
+                MapDocument.Load(p.GetValueForArgument(mapArg)), p.GetValueForArgument(feNameArg));
+            Emit(p.GetValueForOption(jsonOption),
+                new { Name = p.GetValueForArgument(feNameArg), Text = text }, () => text);
+        }));
+
+        var fileSet = new Command("set",
+            "Replace an internal file's bytes from a disk file and save the edited map.")
+        { mapArg, feNameArg, feFrom, setOut };
+        fileSet.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            string name = p.GetValueForArgument(feNameArg);
+            string from = p.GetValueForOption(feFrom)!;
+            var doc = MapDocument.Load(map);
+            var r = FileEditCommand.AddOrReplace(doc, name, File.ReadAllBytes(from));
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc,
+                true, $"{(r.Replaced ? "replaced" : "added")} {r.Name}, {r.SizeBytes} bytes");
+        }));
+
+        var file = new Command("file",
+            "Internal archive files, list, get-text, set (raw byte replace from disk).");
+        file.AddCommand(fileList);
+        file.AddCommand(fileGetText);
+        file.AddCommand(fileSet);
+
         // ---- repair: reusable fixups for generated/byproduct maps ----
         var repair = new Command("repair", "Repair generated/byproduct map issues and save the edited copy.");
         var repairGeneratedHeroes = new Command("generated-heroes",
@@ -1172,6 +1527,12 @@ public static class Program
                 () => Render.Reforged3Repair(r, savedTo));
         }));
         repair.AddCommand(repairReforged3);
+        repair.AddCommand(repairPortraits);
+        repair.AddCommand(repairPointers);
+        repair.AddCommand(repairModels);
+        repair.AddCommand(repairUabi);
+        repair.AddCommand(repairAudit);
+        repair.AddCommand(repairPreload);
 
         // ---- new: create a blank, World-Editor-openable map ----
         var newOut = new Argument<string>("out", "Path to write the new .w3x/.w3m map.");
@@ -1289,11 +1650,12 @@ public static class Program
         root.AddCommand(search); root.AddCommand(diff); root.AddCommand(obj);
         root.AddCommand(extract); root.AddCommand(render); root.AddCommand(renderModel);
         root.AddCommand(script); root.AddCommand(bundle); root.AddCommand(port);
-        root.AddCommand(convert); root.AddCommand(validate);
+        root.AddCommand(convert); root.AddCommand(validate); root.AddCommand(audit);
+        root.AddCommand(deprotect);
         root.AddCommand(place); root.AddCommand(palette); root.AddCommand(terrain);
         root.AddCommand(sound); root.AddCommand(camera); root.AddCommand(pathing);
         root.AddCommand(mapInfo); root.AddCommand(player); root.AddCommand(force);
-        root.AddCommand(repair);
+        root.AddCommand(file); root.AddCommand(repair);
         root.AddCommand(newMap); root.AddCommand(trigger); root.AddCommand(gamedata);
 
         return root;

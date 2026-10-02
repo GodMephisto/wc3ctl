@@ -18,7 +18,8 @@
 
         <Grid Name="ContentRoot" IsVisible="False" RowDefinitions="Auto,*">
 
-            <!-- Header: counts, the map's script language, and the read-only notice. -->
+            <!-- Header: counts, the map's script language, and the current scope of
+                 editing support. -->
             <Border Grid.Row="0" BorderThickness="0,0,0,1"
                     BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
                     Padding="8,6">
@@ -29,7 +30,7 @@
                                    VerticalAlignment="Center" Text=""/>
                     </StackPanel>
                     <TextBlock FontSize="11" Foreground="#8FA3B8"
-                               Text="Read-only view. Trigger editing is coming in a later update."/>
+                               Text="Rename categories and triggers here, and toggle trigger flags. Full ECA editing stays in a later update."/>
                 </StackPanel>
             </Border>
 
@@ -48,16 +49,39 @@
 
                 <GridSplitter Grid.Column="1" ResizeDirection="Columns" Background="#33555555"/>
 
-                <!-- Right: the selected trigger's detail. GUI triggers show their
-                     event/condition/action tree, custom-text triggers show their
-                     script body in a read-only monospace box. -->
-                <Grid Grid.Column="2" RowDefinitions="Auto,Auto,Auto,*">
+                <!-- Right: the selected item's detail. Trigger items can be renamed
+                     here, and actual triggers also expose their basic flags. GUI
+                     triggers still show their event/condition/action tree, custom-text
+                     triggers still show their script body in a read-only box. -->
+                <Grid Grid.Column="2" RowDefinitions="Auto,Auto,Auto,Auto,*">
                     <controls:SectionHeader Name="DetailHeader" Grid.Row="0" Text="Details"/>
                     <TextBlock Name="FlagsText" Grid.Row="1" Margin="8,6,8,0"
                                FontSize="11" Foreground="#8FA3B8" Text=""/>
                     <TextBlock Name="DescriptionText" Grid.Row="2" Margin="8,4,8,0"
                                TextWrapping="Wrap" IsVisible="False" Text=""/>
-                    <Grid Grid.Row="3" Margin="4">
+                    <controls:Card Name="EditorCard" Grid.Row="3" Margin="8,8,8,0" IsVisible="False">
+                        <StackPanel Spacing="6">
+                            <TextBlock Name="EditorTitleText" FontWeight="SemiBold" Text="Edit"/>
+                            <controls:LabeledField Name="NameField" Label="Name">
+                                <TextBox Name="NameBox"/>
+                            </controls:LabeledField>
+                            <StackPanel Name="TriggerFlagsPanel" Spacing="4" IsVisible="False">
+                                <CheckBox Name="EnabledCheckBox" Content="Enabled"/>
+                                <CheckBox Name="InitiallyOnCheckBox" Content="Initially on"/>
+                                <CheckBox Name="RunOnMapInitCheckBox" Content="Run on map init"/>
+                            </StackPanel>
+                            <TextBlock Name="EditorHintText" Foreground="#8FA3B8"
+                                       FontSize="11" TextWrapping="Wrap"
+                                       IsVisible="False" Text=""/>
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Button Name="ApplyEditButton" Content="Apply"
+                                        Click="OnApplyEditClick"/>
+                                <TextBlock Name="EditStatusText" VerticalAlignment="Center"
+                                           TextWrapping="Wrap" Text=""/>
+                            </StackPanel>
+                        </StackPanel>
+                    </controls:Card>
+                    <Grid Grid.Row="4" Margin="4">
                         <TreeView Name="EcaTree" IsVisible="False"/>
                         <TextBox Name="CustomTextBox" IsVisible="False" IsReadOnly="True"
                                  AcceptsReturn="True" TextWrapping="NoWrap"
