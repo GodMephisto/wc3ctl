@@ -1,0 +1,512 @@
+================================================================================================
+  A00W  "Santoryu Ogi: Sanzen Sekai"  (base: ANst)   declares to level 6
+================================================================================================
+    adur:5  Duration - Normal                 
+        set to   20   (your level 1)
+        was      30   (inherited from the base ability)
+    ahdu:5  Duration - Hero                   
+        set to   20   (your level 1)
+        was      30   (inherited from the base ability)
+    Nst3:6  Damage Amount                     
+        set to   0   (your level 5)
+        was      60   (inherited from the base ability)
+    Nst4:6  Damage Radius                     
+        set to   1   (your level 5)
+        was      275   (inherited from the base ability)
+    Nst5:6  Damage Delay                      
+        set to   5   (your level 5)
+        was      0.2   (inherited from the base ability)
+    aran:6  Cast Range                        
+        set to   1200   (your level 5)
+        was      300   (inherited from the base ability)
+
+================================================================================================
+  A01J  "Ryusenka"  (base: ANst)   declares to level 6
+================================================================================================
+    Nst3:6  Damage Amount                     
+        set to   0   (your level 5)
+        was      60   (inherited from the base ability)
+    Nst4:6  Damage Radius                     
+        set to   1   (your level 5)
+        was      275   (inherited from the base ability)
+    Nst5:6  Damage Delay                      
+        set to   5   (your level 5)
+        was      0.2   (inherited from the base ability)
+    aran:6  Cast Range                        
+        set to   800   (your level 5)
+        was      300   (inherited from the base ability)
+
+================================================================================================
+  A01M  "Senbonzakura"  (base: AOsh)   declares to level 6
+================================================================================================
+    acdn:6  Cooldown                          
+        set to   8.5   (your level 5)
+        was      8   (inherited from the base ability)
+
+================================================================================================
+  A01O  "Rikujou Kourou"  (base: AHtb)   declares to level 5
+================================================================================================
+    ahdu:5  Duration - Hero                   
+        set to   2.75   (your level 4)
+        was      3   (inherited from the base ability)
+
+================================================================================================
+  A02J  "Crazy Slash"  (base: AHtb)   declares to level 6
+================================================================================================
+    Htb1:6  Damage                            
+        set to   0   (your level 5)
+        was      100   (inherited from the base ability)
+    abuf:6  Buffs                             
+        set to   B00X   (your level 5)
+        was      BPSE   (inherited from the base ability)
+    acdn:6  Cooldown                          
+        set to   25   (your level 5)
+        was      9   (inherited from the base ability)
+    adur:6  Duration - Normal                 
+        set to   0.01   (your level 5)
+        was      5   (inherited from the base ability)
+    ahdu:6  Duration - Hero                   
+        set to   0.01   (your level 5)
+        was      3   (inherited from the base ability)
+    amcs:6  Mana Cost                         
+        set to   300   (your level 5)
+        was      75   (inherited from the base ability)
+    aran:6  Cast Range                        
+        set to   800   (your level 5)
+        was      600   (inherited from the base ability)
+    atar:6  Targets Allowed                   
+        set to   enemies,ground,neutral,nonancient,organic   (your level 5)
+        was      air,ground,debris,enemy,neutral,organic   (inherited from the base ability)
+    aub1:6  Tooltip - Normal - Extended       
+        set to   Zaraki moves around the battlefield, slashing random 9 ...   (your level 5)
+        was      Throws a magical hammer at a target enemy unit, dealing <AHtb,DataA1> damage and stunning the target for <AHtb,Dur1> seconds.   (inherited from the base ability)
+
+================================================================================================
+  A034  "Hibashira"  (base: AOws)   declares to level 5
+================================================================================================
+    aare:5  Area of Effect                    
+        set to   350   (your level 2)
+        was      250   (inherited from the base ability)
+
+================================================================================================
+  A035  "Strafe"  (base: AEar)   declares to level 6
+================================================================================================
+    Ear1:6  Damage Bonus (%)                  
+        set to   0.25   (your level 5)
+        was      0.1   (inherited from the base ability)
+
+================================================================================================
+  A036  "Super Frenzy"  (base: Auhf)   declares to level 5
+================================================================================================
+    Uhf1:5  Attack Speed Bonus (%)            
+        set to   10   (your level 4)
+        was      0.75   (inherited from the base ability)
+    abuf:5  Buffs                             
+        set to   B010   (your level 4)
+        was      BUhf   (inherited from the base ability)
+    adur:5  Duration - Normal                 
+        set to   5   (your level 4)
+        was      45   (inherited from the base ability)
+    ahdu:5  Duration - Hero                   
+        set to   5   (your level 4)
+        was      45   (inherited from the base ability)
+    atar:5  Targets Allowed                   
+        set to   friend,invulnerable,organic,vulnerable   (your level 4)
+        was      air,ground,organic   (inherited from the base ability)
+
+================================================================================================
+  A037  "Cien Fleur: Spider Net"  (base: ANsi)   declares to level 6
+================================================================================================
+    aare:5  Area of Effect                    
+        set to   350   (your level 2)
+        was      200   (inherited from the base ability)
+    aare:6  Area of Effect                    
+        set to   350   (your level 2)
+        was      200   (inherited from the base ability)
+
+================================================================================================
+  A03A  "Entei"  (base: AEsf)   declares to level 5
+================================================================================================
+    acdn:5  Cooldown                          
+        set to   125   (your level 4)
+        was      120   (inherited from the base ability)
+
+================================================================================================
+  A03Q  "Area Stun"  (base: AOws)   declares to level 21
+================================================================================================
+    aare:6  Area of Effect                    
+        set to   400   (your level 5)
+        was      250   (inherited from the base ability)
+
+================================================================================================
+  A04D  "Some no Mai: Tsukishiro"  (base: AOws)   declares to level 6
+================================================================================================
+    aare:5  Area of Effect                    
+        set to   350   (your level 2)
+        was      250   (inherited from the base ability)
+    aare:6  Area of Effect                    
+        set to   350   (your level 2)
+        was      250   (inherited from the base ability)
+
+================================================================================================
+  A04P  "Complete Hypnosis"  (base: AIil)   declares to level 6
+================================================================================================
+    Iild:5  Damage Dealt (% of normal)        
+        set to   1.5   (your level 1)
+        was      0   (inherited from the base ability)
+    Iilw:5  Damage Received Multiplier        
+        set to   0.35   (your level 1)
+        was      2   (inherited from the base ability)
+    adur:5  Duration - Normal                 
+        set to   40   (your level 1)
+        was      60   (inherited from the base ability)
+    ahdu:5  Duration - Hero                   
+        set to   40   (your level 1)
+        was      60   (inherited from the base ability)
+    aran:5  Cast Range                        
+        set to   1000   (your level 1)
+        was      500   (inherited from the base ability)
+    atar:5  Targets Allowed                   
+        set to   air,enemies,friend,ground,hero,invulnerable,nonancient,...   (your level 1)
+        was      ground,air,friend,self   (inherited from the base ability)
+
+================================================================================================
+  A04V  "Bankai: Senbonzakura Kageyoshi"  (base: AUls)   declares to level 5
+================================================================================================
+    Uls3:5  Max Swarm Units Per Target        
+        set to   6   (your level 4)
+        was      7   (inherited from the base ability)
+
+================================================================================================
+  A055  "Swing Arm"  (base: ANbf)   declares to level 6
+================================================================================================
+    Nbf5:6  Damage Per Second                 
+        set to   0   (your level 5)
+        was      10   (inherited from the base ability)
+
+================================================================================================
+  A05P  "Desert Spada"  (base: ANbf)   declares to level 6
+================================================================================================
+    Nbf5:6  Damage Per Second                 
+        set to   0   (your level 5)
+        was      10   (inherited from the base ability)
+
+================================================================================================
+  A07D  "Tekkai"  (base: AEfk)   declares to level 6
+================================================================================================
+    atp1:6  Tooltip - Normal                  
+        set to   Tekkai [|cffffcc00E|r] - [|cffffcc00Level 5|r]   (your level 5)
+        was      Fan of Knives - [|cffffcc00Level 1|r]   (inherited from the base ability)
+    aub1:6  Tooltip - Normal - Extended       
+        set to   Lucci hardens his body to become as hard as steel. Gran...   (your level 5)
+        was      The Warden hurls a flurry of knives, damaging nearby enemies. Each knife does <AEfk,DataA1> damage.   (inherited from the base ability)
+
+================================================================================================
+  A090  "Zaraki Damage Aura"  (base: ACac)   declares to level 6
+================================================================================================
+    Ear3:5  Ranged Bonus                      
+        set to   0   (your level 1)
+        was      1   (inherited from the base ability)
+
+================================================================================================
+  A094  "Final Madness"  (base: ANst)   declares to level 6
+================================================================================================
+    Nst3:6  Damage Amount                     
+        set to   0   (your level 5)
+        was      60   (inherited from the base ability)
+    Nst4:6  Damage Radius                     
+        set to   1   (your level 5)
+        was      275   (inherited from the base ability)
+    Nst5:6  Damage Delay                      
+        set to   5   (your level 5)
+        was      0.2   (inherited from the base ability)
+    aran:6  Cast Range                        
+        set to   900   (your level 5)
+        was      300   (inherited from the base ability)
+
+================================================================================================
+  A09C  "Ice Saber"  (base: ANcr)   declares to level 5
+================================================================================================
+    ahdu:5  Duration - Hero                   
+        set to   14   (your level 4)
+        was      15   (inherited from the base ability)
+
+================================================================================================
+  A0AA  "Nemuriuta: Furan"  (base: AUcs)   declares to level 6
+================================================================================================
+    acdn:5  Cooldown                          
+        set to   11   (your level 4)
+        was      10   (inherited from the base ability)
+
+================================================================================================
+  A0AH  "Mirage Tempo"  (base: AEfk)   declares to level 5
+================================================================================================
+    acdn:5  Cooldown                          
+        set to   13   (your level 4)
+        was      9   (inherited from the base ability)
+
+================================================================================================
+  A0AK  "Soukatsui Area Stun"  (base: Awrs)   declares to level 6
+================================================================================================
+    Wrs1:6  Damage                            
+        set to   1000   (your level 5)
+        was      25   (inherited from the base ability)
+
+================================================================================================
+  A0AL  "Shukei Hakuteiken"  (base: ANst)   declares to level 6
+================================================================================================
+    Nst3:6  Damage Amount                     
+        set to   0   (your level 5)
+        was      60   (inherited from the base ability)
+    Nst4:6  Damage Radius                     
+        set to   1   (your level 5)
+        was      275   (inherited from the base ability)
+    Nst5:6  Damage Delay                      
+        set to   5   (your level 5)
+        was      0.2   (inherited from the base ability)
+    aran:6  Cast Range                        
+        set to   800   (your level 5)
+        was      300   (inherited from the base ability)
+
+================================================================================================
+  A0AY  "Flame Sweep"  (base: AHtc)   declares to level 6
+================================================================================================
+    ahdu:6  Duration - Hero                   
+        set to   4   (your level 5)
+        was      3   (inherited from the base ability)
+
+================================================================================================
+  A0C3  "Benihiko"  (base: ANst)   declares to level 6
+================================================================================================
+    Nst3:6  Damage Amount                     
+        set to   0   (your level 5)
+        was      60   (inherited from the base ability)
+    Nst4:6  Damage Radius                     
+        set to   1   (your level 5)
+        was      275   (inherited from the base ability)
+    Nst5:6  Damage Delay                      
+        set to   5   (your level 5)
+        was      0.2   (inherited from the base ability)
+    aran:6  Cast Range                        
+        set to   800   (your level 5)
+        was      300   (inherited from the base ability)
+
+================================================================================================
+  A0D7  "Gravity"  (base: AHtc)   declares to level 6
+================================================================================================
+    ahdu:6  Duration - Hero                   
+        set to   4   (your level 5)
+        was      3   (inherited from the base ability)
+
+================================================================================================
+  A0E5  "cast_buff"  (base: Ainf)   declares to level 5
+================================================================================================
+    aran:5  Cast Range                        
+        set to   500   (your level 3)
+        was      500   (inherited from the base ability)
+    atar:5  Targets Allowed                   
+        set to   self   (your level 3)
+        was      air,ground,friend,neutral,self   (inherited from the base ability)
+    atp1:5  Tooltip - Normal                  
+        set to   3   (your level 3)
+        was      Inner Fire   (inherited from the base ability)
+
+================================================================================================
+  A0FV  "Tailed Beast Ball Rasenshuriken"  (base: ANsh)   declares to level 6
+================================================================================================
+    aare:6  Area of Effect                    
+        set to   1   (your level 5)
+        was      150   (inherited from the base ability)
+
+================================================================================================
+  A0G8  "Fire Style: Explosive Storm"  (base: AUcs)   declares to level 6
+================================================================================================
+    acdn:5  Cooldown                          
+        set to   12   (your level 4)
+        was      10   (inherited from the base ability)
+    acdn:6  Cooldown                          
+        set to   12   (your level 4)
+        was      10   (inherited from the base ability)
+
+================================================================================================
+  A0GV  "Black Hole"  (base: AOws)   declares to level 5
+================================================================================================
+    ahdu:5  Duration - Hero                   
+        set to   3.75   (your level 4)
+        was      2   (inherited from the base ability)
+
+================================================================================================
+  A0H4  "Takt"  (base: ANsh)   declares to level 6
+================================================================================================
+    acdn:6  Cooldown                          
+        set to   40   (your level 5)
+        was      8   (inherited from the base ability)
+    atp1:6  Tooltip - Normal                  
+        set to   Takt [|cffffcc00E|r] - [|cffffcc00Level 5|r]   (your level 5)
+        was      Shockwave - [|cffffcc00Level 1|r]   (inherited from the base ability)
+    aub1:6  Tooltip - Normal - Extended       
+        set to   Law uses his ability to levitate an object within his R...   (your level 5)
+        was      A wave of force that ripples outward, causing <AOsh,DataA1> damage to land units in a line.   (inherited from the base ability)
+
+================================================================================================
+  A0H8  "Dusk Crow Genjutsu"  (base: AUls)   declares to level 5
+================================================================================================
+    Uls3:5  Max Swarm Units Per Target        
+        set to   6   (your level 4)
+        was      7   (inherited from the base ability)
+
+================================================================================================
+  A0I3  "Sjd"  (base: ANsh)   declares to level 5
+================================================================================================
+    Osh1:5  Damage                            
+        set to   175   (your level 4)
+        was      (base value)   (inherited from the base ability)
+
+================================================================================================
+  A0I9  "Bushogoma"  (base: ANsh)   declares to level 6
+================================================================================================
+    acdn:6  Cooldown                          
+        set to   8.5   (your level 5)
+        was      8   (inherited from the base ability)
+
+================================================================================================
+  A0IA  "Rikujou Kourou"  (base: AHtb)   declares to level 5
+================================================================================================
+    ahdu:5  Duration - Hero                   
+        set to   2.75   (your level 4)
+        was      3   (inherited from the base ability)
+
+================================================================================================
+  A0IT  "Liberation"  (base: AHtc)   declares to level 6
+================================================================================================
+    aare:5  Area of Effect                    
+        set to   350   (your level 2)
+        was      300   (inherited from the base ability)
+    aare:6  Area of Effect                    
+        set to   350   (your level 2)
+        was      300   (inherited from the base ability)
+
+================================================================================================
+  A0JT  "Transformation"  (base: ANst)   declares to level 6
+================================================================================================
+    Nst3:6  Damage Amount                     
+        set to   0   (your level 5)
+        was      60   (inherited from the base ability)
+    Nst4:6  Damage Radius                     
+        set to   1   (your level 5)
+        was      275   (inherited from the base ability)
+    Nst5:6  Damage Delay                      
+        set to   5   (your level 5)
+        was      0.2   (inherited from the base ability)
+
+================================================================================================
+  A0JW  "Explosive Bands"  (base: ANsi)   declares to level 6
+================================================================================================
+    aare:5  Area of Effect                    
+        set to   350   (your level 2)
+        was      200   (inherited from the base ability)
+    aare:6  Area of Effect                    
+        set to   350   (your level 2)
+        was      200   (inherited from the base ability)
+
+================================================================================================
+  A0JX  "Bakudo #62: Hyapporankan"  (base: AHtb)   declares to level 5
+================================================================================================
+    ahdu:5  Duration - Hero                   
+        set to   2.75   (your level 4)
+        was      3   (inherited from the base ability)
+
+================================================================================================
+  A0K7  "Tailed Beast Rasengan"  (base: Aivs)   declares to level 6
+================================================================================================
+    Ivs1:6  Transition Time (seconds)         
+        set to   5   (your level 5)
+        was      0   (inherited from the base ability)
+
+================================================================================================
+  A0K9  "Negation"  (base: ANbr)   declares to level 5
+================================================================================================
+    ahdu:5  Duration - Hero                   
+        set to   9   (your level 4)
+        was      10   (inherited from the base ability)
+
+================================================================================================
+  A0KK  "Bakudo #8 Seki"  (base: AEfk)   declares to level 6
+================================================================================================
+    atp1:6  Tooltip - Normal                  
+        set to   Bakudo #8. Seki [|cffffcc00E|r] - [|cffffcc00Level 5|r]   (your level 5)
+        was      Fan of Knives - [|cffffcc00Level 1|r]   (inherited from the base ability)
+    aub1:6  Tooltip - Normal - Extended       
+        set to   The practitioner generates an orb of light blue energy ...   (your level 5)
+        was      The Warden hurls a flurry of knives, damaging nearby enemies. Each knife does <AEfk,DataA1> damage.   (inherited from the base ability)
+
+================================================================================================
+  A0KL  "Rikujou Kourou"  (base: AHtb)   declares to level 5
+================================================================================================
+    ahdu:5  Duration - Hero                   
+        set to   2.75   (your level 4)
+        was      3   (inherited from the base ability)
+
+================================================================================================
+  A0M5  "Haki Damage Aura"  (base: ACac)   declares to level 6
+================================================================================================
+    Ear3:5  Ranged Bonus                      
+        set to   0   (your level 1)
+        was      1   (inherited from the base ability)
+
+================================================================================================
+  A0M6  "Tekkai"  (base: AEfk)   declares to level 6
+================================================================================================
+    atp1:6  Tooltip - Normal                  
+        set to   Tekkai [|cffffcc00E|r] - [|cffffcc00Level 5|r]   (your level 5)
+        was      Fan of Knives - [|cffffcc00Level 1|r]   (inherited from the base ability)
+    aub1:6  Tooltip - Normal - Extended       
+        set to   Garp hardens his body to become as hard as steel. Grant...   (your level 5)
+        was      The Warden hurls a flurry of knives, damaging nearby enemies. Each knife does <AEfk,DataA1> damage.   (inherited from the base ability)
+
+================================================================================================
+  A0MK  "Dragon's Breath"  (base: AEsf)   declares to level 5
+================================================================================================
+    acdn:5  Cooldown                          
+        set to   125   (your level 4)
+        was      120   (inherited from the base ability)
+
+================================================================================================
+  A0N0  "Shark Tile True Punch"  (base: ANsh)   declares to level 6
+================================================================================================
+    acdn:6  Cooldown                          
+        set to   40   (your level 5)
+        was      8   (inherited from the base ability)
+
+================================================================================================
+  A0N3  "White Out"  (base: AEfk)   declares to level 6
+================================================================================================
+    acdn:5  Cooldown                          
+        set to   10   (your level 4)
+        was      9   (inherited from the base ability)
+
+================================================================================================
+  A0NA  "Fire Dragon's Roar"  (base: AUcs)   declares to level 6
+================================================================================================
+    acdn:5  Cooldown                          
+        set to   12   (your level 4)
+        was      10   (inherited from the base ability)
+    acdn:6  Cooldown                          
+        set to   12   (your level 4)
+        was      10   (inherited from the base ability)
+
+================================================================================================
+  A0NC  "Fire Dragon's Wing Attack"  (base: ANsh)   declares to level 6
+================================================================================================
+    acdn:6  Cooldown                          
+        set to   17   (your level 5)
+        was      8   (inherited from the base ability)
+
+================================================================================================
+  A0NU  "Blue Rose Sword"  (base: ANca)   declares to level 6
+================================================================================================
+    nca1:6  Distributed Damage Factor         
+        set to   0.73   (your level 5)
+        was      0.4   (inherited from the base ability)
+
+  101 writes across 52 abilities

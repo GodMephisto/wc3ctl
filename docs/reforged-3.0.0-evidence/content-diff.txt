@@ -1,0 +1,700 @@
+  cache load         0.50s
+==============================================================================
+War3.w3mod:Units/MiscGame.txt
+==============================================================================
+  bytes       6,203 -> 6,274
+  lines       218 -> 222
+  diff        +4 / -0 lines in 2 hunks
+      + AICallForHelp=900
+      + 
+      + BaseMeleeCritDamage=150
+      + BaseSpellCritDamage=150
+
+==============================================================================
+War3.w3mod:UI/MiscData.txt
+==============================================================================
+  bytes       10,286 -> 29,776
+  lines       374 -> 770
+  diff        +396 / -0 lines in 7 hunks
+      + CriticalStrikeSpellTextColor=255,0,0,255
+      + CriticalStrikeHealTextColor=255,0,255,0
+      + HeightStart=0
+      + HeightEnd=0
+      + LinearStart=10000
+      + LinearEnd=10000
+      + MaxLinearDensity=1
+      + DrawOverSky=0
+      + HeightStart=0
+      + HeightEnd=0
+      + LinearStart=10000
+      + LinearEnd=10000
+      + MaxLinearDensity=1
+      + DrawOverSky=0
+      + HeightStart=0
+      + HeightEnd=0
+      + LinearStart=10000
+      + LinearEnd=10000
+      + MaxLinearDensity=1
+      + DrawOverSky=0
+      + HeightStart=0
+      + HeightEnd=0
+      + LinearStart=10000
+      + LinearEnd=10000
+      + MaxLinearDensity=1
+      + DrawOverSky=0
+      + HeightStart=0
+      + HeightEnd=0
+      + LinearStart=10000
+      + LinearEnd=10000
+      + MaxLinearDensity=1
+      + DrawOverSky=0
+      + 
+      + [A0M1C020_ArthasArrivesPrefetchList]
+      + File0="Textures/Dust3x"
+      + File1="Units/Critters/ElfVillagerWoman/VillagerFemaleNobleB_Diffuse"
+      + File2="Units/Critters/ElfVillagerWoman/VillagerFemaleNobleB_Normal"
+      + File3="Units/Critters/ElfVillagerWoman/VillagerFemaleNobleB_ORM"
+      + File4="Units/skeletons/Gore_Diffuse"
+      + File5="Units/skeletons/Gore_Normal"
+      (hunk truncated, -0 +364)
+
+==============================================================================
+War3.w3mod:Units/AbilityData.slk
+==============================================================================
+  bytes       872,773 -> 3,527,035
+  rows        841 -> 1,550
+  columns     99 -> 201
+  rows added  709
+  rows gone   0
+  cells changed on shared rows and fields  5
+  NEW COLUMNS (102): Area5, Area6, BuffID5, BuffID6, Cast5, Cast6, Cool5, Cool6, Cost5, Cost6, DataA5, DataA6, DataB5, DataB6, DataC5, DataC6, DataD5, DataD6, DataE5, DataE6, DataF5, DataF6, DataG5, DataG6, DataH5, DataH6, DataI5, DataI6, DataJ5, DataJ6, DataK1, DataK2, DataK3, DataK4, DataK5, DataK6, DataL1, DataL2, DataL3, DataL4
+      ... and 62 more
+  new rows: AA12, AACe, AACq, AACw, AADe, AADi, AADo, AADq, AADr, AADt, AADu, AADw, AADy, AAPa, AAPe, AAPi, AAPo, AAPp, AAPq, AAPr, AAPs, AAPt, AAPu, AAPw, AAPx, AAPy, AARe, AARq, AARw, AASa ... +679
+  sample of changed cells
+      ACd2         DataB1               '150' -> '250'
+      AIi2         code                 'Aiab' -> 'AIab'
+      ANbf         Area4                '90' -> '60'
+      ANdr         Cost4                '30' -> '35'
+      Asb1         DataD1               '#VALUE!' -> '0'
+
+==============================================================================
+War3.w3mod:Units/AbilityMetaData.slk
+==============================================================================
+  bytes       232,287 -> 286,781
+  rows        777 -> 960
+  columns     27 -> 27
+  rows added  183
+  rows gone   0
+  cells changed on shared rows and fields  29
+  new rows: Asdf, Ens4, Ens5, Ens6, Ens7, Icr1, Icr2, Ilv1, Ilv2, Ime1, Ime2, Isa1, Isa2, Isa3, Isv1, Isv2, Ixr2, Ixr3, Ixr4, Tau6, Tau7, Tau8, Tau9, TauA, aabi, aga1, asc1, asc2, bld1, bld2 ... +153
+  sample of changed cells
+      Eev1         useSpecific          'AEev,AIev,ACev,ACes' -> 'AEev,AIev,ACev,ACes,AHes'
+      Ens1         useSpecific          'Aens,ACen,Aweb,ACwb,AIwb' -> 'Aens,ACen,Aweb,ACwb,AIwb,AHap'
+      Ens2         useSpecific          'Aens,ACen,Aweb,ACwb,AIwb' -> 'Aens,ACen,Aweb,ACwb,AIwb,AHap'
+      Ens3         useSpecific          'Aens,ACen,Aweb,ACwb,AIwb' -> 'Aens,ACen,Aweb,ACwb,AIwb,AHap'
+      Ivam         useSpecific          'AIva,SCva' -> 'AIva,SCva,AIvx'
+      Ocr1         minVal               '0' -> '-99999'
+      Ocr1         useSpecific          'AOcr,ACct,ANdb' -> 'AOcr,ACct,ANdb,AIxr,AIsc'
+      Ocr2         useSpecific          'AOcr,ACct,ANdb' -> 'AOcr,ACct,Andb'
+      Pos1         useSpecific          'Apos,ACps,Aps2' -> 'Apos,ACps,Aps2,AHmc'
+      Ssk1         useSpecific          'Assk' -> 'Assk,AHss'
+      Ssk2         useSpecific          'Assk' -> 'Assk,AHss'
+      Ssk3         useSpecific          'Assk' -> 'Assk,AHss'
+      Ssk4         useSpecific          'Assk' -> 'Assk,AHss'
+      Ssk5         useSpecific          'Assk' -> 'Assk,AHss'
+      Uls1         useSpecific          'AUls' -> 'AUls,AUwc'
+      Uls2         useSpecific          'AUls' -> 'AUls,AUwc'
+      Uls3         useSpecific          'AUls' -> 'AUls,AUwc'
+      Uls4         useSpecific          'AUls' -> 'AUls,AUwc'
+      Uls5         useSpecific          'AUls' -> 'AUls,AUwc'
+      Ulsu         useSpecific          'AUls' -> 'AUls,AUwc'
+      Uts1         useSpecific          'AUts,ANth' -> 'AUts,ANth,AUss'
+      Uts2         useSpecific          'AUts,ANth' -> 'AUts,ANth,AUss'
+      Uts3         useSpecific          'AUts,ANth' -> 'AUts,ANth,AUss'
+      aare         notSpecific          '' -> 'AHsw'
+      abuf         notSpecific          '' -> 'ATal'
+      adur         notSpecific          '' -> 'AHsw,AHmc'
+      ahdu         notSpecific          '' -> 'AHsw'
+      isr1         useSpecific          'AIsr' -> 'AIsr,AIss'
+      isr2         useSpecific          'AIsr' -> 'AIsr,AIss'
+
+==============================================================================
+War3.w3mod:Units/AbilityBuffData.slk
+==============================================================================
+  bytes       31,242 -> 40,820
+  rows        241 -> 318
+  columns     9 -> 9
+  rows added  77
+  rows gone   0
+  cells changed on shared rows and fields  0
+  new rows: BApa, BCGb, BDCa, BDMa, BHTf, BHaa, BHag, BHal, BHap, BHas, BHbo, BHbt, BHce, BHcf, BHch, BHcl, BHgh, BHgr, BHgu, BHhc, BHhh, BHhr, BHht, BHic, BHmc, BHpb, BHsa, BHsf, BHss, BHsw ... +47
+
+==============================================================================
+War3.w3mod:Units/UnitBalance.slk
+==============================================================================
+  bytes       646,382 -> 693,805
+  rows        864 -> 928
+  columns     61 -> 61
+  rows added  64
+  rows gone   0
+  cells changed on shared rows and fields  1
+  new rows: Hct1, Hctl, Hctr, Hjsm, Hleo, Htmx, Nglx, Npal, Scth, Srmg, Sswm, Uany, Uarf, Ubru, Ubtr, Uctl, Ugr2, Ugr3, Ugrk, Ujsm, Uput, Urff, Urfm, Urfu, Uzkf, Uzkm, Uzrm, fapo, fber, fdkr ... +34
+  sample of changed cells
+      ugol         spd                  '' -> '-'
+
+==============================================================================
+War3.w3mod:Units/UnitWeapons.slk
+==============================================================================
+  bytes       744,303 -> 799,832
+  rows        865 -> 929
+  columns     67 -> 67
+  rows added  64
+  rows gone   0
+  cells changed on shared rows and fields  0
+  new rows: Hct1, Hctl, Hctr, Hjsm, Hleo, Htmx, Nglx, Npal, Scth, Srmg, Sswm, Uany, Uarf, Ubru, Ubtr, Uctl, Ugr2, Ugr3, Ugrk, Ujsm, Uput, Urff, Urfm, Urfu, Uzkf, Uzkm, Uzrm, fapo, fber, fdkr ... +34
+
+==============================================================================
+War3.w3mod:Units/UnitData.slk
+==============================================================================
+  bytes       320,127 -> 343,550
+  rows        864 -> 928
+  columns     31 -> 31
+  rows added  64
+  rows gone   0
+  cells changed on shared rows and fields  0
+  new rows: Hct1, Hctl, Hctr, Hjsm, Hleo, Htmx, Nglx, Npal, Scth, Srmg, Sswm, Uany, Uarf, Ubru, Ubtr, Uctl, Ugr2, Ugr3, Ugrk, Ujsm, Uput, Urff, Urfm, Urfu, Uzkf, Uzkm, Uzrm, fapo, fber, fdkr ... +34
+
+==============================================================================
+War3.w3mod:Units/UnitAbilities.slk
+==============================================================================
+  bytes       82,147 -> 88,439
+  rows        864 -> 928
+  columns     7 -> 7
+  rows added  64
+  rows gone   0
+  cells changed on shared rows and fields  0
+  new rows: Hct1, Hctl, Hctr, Hjsm, Hleo, Htmx, Nglx, Npal, Scth, Srmg, Sswm, Uany, Uarf, Ubru, Ubtr, Uctl, Ugr2, Ugr3, Ugrk, Ujsm, Uput, Urff, Urfm, Urfu, Uzkf, Uzkm, Uzrm, fapo, fber, fdkr ... +34
+
+==============================================================================
+War3.w3mod:Units/unitUI.slk
+==============================================================================
+  bytes       239,909 -> 289,876
+  rows        864 -> 928
+  columns     25 -> 28
+  rows added  64
+  rows gone   0
+  cells changed on shared rows and fields  0
+  NEW COLUMNS (3): forceDisplayHP, occlusion, showAirToGround
+  new rows: Hct1, Hctl, Hctr, Hjsm, Hleo, Htmx, Nglx, Npal, Scth, Srmg, Sswm, Uany, Uarf, Ubru, Ubtr, Uctl, Ugr2, Ugr3, Ugrk, Ujsm, Uput, Urff, Urfm, Urfu, Uzkf, Uzkm, Uzrm, fapo, fber, fdkr ... +34
+
+==============================================================================
+War3.w3mod:Units/ItemData.slk
+==============================================================================
+  bytes       102,961 -> 282,004
+  rows        283 -> 648
+  columns     30 -> 35
+  rows added  365
+  rows gone   0
+  cells changed on shared rows and fields  0
+  NEW COLUMNS (5): customTeamColor, equipment, invulnerable, tag, teamColor
+  new rows: brpb, cabl, cagh, cbmv, cccg, cccm, ccec, ccem, ccvw, cdhb, cegi, celi, cese, cexp, ckcm, ckdk, clom, cmag, cpor, cprk, cptz, ctat, ctoa, ctoi, ctos, cvdt, cvfs, cvpe, cvvb, eaaa ... +335
+
+==============================================================================
+War3.w3mod:Units/UnitMetaData.slk
+==============================================================================
+  bytes       70,734 -> 73,808
+  rows        273 -> 285
+  columns     24 -> 24
+  rows added  12
+  rows gone   0
+  cells changed on shared rows and fields  1
+  new rows: iequ, iinv, itag, itcc, itco, uatg, uepa, uevi, ufhp, umd1, umd2, uoct
+  sample of changed cells
+      umdl         index                '-1' -> '0'
+
+==============================================================================
+War3.w3mod:Units/DestructableData.slk
+==============================================================================
+  bytes       178,269 -> 194,879
+  rows        336 -> 344
+  columns     38 -> 41
+  rows added  8
+  rows gone   0
+  cells changed on shared rows and fields  0
+  NEW COLUMNS (3): customTeamColor, occlusion, teamColor
+  new rows: Dogv, Dogw, UB01, UB02, UB03, UB04, YTpl, YTps
+
+==============================================================================
+War3.w3mod:Units/DestructableMetaData.slk
+==============================================================================
+  bytes       12,188 -> 12,864
+  rows        53 -> 56
+  columns     19 -> 19
+  rows added  3
+  rows gone   0
+  cells changed on shared rows and fields  0
+  new rows: boct, btcc, btco
+
+==============================================================================
+War3.w3mod:Units/MiscMetaData.slk
+==============================================================================
+  bytes       49,667 -> 50,359
+  rows        227 -> 230
+  columns     20 -> 20
+  rows added  3
+  rows gone   0
+  cells changed on shared rows and fields  0
+  new rows: bmcd, bscd, cfha
+
+==============================================================================
+War3.w3mod:Doodads/Doodads.slk
+==============================================================================
+  bytes       170,116 -> 288,266
+  rows        568 -> 771
+  columns     24 -> 31
+  rows added  203
+  rows gone   0
+  cells changed on shared rows and fields  0
+  NEW COLUMNS (7): customTeamColor, decal, decalSort, occlusion, shadowHD, teamColor, water
+  new rows: CNuc, CNut, EOcr, EOgr, EOmh, EOsk, EOst, FSsb, GLap, GLcb, GLsg, LCap, LCar, LCb1, LCb2, LCb3, LCb4, LCb5, LCb6, LCb7, LCb8, LCcb, LCcd, LCcp, LCcr, LCct, LCet, LChf, LClb, LClt ... +173
+
+==============================================================================
+War3.w3mod:Doodads/DoodadMetaData.slk
+==============================================================================
+  bytes       7,946 -> 9,409
+  rows        35 -> 42
+  columns     19 -> 19
+  rows added  7
+  rows gone   0
+  cells changed on shared rows and fields  0
+  new rows: ddec, decs, doct, dsh2, dtcc, dtco, dwat
+
+==============================================================================
+War3.w3mod:UI/SkinMetaData.slk
+==============================================================================
+  bytes       168,830 -> 172,037
+  rows        857 -> 876
+  columns     19 -> 19
+  rows added  19
+  rows gone   0
+  cells changed on shared rows and fields  0
+  new rows: f333, f334, f335, f336, f337, f338, f339, f340, f341, f342, f343, f344, f345, f346, f347, f348, f349, f350, f351
+
+==============================================================================
+War3.w3mod:TerrainArt/Water.slk
+==============================================================================
+  bytes       12,863 -> 13,531
+  rows        18 -> 19
+  columns     51 -> 51
+  rows added  1
+  rows gone   0
+  cells changed on shared rows and fields  0
+  new rows: uSha
+
+==============================================================================
+War3.w3mod:TerrainArt/Terrain.slk
+==============================================================================
+  bytes       50,162 -> 63,867
+  rows        177 -> 224
+  columns     14 -> 14
+  rows added  47
+  rows gone   0
+  cells changed on shared rows and fields  0
+  new rows: Maph, Mcha, Msco, Pblm, Pbtl, Pdrt, Pdtr, Pgsb, Phdg, Prtl, Psqd, Pwmb, RC11, RC12, RC13, RCt0, RCt1, RCt2, RCt3, RCt4, RCt5, RCt6, RCt7, RCt8, RCt9, eC11, eC12, eC13, eCt0, eCt1 ... +17
+
+==============================================================================
+War3.w3mod:UI/TriggerData.txt
+==============================================================================
+  bytes       689,500 -> 751,141
+  lines       12,142 -> 13,200
+  diff        +1,132 / -74 lines in 120 hunks
+      + TC_DOODAD=WESTRING_TRIGCAT_DOODAD,ReplaceableTextures\WorldEditUI\Actions-Destructibles
+      + TC_LOCATION=WESTRING_TRIGCAT_LOCATION,ReplaceableTextures\WorldEditUI\Actions-Region
+      + oskeytype=1,0,0,WESTRING_TRIGTYPE_oskeyeventkey,integer
+      + hideshowoption=0,0,0,WESTRING_TRIGTYPE_showhideoption,boolean
+      + disableenableoption=0,0,0,WESTRING_TRIGTYPE_enabledisableoption,boolean
+      + disabledenabledoption=0,0,0,WESTRING_TRIGTYPE_enableddisabledoption,boolean
+      + loadoutslot=1,0,0,WESTRING_TRIGTYPE_loadoutslot,integer
+      + equipmenttype=1,1,1,WESTRING_TRIGTYPE_equipmenttype,integer
+      + itemtag=1,1,1,WESTRING_TRIGTYPE_itemtag,integer
+      + dncmodelstring=0,0,0,WESTRING_TRIGTYPE_dncmodelstring,string,Model
+      + abilityuiyesnooption=0,0,0,WESTRING_TRIGTYPE_abilityuiyesnooption,boolean
+      + ItemTypeEquipment=1,itemtype,ITEM_TYPE_EQUIPMENT,WESTRING_ITEMTYPE_EQUIPMENT
+      + // Equipment types
+      + EquipmentTypeAny=1,equipmenttype,EQUIPMENT_TYPE_ANY,WESTRING_EQUIPMENTTYPE_ANY
+      + EquipmentTypeNone=1,equipmenttype,EQUIPMENT_TYPE_NONE,WESTRING_EQUIPMENTTYPE_NONE
+      + EquipmentTypeHead=1,equipmenttype,EQUIPMENT_TYPE_HEAD,WESTRING_EQUIPMENTTYPE_HEAD
+      + EquipmentTypeChest=1,equipmenttype,EQUIPMENT_TYPE_CHEST,WESTRING_EQUIPMENTTYPE_CHEST
+      + EquipmentTypeGloves=1,equipmenttype,EQUIPMENT_TYPE_GLOVES,WESTRING_EQUIPMENTTYPE_GLOVES
+      + EquipmentTypeBoots=1,equipmenttype,EQUIPMENT_TYPE_BOOTS,WESTRING_EQUIPMENTTYPE_BOOTS
+      + EquipmentTypeRing=1,equipmenttype,EQUIPMENT_TYPE_RING,WESTRING_EQUIPMENTTYPE_RING
+      (hunk truncated, -0 +34)
+      + PlayerUnitEventEquipItem=1,playerunitevent,EVENT_PLAYER_UNIT_EQUIP_ITEM,WESTRING_PUEVENT_EQUIPITEM
+      + PlayerUnitEventUnequipItem=1,playerunitevent,EVENT_PLAYER_UNIT_UNEQUIP_ITEM,WESTRING_PUEVENT_UNEQUIPITEM
+      + UnitEventEquipItem=1,unitevent,EVENT_UNIT_EQUIP_ITEM,WESTRING_UEVENT_EQUIPITEM
+      + UnitEventUnequipItem=1,unitevent,EVENT_UNIT_UNEQUIP_ITEM,WESTRING_UEVENT_UNEQUIPITEM
+      + 
+      + // Oskey event Keys
+      + OskeyTypeA=1,oskeytype,OSKEY_A,WESTRING_KEYEVENTKEY_A
+      + OskeyTypeB=1,oskeytype,OSKEY_B,WESTRING_KEYEVENTKEY_B
+      + OskeyTypeC=1,oskeytype,OSKEY_C,WESTRING_KEYEVENTKEY_C
+      + OskeyTypeD=1,oskeytype,OSKEY_D,WESTRING_KEYEVENTKEY_D
+      + OskeyTypeE=1,oskeytype,OSKEY_E,WESTRING_KEYEVENTKEY_E
+      + OskeyTypeF=1,oskeytype,OSKEY_F,WESTRING_KEYEVENTKEY_F
+      (hunk truncated, -0 +87)
+      + UnitBFShowAirToGround=0,unitbooleanfield,UNIT_BF_SHOW_AIR_TO_GROUND,WESTRING_UNITBF_SHOWAIRTOGROUND
+      + UnitBFForceDisplayHP=0,unitbooleanfield,UNIT_BF_FORCE_DISPLAY_HP,WESTRING_UNITBF_FORCEDISPLAYHP
+      + CameraFieldDOFDistance=0,camerafield,CAMERA_FIELD_DEPTH_OF_FIELD_DISTANCE,WESTRING_CAMVAL_DOF_DISTANCE
+      + CameraFieldDOFScale=0,camerafield,CAMERA_FIELD_DEPTH_OF_FIELD_SCALE,WESTRING_CAMVAL_DOF_SCALE
+      + CameraFieldZAbsolute=0,camerafield,CAMERA_FIELD_ZABSOLUTE,WESTRING_CAMVAL_ZABSOLUTE
+      + FogStyleVolumetric=0,fogstyle,3,WESTRING_FOGSTYLE_VOLUMETRIC
+      + FogStyleNewExp1=0,fogstyle,4,WESTRING_FOGSTYLE_NEWEXP1
+      + FogStyleNewExp2=0,fogstyle,5,WESTRING_FOGSTYLE_NEWEXP2
+      + // HideShow option
+      + HideShowHide=0,hideshowoption,true,WESTRING_SHOWHIDE_HIDE
+      + HideShowShow=0,hideshowoption,false,WESTRING_SHOWHIDE_SHOW
+      + 
+      + 
+      + // AbilityUIYesNo option
+      + AbilityUIYesNoYes=0,abilityuiyesnooption,true,WESTRING_ABILITYUIYESNO_YES
+      + AbilityUIYesNoNo=0,abilityuiyesnooption,false,WESTRING_ABILITYUIYESNO_NO
+      + // DNC Model
+      + DNCModelNone=0,dncmodelstring,``,WESTRING_DNCMODEL_NONE
+      + DNCModelAshenvaleUnit=0,dncmodelstring,`Environment\\DNC\\DNCAshenvale\\DNCAshenvaleUnit\\DNCAshenvaleUnit.mdl`,WESTRING_DNCMODEL_ASHENVALEU
+      + DNCModelAshenvaleTerrain=0,dncmodelstring,`Environment\\DNC\\DNCAshenvale\\DNCAshenvaleTerrain\\DNCAshenvaleTerrain.mdl`,WESTRING_DNCMODEL_A
+      + DNCModelDalaranUnit=0,dncmodelstring,`Environment\\DNC\\DNCDalaran\\DNCDalaranUnit\\DNCDalaranUnit.mdl`,WESTRING_DNCMODEL_DALARANUNIT
+      + DNCModelDalaranTerrain=0,dncmodelstring,`Environment\\DNC\\DNCDalaran\\DNCDalaranTerrain\\DNCDalaranTerrain.mdl`,WESTRING_DNCMODEL_DALARANTE
+      + DNCModelDungeonUnit=0,dncmodelstring,`Environment\\DNC\\DNCDungeon\\DNCDungeonUnit\\DNCDungeonUnit.mdl`,WESTRING_DNCMODEL_DUNGEONUNIT
+      + DNCModelDungeonTerrain=0,dncmodelstring,`Environment\\DNC\\DNCDungeon\\DNCDungeonTerrain\\DNCDungeonTerrain.mdl`,WESTRING_DNCMODEL_DUNGEONTE
+      (hunk truncated, -0 +16)
+      + CineFilterTextureLightGray=0,cinefiltertexture,`ReplaceableTextures\\CameraMasks\LightGray_Mask.blp`,WESTRING_CINEFILTERTEX_LIGHTGRAY
+      + MusicThemeForsaken1=0,musictheme,`Forsaken1`,WESTRING_MUSICTHEME_FORSAKEN1
+      + MusicThemeForsaken1Calm=0,musictheme,`Forsaken1Calm`,WESTRING_MUSICTHEME_FORSAKEN1CALM
+      + MusicThemeForsaken2=0,musictheme,`Forsaken2`,WESTRING_MUSICTHEME_FORSAKEN2
+      + MusicThemeForsaken2SFX=0,musictheme,`Forsaken2SFX`,WESTRING_MUSICTHEME_FORSAKEN2SFX
+      + MusicThemeForsaken3=0,musictheme,`Forsaken3`,WESTRING_MUSICTHEME_FORSAKEN3
+      + MusicThemeRace1=0,musictheme,`Race1`,WESTRING_MUSICTHEME_RACE1
+      + MusicThemeRace2=0,musictheme,`Race2`,WESTRING_MUSICTHEME_RACE2
+      + MusicThemeRace3=0,musictheme,`Race3`,WESTRING_MUSICTHEME_RACE3
+      (hunk truncated, -0 +23)
+      + 
+      + // DisableEnable option
+      + DisableEnableEnable=0,disableenableoption,false,WESTRING_ENABLEDISABLE_ENABLE
+      + DisableEnableDisable=0,disableenableoption,true,WESTRING_ENABLEDISABLE_DISABLE
+      + 
+      + // DisabledEnabled option
+      + DisabledEnabledEnabled=0,disabledenabledoption,false,WESTRING_ENABLEDDISABLED_ENABLED
+      + DisabledEnabledDisabled=0,disabledenabledoption,true,WESTRING_ENABLEDDISABLED_DISABLED
+      + //Rebirth Human
+      + MissionIndexRH00=1,missionindex,bj_MISSION_INDEX_RH00,WESTRING_MISSION_INDEX_RH00
+      + MissionIndexRH01=1,missionindex,bj_MISSION_INDEX_RH01,WESTRING_MISSION_INDEX_RH01
+      + MissionIndexRH02=1,missionindex,bj_MISSION_INDEX_RH02,WESTRING_MISSION_INDEX_RH02
+      + MissionIndexRH03=1,missionindex,bj_MISSION_INDEX_RH03,WESTRING_MISSION_INDEX_RH03
+      + MissionIndexRH04=1,missionindex,bj_MISSION_INDEX_RH04,WESTRING_MISSION_INDEX_RH04
+      + //Rebirth Undead
+      + MissionIndexRU00=1,missionindex,bj_MISSION_INDEX_RU00,WESTRING_MISSION_INDEX_RU00
+      (hunk truncated, -0 +11)
+      + CampaignIndexRH=1,campaignindex,bj_CAMPAIGN_INDEX_RH,WESTRING_CAMPAIGN_INDEX_RH
+      + CampaignIndexRU=1,campaignindex,bj_CAMPAIGN_INDEX_RU,WESTRING_CAMPAIGN_INDEX_RU
+      + CinematicIndexHFO=1,cinematicindex,bj_CINEMATICINDEX_HFO,WESTRING_CINEMATICTYPE_HFO
+      + CinematicIndexUFE=1,cinematicindex,bj_CINEMATICINDEX_UFE,WESTRING_CINEMATICTYPE_UFE
+      + UnitOrderApprehend=0,unitorderutarg,`apprehend`,WESTRING_UNITORDERUTARG_APPREHEND
+      + UnitOrderSoulLantern=0,unitorderutarg,`soullantern`,WESTRING_UNITORDERUTARG_SOULLANTERN
+      + UnitOrderHeroicSlash=1,unitorderutarg,`heroicslash`,WESTRING_UNITORDERUTARG_HEROICSLASH
+      + UnitOrderMindControl=1,unitorderutarg,`mindcontrol`,WESTRING_UNITORDERUTARG_MINDCONTROL
+      + UnitOrderSweepingStrike=1,unitorderptarg,`sweepingstrike`,WESTRING_UNITORDERPTARG_SWEEPINGSTRIKE
+      + UnitOrderValiantCharge=1,unitorderptarg,`valiantcharge`,WESTRING_UNITORDERPTARG_VALIANTCHARGE
+      + UnitOrderBatteringRam=1,unitorderptarg,`batteringram`,WESTRING_UNITORDERPTARG_BATTERINGRAM
+      + UnitOrderHolyWrath=1,unitorderptarg,`holywrath`,WESTRING_UNITORDERPTARG_HOLYWRATH
+      + UnitOrderApprehendAOE=1,unitorderptarg,`apprehendaoe`,WESTRING_UNITORDERPTARG_APPREHENDAOE
+      + UnitOrderRighteousFury=1,unitorderptarg,`righteousfury`,WESTRING_UNITORDERPTARG_RIGHTEOUSFURY
+      + UnitOrderLightsMercy=1,unitorderptarg,`lightsmercy`,WESTRING_UNITORDERPTARG_LIGHTSMERCY
+      + UnitOrderWitheringFire=1,unitorderptarg,`witheringfire`,WESTRING_UNITORDERPTARG_WITHERINGFIRE
+      (hunk truncated, -0 +10)
+      + UnitOrderChallengingCall=1,unitordernotarg,`challengingcall`,WESTRING_UNITORDERNOTARG_CHALLENGINGCALL
+      + UnitOrderChallengingCall=1,unitordernotarg,`challengingcall`,WESTRING_UNITORDERNOTARG_CHALLENGINGCALL
+      + UnitOrderWarcry=1,unitordernotarg,`warcry`,WESTRING_UNITORDERNOTARG_WARCRY
+      + UnitOrderUnyieldingGuard=1,unitordernotarg,`unyieldingguard`,WESTRING_UNITORDERNOTARG_UNYIELDINGGUARD
+      + UnitOrderGrimConviction=1,unitordernotarg,`grimconviction`,WESTRING_UNITORDERNOTARG_GRIMCONVICTION
+      + UnitOrderHeroicSlash=1,unitordernotarg,`heroicslash`,WESTRING_UNITORDERNOTARG_HEROICSLASH
+      + UnitOrderInspireCourage=1,unitordernotarg,`inspirecourage`,WESTRING_UNITORDERNOTARG_INSPIRECOURAGE
+      + UnitOrderConsecration=1,unitordernotarg,`consecration`,WESTRING_UNITORDERNOTARG_CONSECRATION
+      + UnitOrderCleansingFire=1,unitordernotarg,`cleansingfire`,WESTRING_UNITORDERNOTARG_CLEANSINGFIRE
+      (hunk truncated, -0 +17)
+      + UnitOrderSweepingStrikeEx=1,unitorderEx,`sweepingstrike`,WESTRING_unitorderEx_SWEEPINGSTRIKE
+      + UnitOrderChallengingCallEx=1,unitorderEx,`challengingcall`,WESTRING_unitorderEx_CHALLENGINGCALL
+      + 
+      + // Special Garek
+      + HeroSkillGarekChallengingCall=1,heroskillcode,'Atau',WESTRING_HEROSKILL_CHALLENGINGCALL
+      + HeroSkillGarekSweepingStrike=1,heroskillcode,'AHsw',WESTRING_HEROSKILL_SWEEPINGSTRIKE
+      + HeroSkillGarekValiantCharge=1,heroskillcode,'AHch',WESTRING_HEROSKILL_VALIANTCHARGE
+      + HeroSkillGarekWarcry=1,heroskillcode,'AHwc',WESTRING_HEROSKILL_WARCRY
+      + HeroSkillGarekUnyieldingGuard=1,heroskillcode,'AHbd',WESTRING_HEROSKILL_UNYIELDINGGUARD
+      + // Special UGarek
+      + HeroSkillGarekGrimConviction=1,heroskillcode,'AUvg',WESTRING_HEROSKILL_GRIMCONVICTION
+      (hunk truncated, -0 +34)
+      - WeatherDalaranShield=0,weathereffectcode,'MEds',WESTRING_WEATHER_DALARANSHIELD
+      + WeatherAshenvaleHeavyRainSplash=0,weathereffectcode,'RAhs',WESTRING_WEATHER_ASHENVALEHEAVYRAINSPLASH
+      + WeatherAshenvaleLightRainSplash=0,weathereffectcode,'RAls',WESTRING_WEATHER_ASHENVALELIGHTRAINSPLASH
+      + WeatherBreeze=0,weathereffectcode,'VWbr',WESTRING_WEATHER_BREEZE
+      + WeatherBubbles=0,weathereffectcode,'VWbb',WESTRING_WEATHER_BUBBLES
+      + WeatherEmberRainBlue=0,weathereffectcode,'VWeb',WESTRING_WEATHER_EMBERRAINBLUE
+      + WeatherEmberRainGreen=0,weathereffectcode,'VWee',WESTRING_WEATHER_EMBERRAINGREEN
+      + WeatherEmberRainGold=0,weathereffectcode,'VWeg',WESTRING_WEATHER_EMBERRAINGOLD
+      + WeatherEmberRainOrange=0,weathereffectcode,'VWeo',WESTRING_WEATHER_EMBERRAINORANGE
+      + WeatherEmberRainPurple=0,weathereffectcode,'VWep',WESTRING_WEATHER_EMBERRAINPURPLE
+      + WeatherEnergyFieldBlue=0,weathereffectcode,'MEbs',WESTRING_WEATHER_ENERGYFIELDBLUE
+      + WeatherEnergyFieldGreen=0,weathereffectcode,'MEgs',WESTRING_WEATHER_ENERGYFIELDGREEN
+      + WeatherEnergyFieldHoly=0,weathereffectcode,'MEhs',WESTRING_WEATHER_ENERGYFIELDHOLY
+      (hunk truncated, -0 +12)
+      + WeatherLordaeronHeavyRainSplash=0,weathereffectcode,'RLhs',WESTRING_WEATHER_LORDAERONHEAVYRAINSPLASH
+      + WeatherLordaeronLightRainSplash=0,weathereffectcode,'RLls',WESTRING_WEATHER_LORDAERONLIGHTRAINSPLASH
+      + WeatherPlague=0,weathereffectcode,'VWpl',WESTRING_WEATHER_PLAGUE
+      + WeatherPlagueLite=0,weathereffectcode,'VWpp',WESTRING_WEATHER_PLAGUELITE
+      + WeatherRainAcid=0,weathereffectcode,'VWra',WESTRING_WEATHER_RAINACID
+      + WeatherRainAle=0,weathereffectcode,'VWrc',WESTRING_WEATHER_RAINALE
+      + WeatherRainBlood=0,weathereffectcode,'VWrb',WESTRING_WEATHER_RAINBLOOD
+      + WeatherRainLight=0,weathereffectcode,'VWrl',WESTRING_WEATHER_RAINLIGHT
+      + WeatherRainOil=0,weathereffectcode,'VWro',WESTRING_WEATHER_RAINOIL
+      + WeatherRainPurple=0,weathereffectcode,'VWrp',WESTRING_WEATHER_RAINPURPLE
+      + WeatherRainSmudge=0,weathereffectcode,'VWrs',WESTRING_WEATHER_RAINSMUDGE
+      + WeatherRainSnowflakes=0,weathereffectcode,'VWsf',WESTRING_WEATHER_SNOWFLAKES
+      + TerrainTypeMaph=1,terraintype,'Maph',WESTRING_TERRAINTYPE_Maph
+      + TerrainTypeMcha=1,terraintype,'Mcha',WESTRING_TERRAINTYPE_Mcha
+      + TerrainTypeMsco=1,terraintype,'Msco',WESTRING_TERRAINTYPE_Msco
+      + TerrainTypeeC13=1,terraintype,'eC13',WESTRING_TERRAINTYPE_eC13
+      + TerrainTypeeCt3=1,terraintype,'eCt3',WESTRING_TERRAINTYPE_eCt3
+      + TerrainTypeeC12=1,terraintype,'eC12',WESTRING_TERRAINTYPE_eC12
+      + TerrainTypeeCt2=1,terraintype,'eCt2',WESTRING_TERRAINTYPE_eCt2
+      + TerrainTypeeCt4=1,terraintype,'eCt4',WESTRING_TERRAINTYPE_eCt4
+      (hunk truncated, -0 +47)
+      + OperatorCompareItemEquipmentType=1,equipmenttype,EqualNotEqualOperator,equipmenttype
+      + _OperatorCompareItemEquipmentType_DisplayName="Equipment-Type Comparison"
+      + _OperatorCompareItemEquipmentType_Parameters=~Value," ",~Operator," ",~Value
+      + _OperatorCompareItemEquipmentType_Defaults=GetItemEquipmentType,OperatorEqualENE,EquipmentTypeNone
+      + _OperatorCompareItemEquipmentType_Category=TC_CONDITION
+      + 
+      + OperatorCompareItemTag=1,itemtag,EqualNotEqualOperator,itemtag
+      + _OperatorCompareItemTag_DisplayName="Tag Comparison"
+      (hunk truncated, -0 +12)
+      - 
+      - SetDialogueTextKey=0,sound,string
+      - _SetDialogueTextKey_DisplayName="Set Dialogue Text ID"
+      - _SetDialogueTextKey_Parameters="Set Dialogue Text ID For Sound ",~Sound," Dialogue Text ID ",~Text,"
+      - _SetDialogueTextKey_Defaults=_
+      - _SetDialogueTextKey_Category=TC_CINEMATIC
+      - 
+      - SetDialogueSpeakerNameKey=0,sound,string
+      (hunk truncated, -12 +0)
+      + BlzGetUnitAnimationDuration=0,unit,animationname
+      + _BlzGetUnitAnimationDuration_DisplayName="Get Unit Animation Duration"
+      + _BlzGetUnitAnimationDuration_Parameters="Get the duration of ",~Unit,"'s ",~Animation Name," animation"
+      + _BlzGetUnitAnimationDuration_Defaults=_,"stand"
+      + _BlzGetUnitAnimationDuration_Category=TC_ANIMATION
+      + 
+      + BlzGetUnitAnimationDurationByIndex=0,unit,integer
+      + _BlzGetUnitAnimationDurationByIndex_DisplayName="Get Unit Animation Duration By Index"
+      (hunk truncated, -0 +12)
+      + // Doodad actions
+      + SetDoodadColorRectBJ=0,playercolor,doodadcode,rect
+      + _SetDoodadColorRectBJ_DisplayName="Set Doodads Team Color In Region"
+      + _SetDoodadColorRectBJ_Parameters="Set to team color ",~Color," all doodads of type ",~Doodad Type," within ",~Rect,"."
+      + _SetDoodadColorRectBJ_Defaults=Color00,_,GetPlayableMapRect
+      + _SetDoodadColorRectBJ_Category=TC_DOODAD
+      + 
+      + SetDoodadColorBJ=0,playercolor,doodadcode,real,location
+      (hunk truncated, -0 +12)
+      + 
+      + SetCameraFieldControlledByInputForPlayer=0,player,camerafield,onoffoption
+      + _SetCameraFieldControlledByInputForPlayer_DisplayName="Set Camera Field Controlled By Input"
+      + _SetCameraFieldControlledByInputForPlayer_Parameters="Set ",~Player,"'s camera ",~Field," to update when any input is received to ",~On-Off
+      + _SetCameraFieldControlledByInputForPlayer_Defaults=Player00,CameraFieldTargetDistance,OnOffOff
+      + _SetCameraFieldControlledByInputForPlayer_Category=TC_CAMERA
+      + SetCameraBlockerForPlayerBJ=0,rect,onoffoption,player
+      + _SetCameraBlockerForPlayerBJ_DisplayName="Turn Camera Blocker On/Off for Player"
+      + _SetCameraBlockerForPlayerBJ_Parameters="Set camera blocker ",~Region," to ",~OnOff," for ",~Player
+      + _SetCameraBlockerForPlayerBJ_Defaults=_,OnOffOn,Player00
+      + _SetCameraBlockerForPlayerBJ_Category=TC_CAMERA
+      + 
+      + SetDialogueTextKey=0,sound,string
+      + _SetDialogueTextKey_DisplayName="Set Dialogue Text"
+      + _SetDialogueTextKey_Parameters="Set dialogue text for sound ",~Sound," to string ",~Text,"
+      + _SetDialogueTextKey_Defaults=_,"Text"
+      + _SetDialogueTextKey_Category=TC_CINEMATIC
+      + 
+      + SetDialogueSpeakerNameKey=0,sound,string
+      + _SetDialogueSpeakerNameKey_DisplayName="Set Dialogue Speaker Name"
+      (hunk truncated, -0 +12)
+      - _PlayDialogueFromSpeakerEx_DisplayName="Play Dialogue from Speaker"
+      - _PlayDialogueFromSpeakerEx_Parameters="Play Dialogue to ",~Player Group," from ",~Unit," with type ",~Unit-Type,". Play ",~Sound,".  Modify 
+      - _PlayDialogueFromSpeakerEx_Defaults=_,_,_,_,AddSetToAdd,0,WaitDontWait
+      + _PlayDialogueFromSpeakerEx_DisplayName="Play Dialogue From Speaker"
+      + _PlayDialogueFromSpeakerEx_Parameters="Play dialogue to ",~Player Group," from ",~Unit," with type ",~Unit-Type,". Play ",~Sound,".  Modify 
+      + _PlayDialogueFromSpeakerEx_Defaults=GetPlayersAll,_,_,_,AddSetToAdd,0,WaitDontWait
+      - _PlayDialogueFromSpeakerTypeEx_DisplayName="Play Dialogue from Unit-Type"
+      - _PlayDialogueFromSpeakerTypeEx_Parameters="Play Dialogue to ",~Player Group," from ",~Player," ",~Unit-Type," to the user interface at locat
+      - _PlayDialogueFromSpeakerTypeEx_Defaults=_,_,_,_,_,AddSetToAdd,0,WaitDontWait
+      + _PlayDialogueFromSpeakerTypeEx_DisplayName="Play Dialogue From Unit-Type"
+      + _PlayDialogueFromSpeakerTypeEx_Parameters="Play dialogue to ",~Player Group," from ",~Player," ",~Unit-Type," to the user interface at locat
+      + _PlayDialogueFromSpeakerTypeEx_Defaults=GetPlayersAll,_,_,_,_,AddSetToAdd,0,WaitDontWait
+      + BlzPlayModelCinematicGameAtPosition=0,modelfile,real,real,real,real
+      + _BlzPlayModelCinematicGameAtPosition_DisplayName="Play Model Cinematic At Position and Return to Game"
+      + _BlzPlayModelCinematicGameAtPosition_Parameters="Play Model Cinematic ",~MDL Filename," PosX ",~PosX," PosY ",~PosY, PosZ ",~PosZ, Rotation 
+      + _BlzPlayModelCinematicGameAtPosition_Defaults="cinematic.mdl", 0, 0, 0, 0
+      + _BlzPlayModelCinematicGameAtPosition_Category=TC_CINEMATIC
+      + 
+      - _CampaignMinimapIconUnitBJ_DisplayName="Create Campaign Quest Ping On Unit"
+      - _CampaignMinimapIconUnitBJ_Parameters="Create Campaign Quest Icon on ",~Unit," using ",~Style," style
+      + _CampaignMinimapIconUnitBJ_DisplayName="Create Minimap Icon On Unit"
+      + _CampaignMinimapIconUnitBJ_Parameters="Create campaign quest minimap icon on ",~Unit," using ",~Style," style."
+      - _CampaignMinimapIconLocBJ_DisplayName="Create Campaign Quest Ping At Point"
+      - _CampaignMinimapIconLocBJ_Parameters="Create Campaign Quest Icon at ",~Location," using ",~Style," style
+      + _CampaignMinimapIconLocBJ_DisplayName="Create Minimap Icon At Point"
+      + _CampaignMinimapIconLocBJ_Parameters="Create campaign quest minimap icon at ",~Location," using ",~Style," style."
+      - _DestroyMinimapIcon_Parameters="Destroy Minimap Icon for ",~Minimap Icon
+      + _DestroyMinimapIcon_Parameters="Destroy campaign quest minimap icon ",~Minimap Icon
+      ... 70 more hunks
+
+==============================================================================
+War3.w3mod:UI/WorldEditData.txt
+==============================================================================
+  bytes       53,047 -> 57,246
+  lines       1,047 -> 1,104
+  diff        +59 / -2 lines in 14 hunks
+      + P=WESTRING_LOCALE_CITYSCAPE_RUINS,TerrainArt\Blight\Village_Blight
+      + e=WESTRING_LOCALE_LORDAERON_CAPITAL,TerrainArt\Blight\Village_Blight
+      + R=WESTRING_LOCALE_LORDAERON_CAPITAL_RUINS,TerrainArt\Blight\Village_Blight
+      + u=WESTRING_LOCALE_UNDERCITY,TerrainArt\Blight\Village_Blight
+      + M=WESTRING_MISCSET
+      + u=Environment\DNC\DNCUnderground\DNCUndergroundTerrain\DNCUndergroundTerrain.mdl
+      + e=Environment\DNC\DNCLordaeron\DNCLordaeronTerrain\DNCLordaeronTerrain.mdl
+      + P=Environment\DNC\DNCDalaran\DNCDalaranTerrain\DNCDalaranTerrain.mdl
+      + R=Environment\DNC\DNCDalaran\DNCDalaranTerrain\DNCDalaranTerrain.mdl
+      + e=Environment\DNC\DNCLordaeron\DNCLordaeronUnit\DNCLordaeronUnit.mdl
+      + u=Environment\DNC\DNCUnderground\DNCUndergroundUnit\DNCUndergroundUnit.mdl
+      + P=Environment\DNC\DNCDalaran\DNCDalaranUnit\DNCDalaranUnit.mdl
+      + R=Environment\DNC\DNCDalaran\DNCDalaranUnit\DNCDalaranUnit.mdl
+      + 22=Environment\Sky\ArcaneSky\ArcaneSky.mdl,WESTRING_SKYMODEL_SKY23
+      - NumScreens=101
+      + NumScreens=121
+      + 101=1,WESTRING_LOADINGSCREEN_HUMANR01,1,UI\Glues\Loading\Backgrounds\Campaigns\LordaeronBackground.mdl
+      + 102=1,WESTRING_LOADINGSCREEN_HUMANR02,1,UI\Glues\Loading\Backgrounds\Campaigns\LordaeronBackground.mdl
+      + 103=1,WESTRING_LOADINGSCREEN_HUMANR03_INTERLUDE,1,UI\Glues\Loading\Backgrounds\Campaigns\LordaeronBackground.mdl
+      + 104=1,WESTRING_LOADINGSCREEN_HUMANR03,1,UI\Glues\Loading\Backgrounds\Campaigns\LordaeronBackground.mdl
+      + 105=1,WESTRING_LOADINGSCREEN_HUMANR04,1,UI\Glues\Loading\Backgrounds\Campaigns\LordaeronBackground.mdl
+      + 106=1,WESTRING_LOADINGSCREEN_UNDEADR01,1,UI\Glues\Loading\Backgrounds\Campaigns\LordaeronBackground.mdl
+      + 107=1,WESTRING_LOADINGSCREEN_UNDEADR01_02,1,UI\Glues\Loading\Backgrounds\Campaigns\LordaeronBackground.mdl
+      + 108=1,WESTRING_LOADINGSCREEN_UNDEADR01_03,1,UI\Glues\Loading\Backgrounds\Campaigns\LordaeronBackground.mdl
+      (hunk truncated, -0 +20)
+      - NumScreens=12
+      + NumScreens=14
+      + //#LINENOBETA
+      + 12=1,WESTRING_CAMPAIGNSCREEN_HUMANREBIRTH,0,UI\Glues\SinglePlayer\HumanRECampaign3D\HumanRECampaign3D.mdl
+      + //#LINENOBETA
+      + 13=1,WESTRING_CAMPAIGNSCREEN_UNDEADREBIRTH,0,UI\Glues\SinglePlayer\UndeadRECampaign3D\UndeadRECampaign3D.mdl
+      + Alpha=WESTRING_ALPHATILE,ReplaceableTextures\WorldEditUI\AlphaBrush
+      + 
+      + // Light Editor icons
+      + LightEIcon_Category=ReplaceableTextures\WorldEditUI\Editor-TriggerGroup.blp
+      + LightEIcon_CategoryOpen=ReplaceableTextures\WorldEditUI\Editor-TriggerGroup-Open.blp
+      + LightEIcon_File=ReplaceableTextures\WorldEditUI\LightEditor-Light.blp
+      + 
+      + // Object Group Editor Icons
+      + OGEIcon_Group=ReplaceableTextures\WorldEditUI\Editor-TriggerGroup.blp
+      + OGEIcon_Unit=ReplaceableTextures\WorldEditUI\Actions-Unit.blp
+      (hunk truncated, -0 +9)
+      + ToolBarIcon_Module_LightEditor=ReplaceableTextures\WorldEditUI\LightEditor-Light.blp
+      + ToolBarIcon_Module_ObjectGroupEditor=ReplaceableTextures\WorldEditUI\Editor-MultipleDoodads.blp
+      + 
+      + [DayWaterEnvironmentMap]
+      + Default=Environment/EnvironmentMap/LordaeronSummer/water_ibl.tif
+      + 
+      + [NightWaterEnvironmentMap]
+      + Default=Environment/EnvironmentMap/LordaeronSummer/water_ibl.tif
+
+==============================================================================
+War3.w3mod:Units/UnitSkin.txt
+==============================================================================
+  bytes       840,725 -> 967,096
+  lines       47,501 -> 53,019
+  diff        +5,591 / -73 lines in 1978 hunks
+      - ﻿[Hamg]
+      + [Hamg]
+      + modelScale:de=0.95
+      + modelScale:de=1.03
+      + modelScale:de=0.9
+      + modelScale:de=0.935
+      + Art:sd=ReplaceableTextures\CommandButtons\BTNDragonHawk.blp
+      + Art:de=ReplaceableTextures\CommandButtons\BTNDragonHawk.blp
+      + file:de=units\human\BloodElfDragonHawk\BloodElfDragonHawk
+      + modelScale:de=0.55
+      + portrait:de=units\human\BloodElfDragonHawk\BloodElfDragonHawk_portrait
+      + 
+      + modelScale:de=0.8
+      + modelScale:de=1
+      - fileVerFlags=2
+      + fileVerFlags=6
+      - modelScale=1
+      + modelScale:de=0.85
+      + modelScale:hd=1
+      + modelScale:sd=1
+      + modelScale:de=0.8
+      - modelScale=1
+      + modelScale:de=0.825
+      + modelScale:hd=1
+      + modelScale:sd=1
+      - fileVerFlags=2
+      + fileVerFlags=6
+      + modelScale:de=1
+      + modelScale:de=0.75
+      - fileVerFlags=2
+      + fileVerFlags=6
+      + modelScale:de=0.75
+      + modelScale:de=0.85
+      + Art:de=ReplaceableTextures\CommandButtons\BTNMarkOfFire.blp
+      - modelScale=1
+      + modelScale:de=1.1
+      + modelScale:hd=1
+      + modelScale:sd=1
+      - green=255
+      - blue=255
+      + green=175
+      + blue=240
+      + modelScale:de=0.8
+      + modelScale:de=0.8
+      - fileVerFlags=2
+      + fileVerFlags=6
+      + modelScale:de=0.75
+      - fileVerFlags=2
+      + fileVerFlags=6
+      + modelScale:de=1.11
+      + modelScale:de=1.15
+      + Art:de=ReplaceableTextures\CommandButtons\BTNSummonWaterElemental.blp
+      + modelScale:de=0.7
+      + Art:de=ReplaceableTextures\CommandButtons\BTNSummonWaterElemental.blp
+      + file:de=units\human\WaterElemental\WaterElemental
+      + modelScale:de=0.8
+      + red:de=255
+      + green:de=192
+      + blue:de=255
+      + portrait:de=units\human\WaterElemental\WaterElemental_portrait
+      + Art:de=ReplaceableTextures\CommandButtons\BTNSummonWaterElemental.blp
+      + file:de=units\human\WaterElemental\WaterElemental
+      + modelScale:de=1
+      + red:de=192
+      + green:de=255
+      + blue:de=255
+      + portrait:de=units\human\WaterElemental\WaterElemental_portrait
+      + modelScale:de=1
+      + modelScale:de=1
+      + modelScale:de=1
+      ... 1928 more hunks
+
+==============================================================================
+War3.w3mod:Units/AbilityStatModifiers.txt
+==============================================================================
+  2.0.4  not present in this build
+  3.0.0  1,198 bytes
+
+==============================================================================
+setup 0.50s   fetch 0.49s   diff 23.41s   TOTAL 24.40s

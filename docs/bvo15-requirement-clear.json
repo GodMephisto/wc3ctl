@@ -1,0 +1,672 @@
+[
+ {
+  "ability": "A006",
+  "name": "Hardened Skin",
+  "base": "Assk",
+  "inherited_requirement": "Rehs",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A00K",
+  "name": "Rubber Skin",
+  "base": "Assk",
+  "inherited_requirement": "Rehs",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A01P",
+  "name": "Release Eye Patch",
+  "base": "Absk",
+  "inherited_requirement": "Robk",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A01Y",
+  "name": "Block Damage",
+  "base": "Assk",
+  "inherited_requirement": "Rehs",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A02D",
+  "name": "Flash Strike",
+  "base": "Acri",
+  "inherited_requirement": "Rune",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A02K",
+  "name": "Veau Shot",
+  "base": "Aivs",
+  "inherited_requirement": "Rhst",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A02S",
+  "name": "Sprint",
+  "base": "Absk",
+  "inherited_requirement": "Robk",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A036",
+  "name": "Super Frenzy",
+  "base": "Auhf",
+  "inherited_requirement": "Rune",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A03D",
+  "name": "Hado #54: Haien",
+  "base": "Acri",
+  "inherited_requirement": "Rune",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A03S",
+  "name": "Shield Arm",
+  "base": "Assk",
+  "inherited_requirement": "Rehs",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A047",
+  "name": "Impact Dial: Absorb Damage",
+  "base": "Absk",
+  "inherited_requirement": "Robk",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A049",
+  "name": "Fleur Net",
+  "base": "ANen",
+  "inherited_requirement": "Rnen",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A04J",
+  "name": "Fire Slash",
+  "base": "Acri",
+  "inherited_requirement": "Rune",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A04T",
+  "name": "Base Heal",
+  "base": "Arej",
+  "inherited_requirement": "Redc",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A04Y",
+  "name": "Black Sword Strike",
+  "base": "Aivs",
+  "inherited_requirement": "Rhst",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A052",
+  "name": "Rokuogan",
+  "base": "Aivs",
+  "inherited_requirement": "Rhst",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A057",
+  "name": "Itoryu iai: Shishisonson",
+  "base": "Aivs",
+  "inherited_requirement": "Rhst",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A060",
+  "name": "Black Moon Slash",
+  "base": "Acri",
+  "inherited_requirement": "Rune",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A06Y",
+  "name": "Block Damage",
+  "base": "Assk",
+  "inherited_requirement": "Rehs",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A07C",
+  "name": "Tekkai armor",
+  "base": "Ainf",
+  "inherited_requirement": "Rhpt",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A07P",
+  "name": "Santen Kesshun",
+  "base": "Absk",
+  "inherited_requirement": "Robk",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A07R",
+  "name": "Shukei Armor",
+  "base": "Ainf",
+  "inherited_requirement": "Rhpt",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A08A",
+  "name": "Overpower",
+  "base": "Absk",
+  "inherited_requirement": "Robk",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A096",
+  "name": "Homonka: Nigeki Kessatsu",
+  "base": "Acri",
+  "inherited_requirement": "Rune",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A097",
+  "name": "Homonka First Hit",
+  "base": "Alsh",
+  "inherited_requirement": "Rost",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A09L",
+  "name": "Lionheart",
+  "base": "Acri",
+  "inherited_requirement": "Rune",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A09R",
+  "name": "Swap",
+  "base": "Absk",
+  "inherited_requirement": "Robk",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A0A3",
+  "name": "Absorb STATS",
+  "base": "Ainf",
+  "inherited_requirement": "Rhpt",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A0AE",
+  "name": "Yahazugiri",
+  "base": "Aivs",
+  "inherited_requirement": "Rhst",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A0AQ",
+  "name": "Hollow Mask",
+  "base": "Absk",
+  "inherited_requirement": "Robk",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A0AV",
+  "name": "Ginrei Kojyaku",
+  "base": "Absk",
+  "inherited_requirement": "Robk",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A0B0",
+  "name": "Gunblade Ex-Equip",
+  "base": "Absk",
+  "inherited_requirement": "Robk",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A0BN",
+  "name": "Higa Zekko",
+  "base": "Aivs",
+  "inherited_requirement": "Rhst",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A0DZ",
+  "name": "Magma Frenzy",
+  "base": "Auhf",
+  "inherited_requirement": "Rune",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A0E5",
+  "name": "cast_buff",
+  "base": "Ainf",
+  "inherited_requirement": "Rhpt",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A0E9",
+  "name": "Hell Hound",
+  "base": "Aivs",
+  "inherited_requirement": "Rhst",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A0ED",
+  "name": "Block 500",
+  "base": "Assk",
+  "inherited_requirement": "Rehs",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A0F2",
+  "name": "Heavenly Illumination",
+  "base": "Aivs",
+  "inherited_requirement": "Rhst",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A0F3",
+  "name": "Wood Style: Universe",
+  "base": "Aivs",
+  "inherited_requirement": "Rhst",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A0FE",
+  "name": "Yellow Slash",
+  "base": "Absk",
+  "inherited_requirement": "Robk",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A0FI",
+  "name": "High Speed",
+  "base": "Absk",
+  "inherited_requirement": "Robk",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A0FY",
+  "name": "Rinnegan",
+  "base": "Absk",
+  "inherited_requirement": "Robk",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A0GD",
+  "name": "Rasengan",
+  "base": "Aivs",
+  "inherited_requirement": "Rhst",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A0GE",
+  "name": "Slippery",
+  "base": "Absk",
+  "inherited_requirement": "Robk",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A0GI",
+  "name": "Jakuho Raikoben",
+  "base": "Aivs",
+  "inherited_requirement": "Rhst",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A0GO",
+  "name": "Silver Sword Strike",
+  "base": "Aivs",
+  "inherited_requirement": "Rhst",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A0GW",
+  "name": "Shadow Knight String",
+  "base": "Acri",
+  "inherited_requirement": "Rune",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A0H2",
+  "name": "Earth Destroyer",
+  "base": "Absk",
+  "inherited_requirement": "Robk",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A0HM",
+  "name": "Tsukuyomi",
+  "base": "Acri",
+  "inherited_requirement": "Rune",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A0HV",
+  "name": "LifeSprinkler",
+  "base": "Aivs",
+  "inherited_requirement": "Rhst",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A0IC",
+  "name": "Reiatsu Seal",
+  "base": "Acri",
+  "inherited_requirement": "Rune",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A0J2",
+  "name": "Magma Hand",
+  "base": "Absk",
+  "inherited_requirement": "Robk",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A0J3",
+  "name": "Katen Kyokotsu",
+  "base": "Absk",
+  "inherited_requirement": "Robk",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A0K2",
+  "name": "Ultimate Strike",
+  "base": "Aivs",
+  "inherited_requirement": "Rhst",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A0K7",
+  "name": "Tailed Beast Rasengan",
+  "base": "Aivs",
+  "inherited_requirement": "Rhst",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A0KO",
+  "name": "Eternal Mangekyou Sharingan",
+  "base": "Absk",
+  "inherited_requirement": "Robk",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A0L1",
+  "name": "Hurricane",
+  "base": "Absk",
+  "inherited_requirement": "Robk",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A0LM",
+  "name": "Agility",
+  "base": "Absk",
+  "inherited_requirement": "Robk",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A0M3",
+  "name": "Endurance",
+  "base": "Assk",
+  "inherited_requirement": "Rehs",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A0M4",
+  "name": "Busoshoku Haki",
+  "base": "Absk",
+  "inherited_requirement": "Robk",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A0MH",
+  "name": "Mangekyo Sharingan",
+  "base": "Absk",
+  "inherited_requirement": "Robk",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A0MR",
+  "name": "Reverse Lotus",
+  "base": "Aivs",
+  "inherited_requirement": "Rhst",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A0N1",
+  "name": "Vagabond Drill",
+  "base": "Aivs",
+  "inherited_requirement": "Rhst",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A0N8",
+  "name": "White Vine",
+  "base": "Aivs",
+  "inherited_requirement": "Rhst",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A0NE",
+  "name": "Crimson Lotus: Fire Dragon's Fist",
+  "base": "Aivs",
+  "inherited_requirement": "Rhst",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "A0NV",
+  "name": "Horizontal Square",
+  "base": "Aivs",
+  "inherited_requirement": "Rhst",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ },
+ {
+  "ability": "Aihn",
+  "name": "Unit Inventory",
+  "base": "Aihn",
+  "inherited_requirement": "Rhpm",
+  "field": "areq",
+  "level": 0,
+  "value": "_",
+  "declares_to": 0
+ }
+]

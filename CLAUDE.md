@@ -37,7 +37,7 @@ Rule of thumb: if you are about to write the second copy of something, stop and 
 ```
 dotnet build
 dotnet test --filter "Category!=Corpus&Category!=GameData"   # hermetic (CI-safe)
-dotnet test --filter "Category=GameData"                     # needs WC3 install at D:\Warcraft III
+dotnet test --filter "Category=GameData"                     # needs WC3 install at C:\Warcraft III
 dotnet test --filter "Category=Corpus"                       # needs a real .w3x on disk
 ```
 Publish: `wc3ctl` to `dist/` (plus `CascLib.dll` beside it). `Wc3.Studio` to `dist-studio/` (close the running app first, the DLL locks). `Wc3.Mcp` to `dist-mcp/` (MCP registration snippet in `src/Wc3.Mcp/README.md`).

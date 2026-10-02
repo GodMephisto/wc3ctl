@@ -1,0 +1,470 @@
+==============================================================================
+FILE LEVEL DIFF, 2.0.4.23745 -> 3.0.0.24268
+==============================================================================
+  paths in 2.0.4.23745    135,414
+  paths in 3.0.0.24268    174,908
+
+  added      111,932 files   56,371,779,680 bytes
+  removed     72,438 files   28,436,138,785 bytes
+  modified    22,006 files   13,568,665,205 bytes (new side)
+  unchanged   40,970 files
+  touched    118.0% of the new build's file list
+
+==============================================================================
+BY EXTENSION, top 25 by files touched
+==============================================================================
+  ext           added  removed  modified      total
+  .flac         6,401   58,276         0     64,677
+  .ogg         64,010        0         0     64,010
+  .dds         24,655    7,300     5,267     37,222
+  .mdx          6,206    3,279     8,778     18,263
+  .animset_ingame    8,013       31     7,240     15,284
+  .wav              0    3,525         0      3,525
+  .pkb          1,334        2         6      1,342
+  .blp            698        0         0        698
+  .txt              2        3       280        285
+  .png            209       13         0        222
+  .facefx_ingame      214        0         0        214
+  .w3x              1        0       160        161
+  .bls             14        2        63         79
+  .fdf              2        0        71         73
+  .jpg              6        0        42         48
+  .mp3             44        0         0         44
+  .w3m              0        0        39         39
+  .slk              3        1        33         37
+  .swatch          34        0         0         34
+  .pkmm            31        0         0         31
+  .w3xd            20        0         0         20
+  (none)            0        0        12         12
+  .avi              9        0         0          9
+  .tiff             7        0         0          7
+  .webm             7        0         0          7
+
+==============================================================================
+THE FILES THAT DECIDE BEHAVIOUR
+==============================================================================
+
+--- ADDED, 7 behaviour files ---
+    War3.w3mod:UI/CampaignInfoDLC01.txt
+    War3.w3mod:UI/FrameDef/UI/FullScreenHelperDE.fdf
+    War3.w3mod:UI/FrameDef/UI/StatDetailsPanel.fdf
+    War3.w3mod:UI/SoundInfo/CinematicSounds.slk
+    War3.w3mod:Units/AbilityStatModifiers.txt
+    War3.w3mod:_DE.w3mod:Splats/LightningData.slk
+    War3.w3mod:_DE.w3mod:TerrainArt/Water.slk
+
+--- REMOVED, 4 behaviour files ---
+    _Addons/HD2.w3addon/Environment.w3mod:_HD.w3mod:TerrainArt/Water.slk
+    _Addons/HD2.w3addon/Environment.w3mod:_HD.w3mod:_Tilesets/C.w3mod:Felwood_Diffuse.txt
+    _Addons/HD2.w3addon/Environment.w3mod:_HD.w3mod:_Tilesets/Q.w3mod:Village Fall_Diffuse.txt
+    _Addons/HD2.w3addon/Environment.w3mod:_HD.w3mod:_Tilesets/V.w3mod:Village_Diffuse.txt
+
+--- MODIFIED, 388 behaviour files ---
+    War3.w3mod:Collection/Collection.json
+    War3.w3mod:CustomKeys.txt
+    War3.w3mod:Doodads/DoodadMetaData.slk
+    War3.w3mod:Doodads/DoodadSkins.txt
+    War3.w3mod:Doodads/DoodadSkinsAddons.txt
+    War3.w3mod:Doodads/Doodads.slk
+    War3.w3mod:FileAliases.json
+    War3.w3mod:PostProcessingConfig.txt
+    War3.w3mod:Scripts/Blizzard.j
+    War3.w3mod:Scripts/common.j
+    War3.w3mod:Splats/UberSplatData.slk
+    War3.w3mod:TerrainArt/CliffTypes.slk
+    War3.w3mod:TerrainArt/Terrain.slk
+    War3.w3mod:TerrainArt/Water.slk
+    War3.w3mod:TerrainArt/Weather.slk
+    War3.w3mod:UI/CampaignInfoClassic.txt
+    War3.w3mod:UI/CampaignInfoReforged.txt
+    War3.w3mod:UI/FrameDef/UI/ConsoleUI.fdf
+    War3.w3mod:UI/FrameDef/UI/EscMenuMainPanel.fdf
+    War3.w3mod:UI/FrameDef/UI/InfoPanelItemDetail.fdf
+    War3.w3mod:UI/FrameDef/UI/InventoryBar.fdf
+    War3.w3mod:UI/FrameDef/UI/ObserverSimpleInfoPanel.fdf
+    War3.w3mod:UI/FrameDef/UI/ProductionPanelUnit.fdf
+    War3.w3mod:UI/FrameDef/UI/SimpleInfoPanel.fdf
+    War3.w3mod:UI/MiscData.txt
+    War3.w3mod:UI/SkinMetaData.slk
+    War3.w3mod:UI/SoundInfo/AbilitySounds.slk
+    War3.w3mod:UI/SoundInfo/AmbienceSounds.slk
+    War3.w3mod:UI/SoundInfo/AmbientMusic.slk
+    War3.w3mod:UI/SoundInfo/AnimSounds.slk
+    War3.w3mod:UI/SoundInfo/DialogSounds.slk
+    War3.w3mod:UI/SoundInfo/DialogueCreepsBase.slk
+    War3.w3mod:UI/SoundInfo/DialogueHumanBase.slk
+    War3.w3mod:UI/SoundInfo/DialogueNightElfBase.slk
+    War3.w3mod:UI/SoundInfo/DialogueUndeadBase.slk
+    War3.w3mod:UI/SoundInfo/Music.slk
+    War3.w3mod:UI/SoundInfo/UISounds.slk
+    War3.w3mod:UI/SoundInfo/UnitAckSounds.slk
+    War3.w3mod:UI/TriggerData.txt
+    War3.w3mod:UI/UnitEditorData.txt
+    War3.w3mod:UI/WorldEditData.txt
+    War3.w3mod:UI/WorldEditLayout.txt
+    War3.w3mod:UI/war3skins.txt
+    War3.w3mod:Units/AbilityBuffData.slk
+    War3.w3mod:Units/AbilityData.slk
+    War3.w3mod:Units/AbilityMetaData.slk
+    War3.w3mod:Units/AbilitySkin.txt
+    War3.w3mod:Units/CampaignAbilityFunc.txt
+    War3.w3mod:Units/CampaignUnitFunc.txt
+    War3.w3mod:Units/DestructableData.slk
+    War3.w3mod:Units/DestructableMetaData.slk
+    War3.w3mod:Units/DestructableSkin.txt
+    War3.w3mod:Units/ItemAbilityFunc.txt
+    War3.w3mod:Units/ItemData.slk
+    War3.w3mod:Units/ItemFunc.txt
+    War3.w3mod:Units/ItemSkin.txt
+    War3.w3mod:Units/MiscGame.txt
+    War3.w3mod:Units/MiscMetaData.slk
+    War3.w3mod:Units/NeutralAbilityFunc.txt
+    War3.w3mod:Units/NeutralUnitFunc.txt
+    War3.w3mod:Units/NightElfAbilityFunc.txt
+    War3.w3mod:Units/UndeadAbilityFunc.txt
+    War3.w3mod:Units/UnitAbilities.slk
+    War3.w3mod:Units/UnitAddons.txt
+    War3.w3mod:Units/UnitBalance.slk
+    War3.w3mod:Units/UnitData.slk
+    War3.w3mod:Units/UnitMetaData.slk
+    War3.w3mod:Units/UnitSkin.txt
+    War3.w3mod:Units/UnitWeapons.slk
+    War3.w3mod:Units/UnitWeaponsFunc.txt
+    War3.w3mod:Units/UnitWeaponsSkin.txt
+    War3.w3mod:Units/unitUI.slk
+    War3.w3mod:_Balance/Custom_V0.w3mod:Units/MiscGame.txt
+    War3.w3mod:_Balance/Custom_V1.w3mod:Units/MiscGame.txt
+    War3.w3mod:_Balance/Melee_V0.w3mod:Units/MiscGame.txt
+    War3.w3mod:_Locales/deDE.w3mod:Doodads/DoodadSkinStrings.txt
+    War3.w3mod:_Locales/deDE.w3mod:Strings/DialogueCreepsBase.fdf
+    War3.w3mod:_Locales/deDE.w3mod:Strings/DialogueHumanBase.fdf
+    War3.w3mod:_Locales/deDE.w3mod:Strings/DialogueUndeadBase.fdf
+    War3.w3mod:_Locales/deDE.w3mod:UI/FrameDef/GlobalStrings.fdf
+    War3.w3mod:_Locales/deDE.w3mod:UI/FrameDef/InfoPanelStrings.fdf
+    War3.w3mod:_Locales/deDE.w3mod:UI/TriggerStrings.txt
+    War3.w3mod:_Locales/deDE.w3mod:UI/WorldEditGameStrings.txt
+    War3.w3mod:_Locales/deDE.w3mod:UI/WorldEditStrings.txt
+    War3.w3mod:_Locales/deDE.w3mod:Units/CampaignAbilityStrings.txt
+    War3.w3mod:_Locales/deDE.w3mod:Units/CampaignUnitStrings.txt
+    War3.w3mod:_Locales/deDE.w3mod:Units/GeneralKeybindStrings.txt
+    War3.w3mod:_Locales/deDE.w3mod:Units/HumanAbilityStrings.txt
+    War3.w3mod:_Locales/deDE.w3mod:Units/ItemAbilityStrings.txt
+    War3.w3mod:_Locales/deDE.w3mod:Units/ItemStrings.txt
+    War3.w3mod:_Locales/deDE.w3mod:Units/NeutralAbilityStrings.txt
+    War3.w3mod:_Locales/deDE.w3mod:Units/NeutralUnitStrings.txt
+    War3.w3mod:_Locales/deDE.w3mod:Units/NightElfAbilityStrings.txt
+    War3.w3mod:_Locales/deDE.w3mod:Units/NightElfUnitStrings.txt
+    War3.w3mod:_Locales/deDE.w3mod:Units/NightElfUpgradeStrings.txt
+    War3.w3mod:_Locales/deDE.w3mod:Units/OrcAbilityStrings.txt
+    War3.w3mod:_Locales/deDE.w3mod:Units/OrcUnitStrings.txt
+    War3.w3mod:_Locales/deDE.w3mod:Units/OrcUpgradeStrings.txt
+    War3.w3mod:_Locales/deDE.w3mod:Units/UndeadAbilityStrings.txt
+    War3.w3mod:_Locales/deDE.w3mod:Units/UndeadUnitStrings.txt
+    War3.w3mod:_Locales/deDE.w3mod:Units/UnitSkinStrings.txt
+    War3.w3mod:_Locales/enUS.w3mod:Doodads/DoodadSkinStrings.txt
+    War3.w3mod:_Locales/enUS.w3mod:Strings/DialogueCreepsBase.fdf
+    War3.w3mod:_Locales/enUS.w3mod:Strings/DialogueHumanBase.fdf
+    War3.w3mod:_Locales/enUS.w3mod:Strings/DialogueUndeadBase.fdf
+    War3.w3mod:_Locales/enUS.w3mod:UI/FrameDef/GlobalStrings.fdf
+    War3.w3mod:_Locales/enUS.w3mod:UI/FrameDef/InfoPanelStrings.fdf
+    War3.w3mod:_Locales/enUS.w3mod:UI/TriggerStrings.txt
+    War3.w3mod:_Locales/enUS.w3mod:UI/WorldEditGameStrings.txt
+    War3.w3mod:_Locales/enUS.w3mod:UI/WorldEditStrings.txt
+    War3.w3mod:_Locales/enUS.w3mod:Units/CampaignAbilityStrings.txt
+    War3.w3mod:_Locales/enUS.w3mod:Units/CampaignUnitStrings.txt
+    War3.w3mod:_Locales/enUS.w3mod:Units/HumanAbilityStrings.txt
+    War3.w3mod:_Locales/enUS.w3mod:Units/ItemAbilityStrings.txt
+    War3.w3mod:_Locales/enUS.w3mod:Units/ItemStrings.txt
+    War3.w3mod:_Locales/enUS.w3mod:Units/NeutralAbilityStrings.txt
+    War3.w3mod:_Locales/enUS.w3mod:Units/NeutralUnitStrings.txt
+    War3.w3mod:_Locales/enUS.w3mod:Units/NightElfAbilityStrings.txt
+    War3.w3mod:_Locales/esES.w3mod:Doodads/DoodadSkinStrings.txt
+    War3.w3mod:_Locales/esES.w3mod:Strings/DialogueCreepsBase.fdf
+    War3.w3mod:_Locales/esES.w3mod:Strings/DialogueHumanBase.fdf
+    War3.w3mod:_Locales/esES.w3mod:Strings/DialogueUndeadBase.fdf
+    War3.w3mod:_Locales/esES.w3mod:UI/FrameDef/GlobalStrings.fdf
+    War3.w3mod:_Locales/esES.w3mod:UI/FrameDef/InfoPanelStrings.fdf
+    War3.w3mod:_Locales/esES.w3mod:UI/TriggerStrings.txt
+    War3.w3mod:_Locales/esES.w3mod:UI/WorldEditGameStrings.txt
+    War3.w3mod:_Locales/esES.w3mod:UI/WorldEditStrings.txt
+    War3.w3mod:_Locales/esES.w3mod:Units/CampaignAbilityStrings.txt
+    War3.w3mod:_Locales/esES.w3mod:Units/CampaignUnitStrings.txt
+    War3.w3mod:_Locales/esES.w3mod:Units/GeneralKeybindStrings.txt
+    War3.w3mod:_Locales/esES.w3mod:Units/HumanAbilityStrings.txt
+    War3.w3mod:_Locales/esES.w3mod:Units/ItemAbilityStrings.txt
+    War3.w3mod:_Locales/esES.w3mod:Units/ItemStrings.txt
+    War3.w3mod:_Locales/esES.w3mod:Units/NeutralAbilityStrings.txt
+    War3.w3mod:_Locales/esES.w3mod:Units/NeutralUnitStrings.txt
+    War3.w3mod:_Locales/esES.w3mod:Units/NightElfAbilityStrings.txt
+    War3.w3mod:_Locales/esES.w3mod:Units/NightElfUnitStrings.txt
+    War3.w3mod:_Locales/esES.w3mod:Units/NightElfUpgradeStrings.txt
+    War3.w3mod:_Locales/esES.w3mod:Units/OrcAbilityStrings.txt
+    War3.w3mod:_Locales/esES.w3mod:Units/OrcUnitStrings.txt
+    War3.w3mod:_Locales/esES.w3mod:Units/OrcUpgradeStrings.txt
+    War3.w3mod:_Locales/esES.w3mod:Units/UndeadAbilityStrings.txt
+    War3.w3mod:_Locales/esES.w3mod:Units/UndeadUnitStrings.txt
+    War3.w3mod:_Locales/esES.w3mod:Units/UndeadUpgradeStrings.txt
+    War3.w3mod:_Locales/esES.w3mod:Units/UnitSkinStrings.txt
+    War3.w3mod:_Locales/esMX.w3mod:Doodads/DoodadSkinStrings.txt
+    War3.w3mod:_Locales/esMX.w3mod:Strings/DialogueCreepsBase.fdf
+    War3.w3mod:_Locales/esMX.w3mod:Strings/DialogueHumanBase.fdf
+    War3.w3mod:_Locales/esMX.w3mod:Strings/DialogueUndeadBase.fdf
+    War3.w3mod:_Locales/esMX.w3mod:UI/FrameDef/GlobalStrings.fdf
+    War3.w3mod:_Locales/esMX.w3mod:UI/FrameDef/InfoPanelStrings.fdf
+    War3.w3mod:_Locales/esMX.w3mod:UI/FrameDef/NetworkStrings.fdf
+    War3.w3mod:_Locales/esMX.w3mod:UI/TriggerStrings.txt
+    War3.w3mod:_Locales/esMX.w3mod:UI/WorldEditGameStrings.txt
+    War3.w3mod:_Locales/esMX.w3mod:UI/WorldEditStrings.txt
+    War3.w3mod:_Locales/esMX.w3mod:Units/CampaignAbilityStrings.txt
+    War3.w3mod:_Locales/esMX.w3mod:Units/CampaignUnitStrings.txt
+    War3.w3mod:_Locales/esMX.w3mod:Units/GeneralKeybindStrings.txt
+    War3.w3mod:_Locales/esMX.w3mod:Units/HumanAbilityStrings.txt
+    War3.w3mod:_Locales/esMX.w3mod:Units/ItemAbilityStrings.txt
+    War3.w3mod:_Locales/esMX.w3mod:Units/ItemStrings.txt
+    War3.w3mod:_Locales/esMX.w3mod:Units/NeutralAbilityStrings.txt
+    War3.w3mod:_Locales/esMX.w3mod:Units/NeutralUnitStrings.txt
+    War3.w3mod:_Locales/esMX.w3mod:Units/NightElfAbilityStrings.txt
+    War3.w3mod:_Locales/esMX.w3mod:Units/NightElfUnitStrings.txt
+    War3.w3mod:_Locales/esMX.w3mod:Units/NightElfUpgradeStrings.txt
+    War3.w3mod:_Locales/esMX.w3mod:Units/OrcAbilityStrings.txt
+    War3.w3mod:_Locales/esMX.w3mod:Units/OrcUnitStrings.txt
+    War3.w3mod:_Locales/esMX.w3mod:Units/OrcUpgradeStrings.txt
+    War3.w3mod:_Locales/esMX.w3mod:Units/UndeadAbilityStrings.txt
+    War3.w3mod:_Locales/esMX.w3mod:Units/UndeadUnitStrings.txt
+    War3.w3mod:_Locales/esMX.w3mod:Units/UnitSkinStrings.txt
+    War3.w3mod:_Locales/frFR.w3mod:Doodads/DoodadSkinStrings.txt
+    War3.w3mod:_Locales/frFR.w3mod:Strings/DialogueCreepsBase.fdf
+    War3.w3mod:_Locales/frFR.w3mod:Strings/DialogueHumanBase.fdf
+    War3.w3mod:_Locales/frFR.w3mod:Strings/DialogueUndeadBase.fdf
+    War3.w3mod:_Locales/frFR.w3mod:UI/FrameDef/GlobalStrings.fdf
+    War3.w3mod:_Locales/frFR.w3mod:UI/FrameDef/InfoPanelStrings.fdf
+    War3.w3mod:_Locales/frFR.w3mod:UI/TriggerStrings.txt
+    War3.w3mod:_Locales/frFR.w3mod:UI/WorldEditGameStrings.txt
+    War3.w3mod:_Locales/frFR.w3mod:UI/WorldEditStrings.txt
+    War3.w3mod:_Locales/frFR.w3mod:Units/CampaignAbilityStrings.txt
+    War3.w3mod:_Locales/frFR.w3mod:Units/CampaignUnitStrings.txt
+    War3.w3mod:_Locales/frFR.w3mod:Units/GeneralKeybindStrings.txt
+    War3.w3mod:_Locales/frFR.w3mod:Units/HumanAbilityStrings.txt
+    War3.w3mod:_Locales/frFR.w3mod:Units/ItemAbilityStrings.txt
+    War3.w3mod:_Locales/frFR.w3mod:Units/ItemStrings.txt
+    War3.w3mod:_Locales/frFR.w3mod:Units/NeutralAbilityStrings.txt
+    War3.w3mod:_Locales/frFR.w3mod:Units/NeutralUnitStrings.txt
+    War3.w3mod:_Locales/frFR.w3mod:Units/NightElfAbilityStrings.txt
+    War3.w3mod:_Locales/frFR.w3mod:Units/NightElfUnitStrings.txt
+    War3.w3mod:_Locales/frFR.w3mod:Units/NightElfUpgradeStrings.txt
+    War3.w3mod:_Locales/frFR.w3mod:Units/OrcAbilityStrings.txt
+    War3.w3mod:_Locales/frFR.w3mod:Units/OrcUnitStrings.txt
+    War3.w3mod:_Locales/frFR.w3mod:Units/OrcUpgradeStrings.txt
+    War3.w3mod:_Locales/frFR.w3mod:Units/UndeadAbilityStrings.txt
+    War3.w3mod:_Locales/frFR.w3mod:Units/UndeadUnitStrings.txt
+    War3.w3mod:_Locales/frFR.w3mod:Units/UnitSkinStrings.txt
+    War3.w3mod:_Locales/itIT.w3mod:Doodads/DoodadSkinStrings.txt
+    War3.w3mod:_Locales/itIT.w3mod:Strings/DialogueCreepsBase.fdf
+    War3.w3mod:_Locales/itIT.w3mod:Strings/DialogueHumanBase.fdf
+    War3.w3mod:_Locales/itIT.w3mod:Strings/DialogueOrcBase.fdf
+    War3.w3mod:_Locales/itIT.w3mod:Strings/DialogueUndeadBase.fdf
+    War3.w3mod:_Locales/itIT.w3mod:UI/FrameDef/GlobalStrings.fdf
+    War3.w3mod:_Locales/itIT.w3mod:UI/FrameDef/InfoPanelStrings.fdf
+    War3.w3mod:_Locales/itIT.w3mod:UI/TriggerStrings.txt
+    War3.w3mod:_Locales/itIT.w3mod:UI/WorldEditGameStrings.txt
+    War3.w3mod:_Locales/itIT.w3mod:UI/WorldEditStrings.txt
+    War3.w3mod:_Locales/itIT.w3mod:Units/CampaignAbilityStrings.txt
+    War3.w3mod:_Locales/itIT.w3mod:Units/CampaignUnitStrings.txt
+    War3.w3mod:_Locales/itIT.w3mod:Units/GeneralKeybindStrings.txt
+    War3.w3mod:_Locales/itIT.w3mod:Units/HumanAbilityStrings.txt
+    War3.w3mod:_Locales/itIT.w3mod:Units/ItemAbilityStrings.txt
+    War3.w3mod:_Locales/itIT.w3mod:Units/ItemSkinStrings.txt
+    War3.w3mod:_Locales/itIT.w3mod:Units/ItemStrings.txt
+    War3.w3mod:_Locales/itIT.w3mod:Units/NeutralAbilityStrings.txt
+    War3.w3mod:_Locales/itIT.w3mod:Units/NeutralUnitStrings.txt
+    War3.w3mod:_Locales/itIT.w3mod:Units/NightElfAbilityStrings.txt
+    War3.w3mod:_Locales/itIT.w3mod:Units/NightElfUnitStrings.txt
+    War3.w3mod:_Locales/itIT.w3mod:Units/NightElfUpgradeStrings.txt
+    War3.w3mod:_Locales/itIT.w3mod:Units/OrcAbilityStrings.txt
+    War3.w3mod:_Locales/itIT.w3mod:Units/OrcUnitStrings.txt
+    War3.w3mod:_Locales/itIT.w3mod:Units/OrcUpgradeStrings.txt
+    War3.w3mod:_Locales/itIT.w3mod:Units/UndeadAbilityStrings.txt
+    War3.w3mod:_Locales/itIT.w3mod:Units/UndeadUnitStrings.txt
+    War3.w3mod:_Locales/itIT.w3mod:Units/UnitSkinStrings.txt
+    War3.w3mod:_Locales/koKR.w3mod:Doodads/DoodadSkinStrings.txt
+    War3.w3mod:_Locales/koKR.w3mod:Strings/DialogueCreepsBase.fdf
+    War3.w3mod:_Locales/koKR.w3mod:Strings/DialogueHumanBase.fdf
+    War3.w3mod:_Locales/koKR.w3mod:Strings/DialogueUndeadBase.fdf
+    War3.w3mod:_Locales/koKR.w3mod:UI/FrameDef/GlobalStrings.fdf
+    War3.w3mod:_Locales/koKR.w3mod:UI/FrameDef/InfoPanelStrings.fdf
+    War3.w3mod:_Locales/koKR.w3mod:UI/TriggerStrings.txt
+    War3.w3mod:_Locales/koKR.w3mod:UI/WorldEditGameStrings.txt
+    War3.w3mod:_Locales/koKR.w3mod:UI/WorldEditStrings.txt
+    War3.w3mod:_Locales/koKR.w3mod:Units/CampaignAbilityStrings.txt
+    War3.w3mod:_Locales/koKR.w3mod:Units/CampaignUnitStrings.txt
+    War3.w3mod:_Locales/koKR.w3mod:Units/CommandStrings.txt
+    War3.w3mod:_Locales/koKR.w3mod:Units/GeneralKeybindStrings.txt
+    War3.w3mod:_Locales/koKR.w3mod:Units/HumanAbilityStrings.txt
+    War3.w3mod:_Locales/koKR.w3mod:Units/ItemAbilityStrings.txt
+    War3.w3mod:_Locales/koKR.w3mod:Units/ItemSkinStrings.txt
+    War3.w3mod:_Locales/koKR.w3mod:Units/ItemStrings.txt
+    War3.w3mod:_Locales/koKR.w3mod:Units/NeutralAbilityStrings.txt
+    War3.w3mod:_Locales/koKR.w3mod:Units/NeutralUnitStrings.txt
+    War3.w3mod:_Locales/koKR.w3mod:Units/NightElfAbilityStrings.txt
+    War3.w3mod:_Locales/koKR.w3mod:Units/NightElfUnitStrings.txt
+    War3.w3mod:_Locales/koKR.w3mod:Units/NightElfUpgradeStrings.txt
+    War3.w3mod:_Locales/koKR.w3mod:Units/OrcAbilityStrings.txt
+    War3.w3mod:_Locales/koKR.w3mod:Units/OrcUnitStrings.txt
+    War3.w3mod:_Locales/koKR.w3mod:Units/OrcUpgradeStrings.txt
+    War3.w3mod:_Locales/koKR.w3mod:Units/UndeadAbilityStrings.txt
+    War3.w3mod:_Locales/koKR.w3mod:Units/UndeadUnitStrings.txt
+    War3.w3mod:_Locales/koKR.w3mod:Units/UnitSkinStrings.txt
+    War3.w3mod:_Locales/plPL.w3mod:Doodads/DoodadSkinStrings.txt
+    War3.w3mod:_Locales/plPL.w3mod:Strings/DialogueCreepsBase.fdf
+    War3.w3mod:_Locales/plPL.w3mod:Strings/DialogueHumanBase.fdf
+    War3.w3mod:_Locales/plPL.w3mod:Strings/DialogueUndeadBase.fdf
+    War3.w3mod:_Locales/plPL.w3mod:UI/FrameDef/GlobalStrings.fdf
+    War3.w3mod:_Locales/plPL.w3mod:UI/FrameDef/InfoPanelStrings.fdf
+    War3.w3mod:_Locales/plPL.w3mod:UI/TriggerStrings.txt
+    War3.w3mod:_Locales/plPL.w3mod:UI/WorldEditGameStrings.txt
+    War3.w3mod:_Locales/plPL.w3mod:UI/WorldEditStrings.txt
+    War3.w3mod:_Locales/plPL.w3mod:Units/CampaignAbilityStrings.txt
+    War3.w3mod:_Locales/plPL.w3mod:Units/CampaignUnitStrings.txt
+    War3.w3mod:_Locales/plPL.w3mod:Units/GeneralKeybindStrings.txt
+    War3.w3mod:_Locales/plPL.w3mod:Units/HumanAbilityStrings.txt
+    War3.w3mod:_Locales/plPL.w3mod:Units/ItemAbilityStrings.txt
+    War3.w3mod:_Locales/plPL.w3mod:Units/ItemSkinStrings.txt
+    War3.w3mod:_Locales/plPL.w3mod:Units/ItemStrings.txt
+    War3.w3mod:_Locales/plPL.w3mod:Units/NeutralAbilityStrings.txt
+    War3.w3mod:_Locales/plPL.w3mod:Units/NeutralUnitStrings.txt
+    War3.w3mod:_Locales/plPL.w3mod:Units/NightElfAbilityStrings.txt
+    War3.w3mod:_Locales/plPL.w3mod:Units/NightElfUnitStrings.txt
+    War3.w3mod:_Locales/plPL.w3mod:Units/NightElfUpgradeStrings.txt
+    War3.w3mod:_Locales/plPL.w3mod:Units/OrcAbilityStrings.txt
+    War3.w3mod:_Locales/plPL.w3mod:Units/OrcUnitStrings.txt
+    War3.w3mod:_Locales/plPL.w3mod:Units/OrcUpgradeStrings.txt
+    War3.w3mod:_Locales/plPL.w3mod:Units/UndeadAbilityStrings.txt
+    War3.w3mod:_Locales/plPL.w3mod:Units/UndeadUnitStrings.txt
+    War3.w3mod:_Locales/plPL.w3mod:Units/UnitSkinStrings.txt
+    War3.w3mod:_Locales/ptBR.w3mod:Doodads/DoodadSkinStrings.txt
+    War3.w3mod:_Locales/ptBR.w3mod:Strings/DialogueCreepsBase.fdf
+    War3.w3mod:_Locales/ptBR.w3mod:Strings/DialogueHumanBase.fdf
+    War3.w3mod:_Locales/ptBR.w3mod:Strings/DialogueOrcBase.fdf
+    War3.w3mod:_Locales/ptBR.w3mod:Strings/DialogueUndeadBase.fdf
+    War3.w3mod:_Locales/ptBR.w3mod:UI/FrameDef/GlobalStrings.fdf
+    War3.w3mod:_Locales/ptBR.w3mod:UI/FrameDef/InfoPanelStrings.fdf
+    War3.w3mod:_Locales/ptBR.w3mod:UI/TriggerStrings.txt
+    War3.w3mod:_Locales/ptBR.w3mod:UI/WorldEditGameStrings.txt
+    War3.w3mod:_Locales/ptBR.w3mod:UI/WorldEditStrings.txt
+    War3.w3mod:_Locales/ptBR.w3mod:Units/CampaignAbilityStrings.txt
+    War3.w3mod:_Locales/ptBR.w3mod:Units/CampaignUnitStrings.txt
+    War3.w3mod:_Locales/ptBR.w3mod:Units/GeneralKeybindStrings.txt
+    War3.w3mod:_Locales/ptBR.w3mod:Units/HumanAbilityStrings.txt
+    War3.w3mod:_Locales/ptBR.w3mod:Units/ItemAbilityStrings.txt
+    War3.w3mod:_Locales/ptBR.w3mod:Units/ItemStrings.txt
+    War3.w3mod:_Locales/ptBR.w3mod:Units/NeutralAbilityStrings.txt
+    War3.w3mod:_Locales/ptBR.w3mod:Units/NeutralUnitStrings.txt
+    War3.w3mod:_Locales/ptBR.w3mod:Units/NightElfAbilityStrings.txt
+    War3.w3mod:_Locales/ptBR.w3mod:Units/NightElfUnitStrings.txt
+    War3.w3mod:_Locales/ptBR.w3mod:Units/NightElfUpgradeStrings.txt
+    War3.w3mod:_Locales/ptBR.w3mod:Units/OrcAbilityStrings.txt
+    War3.w3mod:_Locales/ptBR.w3mod:Units/OrcUnitStrings.txt
+    War3.w3mod:_Locales/ptBR.w3mod:Units/OrcUpgradeStrings.txt
+    War3.w3mod:_Locales/ptBR.w3mod:Units/UndeadAbilityStrings.txt
+    War3.w3mod:_Locales/ptBR.w3mod:Units/UndeadUnitStrings.txt
+    War3.w3mod:_Locales/ptBR.w3mod:Units/UnitSkinStrings.txt
+    War3.w3mod:_Locales/ruRU.w3mod:Doodads/DoodadSkinStrings.txt
+    War3.w3mod:_Locales/ruRU.w3mod:Strings/DialogueCreepsBase.fdf
+    War3.w3mod:_Locales/ruRU.w3mod:Strings/DialogueHumanBase.fdf
+    War3.w3mod:_Locales/ruRU.w3mod:Strings/DialogueUndeadBase.fdf
+    War3.w3mod:_Locales/ruRU.w3mod:UI/FrameDef/GlobalStrings.fdf
+    War3.w3mod:_Locales/ruRU.w3mod:UI/FrameDef/InfoPanelStrings.fdf
+    War3.w3mod:_Locales/ruRU.w3mod:UI/TriggerStrings.txt
+    War3.w3mod:_Locales/ruRU.w3mod:UI/WorldEditGameStrings.txt
+    War3.w3mod:_Locales/ruRU.w3mod:UI/WorldEditStrings.txt
+    War3.w3mod:_Locales/ruRU.w3mod:Units/CampaignAbilityStrings.txt
+    War3.w3mod:_Locales/ruRU.w3mod:Units/CampaignUnitStrings.txt
+    War3.w3mod:_Locales/ruRU.w3mod:Units/GeneralKeybindStrings.txt
+    War3.w3mod:_Locales/ruRU.w3mod:Units/HumanAbilityStrings.txt
+    War3.w3mod:_Locales/ruRU.w3mod:Units/ItemAbilityStrings.txt
+    War3.w3mod:_Locales/ruRU.w3mod:Units/ItemStrings.txt
+    War3.w3mod:_Locales/ruRU.w3mod:Units/NeutralAbilityStrings.txt
+    War3.w3mod:_Locales/ruRU.w3mod:Units/NeutralUnitStrings.txt
+    War3.w3mod:_Locales/ruRU.w3mod:Units/NightElfAbilityStrings.txt
+    War3.w3mod:_Locales/ruRU.w3mod:Units/NightElfUnitStrings.txt
+    War3.w3mod:_Locales/ruRU.w3mod:Units/NightElfUpgradeStrings.txt
+    War3.w3mod:_Locales/ruRU.w3mod:Units/OrcAbilityStrings.txt
+    War3.w3mod:_Locales/ruRU.w3mod:Units/OrcUnitStrings.txt
+    War3.w3mod:_Locales/ruRU.w3mod:Units/OrcUpgradeStrings.txt
+    War3.w3mod:_Locales/ruRU.w3mod:Units/UndeadAbilityStrings.txt
+    War3.w3mod:_Locales/ruRU.w3mod:Units/UndeadUnitStrings.txt
+    War3.w3mod:_Locales/ruRU.w3mod:Units/UnitSkinStrings.txt
+    War3.w3mod:_Locales/zhCN.w3mod:Doodads/DoodadSkinStrings.txt
+    War3.w3mod:_Locales/zhCN.w3mod:Strings/DialogueCreepsBase.fdf
+    War3.w3mod:_Locales/zhCN.w3mod:Strings/DialogueHumanBase.fdf
+    War3.w3mod:_Locales/zhCN.w3mod:Strings/DialogueUndeadBase.fdf
+    War3.w3mod:_Locales/zhCN.w3mod:UI/FrameDef/GlobalStrings.fdf
+    War3.w3mod:_Locales/zhCN.w3mod:UI/FrameDef/InfoPanelStrings.fdf
+    War3.w3mod:_Locales/zhCN.w3mod:UI/TriggerStrings.txt
+    War3.w3mod:_Locales/zhCN.w3mod:UI/WorldEditGameStrings.txt
+    War3.w3mod:_Locales/zhCN.w3mod:UI/WorldEditStrings.txt
+    War3.w3mod:_Locales/zhCN.w3mod:Units/CampaignAbilityStrings.txt
+    War3.w3mod:_Locales/zhCN.w3mod:Units/CampaignUnitStrings.txt
+    War3.w3mod:_Locales/zhCN.w3mod:Units/GeneralKeybindStrings.txt
+    War3.w3mod:_Locales/zhCN.w3mod:Units/HumanAbilityStrings.txt
+    War3.w3mod:_Locales/zhCN.w3mod:Units/ItemAbilityStrings.txt
+    War3.w3mod:_Locales/zhCN.w3mod:Units/ItemStrings.txt
+    War3.w3mod:_Locales/zhCN.w3mod:Units/NeutralAbilityStrings.txt
+    War3.w3mod:_Locales/zhCN.w3mod:Units/NeutralUnitStrings.txt
+    War3.w3mod:_Locales/zhCN.w3mod:Units/NightElfAbilityStrings.txt
+    War3.w3mod:_Locales/zhCN.w3mod:Units/NightElfUnitStrings.txt
+    War3.w3mod:_Locales/zhCN.w3mod:Units/NightElfUpgradeStrings.txt
+    War3.w3mod:_Locales/zhCN.w3mod:Units/OrcAbilityStrings.txt
+    War3.w3mod:_Locales/zhCN.w3mod:Units/OrcUnitStrings.txt
+    War3.w3mod:_Locales/zhCN.w3mod:Units/OrcUpgradeStrings.txt
+    War3.w3mod:_Locales/zhCN.w3mod:Units/UndeadAbilityStrings.txt
+    War3.w3mod:_Locales/zhCN.w3mod:Units/UndeadUnitStrings.txt
+    War3.w3mod:_Locales/zhCN.w3mod:Units/UnitSkinStrings.txt
+    War3.w3mod:_Locales/zhTW.w3mod:Doodads/DoodadSkinStrings.txt
+    War3.w3mod:_Locales/zhTW.w3mod:Strings/DialogueCreepsBase.fdf
+    War3.w3mod:_Locales/zhTW.w3mod:Strings/DialogueHumanBase.fdf
+    War3.w3mod:_Locales/zhTW.w3mod:Strings/DialogueNightElfBase.fdf
+    War3.w3mod:_Locales/zhTW.w3mod:Strings/DialogueUndeadBase.fdf
+    War3.w3mod:_Locales/zhTW.w3mod:UI/FrameDef/GlobalStrings.fdf
+    War3.w3mod:_Locales/zhTW.w3mod:UI/FrameDef/InfoPanelStrings.fdf
+    War3.w3mod:_Locales/zhTW.w3mod:UI/TriggerStrings.txt
+    War3.w3mod:_Locales/zhTW.w3mod:UI/WorldEditGameStrings.txt
+    War3.w3mod:_Locales/zhTW.w3mod:UI/WorldEditStrings.txt
+    War3.w3mod:_Locales/zhTW.w3mod:Units/CampaignAbilityStrings.txt
+    War3.w3mod:_Locales/zhTW.w3mod:Units/CampaignUnitStrings.txt
+    War3.w3mod:_Locales/zhTW.w3mod:Units/GeneralKeybindStrings.txt
+    War3.w3mod:_Locales/zhTW.w3mod:Units/HumanAbilityStrings.txt
+    War3.w3mod:_Locales/zhTW.w3mod:Units/ItemAbilityStrings.txt
+    War3.w3mod:_Locales/zhTW.w3mod:Units/ItemSkinStrings.txt
+    War3.w3mod:_Locales/zhTW.w3mod:Units/ItemStrings.txt
+    War3.w3mod:_Locales/zhTW.w3mod:Units/NeutralAbilityStrings.txt
+    War3.w3mod:_Locales/zhTW.w3mod:Units/NeutralUnitStrings.txt
+    War3.w3mod:_Locales/zhTW.w3mod:Units/NightElfAbilityStrings.txt
+    War3.w3mod:_Locales/zhTW.w3mod:Units/NightElfUnitStrings.txt
+    War3.w3mod:_Locales/zhTW.w3mod:Units/NightElfUpgradeStrings.txt
+    War3.w3mod:_Locales/zhTW.w3mod:Units/OrcAbilityStrings.txt
+    War3.w3mod:_Locales/zhTW.w3mod:Units/OrcUnitStrings.txt
+    War3.w3mod:_Locales/zhTW.w3mod:Units/OrcUpgradeStrings.txt
+    War3.w3mod:_Locales/zhTW.w3mod:Units/UndeadAbilityStrings.txt
+    War3.w3mod:_Locales/zhTW.w3mod:Units/UndeadUnitStrings.txt
+    War3.w3mod:_Locales/zhTW.w3mod:Units/UnitSkinStrings.txt
+
+==============================================================================
+BUILD PROVENANCE, as Blizzard records it
+==============================================================================
+
+  2.0.4.23745
+    build-name               2.0.4.23745-retail
+    build-comments           RC2
+    build-source-branch      v2.0.3
+    build-source-revision    2fedf8c5964a959f62bd76d30f0b6a25844ef637
+    build-data-branch        v2.0.3
+    build-data-revision      189203
+
+  3.0.0.24268
+    build-name               3.0.0.24268-retail
+    build-comments           RETAIL
+    build-source-branch      v3.0.x
+    build-source-revision    ede670caa6aed0834c055dcc1e21c0d458036b60
+    build-data-branch        v3.0.x
+    build-data-revision      203170

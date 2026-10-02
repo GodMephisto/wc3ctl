@@ -1,0 +1,674 @@
+================================================================================
+WARCRAFT III REFORGED 3.0.0, FULL FINDINGS LOG
+The changelog Blizzard does not publish, reconstructed from Blizzard's own data
+================================================================================
+
+Compiled        2026-09-18
+Builds compared 2.0.4.23745-retail  ->  3.0.0.24268-retail
+Repository      C:\playground\Programming\Wc3_CLI
+Companion repo  C:\playground\Programming\wc3-gamedata-history
+
+Every number here was produced by running something on this machine against
+Blizzard's shipped manifests, their CDN, or a corpus of 256 real custom maps.
+Claims are marked so a reader can tell them apart.
+
+    MEASURED    produced by running something
+    INFERRED    a conclusion drawn from measured facts
+    ASSUMED     believed, not verified, stated so it is not mistaken for fact
+    OPEN        not yet known
+
+
+================================================================================
+PART 0. THE HEADLINE
+================================================================================
+
+Patch 3.0.0 is not primarily a rebalance. It is a very large ADDITION.
+
+    Units/AbilityData.slk     841 -> 1,550 rows,  99 -> 201 columns
+                              709 abilities added, 102 columns added,
+                              and only 5 cells changed on rows that existed
+                              before.
+
+The 102 new columns are the level 5 and level 6 fields (DataA5, DataA6, Cool5,
+Cool6, Cast5, Cast6, Cost5, Cost6, Area5, Area6, BuffID5, BuffID6 and the rest)
+plus two entirely new data slots, DataK and DataL, at all six levels.
+
+MEASURED. That is direct confirmation of the wc3edit community repair number 5,
+which had rested on a single community measurement and appears nowhere in
+Blizzard's patch notes. Blizzard really did extend the base ability table to six
+levels in this patch.
+
+MEASURED. No GUI trigger function was removed. UI/TriggerData.txt went from
+9,967 keys to 10,883, with 916 added, 59 changed, and ZERO removed.
+
+INFERRED. A map that broke in 3.0.0 did not break because something was taken
+away. It broke because something was added underneath it, and the map inherits
+base values it never overrode.
+
+
+================================================================================
+PART 1. HOW THIS WAS OBTAINED, AND A CORRECTION
+================================================================================
+
+THE CORRECTION FIRST. Earlier in this work it was reported that pre-3.0.0 data
+was unreachable and that a before-and-after diff was impossible. That was WRONG.
+The cause is worth recording because it is a trap that reads exactly like a
+finding.
+
+Blizzard's CDN addresses files by ENCODING key. Requests were being made with
+CONTENT keys, which return 403. Because the CURRENT build failed in exactly the
+same way, the failure looked like a protocol limitation rather than an error in
+the request, and a control that agrees with a mistake confirms nothing. The
+control was real and the conclusion drawn from it was not.
+
+THE WORKING CHAIN, all four hops verified.
+
+  1. Build config. The install caches the configuration of the build it
+     replaced. This machine holds 2.0.4.23745 alongside the active 3.0.0.24268.
+       C:\Warcraft III\Data\config\9a\94\9a94ff7d25781db6c09190cd69d52458
+       C:\Warcraft III\Data\config\3a\9d\3a9d8f26806936764d2d9ad526a65e04
+
+  2. Encoding table. Fetched from the CDN by the encoding key in the config,
+     BLTE decoded, and parsed. It maps content key to encoding key.
+       2.0.4  7,665,862 bytes decoded, 119,851 content keys
+       3.0.0  8,846,470 bytes decoded, 138,362 content keys
+     MEASURED. Both downloads matched the byte count the build config declares
+     EXACTLY, carry the BLTE magic, and every chunk md5 verifies.
+
+  3. Root. The root content key resolves through the encoding table to an
+     encoding key, which fetches a plain text file list of the form
+     path|ckey|tags|installpath.
+       2.0.4  16,332,038 bytes, 135,414 paths
+       3.0.0  21,145,250 bytes, 174,908 paths
+     MEASURED. The 174,908 figure independently agrees with the 175,026 names
+     counted through CascLib against the local install, which is the kind of
+     two-route agreement worth having.
+
+  4. Content. Ordinary files are NOT served loose. They live in CDN archives
+     and are reached by a ranged GET using the offset and size in an archive
+     index. The install carries 213 index files in Data\indices.
+
+A PARSING BUG WORTH RECORDING. The encoding table's espec block size is a
+uint40 at byte 17, and the block starts at byte 22. Reading the field one byte
+later parses 91 as 23,394, which puts the page area 53 bytes off. It did not
+error. It landed on plausible looking data and returned a partial table of
+5,200 keys instead of 119,851, with the root key simply absent. Found by
+locating a known content key in the raw bytes and confirming its entry sits at
+an exact multiple of 38 bytes from the page start.
+
+A SECOND ONE, SAME SHAPE. The archive-group index uses a 5 byte offset into a
+virtual concatenation of all archives, while a real archive index uses 4 bytes.
+Feeding a group entry to the fetcher produced an offset of 601,563,851,245 and
+a hash that is not a fetchable file, which answered 403. Restricting the lookup
+to the 190 real archives fixed it. That 601 GB number is meaningless and is NOT
+the size of anything.
+
+MEASURED, the real CDN figures.
+    archives listed in the active CDN config      190
+    stored files across them                      284,300
+    stored, compressed content                    46.6 GB
+    size cap per archive                          exactly 256.0 MB
+    local install Data\data                       32.8 GB across 59 files
+
+
+================================================================================
+PART 2. BUILD PROVENANCE, EVERY HUMAN AUTHORED FIELD BLIZZARD SHIPS
+================================================================================
+
+  field                      2.0.4.23745                3.0.0.24268
+  -------------------------  -------------------------  --------------------------
+  build-name                 2.0.4.23745-retail         3.0.0.24268-retail
+  build-comments             RC2 2.0.4 Hotfix           RETAIL - RC 3.5 LAUNCH BUILD
+  build-source-branch        v2.0.3                     v3.0.x
+  build-source-revision      2fedf8c5964a959f62bd76      ede670caa6aed0834c055dcc
+                             d30f0b6a25844ef637         1e21c0d458036b60
+  build-data-branch          v2.0.3                     v3.0.x
+  build-data-revision        189203                     203170
+  build-status               0                          0
+  build-product              War3                       War3
+  build-playbuild-installer  ngdptool_casc2             ngdptool_casc2
+
+MEASURED. Those are the only human readable values in either config. Everything
+else is a hash or a byte count.
+
+WHAT build-comments IS. It is the label whoever cut the build typed into
+Blizzard's build system. It is NOT a git commit message. 3.0.0 was release
+candidate 3.5 promoted to retail. The build it replaced was the second release
+candidate of a 2.0.4 hotfix.
+
+THE COMMIT MESSAGE DOES NOT EXIST PUBLICLY. build-source-revision is a real 40
+hex git SHA and is the commit 3.0.0 was built from, but the repository is
+private. Two routes were probed, each with a control that worked.
+
+    GitHub commit search for ede670ca...      total_count 0
+      control, Linux initial commit SHA       23,817 hits, so search works
+    Blizzard CDN, config and data and patch   403 on all six attempts
+      control, config 3a9d8f26...             200, so the CDN serves configs
+
+INFERRED. The SHA is published, the message is not, and there is no route from
+one to the other from outside Blizzard.
+
+TWO THINGS MORE USEFUL THAN THE COMMENT.
+
+The branch names show 3.0.0 was cut from v3.0.x while the previous build came
+from v2.0.3, not v2.0.4. So 2.0.4.23745 was a hotfix on the 2.0.3 line and
+3.0.0 is the first build off a genuinely new branch.
+
+build-data-revision moved 189203 to 203170, a gap of 13,967 data revisions.
+That counter tracks asset and data commits separately from source, and it is
+the closest available measure of how much content work landed between the two
+builds. It is consistent with the 22,006 modified files below.
+
+
+================================================================================
+PART 3. THE UPDATE TIMELINE SINCE LAUNCH
+================================================================================
+
+MEASURED, from the modification times of the cached CDN configs and the archive
+sets they list. Each config is a distinct content state.
+
+  2026-04-22 01:19   build config 2.0.4.23745 cached          (install date)
+  2026-09-13 03:00   build config 3.0.0.24268                 launch, 189 archives
+  2026-09-15 03:00   CDN config d2ddc67d                      188 archives
+  2026-09-17 03:03   CDN config 49cd4a7b                      189 archives
+  2026-09-18 00:53   CDN config efe63214, ACTIVE              190 archives
+
+INFERRED. Four content updates in the six days after 3.0.0 launched, roughly one
+every day or two. The chain d2ddc6 then 49cd4a then efe632 is strictly nested,
+each adding exactly one archive.
+
+MEASURED. The launch-day config 795461 holds two archives that no later config
+lists, 0a539812 and ce383392, so those were retired and repacked within days.
+
+MEASURED. 187 archives are common to all four states.
+
+
+================================================================================
+PART 4. FILE LEVEL DIFF, 2.0.4.23745 -> 3.0.0.24268
+================================================================================
+
+  paths in 2.0.4          135,414
+  paths in 3.0.0          174,908
+
+  added       111,932 files    56,371,779,680 bytes
+  removed      72,438 files    28,436,138,785 bytes
+  modified     22,006 files    13,568,665,205 bytes (new side)
+  unchanged    40,970 files
+
+A file counts as unchanged only when its content key is byte identical in both
+roots, so this comparison is exact rather than heuristic.
+
+BY EXTENSION, top entries by files touched.
+
+  ext                added  removed  modified     total
+  .flac              6,401   58,276         0    64,677
+  .ogg              64,010        0         0    64,010
+  .dds              24,655    7,300     5,267    37,222
+  .mdx               6,206    3,279     8,778    18,263
+  .animset_ingame    8,013       31     7,240    15,284
+  .wav                   0    3,525         0     3,525
+  .pkb               1,334        2         6     1,342
+  .blp                 698        0         0       698
+  .txt                   2        3       280       285
+  .png                 209       13         0       222
+  .facefx_ingame       214        0         0       214
+  .w3x                   1        0       160       161
+  .bls                  14        2        63        79
+  .fdf                   2        0        71        73
+  .jpg                   6        0        42        48
+  .mp3                  44        0         0        44
+  .w3m                   0        0        39        39
+  .slk                   3        1        33        37
+
+INFERRED. Most of the churn is an audio format migration, 58,276 .flac and
+3,525 .wav out, 64,010 .ogg in. That accounts for the bulk of the added and
+removed counts and has nothing to do with map behaviour.
+
+THE PART THAT DECIDES BEHAVIOUR IS SMALL AND PRECISE.
+
+ADDED, 7 behaviour files.
+    War3.w3mod:UI/CampaignInfoDLC01.txt
+    War3.w3mod:UI/FrameDef/UI/FullScreenHelperDE.fdf
+    War3.w3mod:UI/FrameDef/UI/StatDetailsPanel.fdf
+    War3.w3mod:UI/SoundInfo/CinematicSounds.slk
+    War3.w3mod:Units/AbilityStatModifiers.txt
+    War3.w3mod:_DE.w3mod:Splats/LightningData.slk
+    War3.w3mod:_DE.w3mod:TerrainArt/Water.slk
+
+REMOVED, 4 behaviour files, all inside the HD2 addon.
+    _Addons/HD2.w3addon/Environment.w3mod:_HD.w3mod:TerrainArt/Water.slk
+    _Addons/HD2.w3addon/.../C.w3mod:Felwood_Diffuse.txt
+    _Addons/HD2.w3addon/.../Q.w3mod:Village Fall_Diffuse.txt
+    _Addons/HD2.w3addon/.../V.w3mod:Village_Diffuse.txt
+
+MODIFIED, 388 behaviour files, including all 33 of these SLK tables.
+    Doodads/DoodadMetaData.slk      Units/AbilityBuffData.slk
+    Doodads/Doodads.slk             Units/AbilityData.slk
+    Splats/UberSplatData.slk        Units/AbilityMetaData.slk
+    TerrainArt/CliffTypes.slk       Units/DestructableData.slk
+    TerrainArt/Terrain.slk          Units/DestructableMetaData.slk
+    TerrainArt/Water.slk            Units/ItemData.slk
+    TerrainArt/Weather.slk          Units/MiscMetaData.slk
+    UI/SkinMetaData.slk             Units/UnitAbilities.slk
+    UI/SoundInfo/ (11 tables)       Units/UnitBalance.slk
+                                    Units/UnitData.slk
+                                    Units/UnitMetaData.slk
+                                    Units/UnitWeapons.slk
+                                    Units/unitUI.slk
+
+
+================================================================================
+PART 5. CONTENT LEVEL DIFF, TABLE BY TABLE
+================================================================================
+
+SLK tables are compared cell by cell, keyed by object id and by field NAME.
+Keying on column index would be wrong, because 3.0.0 inserts columns and an
+index based comparison reports every later field as changed.
+
+--------------------------------------------------------------------------------
+Units/MiscGame.txt          6,203 -> 6,274 bytes, 218 -> 222 lines
+--------------------------------------------------------------------------------
+The gameplay constants file every map inherits from. Exactly four lines added,
+none removed, none changed.
+
+    + AICallForHelp=900
+    +
+    + BaseMeleeCritDamage=150
+    + BaseSpellCritDamage=150
+
+INFERRED. Two new critical strike constants that did not exist before. Any map
+that does not override them now inherits 150. This is the single most likely
+mechanism for a map that behaves wrong without crashing.
+
+The matching new meta rows are in Units/MiscMetaData.slk, which gained exactly
+three, bmcd, bscd and cfha.
+
+--------------------------------------------------------------------------------
+UI/MiscData.txt             10,286 -> 29,776 bytes, 374 -> 770 lines
+--------------------------------------------------------------------------------
+396 lines added, none removed.
+
+    + CriticalStrikeSpellTextColor=255,0,0,255
+    + CriticalStrikeHealTextColor=255,0,255,0
+    + HeightStart, HeightEnd, LinearStart, LinearEnd,
+      MaxLinearDensity, DrawOverSky          (a fog block, five times over)
+    + [A0M1C020_ArthasArrivesPrefetchList] and further prefetch lists
+
+--------------------------------------------------------------------------------
+Units/AbilityData.slk       872,773 -> 3,527,035 bytes
+--------------------------------------------------------------------------------
+    rows            841 -> 1,550      (709 added, 0 removed)
+    columns          99 -> 201        (102 added, 0 removed)
+    cells changed on shared rows and fields     5
+
+    NEW COLUMNS include Area5, Area6, BuffID5, BuffID6, Cast5, Cast6, Cool5,
+    Cool6, Cost5, Cost6, DataA5, DataA6, DataB5, DataB6, DataC5, DataC6,
+    DataD5, DataD6, DataE5, DataE6, DataF5, DataF6, DataG5, DataG6, DataH5,
+    DataH6, DataI5, DataI6, DataJ5, DataJ6, and the wholly new DataK1 through
+    DataK6 and DataL1 through DataL6.
+
+    All five changed cells, in full.
+        ACd2   DataB1   '150'      -> '250'
+        AIi2   code     'Aiab'     -> 'AIab'
+        ANbf   Area4    '90'       -> '60'
+        ANdr   Cost4    '30'       -> '35'
+        Asb1   DataD1   '#VALUE!'  -> '0'
+
+INFERRED. Blizzard rebalanced almost nothing here. They extended the schema.
+
+--------------------------------------------------------------------------------
+Units/AbilityMetaData.slk   232,287 -> 286,781 bytes
+--------------------------------------------------------------------------------
+    rows            777 -> 960       (183 added)
+    cells changed    29
+
+    Ocr1  minVal  '0' -> '-99999'
+        The critical strike chance field can now go negative.
+    The other 28 are useSpecific and notSpecific lists gaining new ability
+    codes, for example Ssk1..Ssk5 gaining AHss, and Uls1..Uls5 gaining AUwc.
+
+--------------------------------------------------------------------------------
+The unit tables, all four moving together
+--------------------------------------------------------------------------------
+    Units/UnitBalance.slk    864 -> 928 rows,  61 -> 61 cols,  1 cell changed
+    Units/UnitWeapons.slk    865 -> 929 rows,  67 -> 67 cols,  0 cells changed
+    Units/UnitData.slk       864 -> 928 rows,  31 -> 31 cols,  0 cells changed
+    Units/UnitAbilities.slk  864 -> 928 rows,   7 ->  7 cols,  0 cells changed
+    Units/unitUI.slk         864 -> 928 rows,  25 -> 28 cols,  0 cells changed
+
+    64 units added across all of them, the same 64 ids each time.
+    The one changed cell is ugol spd '' -> '-'.
+    unitUI gained three columns, forceDisplayHP, occlusion, showAirToGround.
+
+INFERRED. The melee and campaign unit roster was NOT rebalanced. 64 new units
+were added and the existing ones were left alone.
+
+--------------------------------------------------------------------------------
+Units/ItemData.slk          102,961 -> 282,004 bytes
+--------------------------------------------------------------------------------
+    rows            283 -> 648       (365 added)
+    columns          30 -> 35
+    cells changed     0
+    NEW COLUMNS  customTeamColor, equipment, invulnerable, tag, teamColor
+
+INFERRED. The equipment and tag columns are the data side of a new item
+equipment system. See TriggerData below, which confirms it.
+
+--------------------------------------------------------------------------------
+Units/UnitMetaData.slk      70,734 -> 73,808 bytes
+--------------------------------------------------------------------------------
+    rows            273 -> 285       (12 added)
+    new rows  iequ, iinv, itag, itcc, itco, uatg, uepa, uevi, ufhp, umd1,
+              umd2, uoct
+    one changed cell, umdl index '-1' -> '0'
+
+--------------------------------------------------------------------------------
+Doodads and destructables, the new lighting and colour surface
+--------------------------------------------------------------------------------
+    Doodads/Doodads.slk            568 -> 771 rows,  24 -> 31 cols
+        NEW COLUMNS  customTeamColor, decal, decalSort, occlusion, shadowHD,
+                     teamColor, water
+    Doodads/DoodadMetaData.slk      35 ->  42 rows
+        new rows  ddec, decs, doct, dsh2, dtcc, dtco, dwat
+    Units/DestructableData.slk     336 -> 344 rows,  38 -> 41 cols
+        NEW COLUMNS  customTeamColor, occlusion, teamColor
+    Units/DestructableMetaData.slk  53 ->  56 rows
+        new rows  boct, btcc, btco
+
+    Zero cells changed in any of them.
+
+--------------------------------------------------------------------------------
+Terrain and water
+--------------------------------------------------------------------------------
+    TerrainArt/Terrain.slk   177 -> 224 rows  (47 new tilesets)
+    TerrainArt/Water.slk      18 ->  19 rows  (1 new, uSha)
+    UI/SkinMetaData.slk      857 -> 876 rows  (19 new, f333 through f351)
+
+--------------------------------------------------------------------------------
+UI/TriggerData.txt          689,500 -> 751,141 bytes
+--------------------------------------------------------------------------------
+This is the GUI trigger definition file, so it decides what the World Editor
+offers and what a GUI map can call.
+
+    keys        9,967 -> 10,883
+    ADDED         916
+    REMOVED         0
+    changed        59
+
+IMPORTANT. A line diff reports 74 removed lines. That reading is WRONG. Those
+are values that were edited, which a line diff scores as a delete plus an
+insert. Comparing the KEY SET instead gives zero removals. No GUI function,
+type or constant was taken away in 3.0.0.
+
+WHAT WAS ADDED, by theme.
+
+    An item equipment system
+        ITEM_TYPE_EQUIPMENT, loadoutslot, equipmenttype, itemtag
+        EQUIPMENT_TYPE_ANY, NONE, HEAD, CHEST, GLOVES, BOOTS, RING and more
+        EVENT_PLAYER_UNIT_EQUIP_ITEM, EVENT_PLAYER_UNIT_UNEQUIP_ITEM
+        EVENT_UNIT_EQUIP_ITEM, EVENT_UNIT_UNEQUIP_ITEM
+
+    Keyboard input
+        oskeytype, with OSKEY_A through OSKEY_Z and beyond
+
+    Camera
+        CAMERA_FIELD_DEPTH_OF_FIELD_DISTANCE
+        CAMERA_FIELD_DEPTH_OF_FIELD_SCALE
+        CAMERA_FIELD_ZABSOLUTE
+
+    Fog
+        FogStyleVolumetric, FogStyleNewExp1, FogStyleNewExp2
+
+    Unit boolean fields
+        UNIT_BF_SHOW_AIR_TO_GROUND, UNIT_BF_FORCE_DISPLAY_HP
+
+    Editor plumbing
+        TC_DOODAD and TC_LOCATION trigger categories, hideshowoption,
+        disableenableoption, disabledenabledoption, dncmodelstring,
+        abilityuiyesnooption
+
+--------------------------------------------------------------------------------
+Units/UnitSkin.txt          840,725 -> 967,096 bytes
+--------------------------------------------------------------------------------
+    lines  47,501 -> 53,019,  +5,591 / -73 across 1,978 hunks
+    Dominated by per-variant model scale and art entries gaining :de, :hd and
+    :sd suffixes, and fileVerFlags moving from 2 to 6.
+
+--------------------------------------------------------------------------------
+Units/AbilityStatModifiers.txt          NEW IN 3.0.0, 1,198 bytes
+--------------------------------------------------------------------------------
+Not present in 2.0.4 at all. Defines display formatting for ability stat
+modifiers, entries AS01 upward, each with text, valueFormat and tooltip.
+
+--------------------------------------------------------------------------------
+Units/MiscData.txt          unchanged, byte identical
+--------------------------------------------------------------------------------
+
+
+================================================================================
+PART 6. WHAT THIS MEANS FOR A CUSTOM MAP
+================================================================================
+
+RULED OUT, with evidence, for the two maps examined in detail.
+
+  JASS natives    MEASURED. Build 3.0.0.24268 declares 2,778 callable names
+                  across common.j (1,681), blizzard.j (1,056) and cheats.j
+                  (33). Both BleachVsOnepiece15 and Naruto Autobattle have
+                  ZERO unresolved calls.
+  GUI functions   MEASURED. Zero keys removed from TriggerData.txt.
+  Lua             MEASURED. The build ships zero .lua files.
+  Desync          INFERRED. Real, but a multiplayer failure. A map that
+                  misbehaves in single player is not desyncing.
+  SLK crash       MEASURED. The repair finds no work of the crashing kind on
+                  BleachVsOnepiece15.
+  Hidden SLK      MEASURED. 793 of its 850 entries are unnamed and every one
+                  is binary, so nothing is hiding behind a stripped name.
+
+THE REMAINING MECHANISM, now supported rather than merely hypothesised.
+
+INHERITED BASE DATA. A map overrides some fields and inherits the rest.
+
+  MEASURED. BleachVsOnepiece15's war3mapMisc.txt sets only 28 gameplay
+  constants and inherits every other one.
+  MEASURED. Units/MiscGame.txt gained BaseMeleeCritDamage=150 and
+  BaseSpellCritDamage=150, which did not exist in 2.0.4.
+  MEASURED. AbilityData.slk gained 102 columns including levels 5 and 6.
+  MEASURED. AbilityMetaData.slk changed Ocr1 minVal from 0 to -99999.
+
+INFERRED. A map using critical strike, or any ability above level 4, is now
+reading fields that either did not exist or had a different permitted range
+when the map was authored.
+
+OPEN. Which specific field BleachVsOnepiece15 is tripping over. The candidate
+set is now small and named, which it was not before.
+
+HOW COMMON THE CRASHING DEFECT IS, separately.
+  MEASURED. Across 256 real custom maps, 3 carry the 3.0.0 SLK defect and 253
+  are clean. The three showed 2,529, 1,645 and 106 issues.
+  MEASURED. Community repairs 2 (quoted numerics) and 4 (stray FDF comment
+  terminators) fired zero times on any of the 256. They remain fixture-only.
+
+
+================================================================================
+PART 7. TOOLKIT WORK DONE, wc3ctl COMMITS
+================================================================================
+
+  a3630d0  Add Reforged 3.0 SLK map repair
+           741 insertions. The five wc3edit repairs as wc3ctl reforged3 repair.
+
+  b38e0e9  fix(mpq): write an edit into every slot of a name
+           An MPQ addresses a file by name hash AND hash slot locale, so one
+           archive can hold several entries reporting the same name. Load took
+           the first and Save wrote under Neutral, so edits silently reverted
+           while every counter reported success. Found on Naruto Autobattle,
+           which reported 973 button positions fixed and still had 973 after
+           reload. Nine names duplicated, three pairs genuinely different
+           payloads, duplicate slot carrying locale 0xFF000000 as a protection
+           trick. Reaches 25 call sites across 12 files.
+
+  2de0360  test: ground the 3.0.0 repair rules in game data
+           Verified the level 5 and 6 rule against the shipped abilitydata.slk,
+           and confirmed a Blizzard-authored 3.0.0 map round-trips
+           byte-faithfully with war3map.doo still W3do v8 sub 11.
+
+  40b0a81  fix(imports): do not count engine data as imports
+           Two defects found on Blizzard's own shipped maps. New 3.0.0 files
+           were reported as author imports, and war3map.imp separator spelling
+           differed from the archive. 14 and 15 phantom rows on two maps.
+
+  ede8653  test: check the repair is not blind on protection
+  32e8c79  test: check a map against the build's natives
+  8b3ef7c  feat(gamedata): snapshot game data for diffing
+           wc3ctl gamedata snapshot writes the 594 files and 30.6 MB that
+           decide behaviour, out of roughly 175,000 stored files.
+  552355b  test: find the prior build config in the install
+
+  History repo
+  813dd0c  Build 3.0.0.24268       596 files, 2,387,524 insertions
+  4b0b819  Add build-info collector and document collecting older builds
+
+
+================================================================================
+PART 8. MEASUREMENT ERRORS MADE AND CORRECTED
+================================================================================
+
+Recorded because each produced a confident wrong answer that read like a
+finding, and the corrections are worth more than the original claims were.
+
+ 1. REPORTED PRE-3.0.0 DATA AS UNRECOVERABLE. Wrong. Requests used content
+    keys where the CDN wants encoding keys. The current build failed
+    identically, so the error looked like a protocol limit. A control that
+    agrees with your mistake confirms nothing.
+
+ 2. REPORTED 74 REMOVED LINES FROM TriggerData.txt. Wrong. Those were edits,
+    which a line diff scores as delete plus insert. A key-set comparison gives
+    zero removals. This nearly became "3.0.0 removed 64 GUI functions".
+
+ 3. ENCODING PARSER READ espec_size AT THE WRONG OFFSET. Returned 5,200 keys
+    instead of 119,851 with no error, and the root key simply absent.
+
+ 4. ARCHIVE LOOKUP INCLUDED THE ARCHIVE-GROUP INDEX. Produced a 601 GB offset
+    and a 403. That number is not the size of anything.
+
+ 5. WRONGLY FLAGGED CATASTROPHIC DATA LOSS. 105.3 MB to 71.9 MB after repair
+    was recompression. Uncompressed content GREW by 1.15 MB.
+
+ 6. MPQ FIX ATTEMPT TWO FILTERED ON hash.IsAvailable, which excludes exactly
+    the odd locale slot, so nothing changed.
+
+ 7. A VACUOUS TEST. A hermetic duplicate-entry test passed on broken code,
+    because a reflection-seeded twin does not survive SaveToBytes.
+
+ 8. NATIVE PROBE, TWO ERRORS. A line-anchored regex reported a 4.5 MB script
+    defined 0 functions, because obfuscators strip newlines. Then two-pass
+    comment-and-string stripping ate the closing quote of any literal holding
+    a double slash, swallowed 67% of the script, and reported 54 real function
+    definitions as missing natives. The tell was 67% against 11% on a
+    comparable map.
+
+ 9. IMPORTS FIX INCOMPLETE. Filtering only the archive side turned 13 rows
+    from wrong-kind into wrong-and-missing.
+
+10. COLLECTOR SCRIPT assumed drive letters and crashed on an unmounted D.
+
+
+================================================================================
+PART 9. PERFORMANCE, AND HOW TO RUN IT FAST
+================================================================================
+
+MEASURED, the whole progression on the same work.
+
+    first version      timed out at 540s having finished 4 of 24 files
+    plus cache and cell diff     60.0s for all 75 core behaviour files
+    fully structural             4.33s for all 75
+
+Three causes, and only one of them was the network.
+
+ 1. difflib.SequenceMatcher was the whole problem, and it was ALSO WRONG. It
+    scores an edited value as a delete plus an insert, so on UI/TriggerData.txt
+    it reported 74 removed lines where the true answer is zero. On
+    Units/UnitSkin.txt it took 21.8 seconds by itself, which was 60% of the
+    entire run.
+
+    Every file in this build has structure, so use it. A key set comparison is
+    one hashing pass and it answers the question actually being asked, which is
+    what was added, removed or changed. It is both linear and more correct.
+
+        .slk                  cell diff keyed by object id and field name
+        .txt .fdf .ini        section and key diff
+        .j .lua .ai           function level diff, body hashed
+        anything else         line multiset
+
+ 2. Every run re-read 40 MB of archive indices and re-decoded two multi-megabyte
+    encoding tables to rebuild maps that cannot change for a fixed build. Built
+    once and cached now, 49.3 MB.
+
+ 3. Files were fetched one ranged request at a time. Issued 32 at a time now.
+
+MEASURED, the current run.
+    cold build of the cache      3.77s  (indices 0.59s, encoding and root 2.32s,
+                                         write 0.84s)
+    warm cache load              0.41s
+    150 ranged fetches           1.21s
+    all 75 structural diffs      2.71s
+    TOTAL warm                   4.33s
+
+MEASURED, and worth stating because it inverts the obvious guess. Once nothing
+is quadratic, parallelism barely matters. Serial diffing is 1.85s and the
+process pool is 1.66s, a saving of 0.19s. The algorithm was the entire win and
+the cores were almost irrelevant.
+
+WHAT THE STRUCTURAL DIFF FOUND THAT THE LINE DIFF HID. Real removals, which a
+line diff buried inside its delete-plus-insert churn.
+    110  Units/UnitSkin.txt          27  Doodads/DoodadSkins.txt
+     23  Units/DestructableSkin.txt  21  UI/WorldEditLayout.txt
+      9  UI/FrameDef/UI/ObserverSimpleInfoPanel.fdf
+      4  UI/FrameDef/UI/ConsoleUI.fdf
+
+COVERAGE. The content diff now covers EVERY changed behaviour file, 388
+modified (75 core plus 313 locale string tables), 7 added and 4 removed, not a
+hand-picked subset.
+
+Scripts, copied into docs/reforged-3.0.0-evidence/.
+    tact.py        build config, BLTE, encoding table, root
+    archidx.py     archive indices, ekey to archive and byte range
+    fastcache.py   pickled maps plus parallel fetch
+    slkdiff.py     cell level SLK diff
+    structdiff.py  section, function and line-multiset diffs
+    turbo.py       the whole behaviour changelog in 4.33s
+    bench.py       serial against process pool
+    diff_builds.py file level diff of two builds
+
+
+================================================================================
+PART 10. WHAT IS STILL OPEN
+================================================================================
+
+ 1. BleachVsOnepiece15's exact fault. The candidate set is now named and small,
+    being the new crit constants, the level 5 and 6 ability columns, and the
+    Ocr1 minVal range change. Not yet pinned to one field.
+
+ 2. war3map.w3l record layout. Magic W3L! version 3. Present in 0 of 256 user
+    maps and in 1 of 465 shipped maps, and that instance is 22 bytes, header
+    only, no lights placed. Unknown files are preserved raw, so they are
+    carried rather than lost, but cannot be read or edited.
+
+ 3. Community repairs 2 and 4 remain unproven against real data.
+
+ 4. Three maps fail the byte-faithful roundtrip check. They are the same
+    duplicate-slot maps as the MPQ bug, so very likely the same root cause.
+
+ 5. StormLib locale lookup order when two slots hold one name. Writing both
+    sidesteps the question.
+
+ 6. Doodad pitch, roll, tint and light are untested, because the only
+    3.0.0-authored map available sets none of them.
+
+ 7. The TACT reader lives in the scratchpad. Folding it into wc3ctl as a real
+    verb would make every future patch diffable with one command rather than
+    a pile of scripts.
+
+
+================================================================================
+END
+================================================================================

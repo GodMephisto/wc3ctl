@@ -1,0 +1,2342 @@
+  cache load         0.41s
+==============================================================================
+EVERY CHANGED BEHAVIOUR FILE, 2.0.4.23745 -> 3.0.0.24268
+==============================================================================
+  modified 388  (core 75, locale 313)
+  added 7   removed 4
+
+==============================================================================
+War3.w3mod:Collection/Collection.json
+==============================================================================
+  bytes       87,370 -> 88,070
+  parsed as   line multiset
+  entries     3,499 -> 3,527
+  ADDED       28
+  REMOVED     0
+  changed     0
+  --- ADDED ---
+            "criteria": "FREE",
+            "criteria": "FREE",
+            "description": "COLLECTION_PORTRAIT_208_DESC",
+            "description": "COLLECTION_PORTRAIT_209_DESC",
+            "group": 9
+            "group": 9
+            "icon": "",
+            "icon": "",
+            "id": "p208",
+            "id": "p209",
+            "name": "COLLECTION_PORTRAIT_208_NAME",
+            "name": "COLLECTION_PORTRAIT_209_NAME",
+            "portrait": "p208",
+            "portrait": "p209",
+            "race": 0,
+            "race": 0,
+            "section": "portraits"
+            "sectionGroupId": 9,
+            "stringId": "COLLECTIONS_FORSAKEN_KINGDOM_PORTRAITS",
+            "visibility": 1,
+            "visibility": 1,
+            //Forsaken kingdom
+          {
+          {
+          {
+      ... and 3 more
+
+==============================================================================
+War3.w3mod:CustomKeys.txt
+==============================================================================
+  bytes       42,200 -> 49,516
+  parsed as   section and key
+  entries     1,236 -> 1,447
+  ADDED       211
+  REMOVED     0
+  changed     0
+  --- ADDED ---
+      [AHa1] Hotkey = E
+      [AHa1] Researchhotkey = E
+      [AHa2] Hotkey = E
+      [AHa2] Researchhotkey = E
+      [AHa3] Hotkey = E
+      [AHa3] Researchhotkey = E
+      [AHal] Hotkey = R
+      [AHal] Researchhotkey = R
+      [AHap] Hotkey = W
+      [AHap] Researchhotkey = W
+      [AHas] Hotkey = E
+      [AHas] Researchhotkey = E
+      [AHb1] Hotkey = W
+      [AHb1] Researchhotkey = W
+      [AHb2] Hotkey = W
+      [AHb2] Researchhotkey = W
+      [AHb3] Hotkey = W
+      [AHb3] Researchhotkey = W
+      [AHbd] Hotkey = W
+      [AHbd] Researchhotkey = W
+      [AHc1] Hotkey = E
+      [AHc1] Researchhotkey = E
+      [AHc2] Hotkey = E
+      [AHc2] Researchhotkey = E
+      [AHc3] Hotkey = E
+      ... and 186 more
+
+==============================================================================
+War3.w3mod:Doodads/DoodadMetaData.slk
+==============================================================================
+  bytes       7,946 -> 9,409
+  rows        35 -> 42
+  columns     19 -> 19
+  rows added  7
+  rows gone   0
+  cells changed on shared rows and fields  0
+  new rows: ddec, decs, doct, dsh2, dtcc, dtco, dwat
+
+==============================================================================
+War3.w3mod:Doodads/DoodadSkins.txt
+==============================================================================
+  bytes       309,824 -> 419,081
+  parsed as   section and key
+  entries     15,474 -> 20,956
+  ADDED       5,509
+  REMOVED     27
+  changed     12
+  --- ADDED ---
+      [APms] InBeta = 1
+      [APms] MMBlue = 0
+      [APms] MMGreen = 0
+      [APms] MMRed = 0
+      [APms] Name = WESTRING_DOOD_APMS
+      [APms] canPlaceRandScale = 1
+      [APms] comment = Mushrooms
+      [APms] defScale = 1.000
+      [APms] defScale:hd = 0.65
+      [APms] file = Doodads\Ashenvale\Plants\AshenShrooms\AshenShrooms
+      [APms] fixedRot = -1
+      [APms] floats = 0
+      [APms] maxScale = 1.200
+      [APms] minScale = 0.800
+      [APms] numVar = 4
+      [APms] onCliffs = 1
+      [APms] onWater = 1
+      [APms] selSize = 0
+      [APms] shadow = 0
+      [APms] skinnableID = APms
+      [APms] useMMColor = 0
+      [APms] version = 0
+      [APms] vertB = 255,255,255,255,255,255,255,255,255,255
+      [APms] vertG = 255,255,255,255,255,255,255,255,255,255
+      [APms] vertR = 255,255,255,255,255,255,255,255,255,255
+      ... and 5,484 more
+  --- REMOVED ---
+      [] InBeta = 1
+      [] MMBlue = 0
+      [] MMGreen = 0
+      [] MMRed = 0
+      [] Name = WESTRING_DOOD_APMS
+      [] canPlaceRandScale = 1
+      [] comment = Mushrooms
+      [] defScale = 1.000
+      [] defScale:hd = 0.65
+      [] file = Doodads\Ashenvale\Plants\AshenShrooms\AshenShrooms
+      [] fixedRot = -1
+      [] floats = 0
+      [] maxScale = 1.200
+      [] minScale = 0.800
+      [] numVar = 4
+      [] onCliffs = 1
+      [] onWater = 1
+      [] selSize = 0
+      [] shadow = 0
+      [] skinnableID = APms
+      [] useMMColor = 0
+      [] version = 0
+      [] vertB = 255,255,255,255,255,255,255,255,255,255
+      [] vertG = 255,255,255,255,255,255,255,255,255,255
+      [] vertR = 255,255,255,255,255,255,255,255,255,255
+      ... and 2 more
+  --- CHANGED ---
+      [LOca] numVar =   '1' -> '4'
+      [LOic] numVar =   '2' -> '4'
+      [LOlp] numVar =   '2' -> '6'
+      [LPrs] numVar =   '4' -> '5'
+      [LPwh] numVar =   '1' -> '5'
+      [NWfp] numVar =   '1' -> '2'
+      [SLt0] numVar =   '1' -> '2'
+      [VSvb] numVar =   '3' -> '9'
+      [YOlp] numVar =   '1' -> '2'
+      [YSll] numVar =   '1' -> '2'
+      [ZOba] numVar =   '1' -> '3'
+      [ZPsh] numVar =   '3' -> '4'
+
+==============================================================================
+War3.w3mod:Doodads/DoodadSkinsAddons.txt
+==============================================================================
+  bytes       16,470 -> 19,022
+  parsed as   section and key
+  entries     568 -> 655
+  ADDED       87
+  REMOVED     0
+  changed     0
+  --- ADDED ---
+      [EOcr] addon = Environment
+      [EOgr] addon = Environment
+      [EOmh] addon = Environment
+      [EOps] addon = Environment
+      [EOsk] addon = Environment
+      [EOst] addon = Environment
+      [LCap] addon = Environment
+      [LCar] addon = Environment
+      [LCcb] addon = Environment
+      [LCct] addon = Environment
+      [LCpe] addon = Environment
+      [LCpi] addon = Environment
+      [LCps] addon = Environment
+      [LCpt] addon = Environment
+      [LCsb] addon = Environment
+      [LCsd] addon = Environment
+      [LCss] addon = Environment
+      [LCst] addon = Environment
+      [LCsx] addon = Environment
+      [LCsy] addon = Environment
+      [LCwi] addon = Environment
+      [LCws] addon = Environment
+      [LCwt] addon = Environment
+      [LCwv] addon = Environment
+      [UCal] addon = Environment
+      ... and 62 more
+
+==============================================================================
+War3.w3mod:Doodads/Doodads.slk
+==============================================================================
+  bytes       170,116 -> 288,266
+  rows        568 -> 771
+  columns     24 -> 31
+  rows added  203
+  rows gone   0
+  cells changed on shared rows and fields  0
+  NEW COLUMNS (7): customTeamColor, decal, decalSort, occlusion, shadowHD, teamColor, water
+  new rows: CNuc, CNut, EOcr, EOgr, EOmh, EOsk, EOst, FSsb, GLap, GLcb, GLsg, LCap, LCar, LCb1, LCb2, LCb3, LCb4, LCb5, LCb6, LCb7, LCb8, LCcb, LCcd, LCcp, LCcr, LCct, LCet, LChf, LClb, LClt ... +173
+
+==============================================================================
+War3.w3mod:FileAliases.json
+==============================================================================
+  bytes       38,903 -> 38,770
+  parsed as   line multiset
+  entries     334 -> 333
+  ADDED       0
+  REMOVED     1
+  changed     0
+  --- REMOVED ---
+          {"src":"Units/Undead/HeroLichCIN/HeroLichCIN_V1.mdx", "dest":"Units/Undead/HeroLich/HeroLichCIN_V1.mdx", "assetType": "Model"},
+
+==============================================================================
+War3.w3mod:PostProcessingConfig.txt
+==============================================================================
+  bytes       829 -> 842
+  parsed as   section and key
+  entries     32 -> 33
+  ADDED       1
+  REMOVED     0
+  changed     7
+  --- ADDED ---
+      [Texture] NormalMapStrength = 0.8
+  --- CHANGED ---
+      [ASSAO] DetailShadowStrength =   '0.000000' -> '1.000000'
+      [ASSAO] Enabled =   'true' -> '0'
+      [ASSAO] FadeOutFrom =   '4000.000000' -> '0.000000'
+      [ASSAO] FadeOutTo =   '5000.000000' -> '211.000000'
+      [ASSAO] HorizonAngleThreshold =   '0.500000' -> '0.18'
+      [ASSAO] Radius =   '37.040001' -> '3.54'
+      [Bloom] Enabled =   'true' -> '0'
+
+==============================================================================
+War3.w3mod:Scripts/Blizzard.j
+==============================================================================
+  bytes       481,865 -> 506,503
+  parsed as   functions
+  entries     985 -> 1,056
+  ADDED       71
+  REMOVED     0
+  changed     13
+  --- ADDED ---
+      AllowHeroGlowOnAllUnitsBJ
+      AllowHeroGlowOnUnitBJ
+      BlzAllUnitsEnableAurasBJ
+      BlzAllUnitsEnableAurasBJEnum
+      BlzClearHDWaterColorOverrideBJ
+      BlzEnableAuras
+      BlzSetHDWaterColorBJ
+      BlzSetHDWaterColorOverrideBJ
+      BlzSetHDWaterEdgeSoftnessBJ
+      BlzSetHDWaterEmissivityBJ
+      BlzSetHDWaterEnvMapStrengthBJ
+      BlzSetHDWaterMaxOpacityBJ
+      BlzSetHDWaterMinOpacityBJ
+      BlzSetHDWaterReflectivityBJ
+      BlzSetHDWaterVertexDisplacementBJ
+      BlzSetHDWaterWaveStrengthBJ
+      BlzSetSingleDoodadAnimationBJ
+      BlzSetSingleDoodadColorBJ
+      BlzSetTerrainFogColorBJ
+      BlzSetTerrainFogDensityBJ
+      BlzSetTerrainFogDrawOverSkyBJ
+      BlzSetTerrainFogHeightEndBJ
+      BlzSetTerrainFogHeightStartBJ
+      BlzSetTerrainFogLinearEndBJ
+      BlzSetTerrainFogLinearStartBJ
+      ... and 46 more
+  --- CHANGED ---
+      AddUnitAnimationPropertiesBJ  'c084caebcf37bf6621dad947be6c3ec3' -> 'e5c449f3bb9596b26a6fdf27bc984156'
+      BJDebugMsg  '374a99066822b0c94419d749338e3308' -> '0b8c5d053be8f656c0bfe8f76ff5fdf9'
+      BlzSetUnitWeaponStringFieldBJ  '73401f8f86e0bf1d4a363153a9e5341d' -> '390badf7c155cc77d21e5bfd819a0227'
+      CustomDefeatDialogBJ  'c4eddbef259b9234077ada06a6777488' -> 'a87b71c6693d1d8d0f3276497246bdd3'
+      GetLastCreatedEffectBJ  '7e8b11be8ef0ae0a3d906126ec9f6a1a' -> 'f9a8eb02a5b7541ee2e957fc2a0dd4bf'
+      MeleeStartingHeroLimit  '4eb297c5fa13e0264c2ca70c8ffec075' -> '61b8389fcd31385638edd2b4fa7b42de'
+      QueueUnitAnimationBJ  '82a59181cf5c87a79f05282a98d26eb7' -> '95df157b795c92fbe8e0cdb0e1fad7a0'
+      SetCampaignAvailableBJ  '9e39fee8fe43c37a8eae26becedac991' -> '6983d31b2d95b8f29b26220e5656743e'
+      SetCampaignMenuRaceBJ  '7752da0969890b9f133ed61ccd42a621' -> '9aa457953b9261ec621df17a2835f613'
+      SetCinematicAvailableBJ  '63ea08b49ba1b8bc6887fd51854507ec' -> '326d778a0b4389c5c398589bd00be257'
+      UnitItemInSlotBJ  '6272bb1302e1e5bc710a4e73842821f8' -> '51e200ac74ade040f6ecc27dd93544b2'
+      UnitRemoveItemFromSlotSwapped  '3a82af260b0ca8323dfd159489e43315' -> '8df2ab1490d3202d2797b8d28e802061'
+      UnitRemoveItemSwapped  '8193c64c13e259a6f157cab37b2690ee' -> 'e58adf508cb3265ce9f871a66d4deaf0'
+
+==============================================================================
+War3.w3mod:Scripts/common.j
+==============================================================================
+  bytes       361,478 -> 382,346
+  parsed as   functions
+  entries     1,253 -> 1,384
+  ADDED       131
+  REMOVED     0
+  changed     19
+  --- ADDED ---
+      AddCameraBlocker
+      AllowHeroGlowOnUnit
+      BlzAdjustUnitAbilityCooldownPercent
+      BlzAdjustUnitAbilityCooldownRemaining
+      BlzCameraGetCameraType
+      BlzCameraSetCameraType
+      BlzCameraSetupGetCameraType
+      BlzCameraSetupSetCameraType
+      BlzCreateDeadDestructablePitchRoll
+      BlzCreateDeadDestructablePitchRollWithColor
+      BlzCreateDeadDestructableWithColor
+      BlzCreateDeadDestructableWithSkinColor
+      BlzCreateDeadDestructableWithSkinPitchRoll
+      BlzCreateDeadDestructableWithSkinPitchRollColor
+      BlzCreateDeadDestructableZPitchRoll
+      BlzCreateDeadDestructableZPitchRollWithColor
+      BlzCreateDeadDestructableZWithColor
+      BlzCreateDeadDestructableZWithSkinColor
+      BlzCreateDeadDestructableZWithSkinPitchRoll
+      BlzCreateDeadDestructableZWithSkinPitchRollColor
+      BlzCreateDestructablePitchRoll
+      BlzCreateDestructablePitchRollWithColor
+      BlzCreateDestructableWithColor
+      BlzCreateDestructableWithSkinColor
+      BlzCreateDestructableWithSkinPitchRoll
+      ... and 106 more
+  --- CHANGED ---
+      AddUnitAnimationProperties  '91b4fdf053bf40b3e8c1f8b991d99ff1' -> '57c4ccc61c3430461f1f2572c013b72c'
+      BlzCameraSetupGetLabel  '1bfca5eddfa46a437f72590b8a3034d3' -> '9f524890241eb26053af29bccc1db597'
+      BlzUnitForceStopOrder  '27f3e0c184a6f74e27366c3a40181769' -> '002e844fea7cfede16db0029f7bf6605'
+      GetCameraMargin  '45765a7d07dd354993d28f3ad91a59f4' -> 'b031053725eb3839e4db7af2bd1af00b'
+      GetTerrainCliffLevel  '7f681911c22c6136d51af7668d4ee22f' -> '1e8d1621b2dc1631fcfe48b181c79114'
+      GetTerrainType  '2f99dd94a5d80147c07e22f05050b848' -> '88024c5bf046a8ea1c89b4ce501af14a'
+      GetTerrainVariance  '0ec34d0b4e4ecd73ffc1e80a1d6c34c5' -> '397c6ce103c80156bcf36e21a4258e30'
+      IsTerrainPathable  '7b5e25c599441854e4eae4ca381a6cde' -> '16143d74259f260183bf8c89b21c8aca'
+      SetCameraOrientController  '81a438c103e23f0d09881718b2608386' -> '2c791f740d48023f9050056a4b52cea1'
+      SetDoodadAnimation  '494af7d0a913375c61bc513bba2240d3' -> '15f463e57b119cca1a4293c4a1a320a0'
+      SetDoodadAnimationRect  '0500a38e6ecc1dd3727626807b5d1606' -> 'ced074420789750ac64d5bd671555774'
+      SetItemUserData  '442753d90b1d3ff979b777d973f2ed6c' -> '88e2722df92fd70890efab997dab545a'
+      SetTerrainPathable  'c1519e8add28763e7ef719582c4dab82' -> 'c9ebf644ab7633b47de548b77c0f2b62'
+      SetTerrainType  'c88ebe2ff64f82948e17774d782240b3' -> 'be72991bccf81f66d996db514b753e56'
+      SetWaterBaseColor  'c7a005221b7ebb08d14db02bb7441cd3' -> '196a3eb8de0a47ef6a00328fc45556ac'
+      SetWaterDeforms  'f26cc64ba21e1a798506c9b215c23780' -> '5c025e15a056523aa1ca678865678e3c'
+      TriggerRegisterPlayerUnitEvent  '648f8908ac79d220fbc1a095a37414b4' -> 'dca4468020d9fb07b40338ca261cdcc3'
+      TriggerSyncReady  '98762ffbc7d797a286e36ffd4a6e4bdd' -> '8fa4310029bd1a6447bc16b0ea5c4c4d'
+      UnitInventorySize  'e71954c3044cd649689d8dffa3751b7c' -> '728c45b4ec48cdfc6675400413ad18e5'
+
+==============================================================================
+War3.w3mod:Splats/UberSplatData.slk
+==============================================================================
+  bytes       17,926 -> 19,260
+  rows        53 -> 57
+  columns     24 -> 24
+  rows added  4
+  rows gone   0
+  cells changed on shared rows and fields  4
+  new rows: USC0, USC1, USC2, USC3
+  sample of changed cells
+      HFS1         BlendMode            '1' -> '0'
+      HFS2         BlendMode            '1' -> '0'
+      NDGS         BlendMode            '1' -> '0'
+      THND         BlendMode            '1' -> '0'
+
+==============================================================================
+War3.w3mod:TerrainArt/CliffTypes.slk
+==============================================================================
+  bytes       9,213 -> 11,458
+  rows        36 -> 45
+  columns     13 -> 13
+  rows added  9
+  rows gone   0
+  cells changed on shared rows and fields  0
+  new rows: CMap, CPdi, CPsq, CRd2, CRdi, Ced2, Cedi, Cudi, Cusq
+
+==============================================================================
+War3.w3mod:TerrainArt/Terrain.slk
+==============================================================================
+  bytes       50,162 -> 63,867
+  rows        177 -> 224
+  columns     14 -> 14
+  rows added  47
+  rows gone   0
+  cells changed on shared rows and fields  0
+  new rows: Maph, Mcha, Msco, Pblm, Pbtl, Pdrt, Pdtr, Pgsb, Phdg, Prtl, Psqd, Pwmb, RC11, RC12, RC13, RCt0, RCt1, RCt2, RCt3, RCt4, RCt5, RCt6, RCt7, RCt8, RCt9, eC11, eC12, eC13, eCt0, eCt1 ... +17
+
+==============================================================================
+War3.w3mod:TerrainArt/Water.slk
+==============================================================================
+  bytes       12,863 -> 13,531
+  rows        18 -> 19
+  columns     51 -> 51
+  rows added  1
+  rows gone   0
+  cells changed on shared rows and fields  0
+  new rows: uSha
+
+==============================================================================
+War3.w3mod:TerrainArt/Weather.slk
+==============================================================================
+  bytes       13,487 -> 30,826
+  rows        21 -> 48
+  columns     47 -> 47
+  rows added  27
+  rows gone   0
+  cells changed on shared rows and fields  17
+  new rows: MEbs, MEgs, MEhs, MErs, RAhs, RAls, RLhs, RLls, VWbb, VWbr, VWeb, VWee, VWeg, VWeo, VWep, VWgl, VWgr, VWpl, VWpp, VWra, VWrb, VWrc, VWrl, VWro, VWrp, VWsf, VWsr
+  sample of changed cells
+      FDbh         modelFile            '' -> 'Environment\\Weather\\DungeonBlueFogHeavy.mdl'
+      FDbl         modelFile            '' -> 'Environment\\Weather\\DungeonBlueFogLight.mdl'
+      FDgh         modelFile            '' -> 'Environment\\Weather\\DungeonGreenFogHeavy.mdl'
+      FDgl         modelFile            '' -> 'Environment\\Weather\\DungeonGreenFogLight.mdl'
+      FDrh         modelFile            '' -> 'Environment\\Weather\\DungeonRedFogHeavy.mdl'
+      FDrl         modelFile            '' -> 'Environment\\Weather\\DungeonRedFogLight.mdl'
+      FDwh         modelFile            'Environment\\Weather\\DegeonWhiteFogHeavy.mdl' -> 'Environment\\Weather\\DungeonWhiteFogHeavy.mdl'
+      FDwl         modelFile            'Environment\\Weather\\DegeonWhiteFogLight.mdl' -> 'Environment\\Weather\\DungeonWhiteFogLight.mdl'
+      MEds         modelFile            '' -> 'Environment\\Weather\\EnergyFieldArcane.mdl'
+      RAhr         alphaStart           '255' -> '0'
+      RAhr         modelFile            'Environment\\Weather\\RainHeavy.mdl' -> 'Environment\\Weather\\AshenvaleRainHeavy.mdl'
+      RAlr         alphaStart           '255' -> '0'
+      RAlr         modelFile            'Environment\\Weather\\RainLight.mdl' -> 'Environment\\Weather\\AshenvaleRainLight.mdl'
+      SNbs         modelFile            '' -> 'Environment\\Weather\\Blizzard.mdl'
+      WNcw         modelFile            '' -> 'Environment\\Weather\\Wind.mdl'
+      WOcw         modelFile            '' -> 'Environment\\Weather\\OutlandWind.mdl'
+      WOlw         modelFile            '' -> 'Environment\\Weather\\OutlandWindLight.mdl'
+
+==============================================================================
+War3.w3mod:UI/CampaignInfoClassic.txt
+==============================================================================
+  bytes       12,574 -> 14,320
+  parsed as   section and key
+  entries     216 -> 279
+  ADDED       63
+  REMOVED     0
+  changed     1
+  --- ADDED ---
+      [Human] BackgroundFogDrawOverSky = 0
+      [Human] BackgroundFogHeightEnd = 0
+      [Human] BackgroundFogHeightStart = 0
+      [Human] BackgroundFogLinearEnd = 10000
+      [Human] BackgroundFogLinearStart = 10000
+      [Human] BackgroundFogMaxLinearDensity = 1
+      [Human] Expansion = "ROC"
+      [HumanEx] BackgroundFogDrawOverSky = 0
+      [HumanEx] BackgroundFogHeightEnd = 0
+      [HumanEx] BackgroundFogHeightStart = 0
+      [HumanEx] BackgroundFogLinearEnd = 10000
+      [HumanEx] BackgroundFogLinearStart = 10000
+      [HumanEx] BackgroundFogMaxLinearDensity = 1
+      [HumanEx] Expansion = "TFT"
+      [NightElf] BackgroundFogDrawOverSky = 0
+      [NightElf] BackgroundFogHeightEnd = 0
+      [NightElf] BackgroundFogHeightStart = 0
+      [NightElf] BackgroundFogLinearEnd = 10000
+      [NightElf] BackgroundFogLinearStart = 10000
+      [NightElf] BackgroundFogMaxLinearDensity = 1
+      [NightElf] Expansion = "ROC"
+      [NightElfEx] BackgroundFogDrawOverSky = 0
+      [NightElfEx] BackgroundFogHeightEnd = 0
+      [NightElfEx] BackgroundFogHeightStart = 0
+      [NightElfEx] BackgroundFogLinearEnd = 10000
+      ... and 38 more
+  --- CHANGED ---
+      [NightElfEx] DefaultOpen =   '0' -> '1'
+
+==============================================================================
+War3.w3mod:UI/CampaignInfoReforged.txt
+==============================================================================
+  bytes       12,887 -> 14,633
+  parsed as   section and key
+  entries     219 -> 282
+  ADDED       63
+  REMOVED     0
+  changed     2
+  --- ADDED ---
+      [Human] BackgroundFogDrawOverSky = 0
+      [Human] BackgroundFogHeightEnd = 0
+      [Human] BackgroundFogHeightStart = 0
+      [Human] BackgroundFogLinearEnd = 10000
+      [Human] BackgroundFogLinearStart = 10000
+      [Human] BackgroundFogMaxLinearDensity = 1
+      [Human] Expansion = "ROC"
+      [HumanEx] BackgroundFogDrawOverSky = 0
+      [HumanEx] BackgroundFogHeightEnd = 0
+      [HumanEx] BackgroundFogHeightStart = 0
+      [HumanEx] BackgroundFogLinearEnd = 10000
+      [HumanEx] BackgroundFogLinearStart = 10000
+      [HumanEx] BackgroundFogMaxLinearDensity = 1
+      [HumanEx] Expansion = "TFT"
+      [NightElf] BackgroundFogDrawOverSky = 0
+      [NightElf] BackgroundFogHeightEnd = 0
+      [NightElf] BackgroundFogHeightStart = 0
+      [NightElf] BackgroundFogLinearEnd = 10000
+      [NightElf] BackgroundFogLinearStart = 10000
+      [NightElf] BackgroundFogMaxLinearDensity = 1
+      [NightElf] Expansion = "ROC"
+      [NightElfEx] BackgroundFogDrawOverSky = 0
+      [NightElfEx] BackgroundFogHeightEnd = 0
+      [NightElfEx] BackgroundFogHeightStart = 0
+      [NightElfEx] BackgroundFogLinearEnd = 10000
+      ... and 38 more
+  --- CHANGED ---
+      [Human] DefaultOpen =   '1' -> '0'
+      [NightElfEx] DefaultOpen =   '0' -> '1'
+
+==============================================================================
+War3.w3mod:UI/FrameDef/UI/ConsoleUI.fdf
+==============================================================================
+  bytes       4,645 -> 4,639
+  parsed as   line multiset
+  entries     152 -> 152
+  ADDED       4
+  REMOVED     4
+  changed     0
+  --- ADDED ---
+                  Height 0.16,
+                  Height 0.192,
+                  TexCoord 0, 1, 0.25, 1,
+                  TexCoord 0, 1, 0.375, 1,
+  --- REMOVED ---
+                  Height 0.15,
+                  Height 0.176,
+                  TexCoord 0, 1, 0.3125, 1,
+                  TexCoord 0, 1, 0.4140625, 1,
+
+==============================================================================
+War3.w3mod:UI/FrameDef/UI/EscMenuMainPanel.fdf
+==============================================================================
+  bytes       12,502 -> 12,501
+  parsed as   line multiset
+  entries     305 -> 305
+  ADDED       1
+  REMOVED     1
+  changed     0
+  --- ADDED ---
+          BackdropCornerSize  0.05,
+  --- REMOVED ---
+          BackdropCornerSize  0.048,
+
+==============================================================================
+War3.w3mod:UI/FrameDef/UI/InfoPanelItemDetail.fdf
+==============================================================================
+  bytes       841 -> 862
+  parsed as   line multiset
+  entries     16 -> 17
+  ADDED       1
+  REMOVED     0
+  changed     0
+  --- ADDED ---
+              Width 0.18,
+
+==============================================================================
+War3.w3mod:UI/FrameDef/UI/InventoryBar.fdf
+==============================================================================
+  bytes       3,611 -> 8,399
+  parsed as   line multiset
+  entries     89 -> 241
+  ADDED       152
+  REMOVED     0
+  changed     0
+  --- ADDED ---
+          BackdropBackground  "EscMenuBackground",
+          BackdropBackground  "EscMenuBackground",
+          BackdropBackgroundInsets 0.0021 0.0021 0.0021 0.0021,
+          BackdropBackgroundInsets 0.0021 0.0021 0.0021 0.0021,
+          BackdropBlendAll,
+          BackdropCornerFlags "UL|UR|BL|BR|T|L|B|R",
+          BackdropCornerFlags "UL|UR|BL|BR|T|L|B|R",
+          BackdropCornerSize  0.02f,
+          BackdropCornerSize  0.02f,
+          BackdropEdgeFile  "EscMenuBorder",
+          BackdropEdgeFile  "EscMenuBorder",
+          BackdropTileBackground,
+          BackdropTileBackground,
+          Font "MasterFont", 0.009,
+          Font "MasterFont", 0.014,
+          FontJustificationH JUSTIFYCENTER,
+          FontJustificationH JUSTIFYLEFT,
+          FontJustificationV JUSTIFYMIDDLE,
+          FontJustificationV JUSTIFYTOP,
+          FontShadowOffset 0.002 -0.002,
+          FontShadowOffset 0.002 -0.002,
+          UseActiveContext,
+          UseActiveContext,
+          UseActiveContext,
+          	Font "MasterFont", 0.009,
+      ... and 127 more
+
+==============================================================================
+War3.w3mod:UI/FrameDef/UI/ObserverSimpleInfoPanel.fdf
+==============================================================================
+  bytes       5,437 -> 5,556
+  parsed as   line multiset
+  entries     136 -> 142
+  ADDED       15
+  REMOVED     9
+  changed     0
+  --- ADDED ---
+                      SetPoint TOP, "ObserverInfoPanelLifeFillBar", TOP, 0.0, 0.0, // Position set in CObserverPanelDetail
+          FontColor 0.99 0.827 0.0705 1.0,
+          FontColor 1.0 1.0 1.0 1.0,
+          FontShadowOffset 0.001 -0.001,
+          String "SimpleBuildingActionLabel" INHERITS "ObserverSimpleInfoPanelDescriptionTextTemplate" {
+          String "SimpleNameValue" INHERITS "ObserverSimpleInfoPanelTitleTextTemplate" {
+      String "ObserverSimpleInfoPanelDescriptionTextTemplate" {
+      String "ObserverSimpleInfoPanelTitleTextTemplate" {
+      	Font "InfoPanelTextFont",0.01,
+      	Font "InfoPanelTextFont",0.011,
+      	FontShadowColor 0.0 0.0 0.0 0.9,
+      	FontShadowColor 0.0 0.0 0.0 0.9,
+      	FontShadowOffset 0.002 -0.002,
+      }
+      }
+  --- REMOVED ---
+                      SetPoint TOP, "ObserverInfoPanelLifeFillBar", TOP, 0.0, 0.0 // Position set in CObserverPanelDetail
+          FontDisabledColor 0.2 0.2 0.2 1.0,
+          FontDisabledColor 0.2 0.2 0.2 1.0,
+          FontHighlightColor 1.0 1.0 1.0 1.0,
+          FontHighlightColor 1.0 1.0 1.0 1.0,
+          String "SimpleBuildingActionLabel" INHERITS "SimpleInfoPanelDescriptionTextTemplate" {
+          String "SimpleNameValue" INHERITS "SimpleInfoPanelTitleTextTemplate" {
+      // -- INCLUDE FILES ---------------------------------------------------------
+      IncludeFile "UI\FrameDef\UI\SimpleInfoPanel.fdf",
+
+==============================================================================
+War3.w3mod:UI/FrameDef/UI/ProductionPanelUnit.fdf
+==============================================================================
+  bytes       1,509 -> 1,468
+  parsed as   line multiset
+  entries     45 -> 44
+  ADDED       0
+  REMOVED     1
+  changed     0
+  --- REMOVED ---
+              LayerStyle "IGNORETRACKEVENTS",
+
+==============================================================================
+War3.w3mod:UI/FrameDef/UI/SimpleInfoPanel.fdf
+==============================================================================
+  bytes       27,845 -> 27,866
+  parsed as   line multiset
+  entries     629 -> 630
+  ADDED       1
+  REMOVED     0
+  changed     0
+  --- ADDED ---
+              Width 0.18,
+
+==============================================================================
+War3.w3mod:UI/MiscData.txt
+==============================================================================
+  bytes       10,286 -> 29,776
+  parsed as   section and key
+  entries     229 -> 587
+  ADDED       358
+  REMOVED     0
+  changed     0
+  --- ADDED ---
+      [A0M1C020_ArthasArrivesMusic] Music1 = "CineArthasArrivesMusic010"
+      [A0M1C020_ArthasArrivesPrefetchList] File0 = "Textures/Dust3x"
+      [A0M1C020_ArthasArrivesPrefetchList] File1 = "Units/Critters/ElfVillagerWoman/VillagerFemaleNobleB_Diffuse"
+      [A0M1C020_ArthasArrivesPrefetchList] File10 = "Textures/Gore_Diffuse"
+      [A0M1C020_ArthasArrivesPrefetchList] File11 = "Textures/Gore_Normal"
+      [A0M1C020_ArthasArrivesPrefetchList] File12 = "Textures/Gore_ORM"
+      [A0M1C020_ArthasArrivesPrefetchList] File13 = "Units/_skeletons/Gore_Diffuse"
+      [A0M1C020_ArthasArrivesPrefetchList] File14 = "Units/_skeletons/Gore_Normal"
+      [A0M1C020_ArthasArrivesPrefetchList] File15 = "Units/_skeletons/Gore_ORM"
+      [A0M1C020_ArthasArrivesPrefetchList] File16 = "Units/Critters/VillagerKid/Child01_Diffuse"
+      [A0M1C020_ArthasArrivesPrefetchList] File17 = "Units/Critters/VillagerKid/Child01_Normal"
+      [A0M1C020_ArthasArrivesPrefetchList] File18 = "Units/Critters/VillagerKid/Child01_ORM"
+      [A0M1C020_ArthasArrivesPrefetchList] File19 = "Units/Critters/VillagerKid/Child01B_Diffuse"
+      [A0M1C020_ArthasArrivesPrefetchList] File2 = "Units/Critters/ElfVillagerWoman/VillagerFemaleNobleB_Normal"
+      [A0M1C020_ArthasArrivesPrefetchList] File20 = "Units/Human/Rifleman/Rifleman_Diffuse"
+      [A0M1C020_ArthasArrivesPrefetchList] File21 = "Units/Human/Rifleman/Rifleman_Normal"
+      [A0M1C020_ArthasArrivesPrefetchList] File22 = "Units/Human/Rifleman/Rifleman_ORM"
+      [A0M1C020_ArthasArrivesPrefetchList] File23 = "Units/Human/Priest/Priest_Diffuse"
+      [A0M1C020_ArthasArrivesPrefetchList] File24 = "Units/Human/Priest/Priest_Normal"
+      [A0M1C020_ArthasArrivesPrefetchList] File25 = "Units/Human/Priest/Priest_ORM"
+      [A0M1C020_ArthasArrivesPrefetchList] File26 = "Units/Human/Priest/Priest_Emmissive"
+      [A0M1C020_ArthasArrivesPrefetchList] File27 = "Units/Critters/VillagerMan1/VillagerMan1_Diffuse"
+      [A0M1C020_ArthasArrivesPrefetchList] File28 = "Units/Critters/VillagerMan/Villager_Normal"
+      [A0M1C020_ArthasArrivesPrefetchList] File29 = "Units/Critters/VillagerMan/Villager_ORM"
+      [A0M1C020_ArthasArrivesPrefetchList] File3 = "Units/Critters/ElfVillagerWoman/VillagerFemaleNobleB_ORM"
+      ... and 333 more
+
+==============================================================================
+War3.w3mod:UI/SkinMetaData.slk
+==============================================================================
+  bytes       168,830 -> 172,037
+  rows        857 -> 876
+  columns     19 -> 19
+  rows added  19
+  rows gone   0
+  cells changed on shared rows and fields  0
+  new rows: f333, f334, f335, f336, f337, f338, f339, f340, f341, f342, f343, f344, f345, f346, f347, f348, f349, f350, f351
+
+==============================================================================
+War3.w3mod:UI/SoundInfo/AbilitySounds.slk
+==============================================================================
+  bytes       19,398 -> 19,691
+  rows        66 -> 67
+  columns     17 -> 17
+  rows added  1
+  rows gone   0
+  cells changed on shared rows and fields  0
+  new rows: BansheesWailSwarmLoop
+
+==============================================================================
+War3.w3mod:UI/SoundInfo/AmbienceSounds.slk
+==============================================================================
+  bytes       37,049 -> 39,949
+  rows        116 -> 125
+  columns     17 -> 17
+  rows added  9
+  rows gone   0
+  cells changed on shared rows and fields  0
+  new rows: CaveWaterDrippingLoop, DalaranSewer01_close, DalaranSewer01_open, Sewers1Ambience, Sewers2Ambience, SteamLoop, UndeadFemaleCry01, UndeadFemaleSigh01, UndeadMaleCry01
+
+==============================================================================
+War3.w3mod:UI/SoundInfo/AmbientMusic.slk
+==============================================================================
+  bytes       9,778 -> 10,043
+  rows        36 -> 37
+  columns     17 -> 17
+  rows added  1
+  rows gone   0
+  cells changed on shared rows and fields  0
+  new rows: UndercityAmbience
+
+==============================================================================
+War3.w3mod:UI/SoundInfo/AnimSounds.slk
+==============================================================================
+  bytes       206,403 -> 219,598
+  rows        662 -> 709
+  columns     17 -> 17
+  rows added  47
+  rows gone   0
+  cells changed on shared rows and fields  12
+  new rows: AnyaDeath1, AvatarOfLight, BansheesWailCaster, BansheesWailLoop, BatteringRam, CleansingFire, Consecration, CultAssassinDeath1, CultBlightWeaverDeath1, CultBruteDeath1, DeathseekerBow, EvilIlastarDeath1, ForsakenApothecaryDeath1, ForsakenDeathguardDeath1, ForsakenGarekDeath1, ForsakenPaladinDeath1, ForsakenRangerDeath1, GarithosAbominationDeath1, GrimConviction, HeadsplitterTarget, HeroicSlash, HumanGarekDeath1, IlastarDeath1, InspireCourage, LFGarekDeath1, LaborerDeath1, LandenDeath1, LeonidDeath1, LightsMercy, MograineDeath1 ... +17
+  sample of changed cells
+      AcolyteDeath FileNames            'AcolyteDeath1,AcolyteDeath2,AcolyteDeath3' -> 'AcolyteDeath1'
+      ArcherDeath  FileNames            'ArcherDeath1,ArcherDeath2,ArcherDeath3,ArcherDeath4,ArcherDeath5,ArcherDeath6' -> 'ArcherDeath1'
+      CryptFiendDeath FileNames            'CryptFiendDeath1,CryptFiendDeath2,CryptFiendDeath3,CryptFiendDeath4' -> 'CryptFiendDeath1'
+      FootmanDeath FileNames            'FootmanDeath1,FootmanDeath2,FootmanDeath3,FootmanDeath4,FootmanDeath5,FootmanDeath6,FootmanDeath7' -> 'FootmanDeath1'
+      GhoulDeath   FileNames            'GhoulDeath1,GhoulDeath2,GhoulDeath3,GhoulDeath4,GhoulDeath5' -> 'GhoulDeath1'
+      GruntDeath   FileNames            'GruntDeath1,GruntDeath2,GruntDeath3,GruntDeath4,GruntDeath5' -> 'GruntDeath1'
+      HeadHunterDeath FileNames            'HeadHunterDeath1,HeadHunterDeath2,HeadHunterDeath3,HeadHunterDeath4,HeadHunterDeath5' -> 'HeadHunterDeath1'
+      PeasantDeath FileNames            'PeasantDeath1,PeasantDeath2,PeasantDeath3,PeasantDeath4' -> 'PeasantDeath1'
+      PeonDeath    FileNames            'PeonDeath1,PeonDeath2,PeonDeath3' -> 'PeonDeath1'
+      RatDeath2    FileNames            'Units/Critters/Rat/RatDeath1.flac,Units/Critters/Rat/RatDeath2.flac' -> 'Units/Critters/Rat/RatDeath1.flac'
+      RiflemanDeath FileNames            'RiflemanDeath1,RiflemanDeath2,RiflemanDeath3,RiflemanDeath4' -> 'RiflemanDeath1'
+      SentinelDeath FileNames            'SentinelDeath1,SentinelDeath2,SentinelDeath3' -> 'SentinelDeath1'
+
+==============================================================================
+War3.w3mod:UI/SoundInfo/DialogSounds.slk
+==============================================================================
+  bytes       812,355 -> 1,209,450
+  rows        2,583 -> 3,831
+  columns     17 -> 17
+  rows added  1,248
+  rows gone   0
+  cells changed on shared rows and fields  2,583
+  new rows: A1M1-C010-070-GAREK, A1M1-C010-120-ANYA, A1M1-C020-040-SYLVANAS, A1M1-C020-040-SYLVANAS_ALT, A1M1-C020-050-SYLVANAS, A1M1-C020-050-SYLVANAS_ALT, A1M1-C020-060-SYLVANAS, A1M1-C020-070-SYLVANAS, A1M1-C020-080-GAREK, A1M1-C020-090-SYLVANAS, A1M1-C020-100-SYLVANAS, A1M1-C030-010-PUTRESS, A1M1-C030-020-GAREK, A1M1-C030-030-ANYA, A1M1-C030-040-PUTRESS, A1M1-C030-050-ANYA, A1M1-C040-010-BERND, A1M1-C040-020-BERND, A1M1-C040-030-BERND, A1M1-C040-040-GAREK, A1M1-C060-020-VARIMATHRAS, A1M1-C060-030-GAREK, A1M1-C060-040-ANYA, A1M1-C060-050-ANYA, A1M1-C060-060-VARIMATHRAS, A1M1-C060-070-VARIMATHRAS, A1M1-C060-080-ANYA, A1M1-C060-090-VARIMATHRAS, A1M1-C070-010-ANYA, A1M1-C070-020-ANYA ... +1218
+  sample of changed cells
+      A01Garithos01 FileNames            'Sound/Dialogue/HumanExpCamp/Human01x/A01Garithos01.flac' -> 'Sound/Dialogue/HumanExpCamp/Human01x/A01Garithos01.ogg'
+      A01Garithos03 FileNames            'Sound/Dialogue/HumanExpCamp/Human01x/A01Garithos03.flac' -> 'Sound/Dialogue/HumanExpCamp/Human01x/A01Garithos03.ogg'
+      A01Garithos03a FileNames            'Sound/Dialogue/HumanExpCamp/Human01x/A01Garithos03a.flac' -> 'Sound/Dialogue/HumanExpCamp/Human01x/A01Garithos03a.ogg'
+      A01Garithos03b FileNames            'Sound/Dialogue/HumanExpCamp/Human01x/A01Garithos03b.flac' -> 'Sound/Dialogue/HumanExpCamp/Human01x/A01Garithos03b.ogg'
+      A01Garithos05 FileNames            'Sound/Dialogue/HumanExpCamp/Human01x/A01Garithos05.flac' -> 'Sound/Dialogue/HumanExpCamp/Human01x/A01Garithos05.ogg'
+      A01Garithos07 FileNames            'Sound/Dialogue/HumanExpCamp/Human01x/A01Garithos07.flac' -> 'Sound/Dialogue/HumanExpCamp/Human01x/A01Garithos07.ogg'
+      A01Garithos07a FileNames            'Sound/Dialogue/HumanExpCamp/Human01x/A01Garithos07a.flac' -> 'Sound/Dialogue/HumanExpCamp/Human01x/A01Garithos07a.ogg'
+      A01Garithos07b FileNames            'Sound/Dialogue/HumanExpCamp/Human01x/A01Garithos07b.flac' -> 'Sound/Dialogue/HumanExpCamp/Human01x/A01Garithos07b.ogg'
+      A01Garithos09 FileNames            'Sound/Dialogue/HumanExpCamp/Human01x/A01Garithos09.flac' -> 'Sound/Dialogue/HumanExpCamp/Human01x/A01Garithos09.ogg'
+      A01Garithos31 FileNames            'Sound/Dialogue/HumanExpCamp/Human01x/A01Garithos31.flac' -> 'Sound/Dialogue/HumanExpCamp/Human01x/A01Garithos31.ogg'
+      A01Garithos33 FileNames            'Sound/Dialogue/HumanExpCamp/Human01x/A01Garithos33.flac' -> 'Sound/Dialogue/HumanExpCamp/Human01x/A01Garithos33.ogg'
+      A01Kael02    FileNames            'Sound/Dialogue/HumanExpCamp/Human01x/A01Kael02.flac' -> 'Sound/Dialogue/HumanExpCamp/Human01x/A01Kael02.ogg'
+      A01Kael04    FileNames            'Sound/Dialogue/HumanExpCamp/Human01x/A01Kael04.flac' -> 'Sound/Dialogue/HumanExpCamp/Human01x/A01Kael04.ogg'
+      A01Kael06    FileNames            'Sound/Dialogue/HumanExpCamp/Human01x/A01Kael06.flac' -> 'Sound/Dialogue/HumanExpCamp/Human01x/A01Kael06.ogg'
+      A01Kael08    FileNames            'Sound/Dialogue/HumanExpCamp/Human01x/A01Kael08.flac' -> 'Sound/Dialogue/HumanExpCamp/Human01x/A01Kael08.ogg'
+      A01Kael10    FileNames            'Sound/Dialogue/HumanExpCamp/Human01x/A01Kael10.flac' -> 'Sound/Dialogue/HumanExpCamp/Human01x/A01Kael10.ogg'
+      A01Kael11    FileNames            'Sound/Dialogue/HumanExpCamp/Human01x/A01Kael11.flac' -> 'Sound/Dialogue/HumanExpCamp/Human01x/A01Kael11.ogg'
+      A01Kael12    FileNames            'Sound/Dialogue/HumanExpCamp/Human01x/A01Kael12.flac' -> 'Sound/Dialogue/HumanExpCamp/Human01x/A01Kael12.ogg'
+      A01Kael13    FileNames            'Sound/Dialogue/HumanExpCamp/Human01x/A01Kael13.flac' -> 'Sound/Dialogue/HumanExpCamp/Human01x/A01Kael13.ogg'
+      A01Kael14    FileNames            'Sound/Dialogue/HumanExpCamp/Human01x/A01Kael14.flac' -> 'Sound/Dialogue/HumanExpCamp/Human01x/A01Kael14.ogg'
+      A01Kael15    FileNames            'Sound/Dialogue/HumanExpCamp/Human01x/A01Kael15.flac' -> 'Sound/Dialogue/HumanExpCamp/Human01x/A01Kael15.ogg'
+      A01Kael16    FileNames            'Sound/Dialogue/HumanExpCamp/Human01x/A01Kael16.flac' -> 'Sound/Dialogue/HumanExpCamp/Human01x/A01Kael16.ogg'
+      A01Kael17    FileNames            'Sound/Dialogue/HumanExpCamp/Human01x/A01Kael17.flac' -> 'Sound/Dialogue/HumanExpCamp/Human01x/A01Kael17.ogg'
+      A01Kael19    FileNames            'Sound/Dialogue/HumanExpCamp/Human01x/A01Kael19.flac' -> 'Sound/Dialogue/HumanExpCamp/Human01x/A01Kael19.ogg'
+      A01Kael21    FileNames            'Sound/Dialogue/HumanExpCamp/Human01x/A01Kael21.flac' -> 'Sound/Dialogue/HumanExpCamp/Human01x/A01Kael21.ogg'
+      ... and 2,558 more
+
+==============================================================================
+War3.w3mod:UI/SoundInfo/DialogueCreepsBase.slk
+==============================================================================
+  bytes       141,406 -> 147,239
+  rows        507 -> 525
+  columns     12 -> 12
+  rows added  18
+  rows gone   0
+  cells changed on shared rows and fields  506
+  new rows: HeroForsakenPaladinDeath1, HeroForsakenPaladinPissed1, HeroForsakenPaladinPissed2, HeroForsakenPaladinPissed3, HeroForsakenPaladinPissed4, HeroForsakenPaladinReady1, HeroForsakenPaladinWarcry1, HeroForsakenPaladinWhat1, HeroForsakenPaladinWhat2, HeroForsakenPaladinWhat3, HeroForsakenPaladinWhat4, HeroForsakenPaladinYes1, HeroForsakenPaladinYes2, HeroForsakenPaladinYes3, HeroForsakenPaladinYes4, HeroForsakenPaladinYesAttack1, HeroForsakenPaladinYesAttack2, HeroForsakenPaladinYesAttack3
+  sample of changed cells
+      A05Kael24A   Filepath             'Sound/Dialogue/HumanExpCamp/Human05x/A05Kael24A.flac' -> 'Sound/Dialogue/HumanExpCamp/Human05x/A05Kael24A.ogg'
+      A06Kael19    Filepath             'Sound/Dialogue/HumanExpCamp/Human06x/A06Kael19.flac' -> 'Sound/Dialogue/HumanExpCamp/Human06x/A06Kael19.ogg'
+      A07Kael15    Filepath             'Sound/Dialogue/HumanExpCamp/Human07x/A07Kael15.flac' -> 'Sound/Dialogue/HumanExpCamp/Human07x/A07Kael15.ogg'
+      A07Kael16    Filepath             'Sound/Dialogue/HumanExpCamp/Human07x/A07Kael16.flac' -> 'Sound/Dialogue/HumanExpCamp/Human07x/A07Kael16.ogg'
+      A07Kael17    Filepath             'Sound/Dialogue/HumanExpCamp/Human07x/A07Kael17.flac' -> 'Sound/Dialogue/HumanExpCamp/Human07x/A07Kael17.ogg'
+      A07LadyVashj09 Filepath             'Sound/Dialogue/HumanExpCamp/Human07x/A07LadyVashj09.flac' -> 'Sound/Dialogue/HumanExpCamp/Human07x/A07LadyVashj09.ogg'
+      A07LadyVashj10 Filepath             'Sound/Dialogue/HumanExpCamp/Human07x/A07LadyVashj10.flac' -> 'Sound/Dialogue/HumanExpCamp/Human07x/A07LadyVashj10.ogg'
+      AkamaPissed1 Filepath             'Units/Other/DranaiAkama/AkamaPissed1.flac' -> 'Units/Other/DranaiAkama/AkamaPissed1.ogg'
+      AkamaPissed2 Filepath             'Units/Other/DranaiAkama/AkamaPissed2.flac' -> 'Units/Other/DranaiAkama/AkamaPissed2.ogg'
+      AkamaPissed3 Filepath             'Units/Other/DranaiAkama/AkamaPissed3.flac' -> 'Units/Other/DranaiAkama/AkamaPissed3.ogg'
+      AkamaPissed4 Filepath             'Units/Other/DranaiAkama/AkamaPissed4.flac' -> 'Units/Other/DranaiAkama/AkamaPissed4.ogg'
+      AkamaPissed5 Filepath             'Units/Other/DranaiAkama/AkamaPissed5.flac' -> 'Units/Other/DranaiAkama/AkamaPissed5.ogg'
+      AkamaPissed6 Filepath             'Units/Other/DranaiAkama/AkamaPissed6.flac' -> 'Units/Other/DranaiAkama/AkamaPissed6.ogg'
+      AkamaPissed7 Filepath             'Units/Other/DranaiAkama/AkamaPissed7.flac' -> 'Units/Other/DranaiAkama/AkamaPissed7.ogg'
+      AkamaPissed8 Filepath             'Units/Other/DranaiAkama/AkamaPissed8.flac' -> 'Units/Other/DranaiAkama/AkamaPissed8.ogg'
+      AkamaPissed9 Filepath             'Units/Other/DranaiAkama/AkamaPissed9.flac' -> 'Units/Other/DranaiAkama/AkamaPissed9.ogg'
+      AkamaReady1  Filepath             'Units/Other/DranaiAkama/AkamaReady1.flac' -> 'Units/Other/DranaiAkama/AkamaReady1.ogg'
+      AkamaWarcry1 Filepath             'Units/Other/DranaiAkama/AkamaWarcry1.flac' -> 'Units/Other/DranaiAkama/AkamaWarcry1.ogg'
+      AkamaWhat1   Filepath             'Units/Other/DranaiAkama/AkamaWhat1.flac' -> 'Units/Other/DranaiAkama/AkamaWhat1.ogg'
+      AkamaWhat2   Filepath             'Units/Other/DranaiAkama/AkamaWhat2.flac' -> 'Units/Other/DranaiAkama/AkamaWhat2.ogg'
+      AkamaWhat3   Filepath             'Units/Other/DranaiAkama/AkamaWhat3.flac' -> 'Units/Other/DranaiAkama/AkamaWhat3.ogg'
+      AkamaWhat4   Filepath             'Units/Other/DranaiAkama/AkamaWhat4.flac' -> 'Units/Other/DranaiAkama/AkamaWhat4.ogg'
+      AkamaWhat5   Filepath             'Units/Other/DranaiAkama/AkamaWhat5.flac' -> 'Units/Other/DranaiAkama/AkamaWhat5.ogg'
+      AkamaYes1    Filepath             'Units/Other/DranaiAkama/AkamaYes1.flac' -> 'Units/Other/DranaiAkama/AkamaYes1.ogg'
+      AkamaYes2    Filepath             'Units/Other/DranaiAkama/AkamaYes2.flac' -> 'Units/Other/DranaiAkama/AkamaYes2.ogg'
+      ... and 481 more
+
+==============================================================================
+War3.w3mod:UI/SoundInfo/DialogueHumanBase.slk
+==============================================================================
+  bytes       157,972 -> 204,798
+  rows        565 -> 734
+  columns     12 -> 12
+  rows added  169
+  rows gone   0
+  cells changed on shared rows and fields  565
+  new rows: AAGarekPissed1, AAGarekPissed2, AAGarekPissed3, AAGarekPissed4, AAGarekReady1, AAGarekWarcry1, AAGarekWhat1, AAGarekWhat2, AAGarekWhat3, AAGarekWhat4, AAGarekYes1, AAGarekYes2, AAGarekYes3, AAGarekYes4, AAGarekYesAttack1, AAGarekYesAttack2, AAGarekYesAttack3, BAGarekPissed1, BAGarekPissed2, BAGarekPissed3, BAGarekPissed4, BAGarekReady1, BAGarekWarcry1, BAGarekWhat1, BAGarekWhat2, BAGarekWhat3, BAGarekWhat4, BAGarekYes1, BAGarekYes2, BAGarekYes3 ... +139
+  sample of changed cells
+      ArthasPissed1 Filepath             'Units/Human/Arthas/ArthasPissed1.flac' -> 'Units/Human/Arthas/ArthasPissed1.ogg'
+      ArthasPissed2 Filepath             'Units/Human/Arthas/ArthasPissed2.flac' -> 'Units/Human/Arthas/ArthasPissed2.ogg'
+      ArthasPissed3 Filepath             'Units/Human/Arthas/ArthasPissed3.flac' -> 'Units/Human/Arthas/ArthasPissed3.ogg'
+      ArthasPissed4 Filepath             'Units/Human/Arthas/ArthasPissed4.flac' -> 'Units/Human/Arthas/ArthasPissed4.ogg'
+      ArthasPissed5 Filepath             'Units/Human/Arthas/ArthasPissed5.flac' -> 'Units/Human/Arthas/ArthasPissed5.ogg'
+      ArthasPissed6 Filepath             'Units/Human/Arthas/ArthasPissed6.flac' -> 'Units/Human/Arthas/ArthasPissed6.ogg'
+      ArthasPissed7 Filepath             'Units/Human/Arthas/ArthasPissed7.flac' -> 'Units/Human/Arthas/ArthasPissed7.ogg'
+      ArthasReady1 Filepath             'Units/Human/Arthas/ArthasReady1.flac' -> 'Units/Human/Arthas/ArthasReady1.ogg'
+      ArthasWarcry1 Filepath             'Units/Human/Arthas/ArthasWarcry1.flac' -> 'Units/Human/Arthas/ArthasWarcry1.ogg'
+      ArthasWhat1  Filepath             'Units/Human/Arthas/ArthasWhat1.flac' -> 'Units/Human/Arthas/ArthasWhat1.ogg'
+      ArthasWhat2  Filepath             'Units/Human/Arthas/ArthasWhat2.flac' -> 'Units/Human/Arthas/ArthasWhat2.ogg'
+      ArthasWhat3  Filepath             'Units/Human/Arthas/ArthasWhat3.flac' -> 'Units/Human/Arthas/ArthasWhat3.ogg'
+      ArthasWhat4  Filepath             'Units/Human/Arthas/ArthasWhat4.flac' -> 'Units/Human/Arthas/ArthasWhat4.ogg'
+      ArthasWhat5  Filepath             'Units/Human/Arthas/ArthasWhat5.flac' -> 'Units/Human/Arthas/ArthasWhat5.ogg'
+      ArthasWithFrostmournePissed1 Filepath             'Units/Human/Arthas/ArthasPissed1.flac' -> 'Units/Human/Arthas/ArthasPissed1.ogg'
+      ArthasWithFrostmournePissed2 Filepath             'Units/Human/Arthas/ArthasPissed2.flac' -> 'Units/Human/Arthas/ArthasPissed2.ogg'
+      ArthasWithFrostmournePissed3 Filepath             'Units/Human/Arthas/ArthasPissed3.flac' -> 'Units/Human/Arthas/ArthasPissed3.ogg'
+      ArthasWithFrostmournePissed4 Filepath             'Units/Human/Arthas/ArthasPissed4.flac' -> 'Units/Human/Arthas/ArthasPissed4.ogg'
+      ArthasWithFrostmournePissed5 Filepath             'Units/Human/Arthas/ArthasPissed5.flac' -> 'Units/Human/Arthas/ArthasPissed5.ogg'
+      ArthasWithFrostmournePissed6 Filepath             'Units/Human/Arthas/ArthasPissed6.flac' -> 'Units/Human/Arthas/ArthasPissed6.ogg'
+      ArthasWithFrostmournePissed7 Filepath             'Units/Human/Arthas/ArthasPissed7.flac' -> 'Units/Human/Arthas/ArthasPissed7.ogg'
+      ArthasWithFrostmourneReady1 Filepath             'Units/Human/Arthas/ArthasReady1.flac' -> 'Units/Human/Arthas/ArthasReady1.ogg'
+      ArthasWithFrostmourneWarcry1 Filepath             'Units/Human/Arthas/ArthasWarcry1.flac' -> 'Units/Human/Arthas/ArthasWarcry1.ogg'
+      ArthasWithFrostmourneWhat1 Filepath             'Units/Human/Arthas/ArthasWhat1.flac' -> 'Units/Human/Arthas/ArthasWhat1.ogg'
+      ArthasWithFrostmourneWhat2 Filepath             'Units/Human/Arthas/ArthasWhat2.flac' -> 'Units/Human/Arthas/ArthasWhat2.ogg'
+      ... and 540 more
+
+==============================================================================
+War3.w3mod:UI/SoundInfo/DialogueNightElfBase.slk
+==============================================================================
+  bytes       152,239 -> 152,222
+  rows        502 -> 502
+  columns     12 -> 12
+  rows added  0
+  rows gone   0
+  cells changed on shared rows and fields  1
+  sample of changed cells
+      ArcherDeath1 Flags                'SD_ONLY' -> ''
+
+==============================================================================
+War3.w3mod:UI/SoundInfo/DialogueUndeadBase.slk
+==============================================================================
+  bytes       124,533 -> 189,267
+  rows        433 -> 649
+  columns     12 -> 12
+  rows added  216
+  rows gone   0
+  cells changed on shared rows and fields  432
+  new rows: ARivendarePissed1, ARivendarePissed2, ARivendareReady1, ARivendareWarcry1, ARivendareWhat1, ARivendareWhat2, ARivendareYes1, ARivendareYes2, ARivendareYesAttack1, ARivendareYesAttack2, AnyaPissed1, AnyaPissed2, AnyaPissed3, AnyaPissed4, AnyaReady1, AnyaWarcry1, AnyaWhat1, AnyaWhat2, AnyaWhat3, AnyaWhat4, AnyaYes1, AnyaYes2, AnyaYes3, AnyaYes4, AnyaYesAttack1, AnyaYesAttack2, AnyaYesAttack3, AnyaYesAttack4, CultAssassinPissed1, CultAssassinReady1 ... +186
+  sample of changed cells
+      AbominationPissed1 Filepath             'Units/Undead/Abomination/AbominationPissed1.flac' -> 'Units/Undead/Abomination/AbominationPissed1.ogg'
+      AbominationPissed2 Filepath             'Units/Undead/Abomination/AbominationPissed2.flac' -> 'Units/Undead/Abomination/AbominationPissed2.ogg'
+      AbominationPissed3 Filepath             'Units/Undead/Abomination/AbominationPissed3.flac' -> 'Units/Undead/Abomination/AbominationPissed3.ogg'
+      AbominationPissed4 Filepath             'Units/Undead/Abomination/AbominationPissed4.flac' -> 'Units/Undead/Abomination/AbominationPissed4.ogg'
+      AbominationPissed5 Filepath             'Units/Undead/Abomination/AbominationPissed5.flac' -> 'Units/Undead/Abomination/AbominationPissed5.ogg'
+      AbominationPissed6 Filepath             'Units/Undead/Abomination/AbominationPissed6.flac' -> 'Units/Undead/Abomination/AbominationPissed6.ogg'
+      AbominationReady1 Filepath             'Units/Undead/Abomination/AbominationReady1.flac' -> 'Units/Undead/Abomination/AbominationReady1.ogg'
+      AbominationWarcry1 Filepath             'Units/Undead/Abomination/AbominationWarcry1.flac' -> 'Units/Undead/Abomination/AbominationWarcry1.ogg'
+      AbominationWhat1 Filepath             'Units/Undead/Abomination/AbominationWhat1.flac' -> 'Units/Undead/Abomination/AbominationWhat1.ogg'
+      AbominationWhat2 Filepath             'Units/Undead/Abomination/AbominationWhat2.flac' -> 'Units/Undead/Abomination/AbominationWhat2.ogg'
+      AbominationWhat3 Filepath             'Units/Undead/Abomination/AbominationWhat3.flac' -> 'Units/Undead/Abomination/AbominationWhat3.ogg'
+      AbominationWhat4 Filepath             'Units/Undead/Abomination/AbominationWhat4.flac' -> 'Units/Undead/Abomination/AbominationWhat4.ogg'
+      AbominationYes1 Filepath             'Units/Undead/Abomination/AbominationYes1.flac' -> 'Units/Undead/Abomination/AbominationYes1.ogg'
+      AbominationYes2 Filepath             'Units/Undead/Abomination/AbominationYes2.flac' -> 'Units/Undead/Abomination/AbominationYes2.ogg'
+      AbominationYes3 Filepath             'Units/Undead/Abomination/AbominationYes3.flac' -> 'Units/Undead/Abomination/AbominationYes3.ogg'
+      AbominationYes4 Filepath             'Units/Undead/Abomination/AbominationYes4.flac' -> 'Units/Undead/Abomination/AbominationYes4.ogg'
+      AbominationYes5 Filepath             'Units/Undead/Abomination/AbominationYes5.flac' -> 'Units/Undead/Abomination/AbominationYes5.ogg'
+      AbominationYesAttack1 Filepath             'Units/Undead/Abomination/AbominationYesAttack1.flac' -> 'Units/Undead/Abomination/AbominationYesAttack1.ogg'
+      AbominationYesAttack2 Filepath             'Units/Undead/Abomination/AbominationYesAttack2.flac' -> 'Units/Undead/Abomination/AbominationYesAttack2.ogg'
+      AbominationYesAttack3 Filepath             'Units/Undead/Abomination/AbominationYesAttack3.flac' -> 'Units/Undead/Abomination/AbominationYesAttack3.ogg'
+      AbominationYesAttack4 Filepath             'Units/Undead/Abomination/AbominationYesAttack4.flac' -> 'Units/Undead/Abomination/AbominationYesAttack4.ogg'
+      AcolyteBuildingComplete1 Filepath             'Sound/Buildings/Undead/AcolyteBuildingComplete1.flac' -> 'Sound/Buildings/Undead/AcolyteBuildingComplete1.ogg'
+      AcolyteCannotBuildThere1 Filepath             'Sound/Interface/Warning/Undead/AcolyteCannotBuildThere1.flac' -> 'Sound/Interface/Warning/Undead/AcolyteCannotBuildThere1.ogg'
+      AcolyteDeath1 Filepath             'Units/Undead/Acolyte/AcolyteDeath1.flac' -> 'Units/Undead/Acolyte/AcolyteDeath1.ogg'
+      AcolyteDeath2 Filepath             'Units/Undead/Acolyte/AcolyteDeath2.flac' -> 'Units/Undead/Acolyte/AcolyteDeath2.ogg'
+      ... and 407 more
+
+==============================================================================
+War3.w3mod:UI/SoundInfo/Music.slk
+==============================================================================
+  bytes       17,216 -> 25,859
+  rows        64 -> 104
+  columns     17 -> 17
+  rows added  40
+  rows gone   0
+  cells changed on shared rows and fields  3
+  new rows: AllianceBattleMarch, Battle_A, Battle_B, Battle_Intense_A, Battle_Intense_B, Battle_Intense_C, Combat1, Combat2, Combat3, CrimsonForest, Forsaken1, Forsaken1Brass, Forsaken1Calm, Forsaken1NoDrums, Forsaken1SFX, Forsaken1Strings, Forsaken2, Forsaken2NoDrums, Forsaken2SFX, Forsaken2Strings, Forsaken3, ForsakenFK, GlueMusicFK, HolyWarriorsOathB, HolyWarriorsOathD, NaxxramasWalking1, NaxxramasWalking2, NaxxramasWalking3, NaxxramasWalking4, NaxxramasWalking5 ... +10
+  sample of changed cells
+      GlueMusic    FileNames            'Sound/Music/mp3Music/War3XMainscreen.flac,Sound/Music/mp3Music/HumanX1.flac,Sound/Music/mp3Music/NightElfX1.flac,Sound/Music/mp3Music/OrcX1.flac,Sound/Music/mp3Music/UndeadX1.flac,Sound/Music/mp3Music/Mainscreen.flac' -> 'Sound/Music/mp3Music/Mainscreen.flac,Sound/Music/mp3Music/War3XMainscreen.flac,Sound/Music/mp3Music/Forsaken1Strings.ogg'
+      GlueMusicROC FileNames            'Sound/Music/mp3Music/War3XMainscreen.flac,Sound/Music/mp3Music/HumanX1.flac,Sound/Music/mp3Music/NightElfX1.flac,Sound/Music/mp3Music/OrcX1.flac,Sound/Music/mp3Music/UndeadX1.flac,Sound/Music/mp3Music/Mainscreen.flac' -> 'Sound/Music/mp3Music/Mainscreen.flac'
+      GlueMusicTFT FileNames            'Sound/Music/mp3Music/War3XMainscreen.flac,Sound/Music/mp3Music/HumanX1.flac,Sound/Music/mp3Music/NightElfX1.flac,Sound/Music/mp3Music/OrcX1.flac,Sound/Music/mp3Music/UndeadX1.flac,Sound/Music/mp3Music/Mainscreen.flac' -> 'Sound/Music/mp3Music/War3XMainscreen.flac'
+
+==============================================================================
+War3.w3mod:UI/SoundInfo/UISounds.slk
+==============================================================================
+  bytes       37,869 -> 38,333
+  rows        145 -> 147
+  columns     17 -> 17
+  rows added  2
+  rows gone   0
+  cells changed on shared rows and fields  0
+  new rows: ItemDropLegendary, ItemDropNormal
+
+==============================================================================
+War3.w3mod:UI/SoundInfo/UnitAckSounds.slk
+==============================================================================
+  bytes       438,250 -> 495,275
+  rows        1,273 -> 1,453
+  columns     17 -> 17
+  rows added  180
+  rows gone   0
+  cells changed on shared rows and fields  0
+  new rows: AAGarekPissed, AAGarekReady, AAGarekWarcry, AAGarekWhat, AAGarekYes, AAGarekYesAttack, ARivendarePissed, ARivendareReady, ARivendareWarcry, ARivendareWhat, ARivendareYes, ARivendareYesAttack, AnyaPissed, AnyaReady, AnyaWarcry, AnyaWhat, AnyaYes, AnyaYesAttack, BAGarekPissed, BAGarekReady, BAGarekWarcry, BAGarekWhat, BAGarekYes, BAGarekYesAttack, CityGuardReady, CityGuardWarcry, CityGuardWhat, CityGuardYes, CityGuardYesAttack, CityguardPissed ... +150
+
+==============================================================================
+War3.w3mod:UI/TriggerData.txt
+==============================================================================
+  bytes       689,500 -> 751,141
+  parsed as   section and key
+  entries     9,973 -> 10,891
+  ADDED       918
+  REMOVED     0
+  changed     59
+  --- ADDED ---
+      [TriggerActions] AllowHeroGlowOnAllUnitsBJ = 1,
+      [TriggerActions] AllowHeroGlowOnUnitBJ = 1,unit
+      [TriggerActions] BlzAdjustUnitAbilityCooldownPercent = 0,unit,abilcode,real
+      [TriggerActions] BlzAdjustUnitAbilityCooldownRemaining = 0,unit,abilcode,real
+      [TriggerActions] BlzAllUnitsEnableAurasBJ = 0,enableddisabledoption,abilityuiyesnooption
+      [TriggerActions] BlzClearHDWaterColorOverrideBJ = 1
+      [TriggerActions] BlzGetUnitAnimationDuration = 0,unit,animationname
+      [TriggerActions] BlzGetUnitAnimationDurationByIndex = 0,unit,integer
+      [TriggerActions] BlzPlayModelCinematicGameAtPosition = 0,modelfile,real,real,real,real
+      [TriggerActions] BlzQueueSpecialEffectAnimation = 0,effect,animationname
+      [TriggerActions] BlzResetUnitAttack = 0,unit,integer
+      [TriggerActions] BlzSetHDWaterColorBJ = 1,real,real,real
+      [TriggerActions] BlzSetHDWaterColorOverrideBJ = 1
+      [TriggerActions] BlzSetHDWaterEdgeSoftnessBJ = 1,integer
+      [TriggerActions] BlzSetHDWaterEmissivityBJ = 1,integer
+      [TriggerActions] BlzSetHDWaterEnvMapStrengthBJ = 1,integer
+      [TriggerActions] BlzSetHDWaterMaxOpacityBJ = 1,integer
+      [TriggerActions] BlzSetHDWaterMinOpacityBJ = 1,integer
+      [TriggerActions] BlzSetHDWaterReflectivityBJ = 1,integer
+      [TriggerActions] BlzSetHDWaterVertexDisplacementBJ = 1,integer
+      [TriggerActions] BlzSetHDWaterWaveStrengthBJ = 1,integer
+      [TriggerActions] BlzSetSpecialEffectAnimation = 0,effect,animationname
+      [TriggerActions] BlzSetSpecialEffectAnimationBlendTime = 0,effect,real
+      [TriggerActions] BlzSetTerrainFogColorBJ = 0,real,real,real
+      [TriggerActions] BlzSetTerrainFogDensityBJ = 0,real
+      ... and 893 more
+  --- CHANGED ---
+      [TriggerActions] BlzHideCinematicPanels =   '0,boolean' -> '0,hideshowoption'
+      [TriggerActions] BlzUnitDisableAbility =   '0,unit,abilcode,boolean,boolean' -> '0,unit,abilcode,disabledenabledoption,abilityuiyesnooption'
+      [TriggerActions] BlzUnitHideAbility =   '0,unit,abilcode,boolean' -> '0,unit,abilcode,hideshowoption'
+      [TriggerActions] SetMinimapIconOrphanDestroy =   '1,minimapicon,boolean' -> '1,minimapicon,onoffoption'
+      [TriggerActions] SetMinimapIconVisible =   '1,minimapicon,boolean' -> '1,minimapicon,onoffoption'
+      [TriggerActions] _BlzHideCinematicPanels_Defaults =   'false' -> 'HideShowHide'
+      [TriggerActions] _BlzHideCinematicPanels_DisplayName =   '"Hide Cinematic Panels"' -> '"Show/Hide Cinematic Panels"'
+      [TriggerActions] _BlzHideCinematicPanels_Parameters =   '"Hide Cinematic Panels ",~Value' -> '"",~Show/Hide," Cinematic Panels"'
+      [TriggerActions] _BlzSetEventAttackType_Parameters =   '"Set Attack Type of Unit Damaged Event to ",~Value' -> '"Set attack type of damage dealt to damage unit to ",~Value'
+      [TriggerActions] _BlzSetEventDamageType_Parameters =   '"Set Damage Type of Unit Damaged Event to ",~Value' -> '"Set damage type of damage dealt to damage unit to ",~Value'
+      [TriggerActions] _BlzSetEventDamage_Parameters =   '"Set Damage of Unit Damaged Event to ",~Value' -> '"Set damage dealt to damaged unit to ",~Value'
+      [TriggerActions] _BlzSetEventWeaponType_Parameters =   '"Set Weapon Type of Unit Damaged Event to ",~Value' -> '"Set weapon type of damage dealt to damage unit to ",~Value'
+      [TriggerActions] _BlzUnitDisableAbility_Defaults =   'GetTriggerUnit,_,true,true' -> 'GetTriggerUnit,_,DisabledEnabledDisabled,AbilityUIYesNoYes'
+      [TriggerActions] _BlzUnitDisableAbility_DisplayName =   '"Disable Ability"' -> '"Enable/Disable Ability"'
+      [TriggerActions] _BlzUnitDisableAbility_Parameters =   '"For ",~Unit,", Ability ",~Value,", Disable ability: ",~Value,", Hide UI: ",~Value' -> '"Set for ",~Unit," the ability ",~Ability," to ",~Disabled/Enabled," and its UI to: ",~Affect-UI/Don\'t-Affect-UI'
+      [TriggerActions] _BlzUnitHideAbility_Defaults =   'GetTriggerUnit,_,true' -> 'GetTriggerUnit,_,HideShowHide'
+      [TriggerActions] _BlzUnitHideAbility_DisplayName =   '"Hide Ability"' -> '"Hide/Show Ability"'
+      [TriggerActions] _BlzUnitHideAbility_Parameters =   '"For ",~Unit,", Ability ",~Value,", Hide ability: ",~Value' -> '"Set for ",~Unit," the ability ",~Ability," UI to: ",~Hide/Show'
+      [TriggerActions] _CampaignMinimapIconLocBJ_DisplayName =   '"Create Campaign Quest Ping At Point"' -> '"Create Minimap Icon At Point"'
+      [TriggerActions] _CampaignMinimapIconLocBJ_Parameters =   '"Create Campaign Quest Icon at ",~Location," using ",~Style," style' -> '"Create campaign quest minimap icon at ",~Location," using ",~Style," style."'
+      [TriggerActions] _CampaignMinimapIconUnitBJ_DisplayName =   '"Create Campaign Quest Ping On Unit"' -> '"Create Minimap Icon On Unit"'
+      [TriggerActions] _CampaignMinimapIconUnitBJ_Parameters =   '"Create Campaign Quest Icon on ",~Unit," using ",~Style," style' -> '"Create campaign quest minimap icon on ",~Unit," using ",~Style," style."'
+      [TriggerActions] _DestroyMinimapIcon_Parameters =   '"Destroy Minimap Icon for ",~Minimap Icon' -> '"Destroy campaign quest minimap icon ",~Minimap Icon'
+      [TriggerActions] _ForGroupMultiple_Parameters =   '"Pick every unit in ",~Unit Group," and do (Actions)"' -> '"Pick every unit in ",~Unit Group," and do (Actions)."'
+      [TriggerActions] _ForGroup_Parameters =   '"Pick every unit in ",~Unit Group," and do ",~Action' -> '"Pick every unit in ",~Unit Group," and do ",~Action,"."'
+      ... and 34 more
+
+==============================================================================
+War3.w3mod:UI/UnitEditorData.txt
+==============================================================================
+  bytes       13,601 -> 15,528
+  parsed as   section and key
+  entries     350 -> 404
+  ADDED       54
+  REMOVED     0
+  changed     1
+  --- ADDED ---
+      [abilityModifierStats] 00 = AS01,WESTRING_UE_AS01
+      [abilityModifierStats] 01 = AS02,WESTRING_UE_AS02
+      [abilityModifierStats] 02 = AS03,WESTRING_UE_AS03
+      [abilityModifierStats] 03 = AS04,WESTRING_UE_AS04
+      [abilityModifierStats] 04 = AS05,WESTRING_UE_AS05
+      [abilityModifierStats] 05 = AS10,WESTRING_UE_AS10
+      [abilityModifierStats] 06 = AS11,WESTRING_UE_AS11
+      [abilityModifierStats] 07 = AS06,WESTRING_UE_AS06
+      [abilityModifierStats] 08 = AS07,WESTRING_UE_AS07
+      [abilityModifierStats] 09 = AS08,WESTRING_UE_AS08
+      [abilityModifierStats] 10 = AS09,WESTRING_UE_AS09
+      [abilityModifierStats] 11 = AS0A,WESTRING_UE_AS0A
+      [abilityModifierStats] 12 = AS0B,WESTRING_UE_AS0B
+      [abilityModifierStats] 13 = AS0C,WESTRING_UE_AS0C
+      [abilityModifierStats] 14 = AS0D,WESTRING_UE_AS0D
+      [abilityModifierStats] 15 = AS0E,WESTRING_UE_AS0E
+      [abilityModifierStats] 16 = AS0F,WESTRING_UE_AS0F
+      [abilityModifierStats] NumValues = 17
+      [damageType] 00 = 0,WESTRING_UE_DAMAGETYPE_MELEE
+      [damageType] 01 = 1,WESTRING_UE_DAMAGETYPE_RANGED
+      [damageType] 02 = 2,WESTRING_UE_DAMAGETYPE_ALL
+      [damageType] NumValues = 3
+      [equipmentType] 00 = None,WESTRING_UE_EQUIPMENTTYPE_NONE
+      [equipmentType] 01 = Head,WESTRING_UE_EQUIPMENTTYPE_HEAD
+      [equipmentType] 02 = Chest,WESTRING_UE_EQUIPMENTTYPE_CHEST
+      ... and 29 more
+  --- CHANGED ---
+      [itemClass] NumValues =   '7' -> '8'
+
+==============================================================================
+War3.w3mod:UI/WorldEditData.txt
+==============================================================================
+  bytes       53,047 -> 57,246
+  parsed as   section and key
+  entries     687 -> 733
+  ADDED       46
+  REMOVED     0
+  changed     2
+  --- ADDED ---
+      [CampaignScreens] 12 = 1,WESTRING_CAMPAIGNSCREEN_HUMANREBIRTH,0,UI\Glues\SinglePlayer\HumanRECampaign3D\HumanRECampaign3D.mdl
+      [CampaignScreens] 13 = 1,WESTRING_CAMPAIGNSCREEN_UNDEADREBIRTH,0,UI\Glues\SinglePlayer\UndeadRECampaign3D\UndeadRECampaign3D.mdl
+      [DayWaterEnvironmentMap] Default = Environment/EnvironmentMap/LordaeronSummer/water_ibl.tif
+      [LoadingScreens] 101 = 1,WESTRING_LOADINGSCREEN_HUMANR01,1,UI\Glues\Loading\Backgrounds\Campaigns\LordaeronBackground.mdl
+      [LoadingScreens] 102 = 1,WESTRING_LOADINGSCREEN_HUMANR02,1,UI\Glues\Loading\Backgrounds\Campaigns\LordaeronBackground.mdl
+      [LoadingScreens] 103 = 1,WESTRING_LOADINGSCREEN_HUMANR03_INTERLUDE,1,UI\Glues\Loading\Backgrounds\Campaigns\LordaeronBackground.mdl
+      [LoadingScreens] 104 = 1,WESTRING_LOADINGSCREEN_HUMANR03,1,UI\Glues\Loading\Backgrounds\Campaigns\LordaeronBackground.mdl
+      [LoadingScreens] 105 = 1,WESTRING_LOADINGSCREEN_HUMANR04,1,UI\Glues\Loading\Backgrounds\Campaigns\LordaeronBackground.mdl
+      [LoadingScreens] 106 = 1,WESTRING_LOADINGSCREEN_UNDEADR01,1,UI\Glues\Loading\Backgrounds\Campaigns\LordaeronBackground.mdl
+      [LoadingScreens] 107 = 1,WESTRING_LOADINGSCREEN_UNDEADR01_02,1,UI\Glues\Loading\Backgrounds\Campaigns\LordaeronBackground.mdl
+      [LoadingScreens] 108 = 1,WESTRING_LOADINGSCREEN_UNDEADR01_03,1,UI\Glues\Loading\Backgrounds\Campaigns\LordaeronBackground.mdl
+      [LoadingScreens] 109 = 1,WESTRING_LOADINGSCREEN_UNDEADR01_04,1,UI\Glues\Loading\Backgrounds\Campaigns\LordaeronBackground.mdl
+      [LoadingScreens] 110 = 1,WESTRING_LOADINGSCREEN_UNDEADR01_05,1,UI\Glues\Loading\Backgrounds\Campaigns\LordaeronBackground.mdl
+      [LoadingScreens] 111 = 1,WESTRING_LOADINGSCREEN_UNDEADR01_06,1,UI\Glues\Loading\Backgrounds\Campaigns\LordaeronBackground.mdl
+      [LoadingScreens] 112 = 1,WESTRING_LOADINGSCREEN_UNDEADR02,1,UI\Glues\Loading\Backgrounds\Campaigns\LordaeronBackground.mdl
+      [LoadingScreens] 113 = 1,WESTRING_LOADINGSCREEN_UNDEADR02_01,1,UI\Glues\Loading\Backgrounds\Campaigns\LordaeronBackground.mdl
+      [LoadingScreens] 114 = 1,WESTRING_LOADINGSCREEN_UNDEADR02_02,1,UI\Glues\Loading\Backgrounds\Campaigns\LordaeronBackground.mdl
+      [LoadingScreens] 115 = 1,WESTRING_LOADINGSCREEN_UNDEADR02_03,1,UI\Glues\Loading\Backgrounds\Campaigns\LordaeronBackground.mdl
+      [LoadingScreens] 116 = 1,WESTRING_LOADINGSCREEN_UNDEADR02_04,1,UI\Glues\Loading\Backgrounds\Campaigns\LordaeronBackground.mdl
+      [LoadingScreens] 117 = 1,WESTRING_LOADINGSCREEN_UNDEADR02_06,1,UI\Glues\Loading\Backgrounds\Campaigns\LordaeronBackground.mdl
+      [LoadingScreens] 118 = 1,WESTRING_LOADINGSCREEN_UNDEADR03_INTERLUDE,1,UI\Glues\Loading\Backgrounds\Campaigns\LordaeronBackground.mdl
+      [LoadingScreens] 119 = 1,WESTRING_LOADINGSCREEN_UNDEADR03A,1,UI\Glues\Loading\Backgrounds\Campaigns\LordaeronBackground.mdl
+      [LoadingScreens] 120 = 1,WESTRING_LOADINGSCREEN_UNDEADR03B,1,UI\Glues\Loading\Backgrounds\Campaigns\LordaeronBackground.mdl
+      [MiscBrushes] Alpha = WESTRING_ALPHATILE,ReplaceableTextures\WorldEditUI\AlphaBrush
+      [NightWaterEnvironmentMap] Default = Environment/EnvironmentMap/LordaeronSummer/water_ibl.tif
+      ... and 21 more
+  --- CHANGED ---
+      [CampaignScreens] NumScreens =   '12' -> '14'
+      [LoadingScreens] NumScreens =   '101' -> '121'
+
+==============================================================================
+War3.w3mod:UI/WorldEditLayout.txt
+==============================================================================
+  bytes       91,013 -> 100,063
+  parsed as   section and key
+  entries     2,851 -> 3,105
+  ADDED       275
+  REMOVED     21
+  changed     88
+  --- ADDED ---
+      [DoodadPropsDialog] ColorAreaH = 25
+      [DoodadPropsDialog] ColorLabel_Pos = 0,4
+      [DoodadPropsDialog] ColorLabel_Size = 75,16
+      [DoodadPropsDialog] ColorMenu_Pos = 75,0
+      [DoodadPropsDialog] ColorMenu_Size = 140,20
+      [DoodadPropsDialog] DampingEdit_Pos = 247,120
+      [DoodadPropsDialog] DampingEdit_Size = 60
+      [DoodadPropsDialog] DampingLabel_Pos = 165,120
+      [DoodadPropsDialog] DampingLabel_Size = 80,16
+      [DoodadPropsDialog] IntensityEdit_Pos = 247,20
+      [DoodadPropsDialog] IntensityEdit_Size = 60
+      [DoodadPropsDialog] IntensityLabel_Pos = 165,20
+      [DoodadPropsDialog] IntensityLabel_Size = 80,16
+      [DoodadPropsDialog] LightColorButton_Pos = 220,140
+      [DoodadPropsDialog] LightColorButton_Size = 50,20
+      [DoodadPropsDialog] LightColorImage_Pos = 275,140
+      [DoodadPropsDialog] LightColorImage_Size = 50,20
+      [DoodadPropsDialog] LightColorLabel_Pos = 165,140
+      [DoodadPropsDialog] LightColorLabel_Size = 50,16
+      [DoodadPropsDialog] LightsListBox_Pos = 0,0
+      [DoodadPropsDialog] LightsListBox_Size = 160,170
+      [DoodadPropsDialog] LinearFalloffEdit_Pos = 247,100
+      [DoodadPropsDialog] LinearFalloffEdit_Size = 60
+      [DoodadPropsDialog] LinearFalloffLabel_Pos = 165,100
+      [DoodadPropsDialog] LinearFalloffLabel_Size = 80,16
+      ... and 250 more
+  --- REMOVED ---
+      [MP_Options] WaterColorButton_Pos = 190,182
+      [MP_Options] WaterColorButton_Size = 87,16
+      [MP_Options] WaterColorCheck_Pos = 10,182
+      [MP_Options] WaterColorImage_Pos = 282,182
+      [MP_Options] WaterColorImage_Size = 38,16
+      [SoundPropsDialog] FileLabel_Pos = 5,5
+      [SoundPropsDialog] FileLabel_Size = 75,16
+      [SoundPropsDialog] FileText_Pos = 80,5
+      [SoundPropsDialog] FileText_Size = 255,16
+      [SoundPropsDialog] PathLabel_Pos = 5,21
+      [SoundPropsDialog] PathLabel_Size = 75,16
+      [SoundPropsDialog] PathText_Pos = 80,21
+      [SoundPropsDialog] PathText_Size = 255,16
+      [SoundPropsDialogMac] FileLabel_Pos = 20,14
+      [SoundPropsDialogMac] FileLabel_Size = 75,16
+      [SoundPropsDialogMac] FileText_Pos = 95,15
+      [SoundPropsDialogMac] FileText_Size = 255,16
+      [SoundPropsDialogMac] PathLabel_Pos = 20,34
+      [SoundPropsDialogMac] PathLabel_Size = 75,16
+      [SoundPropsDialogMac] PathText_Pos = 95,34
+      [SoundPropsDialogMac] PathText_Size = 255,16
+  --- CHANGED ---
+      [CameraPropsDialog] Dlg_Size =   '244,425' -> '244,485'
+      [FogControls] FogColorButton_Pos =   '45,82' -> '55,118'
+      [FogControls] FogColorImage_Pos =   '140,82' -> '150,118'
+      [FogControls] FogColorLabel_Pos =   '0,84' -> '0,118'
+      [FogControls] FogColorLabel_Size =   '40,16' -> '50,16'
+      [FogControls] FogDensityEdit_Pos =   '80,62' -> '55,72'
+      [FogControls] FogDensityLabel_Pos =   '0,64' -> '0,74'
+      [FogControls] FogDensityLabel_Size =   '50,16' -> '45,16'
+      [FogControls] FogStyleLabel_Pos =   '0,4' -> '0,2'
+      [FogControls] FogStyleLabel_Size =   '40,16' -> '45,16'
+      [FogControls] FogStyleMenu_Pos =   '80,0' -> '55,0'
+      [FogControls] FogZEndEdit_Pos =   '80,42' -> '55,48'
+      [FogControls] FogZEndLabel_Pos =   '0,44' -> '0,50'
+      [FogControls] FogZEndLabel_Size =   '40,16' -> '45,16'
+      [FogControls] FogZStartEdit_Pos =   '80,22' -> '55,24'
+      [FogControls] FogZStartLabel_Pos =   '0,24' -> '0,26'
+      [FogControls] FogZStartLabel_Size =   '40,16' -> '45,16'
+      [MP_Options] CameraDefaultZoomEdit_Pos =   '160,300' -> '160,390'
+      [MP_Options] CameraDefaultZoomOverrideCheck_Pos =   '10,300' -> '10,390'
+      [MP_Options] CameraMaxZoomEdit_Pos =   '160,348' -> '160,438'
+      [MP_Options] CameraMaxZoomOverrideCheck_Pos =   '10,348' -> '10,438'
+      [MP_Options] CameraMinZoomEdit_Pos =   '160,324' -> '160,414'
+      [MP_Options] CameraMinZoomOverrideCheck_Pos =   '10,324' -> '10,414'
+      [MP_Options] FogBase_Pos =   '170,0' -> '125,40'
+      [MP_Options] FogCheck_Pos =   '10,0' -> '10,40'
+      ... and 63 more
+
+==============================================================================
+War3.w3mod:UI/war3skins.txt
+==============================================================================
+  bytes       60,396 -> 66,956
+  parsed as   section and key
+  entries     837 -> 941
+  ADDED       104
+  REMOVED     0
+  changed     1
+  --- ADDED ---
+      [Default] ChatMusic_V2 = BattleNetChatMusicTFT
+      [Default] EquipmentBoots = UI\Console\Reforged\UI-PaperDoll-Slot-Feet.blp
+      [Default] EquipmentChest = UI\Console\Reforged\UI-PaperDoll-Slot-Chest.blp
+      [Default] EquipmentGloves = UI\Console\Reforged\UI-PaperDoll-Slot-Hands.blp
+      [Default] EquipmentHead = UI\Console\Reforged\UI-PaperDoll-Slot-Head.blp
+      [Default] EquipmentOffhand = UI\Console\Reforged\UI-PaperDoll-Slot-SecondaryHand.blp
+      [Default] EquipmentPrimary = UI\Console\Reforged\UI-PaperDoll-Slot-MainHand.blp
+      [Default] EquipmentRing = UI\Console\Reforged\UI-PaperDoll-Slot-Finger.blp
+      [Default] EquipmentRingAlt = UI\Console\Reforged\UI-PaperDoll-Slot-Finger.blp
+      [Default] EquipmentTrinket = UI\Console\Reforged\UI-PaperDoll-Slot-Relic.blp
+      [Default] ExtendedInventoryEmptySlot = UI\Widgets\Console\Human\human-inventory-slotempty.blp
+      [Default] GlueMusic_V2 = GlueMusicTFT
+      [Default] GlueScreenBnetLoop_V2 = ExpansionGlueScreenWind
+      [Default] GlueScreenLoop_V2 = ExpansionGlueScreenWind
+      [Default] HumanREBackdrop = UI\Glues\SinglePlayer\HumanRECampaign3D\HumanRECampaign3D.mdl
+      [Default] Music_V2 = DefaultMusic
+      [Default] UndeadREBackdrop = UI\Glues\SinglePlayer\UndeadRECampaign3D\UndeadRECampaign3D.mdl
+      [Forsaken] AllyHeroDiesSound = AllyHeroDiesUndead
+      [Forsaken] AllyTownUnderAttackSound = AllyTownUnderAttackUndead
+      [Forsaken] AllyUnderAttackSound = AllyUnderAttackUndead
+      [Forsaken] CantPlaceSound = CantPlaceUndead
+      [Forsaken] CinematicBorder = UI\Widgets\EscMenu\Undead\undead-cinematic-border.blp
+      [Forsaken] ClassicCursor = UI\Cursor\ForsakenCursor.mdl
+      [Forsaken] CommandBasicStruct = ReplaceableTextures\CommandButtons\BTNScourgeBuild.blp
+      [Forsaken] CommandRally = ReplaceableTextures\CommandButtons\BTNRallyPointUndead.blp
+      ... and 79 more
+  --- CHANGED ---
+      [Main] Skins =   'Orc,Human,NightElf,Undead' -> 'Orc,Human,NightElf,Undead,Forsaken'
+
+==============================================================================
+War3.w3mod:Units/AbilityBuffData.slk
+==============================================================================
+  bytes       31,242 -> 40,820
+  rows        241 -> 318
+  columns     9 -> 9
+  rows added  77
+  rows gone   0
+  cells changed on shared rows and fields  0
+  new rows: BApa, BCGb, BDCa, BDMa, BHTf, BHaa, BHag, BHal, BHap, BHas, BHbo, BHbt, BHce, BHcf, BHch, BHcl, BHgh, BHgr, BHgu, BHhc, BHhh, BHhr, BHht, BHic, BHmc, BHpb, BHsa, BHsf, BHss, BHsw ... +47
+
+==============================================================================
+War3.w3mod:Units/AbilityData.slk
+==============================================================================
+  bytes       872,773 -> 3,527,035
+  rows        841 -> 1,550
+  columns     99 -> 201
+  rows added  709
+  rows gone   0
+  cells changed on shared rows and fields  5
+  NEW COLUMNS (102): Area5, Area6, BuffID5, BuffID6, Cast5, Cast6, Cool5, Cool6, Cost5, Cost6, DataA5, DataA6, DataB5, DataB6, DataC5, DataC6, DataD5, DataD6, DataE5, DataE6, DataF5, DataF6, DataG5, DataG6, DataH5, DataH6, DataI5, DataI6, DataJ5, DataJ6, DataK1, DataK2, DataK3, DataK4, DataK5, DataK6, DataL1, DataL2, DataL3, DataL4
+      ... and 62 more
+  new rows: AA12, AACe, AACq, AACw, AADe, AADi, AADo, AADq, AADr, AADt, AADu, AADw, AADy, AAPa, AAPe, AAPi, AAPo, AAPp, AAPq, AAPr, AAPs, AAPt, AAPu, AAPw, AAPx, AAPy, AARe, AARq, AARw, AASa ... +679
+  sample of changed cells
+      ACd2         DataB1               '150' -> '250'
+      AIi2         code                 'Aiab' -> 'AIab'
+      ANbf         Area4                '90' -> '60'
+      ANdr         Cost4                '30' -> '35'
+      Asb1         DataD1               '#VALUE!' -> '0'
+
+==============================================================================
+War3.w3mod:Units/AbilityMetaData.slk
+==============================================================================
+  bytes       232,287 -> 286,781
+  rows        777 -> 960
+  columns     27 -> 27
+  rows added  183
+  rows gone   0
+  cells changed on shared rows and fields  29
+  new rows: Asdf, Ens4, Ens5, Ens6, Ens7, Icr1, Icr2, Ilv1, Ilv2, Ime1, Ime2, Isa1, Isa2, Isa3, Isv1, Isv2, Ixr2, Ixr3, Ixr4, Tau6, Tau7, Tau8, Tau9, TauA, aabi, aga1, asc1, asc2, bld1, bld2 ... +153
+  sample of changed cells
+      Eev1         useSpecific          'AEev,AIev,ACev,ACes' -> 'AEev,AIev,ACev,ACes,AHes'
+      Ens1         useSpecific          'Aens,ACen,Aweb,ACwb,AIwb' -> 'Aens,ACen,Aweb,ACwb,AIwb,AHap'
+      Ens2         useSpecific          'Aens,ACen,Aweb,ACwb,AIwb' -> 'Aens,ACen,Aweb,ACwb,AIwb,AHap'
+      Ens3         useSpecific          'Aens,ACen,Aweb,ACwb,AIwb' -> 'Aens,ACen,Aweb,ACwb,AIwb,AHap'
+      Ivam         useSpecific          'AIva,SCva' -> 'AIva,SCva,AIvx'
+      Ocr1         minVal               '0' -> '-99999'
+      Ocr1         useSpecific          'AOcr,ACct,ANdb' -> 'AOcr,ACct,ANdb,AIxr,AIsc'
+      Ocr2         useSpecific          'AOcr,ACct,ANdb' -> 'AOcr,ACct,Andb'
+      Pos1         useSpecific          'Apos,ACps,Aps2' -> 'Apos,ACps,Aps2,AHmc'
+      Ssk1         useSpecific          'Assk' -> 'Assk,AHss'
+      Ssk2         useSpecific          'Assk' -> 'Assk,AHss'
+      Ssk3         useSpecific          'Assk' -> 'Assk,AHss'
+      Ssk4         useSpecific          'Assk' -> 'Assk,AHss'
+      Ssk5         useSpecific          'Assk' -> 'Assk,AHss'
+      Uls1         useSpecific          'AUls' -> 'AUls,AUwc'
+      Uls2         useSpecific          'AUls' -> 'AUls,AUwc'
+      Uls3         useSpecific          'AUls' -> 'AUls,AUwc'
+      Uls4         useSpecific          'AUls' -> 'AUls,AUwc'
+      Uls5         useSpecific          'AUls' -> 'AUls,AUwc'
+      Ulsu         useSpecific          'AUls' -> 'AUls,AUwc'
+      Uts1         useSpecific          'AUts,ANth' -> 'AUts,ANth,AUss'
+      Uts2         useSpecific          'AUts,ANth' -> 'AUts,ANth,AUss'
+      Uts3         useSpecific          'AUts,ANth' -> 'AUts,ANth,AUss'
+      aare         notSpecific          '' -> 'AHsw'
+      abuf         notSpecific          '' -> 'ATal'
+      ... and 4 more
+
+==============================================================================
+War3.w3mod:Units/AbilitySkin.txt
+==============================================================================
+  bytes       202,109 -> 333,096
+  parsed as   section and key
+  entries     3,972 -> 6,418
+  ADDED       2,446
+  REMOVED     0
+  changed     2
+  --- ADDED ---
+      [AA12] Art = ReplaceableTextures\CommandButtons\BTNBoots.blp
+      [AA12] skinType = ability
+      [AACe] Art = ReplaceableTextures\CommandButtons\BTNOrbOfCorruption.blp
+      [AACe] Missileart = Abilities\Spells\Items\OrbCorruption\OrbCorruptionMissile.mdl
+      [AACe] Missilehoming = 1
+      [AACe] Specialart = Abilities\Spells\Items\OrbCorruption\OrbCorruptionSpecialArt.mdl
+      [AACe] Specialattach = chest
+      [AACe] Targetart = Abilities\Spells\Items\OrbCorruption\OrbCorruption.mdl
+      [AACe] Targetattach = weapon
+      [AACe] skinType = ability
+      [AACq] Art = ReplaceableTextures\CommandButtons\BTNOrbOfCorruption.blp
+      [AACq] Missileart = Abilities\Spells\Items\OrbCorruption\OrbCorruptionMissile.mdl
+      [AACq] Missilehoming = 1
+      [AACq] Specialart = Abilities\Spells\Items\OrbCorruption\OrbCorruptionSpecialArt.mdl
+      [AACq] Specialattach = chest
+      [AACq] Targetart = Abilities\Spells\Items\OrbCorruption\OrbCorruption.mdl
+      [AACq] Targetattach = weapon
+      [AACq] skinType = ability
+      [AACw] Art = ReplaceableTextures\CommandButtons\BTNOrbOfCorruption.blp
+      [AACw] Missileart = Abilities\Spells\Items\OrbCorruption\OrbCorruptionMissile.mdl
+      [AACw] Missilehoming = 1
+      [AACw] Specialart = Abilities\Spells\Items\OrbCorruption\OrbCorruptionSpecialArt.mdl
+      [AACw] Specialattach = chest
+      [AACw] Targetart = Abilities\Spells\Items\OrbCorruption\OrbCorruption.mdl
+      [AACw] Targetattach = weapon
+      ... and 2,421 more
+  --- CHANGED ---
+      [Amgl] Casterart =   'Abilities\\Spells\\NightElf\\SpiritOfVengeance\\SpiritOfVengeanceBirthMissile.mdl' -> 'Abilities/Spells/NightElf/MoonGlaive/MoonGlaiveCaster.mdl'
+      [Amgr] Casterart =   'Abilities\\Spells\\NightElf\\SpiritOfVengeance\\SpiritOfVengeanceBirthMissile.mdl' -> 'Abilities/Spells/NightElf/MoonGlaive/MoonGlaiveCaster.mdl'
+
+==============================================================================
+War3.w3mod:Units/CampaignAbilityFunc.txt
+==============================================================================
+  bytes       3,581 -> 25,553
+  parsed as   section and key
+  entries     129 -> 804
+  ADDED       675
+  REMOVED     0
+  changed     0
+  --- ADDED ---
+      [AFRq] Buttonpos = 2,1
+      [AFRq] Order = channel
+      [AFRq] Researchbuttonpos = 2,1
+      [AFRw] Buttonpos = 2,1
+      [AFRw] Order = channel
+      [AFRw] Researchbuttonpos = 2,1
+      [AGca] Buttonpos = 0,-11
+      [AHa1] Buttonpos = 2,2
+      [AHa1] Researchbuttonpos = 2,0
+      [AHa2] Buttonpos = 2,2
+      [AHa2] Researchbuttonpos = 2,0
+      [AHa3] Buttonpos = 2,2
+      [AHa3] Researchbuttonpos = 2,0
+      [AHal] Buttonpos = 3,2
+      [AHal] Order = undeadvengeance
+      [AHal] Researchbuttonpos = 3,0
+      [AHap] Buttonpos = 1,2
+      [AHap] MissileHoming = 1
+      [AHap] Missilespeed = 1500
+      [AHap] Order = apprehendaoe
+      [AHap] Researchbuttonpos = 1,0
+      [AHas] Buttonpos = 2,2
+      [AHas] Researchbuttonpos = 2,0
+      [AHb1] Buttonpos = 1,2
+      [AHb1] Order = unyieldingguard
+      ... and 650 more
+
+==============================================================================
+War3.w3mod:Units/CampaignUnitFunc.txt
+==============================================================================
+  bytes       36,838 -> 49,147
+  parsed as   section and key
+  entries     815 -> 1,028
+  ADDED       213
+  REMOVED     0
+  changed     0
+  --- ADDED ---
+      [Hct1] ScoreScreenIcon = UI\Glues\ScoreScreen\scorescreen-hero-Garek.blp
+      [Hct1] Specialart = Objects\Spawnmodels\Human\HumanLargeDeathExplode\HumanLargeDeathExplode.mdl
+      [Hctl] ScoreScreenIcon = UI\Glues\ScoreScreen\scorescreen-hero-Landen.blp
+      [Hctl] Specialart = Objects\Spawnmodels\Human\HumanLargeDeathExplode\HumanLargeDeathExplode.mdl
+      [Hctr] ScoreScreenIcon = UI\Glues\ScoreScreen\scorescreen-hero-Garek.blp
+      [Hctr] Specialart = Objects\Spawnmodels\Human\HumanLargeDeathExplode\HumanLargeDeathExplode.mdl
+      [Hjsm] Buttonpos = 0,1
+      [Hjsm] MissileHoming = 1
+      [Hjsm] Missilearc = 0.15
+      [Hjsm] Missileart = Abilities\Weapons\IlastarMissile\IlastarMissile.mdl
+      [Hjsm] Missilespeed = 900
+      [Hjsm] ScoreScreenIcon = UI\Glues\ScoreScreen\scorescreen-hero-Ilastar.blp
+      [Hjsm] Specialart = Objects\Spawnmodels\Human\HumanLargeDeathExplode\HumanLargeDeathExplode.mdl
+      [Hleo] ScoreScreenIcon = UI\Glues\ScoreScreen\scorescreen-hero-paladin.blp
+      [Hleo] Specialart = Objects\Spawnmodels\Human\HumanLargeDeathExplode\HumanLargeDeathExplode.mdl
+      [Htmx] ScoreScreenIcon = UI\Glues\ScoreScreen\scorescreen-hero-paladin.blp
+      [Htmx] Specialart = Objects\Spawnmodels\Human\HumanLargeDeathExplode\HumanLargeDeathExplode.mdl
+      [Nglx] ScoreScreenIcon = UI\Glues\ScoreScreen\scorescreen-hero-tinker.blp
+      [Nglx] Specialart = Objects\Spawnmodels\Human\HumanLargeDeathExplode\HumanLargeDeathExplode.mdl
+      [Scth] ScoreScreenIcon = UI\Glues\ScoreScreen\scorescreen-hero-paladin.blp
+      [Scth] Specialart = Objects\Spawnmodels\Human\HumanLargeDeathExplode\HumanLargeDeathExplode.mdl
+      [Srmg] ScoreScreenIcon = UI\Glues\ScoreScreen\scorescreen-hero-renaultmograine.blp
+      [Srmg] Specialart = Objects\Spawnmodels\Human\HumanLargeDeathExplode\HumanLargeDeathExplode.mdl
+      [Sswm] MissileHoming = 1
+      [Sswm] Missilearc = 0
+      ... and 188 more
+
+==============================================================================
+War3.w3mod:Units/DestructableData.slk
+==============================================================================
+  bytes       178,269 -> 194,879
+  rows        336 -> 344
+  columns     38 -> 41
+  rows added  8
+  rows gone   0
+  cells changed on shared rows and fields  0
+  NEW COLUMNS (3): customTeamColor, occlusion, teamColor
+  new rows: Dogv, Dogw, UB01, UB02, UB03, UB04, YTpl, YTps
+
+==============================================================================
+War3.w3mod:Units/DestructableMetaData.slk
+==============================================================================
+  bytes       12,188 -> 12,864
+  rows        53 -> 56
+  columns     19 -> 19
+  rows added  3
+  rows gone   0
+  cells changed on shared rows and fields  0
+  new rows: boct, btcc, btco
+
+==============================================================================
+War3.w3mod:Units/DestructableSkin.txt
+==============================================================================
+  bytes       150,577 -> 153,263
+  parsed as   section and key
+  entries     6,759 -> 6,903
+  ADDED       167
+  REMOVED     23
+  changed     0
+  --- ADDED ---
+      [Dogv] Name = WESTRING_DEST_DOGV
+      [Dogv] armor = Stone
+      [Dogv] canPlaceRandScale = 1
+      [Dogv] colorB = 255
+      [Dogv] colorG = 255
+      [Dogv] colorR = 255
+      [Dogv] deathSnd = ForceWallDeath
+      [Dogv] file = Doodads\Dungeon\Props\Ghostwall\Ghostwall45
+      [Dogv] fixedRot = -1
+      [Dogv] lightweight = 0
+      [Dogv] maxScale = 1
+      [Dogv] minScale = 1
+      [Dogv] numVar = 1
+      [Dogv] selSize = 0
+      [Dogv] selcircsize = 256
+      [Dogv] shadow = none
+      [Dogv] skinType = destructable
+      [Dogv] skinnableID = Dogv
+      [Dogv] soundLoop = ForceWallLoop
+      [Dogw] Name = WESTRING_DEST_DOGW
+      [Dogw] armor = Stone
+      [Dogw] canPlaceRandScale = 1
+      [Dogw] colorB = 255
+      [Dogw] colorG = 255
+      [Dogw] colorR = 255
+      ... and 142 more
+  --- REMOVED ---
+      [YTsc] Name = WESTRING_DEST_SCORCHED_TREE_WALL
+      [YTsc] armor = Wood
+      [YTsc] canPlaceRandScale = 1
+      [YTsc] colorB = 255
+      [YTsc] colorG = 255
+      [YTsc] colorR = 255
+      [YTsc] deathSnd = TreeWallDeath
+      [YTsc] file = Doodads\Terrain\NorthrendTree\NorthrendTree
+      [YTsc] file:hd = Doodads\Terrain\ScorchedTree\ScorchedTree
+      [YTsc] fixedRot = 270
+      [YTsc] lightweight = 1
+      [YTsc] lightweight:hd = 0
+      [YTsc] maxScale = 1.2
+      [YTsc] minScale = 0.8
+      [YTsc] numVar = 10
+      [YTsc] selSize = 0
+      [YTsc] selcircsize = 128
+      [YTsc] shadow = ShadowCityTree
+      [YTsc] skinType = destructable
+      [YTsc] skinnableID = YTsc
+      [YTsc] texFile:hd = ReplaceableTextures\ScorchedTree\ScorchedTree
+      [YTsc] texFile:sd = ReplaceableTextures\NorthrendTree\NorthTree
+      [YTsc] texID = 34
+
+==============================================================================
+War3.w3mod:Units/ItemAbilityFunc.txt
+==============================================================================
+  bytes       10,571 -> 11,139
+  parsed as   section and key
+  entries     59 -> 59
+  ADDED       0
+  REMOVED     0
+  changed     0
+
+==============================================================================
+War3.w3mod:Units/ItemData.slk
+==============================================================================
+  bytes       102,961 -> 282,004
+  rows        283 -> 648
+  columns     30 -> 35
+  rows added  365
+  rows gone   0
+  cells changed on shared rows and fields  0
+  NEW COLUMNS (5): customTeamColor, equipment, invulnerable, tag, teamColor
+  new rows: brpb, cabl, cagh, cbmv, cccg, cccm, ccec, ccem, ccvw, cdhb, cegi, celi, cese, cexp, ckcm, ckdk, clom, cmag, cpor, cprk, cptz, ctat, ctoa, ctoi, ctos, cvdt, cvfs, cvpe, cvvb, eaaa ... +335
+
+==============================================================================
+War3.w3mod:Units/ItemFunc.txt
+==============================================================================
+  bytes       25,132 -> 66,844
+  parsed as   section and key
+  entries     347 -> 1,050
+  ADDED       703
+  REMOVED     0
+  changed     0
+  --- ADDED ---
+      [brpb] Art = ReplaceableTextures\CommandButtons\BTNRustyPlatedBoots.blp
+      [brpb] Buttonpos = 0,-1
+      [cabl] Art = ReplaceableTextures\CommandButtons\BTNWirtsLeg.blp
+      [cagh] Art = ReplaceableTextures\CommandButtons\BTNGarithos.blp
+      [cbmv] Art = ReplaceableTextures\CommandButtons\BTNCorrosiveBreath.blp
+      [cccg] Art = ReplaceableTextures\CommandButtons\BTNGhoul.blp
+      [cccm] Art = ReplaceableTextures\CommandButtons\BTNConsecratedMixture.blp
+      [cccm] Buttonpos = 0,-1
+      [ccec] Art = ReplaceableTextures\CommandButtons\BTNElixirofCunning.blp
+      [ccec] Buttonpos = 0,-1
+      [ccem] Art = ReplaceableTextures\CommandButtons\BTNElixirofMonsterHunting.blp
+      [ccem] Buttonpos = 0,-1
+      [ccvw] Art = ReplaceableTextures\CommandButtons\BTNEngineeringUpgrade.blp
+      [ccvw] Buttonpos = 0,-1
+      [cdhb] Art = ReplaceableTextures\CommandButtons\BTNPotionRed.blp
+      [cegi] Art = ReplaceableTextures\CommandButtons\BTNElixirofGreaterIntelligence.blp
+      [cegi] Buttonpos = 0,-1
+      [celi] Art = ReplaceableTextures\CommandButtons\BTNElixirofLesserIntelligence.blp
+      [celi] Buttonpos = 0,-1
+      [cese] Art = ReplaceableTextures\CommandButtons\BTNEnvenomedSpear.blp
+      [cexp] Art = ReplaceableTextures\CommandButtons\BTNBarrel.blp
+      [ckcm] Art = ReplaceableTextures\CommandButtons\BTNBloodKey.blp
+      [ckdk] Art = ReplaceableTextures\CommandButtons\BTNMoonKey.blp
+      [clom] Art = ReplaceableTextures\CommandButtons\BTNLumpofMeat.blp
+      [cmag] Art = ReplaceableTextures\CommandButtons\BTNGhostKey.blp
+      ... and 678 more
+
+==============================================================================
+War3.w3mod:Units/ItemSkin.txt
+==============================================================================
+  bytes       48,473 -> 109,358
+  parsed as   section and key
+  entries     2,549 -> 5,834
+  ADDED       3,285
+  REMOVED     0
+  changed     0
+  --- ADDED ---
+      [brpb] armor = Wood
+      [brpb] colorB = 255
+      [brpb] colorG = 255
+      [brpb] colorR = 255
+      [brpb] file = Objects/InventoryItems/ItemBoots/ItemBoots0.mdl
+      [brpb] scale = 1
+      [brpb] selSize = 0
+      [brpb] skinType = item
+      [brpb] skinnableID = brpb
+      [cabl] armor = Wood
+      [cabl] colorB = 255
+      [cabl] colorG = 255
+      [cabl] colorR = 255
+      [cabl] file = Objects\InventoryItems\TreasureChest\treasurechest.mdl
+      [cabl] scale = 1
+      [cabl] selSize = 0
+      [cabl] skinType = item
+      [cabl] skinnableID = cabl
+      [cagh] armor = Wood
+      [cagh] colorB = 255
+      [cagh] colorG = 255
+      [cagh] colorR = 255
+      [cagh] file = Objects/InventoryItems/GarithosHead/GarithosHead.mdl
+      [cagh] scale = 1
+      [cagh] selSize = 0
+      ... and 3,260 more
+
+==============================================================================
+War3.w3mod:Units/MiscGame.txt
+==============================================================================
+  bytes       6,203 -> 6,274
+  parsed as   section and key
+  entries     155 -> 158
+  ADDED       3
+  REMOVED     0
+  changed     0
+  --- ADDED ---
+      [Misc] AICallForHelp = 900
+      [Misc] BaseMeleeCritDamage = 150
+      [Misc] BaseSpellCritDamage = 150
+
+==============================================================================
+War3.w3mod:Units/MiscMetaData.slk
+==============================================================================
+  bytes       49,667 -> 50,359
+  rows        227 -> 230
+  columns     20 -> 20
+  rows added  3
+  rows gone   0
+  cells changed on shared rows and fields  0
+  new rows: bmcd, bscd, cfha
+
+==============================================================================
+War3.w3mod:Units/NeutralAbilityFunc.txt
+==============================================================================
+  bytes       21,715 -> 22,177
+  parsed as   section and key
+  entries     658 -> 669
+  ADDED       11
+  REMOVED     0
+  changed     0
+  --- ADDED ---
+      [AHcl] Buttonpos = 3,2
+      [AHcl] Order = cleansingfire
+      [AHcl] Researchbuttonpos = 3,0
+      [AHcr] Buttonpos = 1,2
+      [AHcr] Order = consecration
+      [AHcr] Researchbuttonpos = 1,0
+      [AHpa] Buttonpos = 2,2
+      [AHpa] Researchbuttonpos = 2,0
+      [ANcp] Buttonpos = 0,2
+      [ANcp] Order = righteousfury
+      [ANcp] Researchbuttonpos = 0,0
+
+==============================================================================
+War3.w3mod:Units/NeutralUnitFunc.txt
+==============================================================================
+  bytes       67,467 -> 67,793
+  parsed as   section and key
+  entries     1,410 -> 1,418
+  ADDED       8
+  REMOVED     0
+  changed     2
+  --- ADDED ---
+      [Npal] Attachmentanimprops = medium
+      [Npal] Buttonpos = 3,0
+      [Npal] Requires = TALT
+      [Npal] Requires1 = TWN2,TALT
+      [Npal] Requires2 = TWN3,TALT
+      [Npal] Requirescount = 3
+      [Npal] ScoreScreenIcon = UI\Glues\ScoreScreen\scorescreen-hero-forsakenpaladin.blp
+      [Npal] Specialart = Objects\Spawnmodels\Undead\UndeadLargeDeathExplode\UndeadLargeDeathExplode.mdl
+  --- CHANGED ---
+      [HERO] DependencyOr =   'Hamg,Hblm,Hmkg,Hpal,Obla,Ofar,Oshd,Otch,Edem,Ekee,Emoo,Ewar,Ucrl,Udea,Udre,Ulic,Npbm,Nbrn,Nngs,Nplh,Nbst,Nalc,Ntin,Nfir' -> 'Hamg,Hblm,Hmkg,Hpal,Obla,Ofar,Oshd,Otch,Edem,Ekee,Emoo,Ewar,Ucrl,Udea,Udre,Ulic,Npbm,Nbrn,Nngs,Nplh,Nbst,Nalc,Ntin,Nfir,Npal'
+      [ntav] Sellunits =   'Nalc,Ntin,Nfir,Nngs,Nbrn,Npbm,Nplh,Nbst' -> 'Nalc,Ntin,Nfir,Nngs,Nbrn,Npbm,Nplh,Nbst,Npal'
+
+==============================================================================
+War3.w3mod:Units/NightElfAbilityFunc.txt
+==============================================================================
+  bytes       7,020 -> 7,097
+  parsed as   section and key
+  entries     222 -> 222
+  ADDED       0
+  REMOVED     0
+  changed     0
+
+==============================================================================
+War3.w3mod:Units/UndeadAbilityFunc.txt
+==============================================================================
+  bytes       7,382 -> 7,367
+  parsed as   section and key
+  entries     237 -> 236
+  ADDED       0
+  REMOVED     1
+  changed     0
+  --- REMOVED ---
+      [Aap2] Requires = Rupc
+
+==============================================================================
+War3.w3mod:Units/UnitAbilities.slk
+==============================================================================
+  bytes       82,147 -> 88,439
+  rows        864 -> 928
+  columns     7 -> 7
+  rows added  64
+  rows gone   0
+  cells changed on shared rows and fields  0
+  new rows: Hct1, Hctl, Hctr, Hjsm, Hleo, Htmx, Nglx, Npal, Scth, Srmg, Sswm, Uany, Uarf, Ubru, Ubtr, Uctl, Ugr2, Ugr3, Ugrk, Ujsm, Uput, Urff, Urfm, Urfu, Uzkf, Uzkm, Uzrm, fapo, fber, fdkr ... +34
+
+==============================================================================
+War3.w3mod:Units/UnitAddons.txt
+==============================================================================
+  bytes       22,274 -> 22,739
+  parsed as   section and key
+  entries     915 -> 935
+  ADDED       20
+  REMOVED     0
+  changed     0
+  --- ADDED ---
+      [Hctl] addon = units
+      [Hctr] addon = Heroes
+      [Hleo] addon = Heroes
+      [Uany] addon = Heroes
+      [Uarf] addon = Heroes
+      [Ugrk] addon = Heroes
+      [fapo] addon = Units
+      [fdkr] addon = Units
+      [fdtg] addon = Units
+      [flab] addon = Units
+      [hctc] addon = Units
+      [hctg] addon = units
+      [sarc] addon = Units
+      [scle] addon = Units
+      [scru] addon = Units
+      [sfoo] addon = Units
+      [sinq] addon = Units
+      [uass] addon = units
+      [ublw] addon = units
+      [ucze] addon = units
+
+==============================================================================
+War3.w3mod:Units/UnitBalance.slk
+==============================================================================
+  bytes       646,382 -> 693,805
+  rows        864 -> 928
+  columns     61 -> 61
+  rows added  64
+  rows gone   0
+  cells changed on shared rows and fields  1
+  new rows: Hct1, Hctl, Hctr, Hjsm, Hleo, Htmx, Nglx, Npal, Scth, Srmg, Sswm, Uany, Uarf, Ubru, Ubtr, Uctl, Ugr2, Ugr3, Ugrk, Ujsm, Uput, Urff, Urfm, Urfu, Uzkf, Uzkm, Uzrm, fapo, fber, fdkr ... +34
+  sample of changed cells
+      ugol         spd                  '' -> '-'
+
+==============================================================================
+War3.w3mod:Units/UnitData.slk
+==============================================================================
+  bytes       320,127 -> 343,550
+  rows        864 -> 928
+  columns     31 -> 31
+  rows added  64
+  rows gone   0
+  cells changed on shared rows and fields  0
+  new rows: Hct1, Hctl, Hctr, Hjsm, Hleo, Htmx, Nglx, Npal, Scth, Srmg, Sswm, Uany, Uarf, Ubru, Ubtr, Uctl, Ugr2, Ugr3, Ugrk, Ujsm, Uput, Urff, Urfm, Urfu, Uzkf, Uzkm, Uzrm, fapo, fber, fdkr ... +34
+
+==============================================================================
+War3.w3mod:Units/UnitMetaData.slk
+==============================================================================
+  bytes       70,734 -> 73,808
+  rows        273 -> 285
+  columns     24 -> 24
+  rows added  12
+  rows gone   0
+  cells changed on shared rows and fields  1
+  new rows: iequ, iinv, itag, itcc, itco, uatg, uepa, uevi, ufhp, umd1, umd2, uoct
+  sample of changed cells
+      umdl         index                '-1' -> '0'
+
+==============================================================================
+War3.w3mod:Units/UnitSkin.txt
+==============================================================================
+  bytes       840,725 -> 967,096
+  parsed as   section and key
+  entries     45,125 -> 50,428
+  ADDED       5,413
+  REMOVED     110
+  changed     36
+  --- ADDED ---
+      [Ecen] Art:de = ReplaceableTextures\CommandButtons\BTNKeeperOfTheGrove.blp
+      [Ecen] blue:de = 255
+      [Ecen] file:de = Units\NightElf\Cenarius\Cenarius
+      [Ecen] green:de = 255
+      [Ecen] portrait:de = Units\NightElf\Cenarius\Cenarius_portrait
+      [Ecen] red:de = 255
+      [Edem] Art:de = ReplaceableTextures\CommandButtons\BTNHeroDemonHunter.blp
+      [Edem] file:de = Units\NightElf\HeroDemonHunter\HeroDemonHunter
+      [Edem] modelScale:de = 1.05
+      [Edem] portrait:de = Units\NightElf\HeroDemonHunter\HeroDemonHunter_portrait
+      [Edmf] file:de = units\nightelf\HeroDemonHunter\HeroDemonHunter
+      [Edmf] portrait:de = units\nightelf\HeroDemonHunter\HeroDemonHunter_portrait
+      [Edmm] Art:de = ReplaceableTextures\CommandButtons\BTNMetamorphosis.blp
+      [Edmm] file:de = Units\NightElf\HeroDemonHunter\HeroDemonHunter
+      [Edmm] modelScale:de = 1.05
+      [Edmm] portrait:de = units\nightelf\HeroDemonHunter\HeroDemonHunterMeta_portrait
+      [Eidm] Art:de = ReplaceableTextures\CommandButtons\BTNHeroDemonHunter.blp
+      [Eidm] file:de = Units\NightElf\Illidan\Illidan
+      [Eidm] portrait:de = Units\NightElf\Illidan\Illidan_portrait
+      [Eill] Art:de = ReplaceableTextures\CommandButtons\BTNHeroDemonHunter.blp
+      [Eill] file:de = Units\NightElf\Illidan\Illidan
+      [Eill] portrait:de = Units\NightElf\Illidan\Illidan_portrait
+      [Eilm] Art:de = ReplaceableTextures\CommandButtons\BTNHeroDemonHunter.blp
+      [Eilm] file:de = Units\NightElf\Illidan\Illidan
+      [Eilm] portrait:de = Units\NightElf\Illidan\Illidan_portrait
+      ... and 5,388 more
+  --- REMOVED ---
+      [] Art = ReplaceableTextures\CommandButtons\BTNHeroArchMage.blp
+      [] abilSkinList = AInv
+      [] armor = Flesh
+      [] blend = 0.15
+      [] blue = 255
+      [] campaign = 0
+      [] customTeamColor = 0
+      [] dropItems = 1
+      [] elevRad = 30
+      [] file = units\human\HeroArchMage\HeroArchMage
+      [] fileVerFlags = 0
+      [] fogRad = 0
+      [] green = 255
+      [] heroAbilSkinList = AHbz,AHab,AHwe,AHmt
+      [] hiddenInEditor = 0
+      [] hideHeroBar = 0
+      [] hideHeroDeathMsg = 0
+      [] hideHeroMinimap = 0
+      [] hideOnMinimap = 0
+      [] inEditor = 1
+      [] legacyModelScale = 1
+      [] legacyScale = 1.5
+      [] maxPitch = 45
+      [] maxRoll = 10
+      [] modelScale:hd = 1
+      ... and 85 more
+  --- CHANGED ---
+      [Ubal] skinnableID =   'Ubal' -> 'Udre'
+      [Ulic] fileVerFlags =   '2' -> '6'
+      [ebal] fileVerFlags =   '2' -> '6'
+      [hgyr] fileVerFlags =   '2' -> '6'
+      [hmpr] fileVerFlags =   '2' -> '6'
+      [hmtt] fileVerFlags =   '2' -> '6'
+      [hphx] blue =   '255' -> '240'
+      [hphx] green =   '255' -> '175'
+      [hrtt] fileVerFlags =   '2' -> '6'
+      [hsor] fileVerFlags =   '2' -> '6'
+      [nbzw] blue:sd =   '80' -> '120'
+      [ndtb] modelScale:sd =   '1.3' -> '1.5'
+      [ndth] modelScale:sd =   '1.25' -> '1.1'
+      [ndtp] modelScale:sd =   '0.9' -> '0.82'
+      [ndtt] modelScale:sd =   '1.15' -> '0.95'
+      [nelb] green:sd =   '50' -> '100'
+      [nfel] fileVerFlags =   '2' -> '6'
+      [ngrk] green:sd =   '110' -> '255'
+      [ngrk] red:sd =   '150' -> '255'
+      [nmfs] fileVerFlags =   '2' -> '6'
+      [nmmu] fileVerFlags =   '2' -> '6'
+      [nmpg] fileVerFlags =   '2' -> '6'
+      [nmrl] fileVerFlags =   '2' -> '6'
+      [nmrm] fileVerFlags =   '2' -> '6'
+      [nmrr] fileVerFlags =   '2' -> '6'
+      ... and 11 more
+
+==============================================================================
+War3.w3mod:Units/UnitWeapons.slk
+==============================================================================
+  bytes       744,303 -> 799,832
+  rows        865 -> 929
+  columns     67 -> 67
+  rows added  64
+  rows gone   0
+  cells changed on shared rows and fields  0
+  new rows: Hct1, Hctl, Hctr, Hjsm, Hleo, Htmx, Nglx, Npal, Scth, Srmg, Sswm, Uany, Uarf, Ubru, Ubtr, Uctl, Ugr2, Ugr3, Ugrk, Ujsm, Uput, Urff, Urfm, Urfu, Uzkf, Uzkm, Uzrm, fapo, fber, fdkr ... +34
+
+==============================================================================
+War3.w3mod:Units/UnitWeaponsFunc.txt
+==============================================================================
+  bytes       27,950 -> 29,957
+  parsed as   section and key
+  entries     1,730 -> 1,856
+  ADDED       126
+  REMOVED     0
+  changed     0
+  --- ADDED ---
+      [Hct1] launchX = 0
+      [Hct1] launchY = 0
+      [Hctl] launchX = 0
+      [Hctl] launchY = 0
+      [Hctr] launchX = 0
+      [Hctr] launchY = 0
+      [Hjsm] launchX = 15
+      [Hjsm] launchY = 0
+      [Hleo] launchX = 0
+      [Hleo] launchY = 0
+      [Htmx] launchX = 0
+      [Htmx] launchY = 0
+      [Nglx] launchX = 0
+      [Nglx] launchY = 0
+      [Npal] launchX = 0
+      [Npal] launchY = 0
+      [Scth] launchX = 0
+      [Scth] launchY = 0
+      [Srmg] launchX = 0
+      [Srmg] launchY = 0
+      [Sswm] launchX = 15
+      [Sswm] launchY = 0
+      [Uany] launchX = 0
+      [Uany] launchY = 0
+      [Uarf] launchX = 0
+      ... and 101 more
+
+==============================================================================
+War3.w3mod:Units/UnitWeaponsSkin.txt
+==============================================================================
+  bytes       96,611 -> 104,165
+  parsed as   section and key
+  entries     6,091 -> 6,548
+  ADDED       457
+  REMOVED     0
+  changed     0
+  --- ADDED ---
+      [Hct1] impactSwimZ = 0
+      [Hct1] impactZ = 60
+      [Hct1] launchSwimZ = 0
+      [Hct1] launchZ = 60
+      [Hct1] showUI1 = 1
+      [Hct1] showUI2 = 1
+      [Hct1] weapType1 = MetalHeavySlice
+      [Hctl] impactSwimZ = 0
+      [Hctl] impactZ = 60
+      [Hctl] launchSwimZ = 0
+      [Hctl] launchZ = 60
+      [Hctl] showUI1 = 1
+      [Hctl] showUI2 = 1
+      [Hctl] weapType1 = MetalMediumSlice
+      [Hctr] impactSwimZ = 0
+      [Hctr] impactZ = 60
+      [Hctr] launchSwimZ = 0
+      [Hctr] launchZ = 60
+      [Hctr] showUI1 = 1
+      [Hctr] showUI2 = 1
+      [Hctr] weapType1 = MetalMediumSlice
+      [Hjsm] impactSwimZ = 0
+      [Hjsm] impactZ = 60
+      [Hjsm] launchSwimZ = 0
+      [Hjsm] launchZ = 66
+      ... and 432 more
+
+==============================================================================
+War3.w3mod:Units/unitUI.slk
+==============================================================================
+  bytes       239,909 -> 289,876
+  rows        864 -> 928
+  columns     25 -> 28
+  rows added  64
+  rows gone   0
+  cells changed on shared rows and fields  0
+  NEW COLUMNS (3): forceDisplayHP, occlusion, showAirToGround
+  new rows: Hct1, Hctl, Hctr, Hjsm, Hleo, Htmx, Nglx, Npal, Scth, Srmg, Sswm, Uany, Uarf, Ubru, Ubtr, Uctl, Ugr2, Ugr3, Ugrk, Ujsm, Uput, Urff, Urfm, Urfu, Uzkf, Uzkm, Uzrm, fapo, fber, fdkr ... +34
+
+==============================================================================
+War3.w3mod:_Balance/Custom_V0.w3mod:Units/MiscGame.txt
+==============================================================================
+  bytes       6,017 -> 6,223
+  parsed as   section and key
+  entries     148 -> 156
+  ADDED       8
+  REMOVED     0
+  changed     0
+  --- ADDED ---
+      [Misc] AICallForHelp = 900
+      [Misc] BaseMeleeCritDamage = 200
+      [Misc] BaseSpellCritDamage = 200
+      [Misc] IllusionsGetCooldownReduction = 0
+      [Misc] IllusionsGetManaEfficiency = 0
+      [Misc] IllusionsGetResolve = 0
+      [Misc] IllusionsGetSpellAmp = 0
+      [Misc] IllusionsGetSpellVamp = 0
+
+==============================================================================
+War3.w3mod:_Balance/Custom_V1.w3mod:Units/MiscGame.txt
+==============================================================================
+  bytes       6,202 -> 6,408
+  parsed as   section and key
+  entries     155 -> 163
+  ADDED       8
+  REMOVED     0
+  changed     0
+  --- ADDED ---
+      [Misc] AICallForHelp = 900
+      [Misc] BaseMeleeCritDamage = 200
+      [Misc] BaseSpellCritDamage = 200
+      [Misc] IllusionsGetCooldownReduction = 0
+      [Misc] IllusionsGetManaEfficiency = 0
+      [Misc] IllusionsGetResolve = 0
+      [Misc] IllusionsGetSpellAmp = 0
+      [Misc] IllusionsGetSpellVamp = 0
+
+==============================================================================
+War3.w3mod:_Balance/Melee_V0.w3mod:Units/MiscGame.txt
+==============================================================================
+  bytes       6,043 -> 6,249
+  parsed as   section and key
+  entries     149 -> 157
+  ADDED       8
+  REMOVED     0
+  changed     0
+  --- ADDED ---
+      [Misc] AICallForHelp = 900
+      [Misc] BaseMeleeCritDamage = 200
+      [Misc] BaseSpellCritDamage = 200
+      [Misc] IllusionsGetCooldownReduction = 1
+      [Misc] IllusionsGetManaEfficiency = 1
+      [Misc] IllusionsGetResolve = 1
+      [Misc] IllusionsGetSpellAmp = 1
+      [Misc] IllusionsGetSpellVamp = 1
+
+==============================================================================
+LOCALE STRING TABLES CHANGED (313), listed not diffed
+==============================================================================
+  War3.w3mod:_Locales/deDE.w3mod:Doodads/DoodadSkinStrings.txt
+  War3.w3mod:_Locales/deDE.w3mod:Strings/DialogueCreepsBase.fdf
+  War3.w3mod:_Locales/deDE.w3mod:Strings/DialogueHumanBase.fdf
+  War3.w3mod:_Locales/deDE.w3mod:Strings/DialogueUndeadBase.fdf
+  War3.w3mod:_Locales/deDE.w3mod:UI/FrameDef/GlobalStrings.fdf
+  War3.w3mod:_Locales/deDE.w3mod:UI/FrameDef/InfoPanelStrings.fdf
+  War3.w3mod:_Locales/deDE.w3mod:UI/TriggerStrings.txt
+  War3.w3mod:_Locales/deDE.w3mod:UI/WorldEditGameStrings.txt
+  War3.w3mod:_Locales/deDE.w3mod:UI/WorldEditStrings.txt
+  War3.w3mod:_Locales/deDE.w3mod:Units/CampaignAbilityStrings.txt
+  War3.w3mod:_Locales/deDE.w3mod:Units/CampaignUnitStrings.txt
+  War3.w3mod:_Locales/deDE.w3mod:Units/GeneralKeybindStrings.txt
+  War3.w3mod:_Locales/deDE.w3mod:Units/HumanAbilityStrings.txt
+  War3.w3mod:_Locales/deDE.w3mod:Units/ItemAbilityStrings.txt
+  War3.w3mod:_Locales/deDE.w3mod:Units/ItemStrings.txt
+  War3.w3mod:_Locales/deDE.w3mod:Units/NeutralAbilityStrings.txt
+  War3.w3mod:_Locales/deDE.w3mod:Units/NeutralUnitStrings.txt
+  War3.w3mod:_Locales/deDE.w3mod:Units/NightElfAbilityStrings.txt
+  War3.w3mod:_Locales/deDE.w3mod:Units/NightElfUnitStrings.txt
+  War3.w3mod:_Locales/deDE.w3mod:Units/NightElfUpgradeStrings.txt
+  War3.w3mod:_Locales/deDE.w3mod:Units/OrcAbilityStrings.txt
+  War3.w3mod:_Locales/deDE.w3mod:Units/OrcUnitStrings.txt
+  War3.w3mod:_Locales/deDE.w3mod:Units/OrcUpgradeStrings.txt
+  War3.w3mod:_Locales/deDE.w3mod:Units/UndeadAbilityStrings.txt
+  War3.w3mod:_Locales/deDE.w3mod:Units/UndeadUnitStrings.txt
+  War3.w3mod:_Locales/deDE.w3mod:Units/UnitSkinStrings.txt
+  War3.w3mod:_Locales/enUS.w3mod:Doodads/DoodadSkinStrings.txt
+  War3.w3mod:_Locales/enUS.w3mod:Strings/DialogueCreepsBase.fdf
+  War3.w3mod:_Locales/enUS.w3mod:Strings/DialogueHumanBase.fdf
+  War3.w3mod:_Locales/enUS.w3mod:Strings/DialogueUndeadBase.fdf
+  War3.w3mod:_Locales/enUS.w3mod:UI/FrameDef/GlobalStrings.fdf
+  War3.w3mod:_Locales/enUS.w3mod:UI/FrameDef/InfoPanelStrings.fdf
+  War3.w3mod:_Locales/enUS.w3mod:UI/TriggerStrings.txt
+  War3.w3mod:_Locales/enUS.w3mod:UI/WorldEditGameStrings.txt
+  War3.w3mod:_Locales/enUS.w3mod:UI/WorldEditStrings.txt
+  War3.w3mod:_Locales/enUS.w3mod:Units/CampaignAbilityStrings.txt
+  War3.w3mod:_Locales/enUS.w3mod:Units/CampaignUnitStrings.txt
+  War3.w3mod:_Locales/enUS.w3mod:Units/HumanAbilityStrings.txt
+  War3.w3mod:_Locales/enUS.w3mod:Units/ItemAbilityStrings.txt
+  War3.w3mod:_Locales/enUS.w3mod:Units/ItemStrings.txt
+  War3.w3mod:_Locales/enUS.w3mod:Units/NeutralAbilityStrings.txt
+  War3.w3mod:_Locales/enUS.w3mod:Units/NeutralUnitStrings.txt
+  War3.w3mod:_Locales/enUS.w3mod:Units/NightElfAbilityStrings.txt
+  War3.w3mod:_Locales/esES.w3mod:Doodads/DoodadSkinStrings.txt
+  War3.w3mod:_Locales/esES.w3mod:Strings/DialogueCreepsBase.fdf
+  War3.w3mod:_Locales/esES.w3mod:Strings/DialogueHumanBase.fdf
+  War3.w3mod:_Locales/esES.w3mod:Strings/DialogueUndeadBase.fdf
+  War3.w3mod:_Locales/esES.w3mod:UI/FrameDef/GlobalStrings.fdf
+  War3.w3mod:_Locales/esES.w3mod:UI/FrameDef/InfoPanelStrings.fdf
+  War3.w3mod:_Locales/esES.w3mod:UI/TriggerStrings.txt
+  War3.w3mod:_Locales/esES.w3mod:UI/WorldEditGameStrings.txt
+  War3.w3mod:_Locales/esES.w3mod:UI/WorldEditStrings.txt
+  War3.w3mod:_Locales/esES.w3mod:Units/CampaignAbilityStrings.txt
+  War3.w3mod:_Locales/esES.w3mod:Units/CampaignUnitStrings.txt
+  War3.w3mod:_Locales/esES.w3mod:Units/GeneralKeybindStrings.txt
+  War3.w3mod:_Locales/esES.w3mod:Units/HumanAbilityStrings.txt
+  War3.w3mod:_Locales/esES.w3mod:Units/ItemAbilityStrings.txt
+  War3.w3mod:_Locales/esES.w3mod:Units/ItemStrings.txt
+  War3.w3mod:_Locales/esES.w3mod:Units/NeutralAbilityStrings.txt
+  War3.w3mod:_Locales/esES.w3mod:Units/NeutralUnitStrings.txt
+  War3.w3mod:_Locales/esES.w3mod:Units/NightElfAbilityStrings.txt
+  War3.w3mod:_Locales/esES.w3mod:Units/NightElfUnitStrings.txt
+  War3.w3mod:_Locales/esES.w3mod:Units/NightElfUpgradeStrings.txt
+  War3.w3mod:_Locales/esES.w3mod:Units/OrcAbilityStrings.txt
+  War3.w3mod:_Locales/esES.w3mod:Units/OrcUnitStrings.txt
+  War3.w3mod:_Locales/esES.w3mod:Units/OrcUpgradeStrings.txt
+  War3.w3mod:_Locales/esES.w3mod:Units/UndeadAbilityStrings.txt
+  War3.w3mod:_Locales/esES.w3mod:Units/UndeadUnitStrings.txt
+  War3.w3mod:_Locales/esES.w3mod:Units/UndeadUpgradeStrings.txt
+  War3.w3mod:_Locales/esES.w3mod:Units/UnitSkinStrings.txt
+  War3.w3mod:_Locales/esMX.w3mod:Doodads/DoodadSkinStrings.txt
+  War3.w3mod:_Locales/esMX.w3mod:Strings/DialogueCreepsBase.fdf
+  War3.w3mod:_Locales/esMX.w3mod:Strings/DialogueHumanBase.fdf
+  War3.w3mod:_Locales/esMX.w3mod:Strings/DialogueUndeadBase.fdf
+  War3.w3mod:_Locales/esMX.w3mod:UI/FrameDef/GlobalStrings.fdf
+  War3.w3mod:_Locales/esMX.w3mod:UI/FrameDef/InfoPanelStrings.fdf
+  War3.w3mod:_Locales/esMX.w3mod:UI/FrameDef/NetworkStrings.fdf
+  War3.w3mod:_Locales/esMX.w3mod:UI/TriggerStrings.txt
+  War3.w3mod:_Locales/esMX.w3mod:UI/WorldEditGameStrings.txt
+  War3.w3mod:_Locales/esMX.w3mod:UI/WorldEditStrings.txt
+  War3.w3mod:_Locales/esMX.w3mod:Units/CampaignAbilityStrings.txt
+  War3.w3mod:_Locales/esMX.w3mod:Units/CampaignUnitStrings.txt
+  War3.w3mod:_Locales/esMX.w3mod:Units/GeneralKeybindStrings.txt
+  War3.w3mod:_Locales/esMX.w3mod:Units/HumanAbilityStrings.txt
+  War3.w3mod:_Locales/esMX.w3mod:Units/ItemAbilityStrings.txt
+  War3.w3mod:_Locales/esMX.w3mod:Units/ItemStrings.txt
+  War3.w3mod:_Locales/esMX.w3mod:Units/NeutralAbilityStrings.txt
+  War3.w3mod:_Locales/esMX.w3mod:Units/NeutralUnitStrings.txt
+  War3.w3mod:_Locales/esMX.w3mod:Units/NightElfAbilityStrings.txt
+  War3.w3mod:_Locales/esMX.w3mod:Units/NightElfUnitStrings.txt
+  War3.w3mod:_Locales/esMX.w3mod:Units/NightElfUpgradeStrings.txt
+  War3.w3mod:_Locales/esMX.w3mod:Units/OrcAbilityStrings.txt
+  War3.w3mod:_Locales/esMX.w3mod:Units/OrcUnitStrings.txt
+  War3.w3mod:_Locales/esMX.w3mod:Units/OrcUpgradeStrings.txt
+  War3.w3mod:_Locales/esMX.w3mod:Units/UndeadAbilityStrings.txt
+  War3.w3mod:_Locales/esMX.w3mod:Units/UndeadUnitStrings.txt
+  War3.w3mod:_Locales/esMX.w3mod:Units/UnitSkinStrings.txt
+  War3.w3mod:_Locales/frFR.w3mod:Doodads/DoodadSkinStrings.txt
+  War3.w3mod:_Locales/frFR.w3mod:Strings/DialogueCreepsBase.fdf
+  War3.w3mod:_Locales/frFR.w3mod:Strings/DialogueHumanBase.fdf
+  War3.w3mod:_Locales/frFR.w3mod:Strings/DialogueUndeadBase.fdf
+  War3.w3mod:_Locales/frFR.w3mod:UI/FrameDef/GlobalStrings.fdf
+  War3.w3mod:_Locales/frFR.w3mod:UI/FrameDef/InfoPanelStrings.fdf
+  War3.w3mod:_Locales/frFR.w3mod:UI/TriggerStrings.txt
+  War3.w3mod:_Locales/frFR.w3mod:UI/WorldEditGameStrings.txt
+  War3.w3mod:_Locales/frFR.w3mod:UI/WorldEditStrings.txt
+  War3.w3mod:_Locales/frFR.w3mod:Units/CampaignAbilityStrings.txt
+  War3.w3mod:_Locales/frFR.w3mod:Units/CampaignUnitStrings.txt
+  War3.w3mod:_Locales/frFR.w3mod:Units/GeneralKeybindStrings.txt
+  War3.w3mod:_Locales/frFR.w3mod:Units/HumanAbilityStrings.txt
+  War3.w3mod:_Locales/frFR.w3mod:Units/ItemAbilityStrings.txt
+  War3.w3mod:_Locales/frFR.w3mod:Units/ItemStrings.txt
+  War3.w3mod:_Locales/frFR.w3mod:Units/NeutralAbilityStrings.txt
+  War3.w3mod:_Locales/frFR.w3mod:Units/NeutralUnitStrings.txt
+  War3.w3mod:_Locales/frFR.w3mod:Units/NightElfAbilityStrings.txt
+  War3.w3mod:_Locales/frFR.w3mod:Units/NightElfUnitStrings.txt
+  War3.w3mod:_Locales/frFR.w3mod:Units/NightElfUpgradeStrings.txt
+  War3.w3mod:_Locales/frFR.w3mod:Units/OrcAbilityStrings.txt
+  War3.w3mod:_Locales/frFR.w3mod:Units/OrcUnitStrings.txt
+  War3.w3mod:_Locales/frFR.w3mod:Units/OrcUpgradeStrings.txt
+  War3.w3mod:_Locales/frFR.w3mod:Units/UndeadAbilityStrings.txt
+  War3.w3mod:_Locales/frFR.w3mod:Units/UndeadUnitStrings.txt
+  War3.w3mod:_Locales/frFR.w3mod:Units/UnitSkinStrings.txt
+  War3.w3mod:_Locales/itIT.w3mod:Doodads/DoodadSkinStrings.txt
+  War3.w3mod:_Locales/itIT.w3mod:Strings/DialogueCreepsBase.fdf
+  War3.w3mod:_Locales/itIT.w3mod:Strings/DialogueHumanBase.fdf
+  War3.w3mod:_Locales/itIT.w3mod:Strings/DialogueOrcBase.fdf
+  War3.w3mod:_Locales/itIT.w3mod:Strings/DialogueUndeadBase.fdf
+  War3.w3mod:_Locales/itIT.w3mod:UI/FrameDef/GlobalStrings.fdf
+  War3.w3mod:_Locales/itIT.w3mod:UI/FrameDef/InfoPanelStrings.fdf
+  War3.w3mod:_Locales/itIT.w3mod:UI/TriggerStrings.txt
+  War3.w3mod:_Locales/itIT.w3mod:UI/WorldEditGameStrings.txt
+  War3.w3mod:_Locales/itIT.w3mod:UI/WorldEditStrings.txt
+  War3.w3mod:_Locales/itIT.w3mod:Units/CampaignAbilityStrings.txt
+  War3.w3mod:_Locales/itIT.w3mod:Units/CampaignUnitStrings.txt
+  War3.w3mod:_Locales/itIT.w3mod:Units/GeneralKeybindStrings.txt
+  War3.w3mod:_Locales/itIT.w3mod:Units/HumanAbilityStrings.txt
+  War3.w3mod:_Locales/itIT.w3mod:Units/ItemAbilityStrings.txt
+  War3.w3mod:_Locales/itIT.w3mod:Units/ItemSkinStrings.txt
+  War3.w3mod:_Locales/itIT.w3mod:Units/ItemStrings.txt
+  War3.w3mod:_Locales/itIT.w3mod:Units/NeutralAbilityStrings.txt
+  War3.w3mod:_Locales/itIT.w3mod:Units/NeutralUnitStrings.txt
+  War3.w3mod:_Locales/itIT.w3mod:Units/NightElfAbilityStrings.txt
+  War3.w3mod:_Locales/itIT.w3mod:Units/NightElfUnitStrings.txt
+  War3.w3mod:_Locales/itIT.w3mod:Units/NightElfUpgradeStrings.txt
+  War3.w3mod:_Locales/itIT.w3mod:Units/OrcAbilityStrings.txt
+  War3.w3mod:_Locales/itIT.w3mod:Units/OrcUnitStrings.txt
+  War3.w3mod:_Locales/itIT.w3mod:Units/OrcUpgradeStrings.txt
+  War3.w3mod:_Locales/itIT.w3mod:Units/UndeadAbilityStrings.txt
+  War3.w3mod:_Locales/itIT.w3mod:Units/UndeadUnitStrings.txt
+  War3.w3mod:_Locales/itIT.w3mod:Units/UnitSkinStrings.txt
+  War3.w3mod:_Locales/koKR.w3mod:Doodads/DoodadSkinStrings.txt
+  War3.w3mod:_Locales/koKR.w3mod:Strings/DialogueCreepsBase.fdf
+  War3.w3mod:_Locales/koKR.w3mod:Strings/DialogueHumanBase.fdf
+  War3.w3mod:_Locales/koKR.w3mod:Strings/DialogueUndeadBase.fdf
+  War3.w3mod:_Locales/koKR.w3mod:UI/FrameDef/GlobalStrings.fdf
+  War3.w3mod:_Locales/koKR.w3mod:UI/FrameDef/InfoPanelStrings.fdf
+  War3.w3mod:_Locales/koKR.w3mod:UI/TriggerStrings.txt
+  War3.w3mod:_Locales/koKR.w3mod:UI/WorldEditGameStrings.txt
+  War3.w3mod:_Locales/koKR.w3mod:UI/WorldEditStrings.txt
+  War3.w3mod:_Locales/koKR.w3mod:Units/CampaignAbilityStrings.txt
+  War3.w3mod:_Locales/koKR.w3mod:Units/CampaignUnitStrings.txt
+  War3.w3mod:_Locales/koKR.w3mod:Units/CommandStrings.txt
+  War3.w3mod:_Locales/koKR.w3mod:Units/GeneralKeybindStrings.txt
+  War3.w3mod:_Locales/koKR.w3mod:Units/HumanAbilityStrings.txt
+  War3.w3mod:_Locales/koKR.w3mod:Units/ItemAbilityStrings.txt
+  War3.w3mod:_Locales/koKR.w3mod:Units/ItemSkinStrings.txt
+  War3.w3mod:_Locales/koKR.w3mod:Units/ItemStrings.txt
+  War3.w3mod:_Locales/koKR.w3mod:Units/NeutralAbilityStrings.txt
+  War3.w3mod:_Locales/koKR.w3mod:Units/NeutralUnitStrings.txt
+  War3.w3mod:_Locales/koKR.w3mod:Units/NightElfAbilityStrings.txt
+  War3.w3mod:_Locales/koKR.w3mod:Units/NightElfUnitStrings.txt
+  War3.w3mod:_Locales/koKR.w3mod:Units/NightElfUpgradeStrings.txt
+  War3.w3mod:_Locales/koKR.w3mod:Units/OrcAbilityStrings.txt
+  War3.w3mod:_Locales/koKR.w3mod:Units/OrcUnitStrings.txt
+  War3.w3mod:_Locales/koKR.w3mod:Units/OrcUpgradeStrings.txt
+  War3.w3mod:_Locales/koKR.w3mod:Units/UndeadAbilityStrings.txt
+  War3.w3mod:_Locales/koKR.w3mod:Units/UndeadUnitStrings.txt
+  War3.w3mod:_Locales/koKR.w3mod:Units/UnitSkinStrings.txt
+  War3.w3mod:_Locales/plPL.w3mod:Doodads/DoodadSkinStrings.txt
+  War3.w3mod:_Locales/plPL.w3mod:Strings/DialogueCreepsBase.fdf
+  War3.w3mod:_Locales/plPL.w3mod:Strings/DialogueHumanBase.fdf
+  War3.w3mod:_Locales/plPL.w3mod:Strings/DialogueUndeadBase.fdf
+  War3.w3mod:_Locales/plPL.w3mod:UI/FrameDef/GlobalStrings.fdf
+  War3.w3mod:_Locales/plPL.w3mod:UI/FrameDef/InfoPanelStrings.fdf
+  War3.w3mod:_Locales/plPL.w3mod:UI/TriggerStrings.txt
+  War3.w3mod:_Locales/plPL.w3mod:UI/WorldEditGameStrings.txt
+  War3.w3mod:_Locales/plPL.w3mod:UI/WorldEditStrings.txt
+  War3.w3mod:_Locales/plPL.w3mod:Units/CampaignAbilityStrings.txt
+  War3.w3mod:_Locales/plPL.w3mod:Units/CampaignUnitStrings.txt
+  War3.w3mod:_Locales/plPL.w3mod:Units/GeneralKeybindStrings.txt
+  War3.w3mod:_Locales/plPL.w3mod:Units/HumanAbilityStrings.txt
+  War3.w3mod:_Locales/plPL.w3mod:Units/ItemAbilityStrings.txt
+  War3.w3mod:_Locales/plPL.w3mod:Units/ItemSkinStrings.txt
+  War3.w3mod:_Locales/plPL.w3mod:Units/ItemStrings.txt
+  War3.w3mod:_Locales/plPL.w3mod:Units/NeutralAbilityStrings.txt
+  War3.w3mod:_Locales/plPL.w3mod:Units/NeutralUnitStrings.txt
+  War3.w3mod:_Locales/plPL.w3mod:Units/NightElfAbilityStrings.txt
+  War3.w3mod:_Locales/plPL.w3mod:Units/NightElfUnitStrings.txt
+  War3.w3mod:_Locales/plPL.w3mod:Units/NightElfUpgradeStrings.txt
+  War3.w3mod:_Locales/plPL.w3mod:Units/OrcAbilityStrings.txt
+  War3.w3mod:_Locales/plPL.w3mod:Units/OrcUnitStrings.txt
+  War3.w3mod:_Locales/plPL.w3mod:Units/OrcUpgradeStrings.txt
+  War3.w3mod:_Locales/plPL.w3mod:Units/UndeadAbilityStrings.txt
+  War3.w3mod:_Locales/plPL.w3mod:Units/UndeadUnitStrings.txt
+  War3.w3mod:_Locales/plPL.w3mod:Units/UnitSkinStrings.txt
+  War3.w3mod:_Locales/ptBR.w3mod:Doodads/DoodadSkinStrings.txt
+  War3.w3mod:_Locales/ptBR.w3mod:Strings/DialogueCreepsBase.fdf
+  War3.w3mod:_Locales/ptBR.w3mod:Strings/DialogueHumanBase.fdf
+  War3.w3mod:_Locales/ptBR.w3mod:Strings/DialogueOrcBase.fdf
+  War3.w3mod:_Locales/ptBR.w3mod:Strings/DialogueUndeadBase.fdf
+  War3.w3mod:_Locales/ptBR.w3mod:UI/FrameDef/GlobalStrings.fdf
+  War3.w3mod:_Locales/ptBR.w3mod:UI/FrameDef/InfoPanelStrings.fdf
+  War3.w3mod:_Locales/ptBR.w3mod:UI/TriggerStrings.txt
+  War3.w3mod:_Locales/ptBR.w3mod:UI/WorldEditGameStrings.txt
+  War3.w3mod:_Locales/ptBR.w3mod:UI/WorldEditStrings.txt
+  War3.w3mod:_Locales/ptBR.w3mod:Units/CampaignAbilityStrings.txt
+  War3.w3mod:_Locales/ptBR.w3mod:Units/CampaignUnitStrings.txt
+  War3.w3mod:_Locales/ptBR.w3mod:Units/GeneralKeybindStrings.txt
+  War3.w3mod:_Locales/ptBR.w3mod:Units/HumanAbilityStrings.txt
+  War3.w3mod:_Locales/ptBR.w3mod:Units/ItemAbilityStrings.txt
+  War3.w3mod:_Locales/ptBR.w3mod:Units/ItemStrings.txt
+  War3.w3mod:_Locales/ptBR.w3mod:Units/NeutralAbilityStrings.txt
+  War3.w3mod:_Locales/ptBR.w3mod:Units/NeutralUnitStrings.txt
+  War3.w3mod:_Locales/ptBR.w3mod:Units/NightElfAbilityStrings.txt
+  War3.w3mod:_Locales/ptBR.w3mod:Units/NightElfUnitStrings.txt
+  War3.w3mod:_Locales/ptBR.w3mod:Units/NightElfUpgradeStrings.txt
+  War3.w3mod:_Locales/ptBR.w3mod:Units/OrcAbilityStrings.txt
+  War3.w3mod:_Locales/ptBR.w3mod:Units/OrcUnitStrings.txt
+  War3.w3mod:_Locales/ptBR.w3mod:Units/OrcUpgradeStrings.txt
+  War3.w3mod:_Locales/ptBR.w3mod:Units/UndeadAbilityStrings.txt
+  War3.w3mod:_Locales/ptBR.w3mod:Units/UndeadUnitStrings.txt
+  War3.w3mod:_Locales/ptBR.w3mod:Units/UnitSkinStrings.txt
+  War3.w3mod:_Locales/ruRU.w3mod:Doodads/DoodadSkinStrings.txt
+  War3.w3mod:_Locales/ruRU.w3mod:Strings/DialogueCreepsBase.fdf
+  War3.w3mod:_Locales/ruRU.w3mod:Strings/DialogueHumanBase.fdf
+  War3.w3mod:_Locales/ruRU.w3mod:Strings/DialogueUndeadBase.fdf
+  War3.w3mod:_Locales/ruRU.w3mod:UI/FrameDef/GlobalStrings.fdf
+  War3.w3mod:_Locales/ruRU.w3mod:UI/FrameDef/InfoPanelStrings.fdf
+  War3.w3mod:_Locales/ruRU.w3mod:UI/TriggerStrings.txt
+  War3.w3mod:_Locales/ruRU.w3mod:UI/WorldEditGameStrings.txt
+  War3.w3mod:_Locales/ruRU.w3mod:UI/WorldEditStrings.txt
+  War3.w3mod:_Locales/ruRU.w3mod:Units/CampaignAbilityStrings.txt
+  War3.w3mod:_Locales/ruRU.w3mod:Units/CampaignUnitStrings.txt
+  War3.w3mod:_Locales/ruRU.w3mod:Units/GeneralKeybindStrings.txt
+  War3.w3mod:_Locales/ruRU.w3mod:Units/HumanAbilityStrings.txt
+  War3.w3mod:_Locales/ruRU.w3mod:Units/ItemAbilityStrings.txt
+  War3.w3mod:_Locales/ruRU.w3mod:Units/ItemStrings.txt
+  War3.w3mod:_Locales/ruRU.w3mod:Units/NeutralAbilityStrings.txt
+  War3.w3mod:_Locales/ruRU.w3mod:Units/NeutralUnitStrings.txt
+  War3.w3mod:_Locales/ruRU.w3mod:Units/NightElfAbilityStrings.txt
+  War3.w3mod:_Locales/ruRU.w3mod:Units/NightElfUnitStrings.txt
+  War3.w3mod:_Locales/ruRU.w3mod:Units/NightElfUpgradeStrings.txt
+  War3.w3mod:_Locales/ruRU.w3mod:Units/OrcAbilityStrings.txt
+  War3.w3mod:_Locales/ruRU.w3mod:Units/OrcUnitStrings.txt
+  War3.w3mod:_Locales/ruRU.w3mod:Units/OrcUpgradeStrings.txt
+  War3.w3mod:_Locales/ruRU.w3mod:Units/UndeadAbilityStrings.txt
+  War3.w3mod:_Locales/ruRU.w3mod:Units/UndeadUnitStrings.txt
+  War3.w3mod:_Locales/ruRU.w3mod:Units/UnitSkinStrings.txt
+  War3.w3mod:_Locales/zhCN.w3mod:Doodads/DoodadSkinStrings.txt
+  War3.w3mod:_Locales/zhCN.w3mod:Strings/DialogueCreepsBase.fdf
+  War3.w3mod:_Locales/zhCN.w3mod:Strings/DialogueHumanBase.fdf
+  War3.w3mod:_Locales/zhCN.w3mod:Strings/DialogueUndeadBase.fdf
+  War3.w3mod:_Locales/zhCN.w3mod:UI/FrameDef/GlobalStrings.fdf
+  War3.w3mod:_Locales/zhCN.w3mod:UI/FrameDef/InfoPanelStrings.fdf
+  War3.w3mod:_Locales/zhCN.w3mod:UI/TriggerStrings.txt
+  War3.w3mod:_Locales/zhCN.w3mod:UI/WorldEditGameStrings.txt
+  War3.w3mod:_Locales/zhCN.w3mod:UI/WorldEditStrings.txt
+  War3.w3mod:_Locales/zhCN.w3mod:Units/CampaignAbilityStrings.txt
+  War3.w3mod:_Locales/zhCN.w3mod:Units/CampaignUnitStrings.txt
+  War3.w3mod:_Locales/zhCN.w3mod:Units/GeneralKeybindStrings.txt
+  War3.w3mod:_Locales/zhCN.w3mod:Units/HumanAbilityStrings.txt
+  War3.w3mod:_Locales/zhCN.w3mod:Units/ItemAbilityStrings.txt
+  War3.w3mod:_Locales/zhCN.w3mod:Units/ItemStrings.txt
+  War3.w3mod:_Locales/zhCN.w3mod:Units/NeutralAbilityStrings.txt
+  War3.w3mod:_Locales/zhCN.w3mod:Units/NeutralUnitStrings.txt
+  War3.w3mod:_Locales/zhCN.w3mod:Units/NightElfAbilityStrings.txt
+  War3.w3mod:_Locales/zhCN.w3mod:Units/NightElfUnitStrings.txt
+  War3.w3mod:_Locales/zhCN.w3mod:Units/NightElfUpgradeStrings.txt
+  War3.w3mod:_Locales/zhCN.w3mod:Units/OrcAbilityStrings.txt
+  War3.w3mod:_Locales/zhCN.w3mod:Units/OrcUnitStrings.txt
+  War3.w3mod:_Locales/zhCN.w3mod:Units/OrcUpgradeStrings.txt
+  War3.w3mod:_Locales/zhCN.w3mod:Units/UndeadAbilityStrings.txt
+  War3.w3mod:_Locales/zhCN.w3mod:Units/UndeadUnitStrings.txt
+  War3.w3mod:_Locales/zhCN.w3mod:Units/UnitSkinStrings.txt
+  War3.w3mod:_Locales/zhTW.w3mod:Doodads/DoodadSkinStrings.txt
+  War3.w3mod:_Locales/zhTW.w3mod:Strings/DialogueCreepsBase.fdf
+  War3.w3mod:_Locales/zhTW.w3mod:Strings/DialogueHumanBase.fdf
+  War3.w3mod:_Locales/zhTW.w3mod:Strings/DialogueNightElfBase.fdf
+  War3.w3mod:_Locales/zhTW.w3mod:Strings/DialogueUndeadBase.fdf
+  War3.w3mod:_Locales/zhTW.w3mod:UI/FrameDef/GlobalStrings.fdf
+  War3.w3mod:_Locales/zhTW.w3mod:UI/FrameDef/InfoPanelStrings.fdf
+  War3.w3mod:_Locales/zhTW.w3mod:UI/TriggerStrings.txt
+  War3.w3mod:_Locales/zhTW.w3mod:UI/WorldEditGameStrings.txt
+  War3.w3mod:_Locales/zhTW.w3mod:UI/WorldEditStrings.txt
+  War3.w3mod:_Locales/zhTW.w3mod:Units/CampaignAbilityStrings.txt
+  War3.w3mod:_Locales/zhTW.w3mod:Units/CampaignUnitStrings.txt
+  War3.w3mod:_Locales/zhTW.w3mod:Units/GeneralKeybindStrings.txt
+  War3.w3mod:_Locales/zhTW.w3mod:Units/HumanAbilityStrings.txt
+  War3.w3mod:_Locales/zhTW.w3mod:Units/ItemAbilityStrings.txt
+  War3.w3mod:_Locales/zhTW.w3mod:Units/ItemSkinStrings.txt
+  War3.w3mod:_Locales/zhTW.w3mod:Units/ItemStrings.txt
+  War3.w3mod:_Locales/zhTW.w3mod:Units/NeutralAbilityStrings.txt
+  War3.w3mod:_Locales/zhTW.w3mod:Units/NeutralUnitStrings.txt
+  War3.w3mod:_Locales/zhTW.w3mod:Units/NightElfAbilityStrings.txt
+  War3.w3mod:_Locales/zhTW.w3mod:Units/NightElfUnitStrings.txt
+  War3.w3mod:_Locales/zhTW.w3mod:Units/NightElfUpgradeStrings.txt
+  War3.w3mod:_Locales/zhTW.w3mod:Units/OrcAbilityStrings.txt
+  War3.w3mod:_Locales/zhTW.w3mod:Units/OrcUnitStrings.txt
+  War3.w3mod:_Locales/zhTW.w3mod:Units/OrcUpgradeStrings.txt
+  War3.w3mod:_Locales/zhTW.w3mod:Units/UndeadAbilityStrings.txt
+  War3.w3mod:_Locales/zhTW.w3mod:Units/UndeadUnitStrings.txt
+  War3.w3mod:_Locales/zhTW.w3mod:Units/UnitSkinStrings.txt
+
+ADDED (7)
+  + War3.w3mod:UI/CampaignInfoDLC01.txt
+  + War3.w3mod:UI/FrameDef/UI/FullScreenHelperDE.fdf
+  + War3.w3mod:UI/FrameDef/UI/StatDetailsPanel.fdf
+  + War3.w3mod:UI/SoundInfo/CinematicSounds.slk
+  + War3.w3mod:Units/AbilityStatModifiers.txt
+  + War3.w3mod:_DE.w3mod:Splats/LightningData.slk
+  + War3.w3mod:_DE.w3mod:TerrainArt/Water.slk
+REMOVED (4)
+  - _Addons/HD2.w3addon/Environment.w3mod:_HD.w3mod:TerrainArt/Water.slk
+  - _Addons/HD2.w3addon/Environment.w3mod:_HD.w3mod:_Tilesets/C.w3mod:Felwood_Diffuse.txt
+  - _Addons/HD2.w3addon/Environment.w3mod:_HD.w3mod:_Tilesets/Q.w3mod:Village Fall_Diffuse.txt
+  - _Addons/HD2.w3addon/Environment.w3mod:_HD.w3mod:_Tilesets/V.w3mod:Village_Diffuse.txt
+
+==============================================================================
+setup 0.41s   fetch 1.21s   diff 2.71s   TOTAL 4.33s
