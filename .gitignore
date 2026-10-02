@@ -11,3 +11,14 @@ dist-studio-new/
 dist-mcp/
 .claude/settings.local.json
 .claude/worktrees/
+
+# Maps, replays and archives are other people's work or large binaries, never source
+*.w3x
+*.w3m
+*.w3g
+*.zip
+tmp/
+uabi-disconnect/maps/
+uabi-disconnect/results/
+/*.jpg
+/*.png
