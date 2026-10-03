@@ -15,7 +15,8 @@ published and you are credited unless you ask not to be.
 
 ## Supported versions
 
-Only the latest build of the default branch gets fixes.
+Only the latest release gets fixes. Install it with the one-line installer in the
+README, or download it from the Releases page.
 
 ## What counts
 

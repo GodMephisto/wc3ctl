@@ -13,13 +13,14 @@ JSON. No map parsing or logic lives here.
 
 ```
 dotnet build src/Wc3.Mcp
-dotnet publish src/Wc3.Mcp -c Release -o dist-mcp
+dotnet publish src/Wc3.Mcp -c Release --self-contained -r win-x64 -o dist-mcp
 ```
 
-The published server is `dist-mcp/Wc3.Mcp.exe`. The native `CascLib.dll` (for
-base-game data queries) is resolved from `dist-mcp/runtimes/win-x64/native/`. If
-game-data lookups ever report "could not open game data", copy that file beside
-the exe (the same caveat as the CLI's `dist/`).
+The published server is `dist-mcp/Wc3.Mcp.exe`, with the native `CascLib.dll`
+(for base-game data) beside it. Keep them together. Publish into an empty folder,
+since publishing over an old one can keep an older DLL whose file date is newer.
+Most people do not need this exe, because `wc3ctl.exe mcp serve` is the same
+server and the installer sets it up.
 
 ## Register with an MCP client
 

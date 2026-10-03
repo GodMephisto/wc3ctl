@@ -32,6 +32,11 @@ Map logic lives in `Wc3.Commands`, which returns plain result objects. The CLI
 (`src/Wc3.Mcp`) only parse input and render those results, so a fix in a
 command reaches all three. Never re-implement map logic in a front-end.
 
+The MCP server and the libraries under it are also published on their own as
+[wc3-mcp](https://github.com/GodMephisto/wc3-mcp). That repository's `src/` and
+`tests/` are copied from here by `scripts/export-wc3-mcp.py`, so code changes for
+either belong here.
+
 ## Pull requests
 
 - Keep untouched files byte for byte. A map that is opened and saved without

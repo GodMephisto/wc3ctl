@@ -10,6 +10,13 @@
 > clone; the goal is programmatic + automatable map authoring. "Missing" below means
 > "no programmatic path today", not "we must build a GUI for it".
 
+> **Updated 2026-10-03.** Rows that later work closed are marked with the command that closes
+> them, each checked against `wc3ctl <group> --help` on the 0.1.0 build. The GUI trigger tree,
+> its catalog, camera objects, start locations, sound definitions and the in-map instance
+> lists all have a programmatic path now. Still open are trigger variable editing, structured
+> `war3map.wct` editing, the Reforged fields as named affordances, tileset swap, AI scripts and
+> campaigns.
+
 ## Legend
 
 | Mark | Meaning |
@@ -44,8 +51,8 @@ placement* (units, doodads, regions, cameras). Reads/writes `war3map.w3e`
 | **Unit / item placement** (`war3mapUnits.doo`) | ✅ Have | `PlacementCommand` place unit — owner/position/rotation/scale/variation/skin, auto creation numbers; tested |
 | **Doodad placement** (`war3map.doo`) | ✅ Have | `PlacementCommand` place doodad — same shape as units, on `war3map.doo`; tested |
 | **Region placement** (`war3map.w3r`) | ✅ Have | `PlacementCommand` place region — rect + name/weather/ambient, on `war3map.w3r`; tested |
-| **Camera objects** (`war3map.w3c`) | 🟡 Partial | Bounds yes; named camera objects no |
-| Start locations | 🟡 Partial | Count in `w3i`; no placement helper |
+| **Camera objects** (`war3map.w3c`) | ✅ Have | `camera list`, `add`, `set` and `remove` (and the matching MCP tools), plus the Studio cameras panel |
+| Start locations | ✅ Have | `place start-location` places or moves a player's start location |
 | Tile variations / tileset swap (up to 64 tiles) | 🟡 Partial | Data model supports; no convenience op |
 
 **Biggest terrain gaps (remaining):** the terrain-brush family now ships end to end —
@@ -89,10 +96,10 @@ and generates `war3map.j` / `war3map.lua` (compiled script).
 |---|---|---|
 | Trigger strings `war3map.wts` (read/write/resolve) | ✅ Have | `StringsCommand`, `TriggerStringResolver`, `StringImportView` |
 | Custom script (`war3map.j` / `.lua`) porting | ✅ Have | `ScriptCommand`, `ScriptPorter`, `ScriptView` |
-| GUI trigger model (`war3map.wtg`) | ❌ Missing | Not parsed to an editable GUI-trigger AST |
-| Custom text triggers (`war3map.wct`) | 🟡 Partial | Read via MapDocument; no structured editing |
-| GUI event/condition/action catalog | ❌ Missing | No trigger-function catalog |
-| Variables editor | ❌ Missing | — |
+| GUI trigger model (`war3map.wtg`) | ✅ Have | `trigger read`, `rename`, `add`, `add-category`, `remove`, the enabled, initially-on and run-on-init flags, and `add-eca`, `remove-eca` and `set-eca-enabled` for events, conditions and actions. `trigger recover-from-script` rebuilds a tree for a map that has none |
+| Custom text triggers (`war3map.wct`) | 🟡 Partial | `trigger read` returns the custom text bodies. No structured editing, and War3Net has no wct writer |
+| GUI event/condition/action catalog | ✅ Have | `trigger catalog list` and `describe`, from the game's `UI\TriggerData.txt` |
+| Variables editor | 🟡 Partial | `trigger read` lists every global variable with its type, array flag and initial value. Not editable yet |
 | New Reforged trigger events ("Unit takes damage", set-stat actions) | ➖ N/A | These are GUI-catalog entries; only relevant if we build GUI-trigger support |
 | JassNewGen / vJass (off-by-default in 1.33+) | ➖ N/A | See survey — external toolchains (JassHelper/Wurst) |
 
@@ -109,8 +116,8 @@ Sound sets + imported audio. Reads/writes `war3map.w3s` (sound definitions),
 | Feature | wc3ctl status | Notes |
 |---|---|---|
 | Import/preview audio assets | 🟡 Partial | Audio file preview exists (AudioPlayer / FilePreview) |
-| Sound definitions `war3map.w3s` | ❌ Missing | Not parsed |
-| Sound sets / 3D sound params | ❌ Missing | — |
+| Sound definitions `war3map.w3s` | ✅ Have | `sound list`, `add`, `set` and `remove`, plus the Studio sounds panel |
+| Sound sets / 3D sound params | ✅ Have | `sound set` edits volume, pitch, fades, channel, flags, EAX and the 3D distance and cone fields |
 
 ---
 
@@ -131,7 +138,7 @@ Map-wide cross-referenced listing of every unit/doodad/region/trigger/etc.
 
 | Feature | wc3ctl status | Notes |
 |---|---|---|
-| Enumerate map contents by category | 🟡 Partial | `ListCommand` (files), object commands (data); **no unified in-map instance manager** |
+| Enumerate map contents by category | ✅ Have | `unit list`, `doodad list`, `region list` and `camera list` for placed instances, `object list` for data, `ls` for files, and `search` across all of them |
 | Dependency graph / cross-references | ✅ Have | `DependencyGraphView` panel |
 
 ---
@@ -177,18 +184,17 @@ Ranked by value for an automatable map tool:
    Unlocks automated test-map generation.
 2. ✅ **Doodad placement** (`war3map.doo`) — **shipped** (`PlacementCommand`, tested).
 3. ✅ **Region placement** (`war3map.w3r`) — **shipped** (`PlacementCommand`, tested).
-   Camera-object placement (`.w3c`) still open.
+   Camera-object placement (`.w3c`) has since shipped too, see 6.
 4. ✅ **Pathing-map brush ops** (`war3map.wpm`) — **shipped** (`PathingCommand`, tested) —
    HiveWE's signature capability.
 5. ✅ **Terrain brush primitives** — height/deform, texture-paint, cliff/ramp, water, and
    blight brushes all **shipped** (`TerrainCommand`, tested, CLI+MCP) — HiveWE-style
    generative terrain is done; only tileset-swap/tile-variation convenience ops remain.
-6. **Camera-object placement** (`war3map.w3c`) — discrete named cameras; small, completes
-   in-map placement automation.
-7. **GUI trigger (`.wtg`) parse/edit** — largest missing module; big effort, defer
-   unless demand.
-7. **Sound editor (`.w3s`)** — low effort, low demand.
-8. AI/Campaign — lowest priority.
+6. ✅ **Camera-object placement** (`war3map.w3c`), **shipped** (`camera add`, `set`, `remove`).
+7. ✅ **GUI trigger (`.wtg`) parse and edit**, **shipped** (the `trigger` group). Variable editing
+   and structured `.wct` editing remain.
+8. ✅ **Sound editor (`.w3s`)**, **shipped** (the `sound` group).
+9. AI and campaign files, still open and lowest priority.
 
 ---
 

@@ -21,6 +21,15 @@ five `repair` subcommands, `data-pointers`, `model-paths`, `uabi-runtime`, `audi
 `preload`, the `script leaks` subcommand, and the audit check `missing-model`. That makes 32 top
 level verbs and 66 runnable commands.
 
+Updated 2026-10-03. This file is a measured snapshot, so the sections below keep their
+dates and counts. Since 2026-09-26 the CLI has grown to 48 top level verbs and the MCP
+server to 97 tools, and four things changed that the sections below describe in their old
+form. `mcp` is a new group (`serve` runs the server, `install`, `uninstall`, `config`,
+`clients` and `doctor` set it up in AI apps). `search` now looks in script lines, the string
+table and object data as well as file names. `file set` takes its source file as a third
+argument or with `--from`. `unit abilities` replaced `object abilities`, and there is one
+`audit` command. `wc3ctl --help` and `tools/list` are the current authority.
+
 ## Global options
 
 Present on every command.
@@ -850,18 +859,15 @@ identical results (29 tiles changed each time).
 
 **11. `WC3_GAME_DIR` is read by the MCP server only, not by the CLI.** The single
 `Environment.GetEnvironmentVariable` call in `src/` is at `src/Wc3.Mcp/Wc3Tools.cs:806`. The
-CLI takes `--game-dir` or auto-detects.
+CLI takes `--game-dir` or auto-detects. (Line numbers here are from 2026-09-26. The read now
+sits in `ResolveGameDir` in the same file, and `mcp doctor` reports it too.)
 
-**12. CLAUDE.md's CLI publish path is stale.** It names
-`src\Wc3.CLI\Wc3.CLI.csproj`, and that directory does not exist. The real project is
-`src\wc3ctl\wc3ctl.csproj`, whose `AssemblyName` is `wc3ctl` (line 9).
+**12. The CLI project is `src\wc3ctl\wc3ctl.csproj`**, whose `AssemblyName` is `wc3ctl`.
+An older internal note named `src\Wc3.CLI\Wc3.CLI.csproj`, which never existed. Fixed
+2026-10-03.
 
-```
-$ ls src/Wc3.CLI
-ls: cannot access 'src/Wc3.CLI': No such file or directory
-```
-
-**13. `file set --from` is REQUIRED.** It is the only required option in the whole surface.
+**13. `file set` takes its source as a third argument or with `--from`.** Until 2026-10-03
+`--from` was required, the only required option in the whole surface.
 
 **14. `repair generated-heroes` has no `--apply` and writes on every run.** Its two siblings
 `repair reforged-3` and `repair portraits` are detect-only without `--apply`.
@@ -933,7 +939,8 @@ WRITE A NON-MAP FILE TO AN EXPLICIT PATH
 
 # MCP TOOLS
 
-48 tools as of 2026-09-26 (45 on 2026-09-19, plus `replay_summary`, `uabi_profile` and `script_leaks`), read from `src/Wc3.Mcp/Wc3Tools.cs` by parsing every `[McpServerTool(Name = ...)]`
+97 tools as of 2026-10-03. `tools/list` from `wc3ctl mcp serve` gives the current set,
+and the table below is the 2026-09-26 one, 48 tools as of 2026-09-26 (45 on 2026-09-19, plus `replay_summary`, `uabi_profile` and `script_leaks`), read from `src/Wc3.Mcp/Wc3Tools.cs` by parsing every `[McpServerTool(Name = ...)]`
 attribute and the method signature that follows it. Read-only status is the attribute's own
 `ReadOnly` flag. Parameter names are the C# parameter identifiers, with defaults shown.
 
@@ -1032,27 +1039,22 @@ dotnet test --filter "Category=Corpus"                       # needs a real .w3x
 
 # PUBLISH
 
-Quoted from `CLAUDE.md` lines 51 to 53, with the CLI line corrected against the real project
-layout (see GOTCHA 12).
+Updated 2026-10-03. Users install a release (see the README). To build the binaries here,
+`scripts/publish-all.ps1` publishes all three, each into a fresh folder that is then swapped
+in, and prints their timestamps. By hand, publish into an empty folder.
 
 ```
-Studio: dotnet publish src\Wc3.Studio\Wc3.Studio.csproj -c Release --self-contained -r win-x64 -o dist-studio
 CLI:    dotnet publish src\wc3ctl\wc3ctl.csproj          -c Release --self-contained -r win-x64 -o dist
+Studio: dotnet publish src\Wc3.Studio\Wc3.Studio.csproj -c Release --self-contained -r win-x64 -o dist-studio
 MCP:    dotnet publish src\Wc3.Mcp\Wc3.Mcp.csproj        -c Release --self-contained -r win-x64 -o dist-mcp
 ```
 
-CLAUDE.md writes the CLI line as `src\Wc3.CLI\Wc3.CLI.csproj`, which does not exist on disk.
-
-Rules that go with a publish, from CLAUDE.md.
-
-1. Close `dist-studio\Wc3.Studio.exe` before publishing Studio, because the running app locks
-   its DLLs and the publish fails while it is open.
-2. Keep `CascLib.dll` beside `wc3ctl.exe` in `dist`.
-3. Verify freshness afterwards so the user's binary actually carries the change.
-
-```powershell
-Get-Item dist-studio\Wc3.Studio.exe | Select LastWriteTime
-```
+1. Close `dist-studio\Wc3.Studio.exe` first, because the running app locks its DLLs.
+2. Keep `CascLib.dll` beside each exe.
+3. Publishing over an old folder can keep an older DLL whose file date is newer. On
+   2026-10-03 that left `wc3ctl mcp serve` unable to start while every other command worked.
+4. Check the result runs, not just its timestamp, for example
+   `pwsh scripts/smoke-mcp.ps1 -Exe dist\wc3ctl.exe -Arguments 'mcp serve'`.
 
 `dotnet run`, `dotnet build` and `dotnet test` all run from source. They do not update the
 published binaries in `dist`, `dist-studio` or `dist-mcp`.
