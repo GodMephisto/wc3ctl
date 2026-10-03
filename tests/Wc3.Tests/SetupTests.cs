@@ -299,7 +299,8 @@ public sealed class SetupTests : IDisposable
         Assert.Contains("wc3ctl mcp install --all", help);
         Assert.Contains("'wc3ctl mcp serve' is the MCP server", help);
         Assert.Contains(ConfigFile.BackupSuffix, help);
-        Assert.DoesNotContain("wc3-mcp", help);
+        // No hard-coded product name. The backup suffix is the build's own (wc3-mcp in the public build).
+        Assert.DoesNotContain("wc3-mcp", help.Replace(ConfigFile.BackupSuffix, ""));
 
         Assert.Contains("Run with no arguments, it is the MCP server", Cli("help").Output);
         Assert.StartsWith("wc3ctl mcp ", Cli(SetupProduct.Wc3ctl, "version").Output);
