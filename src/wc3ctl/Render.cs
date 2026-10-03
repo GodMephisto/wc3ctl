@@ -493,6 +493,27 @@ public static class Render
     public static string Extract(ExtractManifest m, string dest) =>
         $"Extracted {m.Count} file(s) ({m.TotalBytes:N0} bytes) to {dest}";
 
+    public static string UnitAbilities(UnitAbilitiesResult r)
+    {
+        var sb = new StringBuilder();
+        if (!r.Found)
+        {
+            sb.AppendLine($"unit {r.Unit} not found");
+            foreach (var d in r.Diagnostics) sb.AppendLine($"  {d}");
+            return sb.ToString().TrimEnd('\r', '\n');
+        }
+        string who = r.PlacedCreationNumber is { } cn ? $"placed unit #{cn}, " : "";
+        sb.AppendLine($"{who}{r.Unit} {r.Name}  {r.Abilities.Count} abilit(ies)");
+        foreach (var g in r.Abilities.GroupBy(a => a.Source).OrderBy(g => g.Key))
+        {
+            sb.AppendLine();
+            sb.AppendLine($"{UnitAbilitiesCommand.SourceLabel(g.Key)} ({g.Count()})");
+            foreach (var a in g) sb.AppendLine($"  {UnitAbilitiesCommand.Describe(a)}");
+        }
+        foreach (var d in r.Diagnostics) sb.AppendLine($"note: {d}");
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
     public static string GameDataSnapshot(SnapshotResult r)
     {
         var sb = new StringBuilder();

@@ -223,14 +223,17 @@ public partial class UnitPropertiesView : UserControl, IMapPanel
         ScaleZBox.Text = info.Scale.Sz.ToString("0.###", inv);
         FacingBox.Text = (info.Rotation * 180.0 / Math.PI).ToString("0.##", inv);
 
-        // The unit type's abilities, resolved from rawcodes to names so a character's
-        // spells are actually readable (game-data is already warm from TypeLabel above).
-        var abilities = UnitAbilitiesCommand.ForUnitType(doc, info.TypeRawcode, _session?.GameDir);
-        var abilityLabels = abilities
-            .Select(a => (a.Name ?? a.Rawcode) + (a.IsHeroAbility ? "  (hero)" : ""))
-            .ToList();
+        // Every ability this placed unit has, from every source (unit data, spellbooks, its own
+        // placed abilities, morph forms, the script), grouped under a line naming the source.
+        var abilities = UnitAbilitiesCommand.Execute(doc, info.TypeRawcode, _session?.GameDir, _creationNumber).Abilities;
+        var abilityLabels = new List<string>();
+        foreach (var g in abilities.GroupBy(a => a.Source).OrderBy(g => g.Key))
+        {
+            abilityLabels.Add($"{UnitAbilitiesCommand.SourceLabel(g.Key)} ({g.Count()})");
+            abilityLabels.AddRange(g.Select(a => "    " + UnitAbilitiesCommand.Describe(a)));
+        }
         AbilitiesList.ItemsSource = abilityLabels;
-        AbilitiesHeader.Text = abilityLabels.Count == 0 ? "Abilities: none" : $"Abilities ({abilityLabels.Count})";
+        AbilitiesHeader.Text = abilities.Count == 0 ? "Abilities: none" : $"Abilities ({abilities.Count})";
 
         StatusText.Text = "";
         PlaceholderText.IsVisible = false;

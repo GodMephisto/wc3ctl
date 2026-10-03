@@ -155,6 +155,29 @@ public static class Program
         }));
         obj.AddCommand(objList);
 
+        var abilitiesUnitArg = new Argument<string>("rawcode",
+            "Four-character unit type rawcode.");
+        var placedOpt = new Option<int?>("--placed",
+            "Show abilities for a placed unit instance by creation number instead.");
+        var objAbilities = new Command("abilities",
+            "List all abilities for a unit, grouped by source (normal, hero, "
+            + "spellbook, placed unit, morph form, script).")
+        { mapArg, abilitiesUnitArg, placedOpt };
+        objAbilities.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            string rawcode = p.GetValueForArgument(abilitiesUnitArg);
+            int? creationNumber = p.GetValueForOption(placedOpt);
+            string? gameDir = p.GetValueForOption(gameDirOption);
+            bool json = p.GetValueForOption(jsonOption);
+            var doc = MapDocument.Load(map);
+
+            var abilities = UnitAbilitiesCommand.Execute(doc, rawcode, gameDir, creationNumber);
+            Emit(json, abilities, () => Render.UnitAbilities(abilities));
+        }));
+        obj.AddCommand(objAbilities);
+
         var setFieldArg = new Argument<string>("field",
             "Four-character field code (e.g. uhpm), or code:N for an ability/upgrade level or doodad variation.");
         var setValueArg = new Argument<string>("value", "New value for the field.");

@@ -27,6 +27,7 @@ public class CliMcpParityTests
         ["object_list"] = "object list",
         ["object_set"] = "object set",
         ["object_new"] = "object new",
+        ["unit_abilities"] = "object abilities",
         ["bundle_unit"] = "bundle unit",
         ["render_model"] = "render-model",
         ["replay_summary"] = "replay",
