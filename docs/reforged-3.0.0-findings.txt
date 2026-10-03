@@ -5,8 +5,8 @@ The changelog Blizzard does not publish, reconstructed from Blizzard's own data
 
 Compiled        2026-09-18
 Builds compared 2.0.4.23745-retail  ->  3.0.0.24268-retail
-Repository      C:\playground\Programming\Wc3_CLI
-Companion repo  C:\playground\Programming\wc3-gamedata-history
+Repository      wc3ctl
+Companion repo  wc3-gamedata-history
 
 Every number here was produced by running something on this machine against
 Blizzard's shipped manifests, their CDN, or a corpus of 256 real custom maps.

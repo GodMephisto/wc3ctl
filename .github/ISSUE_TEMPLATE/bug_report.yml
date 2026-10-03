@@ -1,0 +1,40 @@
+name: Bug report
+description: Something in wc3ctl, the Studio or the MCP server does not work as it should
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Security problems go through the Security tab instead, see SECURITY.md.
+  - type: input
+    id: version
+    attributes:
+      label: Which app and build
+      description: wc3ctl, the Studio or the MCP server, and the date or commit you built it from
+      placeholder: wc3ctl, built 2026-10-03
+    validations:
+      required: true
+  - type: input
+    id: client
+    attributes:
+      label: AI app
+      description: Which app runs the server, for example Claude Desktop, Cursor or VS Code
+  - type: input
+    id: tool
+    attributes:
+      label: Command, tool or panel
+      description: The wc3ctl command you ran, the MCP tool you called, or the Studio panel you used
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what you expected
+      description: Paste the tool's output or error if you can
+    validations:
+      required: true
+  - type: textarea
+    id: map
+    attributes:
+      label: Map or file
+      description: Attach the map, replay or model that shows the problem (zip it if GitHub refuses the extension), or say where to get it

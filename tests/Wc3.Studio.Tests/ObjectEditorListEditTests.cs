@@ -9,6 +9,8 @@ using Wc3.Studio;
 using Wc3.Studio.Controls;
 using Wc3.Studio.Panels;
 
+using Wc3.Tests;
+
 namespace Wc3.Studio.Tests;
 
 /// <summary>
@@ -20,8 +22,8 @@ namespace Wc3.Studio.Tests;
 /// </summary>
 public class ObjectEditorListEditTests
 {
-    private const string MapPath =
-        @"C:\Users\GodMephisto\Documents\Warcraft III\Maps\Download\Anime_WOS2_0.27d3.w3x";
+    private static readonly string MapPath =
+        TestCorpus.Map(@"Anime_WOS2_0.27d3.w3x");
 
     /// <summary>Unit ability-list field codes ('uabi' abilList, 'uhab' heroAbilList) -
     /// the canonical object-reference LIST fields the builder targets.</summary>

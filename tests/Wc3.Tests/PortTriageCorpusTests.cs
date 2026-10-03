@@ -18,7 +18,7 @@ namespace Wc3.Tests;
 
 public class PortTriageCorpusTests
 {
-    private const string MapDir = @"C:\Users\GodMephisto\Documents\Warcraft III\Maps\Download";
+    private static readonly string MapDir = TestCorpus.Directory;
 
     /// <summary>Heroes to port per map. Some of the user's maps are hero-arena games with
     /// hundreds of playable heroes (Anime Choice Arena alone has 296), so this can never be

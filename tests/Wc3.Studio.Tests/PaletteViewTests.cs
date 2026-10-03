@@ -7,6 +7,8 @@ using Wc3.Commands;
 using Wc3.Model;
 using Wc3.Studio.Panels;
 
+using Wc3.Tests;
+
 namespace Wc3.Studio.Tests;
 
 /// <summary>
@@ -18,8 +20,8 @@ namespace Wc3.Studio.Tests;
 /// </summary>
 public class PaletteViewTests
 {
-    private const string MapPath =
-        @"C:\Users\GodMephisto\Documents\Warcraft III\Maps\Download\Anime_WOS2_0.27d3.w3x";
+    private static readonly string MapPath =
+        TestCorpus.Map(@"Anime_WOS2_0.27d3.w3x");
 
     /// <summary>The first load may open CASC (seconds); bounded so a hang still fails.</summary>
     private static readonly TimeSpan LoadTimeout = TimeSpan.FromSeconds(120);

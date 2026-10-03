@@ -9,6 +9,8 @@ public static class Program
 {
     public static async Task<int> Main(string[] args)
     {
+        if (McpCommand.TryRun(args) is { } mcp) return await mcp;
+
         var root = BuildRoot(out var exitCode);
         int parseResult = await root.InvokeAsync(args);
         return parseResult != 0 ? parseResult : exitCode[0];
@@ -3096,6 +3098,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         root.AddCommand(repairHeroes); root.AddCommand(repair);
         root.AddCommand(trigger);
         root.AddCommand(editor); root.AddCommand(gamedata);
+        root.AddCommand(McpCommand.Build());
 
         return root;
     }

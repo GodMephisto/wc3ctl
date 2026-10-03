@@ -26,7 +26,7 @@ namespace Wc3.Tests;
 
 public class ProtectedMapNameRecoveryTests
 {
-    private const string MapDir = @"C:\Users\GodMephisto\Documents\Warcraft III\Maps\Download";
+    private static readonly string MapDir = TestCorpus.Directory;
 
     private readonly ITestOutputHelper _out;
     public ProtectedMapNameRecoveryTests(ITestOutputHelper output) => _out = output;

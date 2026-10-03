@@ -30,6 +30,7 @@
     <!-- Shared with Wc3.Tests rather than copied, both suites build the same synthetic
          archives (here, a map with nameless entries for the Files panel). -->
     <Compile Include="..\Wc3.Tests\SyntheticMap.cs" Link="SyntheticMap.cs" />
+    <Compile Include="..\Wc3.Tests\TestCorpus.cs" Link="TestCorpus.cs" />
   </ItemGroup>
 
 </Project>

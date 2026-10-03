@@ -11,7 +11,7 @@ namespace Wc3.Tests;
 public class ObjectFormGameDataTests
 {
     private const string Install = @"D:\Warcraft III";
-    private const string Map = @"C:\Users\GodMephisto\Documents\Warcraft III\Maps\Download\GGGA_V0.04g.w3x";
+    private static readonly string Map = TestCorpus.Map(@"GGGA_V0.04g.w3x");
 
     private static ObjectForm? Form(string rawcode, ObjectKind kind)
     {

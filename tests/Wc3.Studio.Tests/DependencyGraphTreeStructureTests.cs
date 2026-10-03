@@ -8,6 +8,8 @@ using Wc3.Commands;
 using Wc3.Model;
 using Wc3.Studio.Panels;
 
+using Wc3.Tests;
+
 namespace Wc3.Studio.Tests;
 
 /// <summary>
@@ -27,10 +29,10 @@ namespace Wc3.Studio.Tests;
 /// </summary>
 public class DependencyGraphTreeStructureTests
 {
-    private const string AstaMap =
-        @"C:\Users\GodMephisto\Documents\Warcraft III\Maps\Download\Anime_WOS2_0.28a2.w3x";
-    private const string ChoiceArenaMap =
-        @"C:\Users\GodMephisto\Documents\Warcraft III\Maps\Download\Anime Choice Arena V0.31C.w3x";
+    private static readonly string AstaMap =
+        TestCorpus.Map(@"Anime_WOS2_0.28a2.w3x");
+    private static readonly string ChoiceArenaMap =
+        TestCorpus.Map(@"Anime Choice Arena V0.31C.w3x");
 
     private static readonly TimeSpan LoadTimeout = TimeSpan.FromSeconds(180);
 

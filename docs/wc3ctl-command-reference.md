@@ -1,6 +1,6 @@
 # wc3ctl verified command reference
 
-Produced 2026-09-19 by running `C:\playground\Programming\Wc3_CLI\dist\wc3ctl.exe` and by
+Produced 2026-09-19 by running `dist\wc3ctl.exe` and by
 reading the repository source. Every usage line below is copied from the tool's own
 `--help` output. Every JSON shape below came from a real invocation, not from the source
 and not from memory. Where a command behaved unexpectedly the behaviour is recorded as
@@ -9,7 +9,7 @@ measured, with the output verbatim.
 Probe map used for the JSON shapes, read only, never written to.
 
 ```
-C:\Users\GodMephisto\Documents\Warcraft III\Maps\Download\BleachVsOnepiece15.w3x
+Documents\Warcraft III\Maps\Download\BleachVsOnepiece15.w3x
 ```
 
 Scale of the surface. 30 top level verbs. 14 of them run directly, 16 are command groups.
@@ -783,9 +783,9 @@ taken as the path.
 
 ```
 $ wc3ctl object get ninf "<map>"
-error: file not found: C:\playground\Programming\Wc3_CLI\ninf
+error: file not found: <current folder>\ninf
 $ wc3ctl search Ichigo "<map>"
-error: file not found: C:\playground\Programming\Wc3_CLI\Ichigo
+error: file not found: <current folder>\Ichigo
 ```
 
 **2. `port unit` puts the rawcode BETWEEN two map paths.**

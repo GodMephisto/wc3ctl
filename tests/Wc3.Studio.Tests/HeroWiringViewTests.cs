@@ -9,6 +9,8 @@ using Wc3.Studio;
 using Wc3.Studio.Controls;
 using Wc3.Studio.Panels;
 
+using Wc3.Tests;
+
 namespace Wc3.Studio.Tests;
 
 /// <summary>
@@ -17,10 +19,10 @@ namespace Wc3.Studio.Tests;
 /// </summary>
 public class HeroWiringViewTests
 {
-    private const string TohnoV3 =
-        @"C:\Users\GodMephisto\Documents\Warcraft III\Maps\Download\1\1\Shiki_Tohno_v3.w3x";
-    private const string ShikiArena =
-        @"C:\Users\GodMephisto\Documents\Warcraft III\Maps\Download\1\ShikiArena.w3x";
+    private static readonly string TohnoV3 =
+        TestCorpus.Map(@"1\1\Shiki_Tohno_v3.w3x");
+    private static readonly string ShikiArena =
+        TestCorpus.Map(@"1\ShikiArena.w3x");
 
     private static readonly TimeSpan LoadTimeout = TimeSpan.FromSeconds(60);
 

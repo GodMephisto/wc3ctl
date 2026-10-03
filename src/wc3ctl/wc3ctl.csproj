@@ -12,6 +12,9 @@
   <ItemGroup>
     <ProjectReference Include="..\Wc3.Commands\Wc3.Commands.csproj" />
     <ProjectReference Include="..\Wc3.MapDocument\Wc3.MapDocument.csproj" />
+    <!-- The MCP server and its setup, run as "wc3ctl mcp". This brings the MCP SDK and its
+         Microsoft.Extensions.* dependencies into this exe only, never into the libraries. -->
+    <ProjectReference Include="..\Wc3.Mcp\Wc3.Mcp.csproj" />
   </ItemGroup>
 
   <ItemGroup>

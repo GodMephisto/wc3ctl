@@ -11,6 +11,8 @@ using Wc3.Studio;
 using Wc3.Studio.Controls;
 using Wc3.Studio.Panels;
 
+using Wc3.Tests;
+
 namespace Wc3.Studio.Tests;
 
 /// <summary>
@@ -23,14 +25,14 @@ namespace Wc3.Studio.Tests;
 /// </summary>
 public class DependencyGraphViewTests
 {
-    private const string MapPath =
-        @"C:\Users\GodMephisto\Documents\Warcraft III\Maps\Download\Anime_WOS2_0.27d3.w3x";
+    private static readonly string MapPath =
+        TestCorpus.Map(@"Anime_WOS2_0.27d3.w3x");
 
     /// <summary>A real hero closure runs into the hundreds of objects, used here to prove
     /// the exclusion toggle and the nested trigger-function tree hold up at that size, not
     /// just on a hand-built fixture.</summary>
-    private const string GggaPath =
-        @"C:\Users\GodMephisto\Documents\Warcraft III\Maps\Download\GGGA_V0.02b.w3x";
+    private static readonly string GggaPath =
+        TestCorpus.Map(@"GGGA_V0.02b.w3x");
 
     /// <summary>The first load may open CASC (seconds); bounded so a hang still fails.</summary>
     private static readonly TimeSpan LoadTimeout = TimeSpan.FromSeconds(120);

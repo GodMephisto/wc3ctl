@@ -23,14 +23,25 @@ the exe (the same caveat as the CLI's `dist/`).
 
 ## Register with an MCP client
 
-Add the server under `mcpServers` in your client's MCP config (for example a
-project `.mcp.json`, or a desktop client's config file).
+The same server runs inside the CLI as `wc3ctl mcp serve`, and either exe sets
+itself up in the supported AI apps.
+
+```
+wc3ctl mcp install --all          registers "wc3ctl.exe mcp serve"
+Wc3.Mcp.exe install --all         registers "Wc3.Mcp.exe" with no arguments
+```
+
+`config <app>` prints the entry to paste by hand instead, `clients` shows which
+apps are set up and `doctor` checks the install. The setup code is in `Setup/`,
+and `SetupProduct` decides which of the two commands gets registered. For any
+other client, add an entry like this under `mcpServers`.
 
 ```json
 {
   "mcpServers": {
-    "wc3-mcp": {
-      "command": "C:\\path\\to\\dist-mcp\\Wc3.Mcp.exe",
+    "wc3ctl": {
+      "command": "C:\\path\\to\\dist\\wc3ctl.exe",
+      "args": ["mcp", "serve"],
       "env": { "WC3_GAME_DIR": "C:\\path\\to\\Warcraft III" }
     }
   }

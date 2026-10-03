@@ -144,6 +144,10 @@ public class CliMcpParityTests
         // and it is a bulk filesystem write, which is the same reason extract and convert sit
         // here rather than on the agent surface.
         "gamedata snapshot",
+        // The server itself and the commands that register it with AI apps. They are how the MCP
+        // surface is reached, not map operations, so there is nothing for a tool to mirror.
+        "mcp serve", "mcp install", "mcp uninstall", "mcp config", "mcp clients", "mcp doctor",
+        "mcp version", "mcp help",
         // Writes an image to a path on this machine, so the output is a local file rather
         // than an answer. Same reason as extract.
         "render",
