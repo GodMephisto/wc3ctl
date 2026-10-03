@@ -19,8 +19,13 @@ public sealed partial class McpToolSmokeTests
 
         var lint = await Call("lint", Args(("map", Fixture)));
         Assert.True(Prop(lint, "ok").GetBoolean());
-        Assert.Contains(Rows(Prop(lint, "checks")), c => Prop(c, "name").GetString() == "script-compiles"
-                                                        && Prop(c, "severity").GetString() == "Ok");
+        // pjass needs the game's common.j, so with no install (CI) the check is skipped and says so.
+        // Anywhere else the blank map's script has to compile.
+        var compiles = Rows(Prop(lint, "checks")).Single(c => Prop(c, "name").GetString() == "script-compiles");
+        var severity = Prop(compiles, "severity").GetString();
+        Assert.True(severity == "Ok"
+                    || (severity == "Warning" && Prop(compiles, "summary").GetString()!.Contains("did not run")),
+            $"script-compiles was {severity}: {Prop(compiles, "summary").GetString()}");
 
         Assert.True(Prop(await Call("roundtrip", Args(("map", Fixture))), "faithful").GetBoolean());
     }
