@@ -235,6 +235,11 @@ public partial class PaletteView : UserControl, IMapPanel
         {
             List<PaletteRow>? rows = null;
             string? error = null;
+            // Collected and shown. Each palette result carries Diagnostics alongside Entries, and
+            // reading only Entries meant that with no reachable Warcraft III install the base
+            // catalog simply vanished behind an ordinary-looking status line, with the
+            // explanation sitting in hand and discarded.
+            var notes = new List<string>();
             try
             {
                 var units = PaletteCommand.UnitPalette(doc, gameDir);
@@ -246,6 +251,13 @@ public partial class PaletteView : UserControl, IMapPanel
                 var placed = UnitInstanceCommand.List(doc)
                     .GroupBy(u => u.TypeRawcode, StringComparer.OrdinalIgnoreCase)
                     .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
+                // Added one at a time rather than through an array, because the four palette
+                // results are distinct tuple types with no common base.
+                notes.AddRange(units.Diagnostics);
+                notes.AddRange(doodads.Diagnostics);
+                notes.AddRange(items.Diagnostics);
+                notes.AddRange(destructables.Diagnostics);
+
                 var scriptCodes = ScriptRawcodes(doc);
                 rows = units.Entries.Select(e => Row(ObjectKind.Unit, e, icons,
                         placed.GetValueOrDefault(e.Rawcode), scriptCodes.Contains(e.Rawcode)))
@@ -270,6 +282,18 @@ public partial class PaletteView : UserControl, IMapPanel
                 }
                 _all = rows;
                 ApplyFilter();
+
+                // Surfaced after the filter, so it does not get overwritten by the row count.
+                if (notes.Count > 0)
+                {
+                    var distinct = notes.Distinct(StringComparer.Ordinal).ToList();
+                    StatusText.Text = (StatusText.Text ?? string.Empty).TrimEnd()
+                        + (rows.Count == 0
+                            ? "The base catalog could not be read: "
+                            : "  Some of the base catalog could not be read: ")
+                        + string.Join("; ", distinct.Take(3))
+                        + (distinct.Count > 3 ? $" (and {distinct.Count - 3} more)" : string.Empty);
+                }
             });
         });
     }
@@ -288,7 +312,7 @@ public partial class PaletteView : UserControl, IMapPanel
     private static HashSet<string> ScriptRawcodes(Wc3.Model.MapDocument doc)
     {
         var codes = new HashSet<string>(StringComparer.Ordinal);
-        if (doc.GetFile("war3map.j")?.RawBytes is not { Length: > 0 } bytes)
+        if (doc.GetFile("war3map.j")?.CurrentBytes is not { Length: > 0 } bytes)
             return codes;
         var text = System.Text.Encoding.UTF8.GetString(bytes);
         for (int i = 0; i + 5 < text.Length; i++)

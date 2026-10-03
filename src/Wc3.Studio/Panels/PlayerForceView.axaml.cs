@@ -19,7 +19,7 @@ namespace Wc3.Studio.Panels;
 /// </summary>
 public partial class PlayerForceView : UserControl, IMapPanel
 {
-    private static readonly IBrush DimBrush = new SolidColorBrush(Color.Parse("#8FA3B8"));
+    private static readonly IBrush DimBrush = StudioPalette.Muted;
 
     private MapSession? _session;
     /// <summary>True while (re)building the cards - checkbox/dropdown handlers no-op so

@@ -22,6 +22,41 @@ public class CliTests
         finally { File.Delete(path); }
     }
 
+    // Both shapes existed in the two lines this tool was merged from, the source as a third
+    // argument and as --from. The merge first left --from required, which refused the positional
+    // form outright, and the MCP smoke test could not see it because MCP names its arguments.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task File_set_takes_the_source_positionally_or_with_from(bool useFromOption)
+    {
+        var map = SyntheticMap.Build(new Dictionary<string, byte[]> { ["war3map.j"] = new byte[] { 1 } });
+        var dir = Path.Combine(Path.GetTempPath(), $"wc3ctl_fileset_{System.Guid.NewGuid():N}");
+        Directory.CreateDirectory(dir);
+        var path = Path.Combine(dir, "in.w3x");
+        var payload = Path.Combine(dir, "payload.j");
+        var output = Path.Combine(dir, "out.w3x");
+        File.WriteAllBytes(path, map);
+        File.WriteAllBytes(payload, new byte[] { 7, 8, 9 });
+        try
+        {
+            var args = useFromOption
+                ? new[] { "file", "set", path, "war3map.j", "--from", payload, "-o", output }
+                : new[] { "file", "set", path, "war3map.j", payload, "-o", output };
+            var console = System.Console.Out;
+            System.Console.SetOut(new StringWriter());
+            int code = await Wc3Ctl.Program.Main(args);
+            int neither = await Wc3Ctl.Program.Main(new[] { "file", "set", path, "war3map.j", "-o", output + ".x" });
+            System.Console.SetOut(console);
+
+            Assert.Equal(0, code);
+            Assert.Equal(new byte[] { 7, 8, 9 }, Wc3.Model.MapDocument.Load(output).GetFile("war3map.j")!.CurrentBytes);
+            Assert.NotEqual(0, neither);
+            Assert.False(File.Exists(output + ".x"));
+        }
+        finally { Directory.Delete(dir, recursive: true); }
+    }
+
     [Fact]
     public async Task Extract_models_writes_mdx_to_out_dir_preserving_structure()
     {

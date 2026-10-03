@@ -6,12 +6,18 @@ using Avalonia.Layout;
 using Avalonia.Threading;
 using Wc3.Commands;
 using Wc3.Model;
+using Wc3.Studio.Controls;
+using Wc3.Studio.Dialogs;
 using Wc3.Studio.Panels;
 
 namespace Wc3.Studio;
 
 public partial class MainWindow : Window
 {
+    /// <summary>Persisted install/map folders, loaded once at startup and applied to both
+    /// workspaces and the shared file picker (see <see cref="ApplySettings"/>).</summary>
+    private StudioSettings _settings = StudioSettings.Load();
+
     public MainWindow()
     {
         InitializeComponent();
@@ -20,7 +26,33 @@ public partial class MainWindow : Window
         TargetWorkspace.MapChanged += OnWorkspaceMapChanged;
         SourceWorkspace.PortRequested += OnPortRequested;
         SourceWorkspace.PortPreviewRequested += OnPortPreviewRequested;
+        ApplySettings();
         Opened += OnOpenedAutoLoad;
+    }
+
+    /// <summary>Pushes the saved folders into the running app: the Warcraft III install goes to
+    /// both map sessions (null keeps auto-detect), and the map folder seeds the shared picker so
+    /// Open Map starts there. Called at startup and after the Settings dialog saves.</summary>
+    private void ApplySettings()
+    {
+        SourceWorkspace.Session.GameDir = _settings.GameDir;
+        TargetWorkspace.Session.GameDir = _settings.GameDir;
+        FilePicker.SeedLastDirectory(_settings.MapsDir);
+        // Open the base game data now, off the UI thread, rather than making whichever panel
+        // needs it first block for a second and a half. See GameDataWarmup for the measurement.
+        GameDataWarmup.Begin(_settings.GameDir);
+    }
+
+    private async void OnSettingsClick(object? sender, RoutedEventArgs e)
+    {
+        var updated = await new SettingsDialog(_settings).ShowDialog<StudioSettings?>(this);
+        if (updated is null)
+            return; // cancelled, nothing changes
+
+        _settings = updated;
+        _settings.Save();
+        ApplySettings();
+        StatusText.Text = "Settings saved. The Warcraft III install and map folder are remembered for next time.";
     }
 
     /// <summary>Dev/QA convenience: <c>Wc3.Studio.exe --open &lt;map&gt; [--open-target &lt;map&gt;]</c>
@@ -126,24 +158,25 @@ public partial class MainWindow : Window
     /// works on a fresh reload of each map on disk, so the open sessions stay untouched
     /// and the result is written to a sibling &lt;target&gt;.ported.&lt;ext&gt; (never clobbers).
     /// </summary>
-    private async void OnPortRequested(object? sender, string rawcode)
+    private async void OnPortRequested(object? sender, MapWorkspaceView.PortRequest request)
     {
         RevealTargetPane(); // pressing Port brings in the Target pane so a map can be set up there
-        await RunPort(rawcode, dryRun: false);
+        await RunPort(request, dryRun: false);
     }
 
     /// <summary>
     /// Dry-run preview: computes the identical report through PortCommand.PreviewPort
     /// (same code path as the real port) and shows it — nothing is written anywhere.
     /// </summary>
-    private async void OnPortPreviewRequested(object? sender, string rawcode)
+    private async void OnPortPreviewRequested(object? sender, MapWorkspaceView.PortRequest request)
     {
         RevealTargetPane();
-        await RunPort(rawcode, dryRun: true);
+        await RunPort(request, dryRun: true);
     }
 
-    private async Task RunPort(string rawcode, bool dryRun)
+    private async Task RunPort(MapWorkspaceView.PortRequest request, bool dryRun)
     {
+        var (rawcode, excludedKeys) = request;
         if (!SourceWorkspace.HasMap || SourceWorkspace.Session.MapPath is not { } sourcePath)
         { SourceWorkspace.SetStatus("Open a Source map first."); return; }
         if (!TargetWorkspace.HasMap || TargetWorkspace.Session.Current is not { } liveTarget)
@@ -155,9 +188,10 @@ public partial class MainWindow : Window
         var targetPath = TargetWorkspace.Session.MapPath;
         var gameDir = SourceWorkspace.Session.GameDir;
         var targetLabel = targetPath is not null ? Path.GetFileName(targetPath) : "the target map";
+        var exclusionNote = excludedKeys.Count > 0 ? $" ({excludedKeys.Count} node(s) excluded)" : "";
         SourceWorkspace.SetStatus(dryRun
-            ? $"Previewing port of {rawcode} → {targetLabel}…"
-            : $"Porting {rawcode} → {targetLabel}…");
+            ? $"Previewing port of {rawcode} → {targetLabel}{exclusionNote}…"
+            : $"Porting {rawcode} → {targetLabel}{exclusionNote}…");
 
         try
         {
@@ -167,6 +201,10 @@ public partial class MainWindow : Window
                 // Saved target → a fresh disk copy; blank/unsaved → the live in-memory doc.
                 var target = targetPath is not null ? MapDocument.Load(targetPath) : liveTarget;
                 var bundle = BundleCommand.ResolveUnit(source, rawcode, gameDir);
+                // Left-click exclusions from the Dependencies graph narrow the bundle before
+                // anything is ported, everything else about the pipeline is unaware of them.
+                if (excludedKeys.Count > 0)
+                    bundle = BundleFilter.Apply(bundle, excludedKeys);
                 if (dryRun)
                     return (PortCommand.PreviewPort(source, bundle, target), (string?)null);
                 var r = PortCommand.PortUnit(source, bundle, target);
@@ -209,37 +247,11 @@ public partial class MainWindow : Window
     /// port into an unsaved target (<paramref name="outPath"/> null but not a dry run).</summary>
     private async Task ShowPortReport(PortResult r, string? outPath, bool dryRun)
     {
-        var sb = new StringBuilder();
-        string root = r.RootPortedTo == r.RootRawcode ? r.RootRawcode : $"{r.RootRawcode} → {r.RootPortedTo}";
-        sb.AppendLine($"Ported {root}{(r.RootName is null ? "" : $"  \"{r.RootName}\"")}");
-        sb.AppendLine($"{r.Objects.Count} object(s), {r.CopiedFiles.Count} file(s) copied, "
-                      + $"{r.InlinedStrings} string(s) inlined, {r.Remaps.Count} rawcode(s) remapped");
-        sb.AppendLine();
-        if (r.Remaps.Count > 0)
-        {
-            sb.AppendLine("Rawcode remaps (collisions):");
-            foreach (var m in r.Remaps)
-                sb.AppendLine($"  {m.Kind.ToString().ToLowerInvariant()} {m.From} → {m.To}");
-            sb.AppendLine();
-        }
-        sb.AppendLine("Objects:");
-        foreach (var o in r.Objects)
-            sb.AppendLine($"  {o.Kind.ToString().ToLowerInvariant()} {o.Rawcode}"
-                          + $"{(o.Name is null ? "" : $"  \"{o.Name}\"")}"
-                          + $"{(o.ModifiesStandard ? "  (modifies standard object)" : "")}");
-        if (r.Script is { } s)
-        {
-            sb.AppendLine().AppendLine(
-                $"Script (best-effort): {s.Functions} function(s), {s.Globals} global(s) carried, "
-                + $"{s.Renamed} renamed, init {(s.InitHooked ? "wired" : "NOT wired")}.");
-            foreach (var n in s.Notes) sb.AppendLine($"  - {n}");
-        }
-        if (r.Warnings.Count > 0)
-        {
-            sb.AppendLine().AppendLine("Warnings:");
-            foreach (var w in r.Warnings) sb.AppendLine($"  ! {w}");
-        }
-        foreach (var d in r.Diagnostics) sb.AppendLine($"note: {d}");
+        // One shared report body, PortReport in Wc3.Commands. This used to be a second copy of the
+        // CLI's renderer, and it drifted, so Studio went on listing every object the script closure
+        // carries as if the ported unit owned them long after the CLI stopped. Studio only owns the
+        // footer below, because only Studio can port into an unsaved target.
+        var sb = new StringBuilder(PortReport.Body(r));
         sb.AppendLine().AppendLine(dryRun
             ? "DRY RUN - nothing written"
             : outPath is not null

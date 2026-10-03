@@ -37,6 +37,13 @@ public static class Program
         void Emit(bool json, object result, Func<string> human) =>
             Console.WriteLine(json ? Render.AsJson(result) : human());
 
+        // Column-safe shortening for table output. Only the human rendering uses it, the JSON
+        // carries the full value, so a truncated column can never become a truncated result.
+        static string Trunc(string s, int max) =>
+            string.IsNullOrEmpty(s) ? string.Empty
+            : s.Length <= max ? s
+            : s[..Math.Max(0, max - 1)] + "…";
+
         // Run a command body, turning expected failures into a clean one-line
         // message on stderr + a non-zero exit code (never a raw stack trace).
         void RunSafely(Action body)
@@ -74,12 +81,17 @@ public static class Program
             Emit(json, r, () => Render.Info(r));
         }), mapArg, jsonOption);
 
-        var ls = new Command("ls", "List internal files.") { mapArg };
-        ls.SetHandler((string map, bool json) => RunSafely(() =>
+        var lsHarvestOption = new Option<bool>("--harvest",
+            "Recover unnamed entries' names from the map's own script and object data before listing "
+            + "(a second pass worth paying for on a protected map, wasted on a healthy one).");
+        var ls = new Command("ls", "List internal files.") { mapArg, lsHarvestOption };
+        ls.SetHandler((string map, bool harvest, bool json) => RunSafely(() =>
         {
-            var r = ListCommand.Execute(MapDocument.Load(map));
+            var doc = MapDocument.Load(map);
+            if (harvest) doc.HarvestAssetNames();
+            var r = ListCommand.Execute(doc, typeUnnamed: true);
             Emit(json, r, () => Render.List(r));
-        }), mapArg, jsonOption);
+        }), mapArg, lsHarvestOption, jsonOption);
 
         var rt = new Command("roundtrip", "Verify byte-faithful round-trip.") { mapArg };
         rt.SetHandler((string map, bool json) => RunSafely(() =>
@@ -89,7 +101,9 @@ public static class Program
         }), mapArg, jsonOption);
 
         var queryArg = new Argument<string>("query", "Substring to search for.");
-        var search = new Command("search", "Search map contents.") { mapArg, queryArg };
+        var search = new Command("search",
+            "Search a map for text, ignoring case: file names, script lines, string-table entries and "
+            + "object data (custom rawcodes and field values).") { mapArg, queryArg };
         search.SetHandler((string map, string query, bool json) => RunSafely(() =>
         {
             var r = SearchCommand.Execute(MapDocument.Load(map), query);
@@ -140,6 +154,23 @@ public static class Program
             }
             Emit(json, r, () => Render.ObjectGet(r));
         }));
+        var objForm = new Command("form",
+            "Show an object the way an editor should: fields grouped and ordered like the World "
+            + "Editor, fields that do not apply to this object hidden, legal ranges shown, and "
+            + "which object-data layer each field is written to.")
+        { mapArg, objRawcode, objGetKind, jsonOption };
+        objForm.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var kindToken = p.GetValueForOption(objGetKind);
+            var form = ObjectFormCommand.Execute(
+                MapDocument.Load(p.GetValueForArgument(mapArg)),
+                kindToken is null ? ObjectKind.Unit : ObjectKinds.Parse(kindToken),
+                p.GetValueForArgument(objRawcode),
+                p.GetValueForOption(gameDirOption));
+            Emit(p.GetValueForOption(jsonOption), form, () => Render.ObjectForm(form));
+        }));
+        obj.AddCommand(objForm);
         obj.AddCommand(objGet);
 
         var objList = new Command("list", "List the map's custom/modified objects of one kind.")
@@ -154,29 +185,6 @@ public static class Program
             Emit(p.GetValueForOption(jsonOption), r, () => Render.ObjectList(r));
         }));
         obj.AddCommand(objList);
-
-        var abilitiesUnitArg = new Argument<string>("rawcode",
-            "Four-character unit type rawcode.");
-        var placedOpt = new Option<int?>("--placed",
-            "Show abilities for a placed unit instance by creation number instead.");
-        var objAbilities = new Command("abilities",
-            "List all abilities for a unit, grouped by source (normal, hero, "
-            + "spellbook, placed unit, morph form, script).")
-        { mapArg, abilitiesUnitArg, placedOpt };
-        objAbilities.SetHandler(ctx => RunSafely(() =>
-        {
-            var p = ctx.ParseResult;
-            string map = p.GetValueForArgument(mapArg);
-            string rawcode = p.GetValueForArgument(abilitiesUnitArg);
-            int? creationNumber = p.GetValueForOption(placedOpt);
-            string? gameDir = p.GetValueForOption(gameDirOption);
-            bool json = p.GetValueForOption(jsonOption);
-            var doc = MapDocument.Load(map);
-
-            var abilities = UnitAbilitiesCommand.Execute(doc, rawcode, gameDir, creationNumber);
-            Emit(json, abilities, () => Render.UnitAbilities(abilities));
-        }));
-        obj.AddCommand(objAbilities);
 
         var setFieldArg = new Argument<string>("field",
             "Four-character field code (e.g. uhpm), or code:N for an ability/upgrade level or doodad variation.");
@@ -324,7 +332,9 @@ public static class Program
         var placeUnitRawcode = new Argument<string>("rawcode", "Four-character unit type rawcode.");
         var placeOwnerArg = new Argument<int>("owner", "Owning player id (0-based; 0 = red).");
         var placeUnit = new Command("unit",
-            "Place a unit at (x, y) and save the edited map. Writes war3mapUnits.doo.")
+            "Place a unit at (x, y) and save the edited map. Writes war3mapUnits.doo, and the map's "
+            + "script when a spawn call has to be wired (a preplaced unit no script creates "
+            + "never appears in the game).")
         { mapArg, placeUnitRawcode, placeOwnerArg, placeXArg, placeYArg, placeZOpt, placeRotOpt, placeScaleOpt, setOut };
         placeUnit.SetHandler(ctx => RunSafely(() =>
         {
@@ -358,7 +368,8 @@ public static class Program
         var placePlayerArg = new Argument<int>("player", "Player whose start location this is (0-based; 0 = red).");
         var placeStartLoc = new Command("start-location",
             "Place or move a player's start location at (x, y) and save the edited map. "
-            + "One per player — an existing one for this player is moved. Writes war3mapUnits.doo.")
+            + "One per player — an existing one for this player is moved. Writes war3mapUnits.doo, "
+            + "and the map's script when a spawn call has to be wired.")
         { mapArg, placePlayerArg, placeXArg, placeYArg, setOut };
         placeStartLoc.SetHandler(ctx => RunSafely(() =>
         {
@@ -387,7 +398,8 @@ public static class Program
 
         var placeItemRawcode = new Argument<string>("rawcode", "Four-character item type rawcode.");
         var placeItem = new Command("item",
-            "Place a preplaced item at (x, y) and save the edited map. Writes war3mapUnits.doo (item slot).")
+            "Place a preplaced item at (x, y) and save the edited map. Writes war3mapUnits.doo "
+            + "(item slot), and the map's script when a spawn call has to be wired.")
         { mapArg, placeItemRawcode, placeXArg, placeYArg, placeZOpt, placeRotOpt, placeScaleOpt, setOut };
         placeItem.SetHandler(ctx => RunSafely(() =>
         {
@@ -416,6 +428,34 @@ public static class Program
                 () => $"{r.Message}\nsaved: {dest}");
         }));
         place.AddCommand(placeItem);
+
+        var placeSync = new Command("sync",
+            "Regenerate the runtime creation script (CreateAllUnits/CreateAllItems in war3map.j) "
+            + "from war3mapUnits.doo so preplaced widgets actually spawn in game. Repairs maps whose "
+            + "units were placed without the spawning script. Placing through wc3ctl does this "
+            + "automatically; this repairs a map that predates it.")
+        { mapArg, setOut };
+        placeSync.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = PreplacedUnitsScript.Sync(doc);
+            if (!r.Ok)
+            {
+                Emit(p.GetValueForOption(jsonOption), r, () => r.Message);
+                exitCode[0] = 1;
+                return;
+            }
+            var dest = p.GetValueForOption(setOut) ?? Path.Combine(
+                Path.GetDirectoryName(map) ?? "",
+                Path.GetFileNameWithoutExtension(map) + ".edited" + Path.GetExtension(map));
+            doc.Save(dest);
+            Emit(p.GetValueForOption(jsonOption),
+                new { r.Ok, r.Message, r.Units, r.Items, SavedTo = dest },
+                () => $"{r.Message}\nsaved: {dest}");
+        }));
+        place.AddCommand(placeSync);
 
         // ---- palette: the doodad types placeable on a map (base catalog ⊕ map object-data) ----
         var palette = new Command("palette",
@@ -504,6 +544,63 @@ public static class Program
         }));
         bundle.AddCommand(bundleObject);
 
+
+        // Loops that may never terminate. A JASS loop that cannot exit presents as a tight native
+        // loop inside the game executable (the interpreter lives there), with no crash and no log,
+        // which is indistinguishable from an engine bug until you look at the script.
+        var loopsAll = new Option<bool>("--all", () => false,
+            "List every loop, not just the risky ones.");
+        var scriptLoops = new Command("loops",
+            "Find JASS loops that may never terminate: no exitwhen at all, or an exit condition "
+            + "naming only values the loop body never assigns.")
+        { mapArg, loopsAll, jsonOption };
+        scriptLoops.SetHandler(ctx => RunSafely(() =>
+        {
+            var p3 = ctx.ParseResult;
+            var doc3 = MapDocument.Load(p3.GetValueForArgument(mapArg));
+            var r3 = ScriptLoopsCommand.Run(doc3, onlyRisky: !p3.GetValueForOption(loopsAll));
+            Emit(p3.GetValueForOption(jsonOption), r3, () => Render.ScriptLoops(r3));
+        }));
+        // Roots for any reachability-based cleanup: functions invoked only by name at runtime,
+        // which a caller-graph pass cannot see and would delete. Prerequisite for replacing the
+        // porter's line-by-line trimming (which is what actually breaks ported maps) with a
+        // carry-complete-then-strip pass.
+        var scriptRoots = new Command("roots",
+            "List functions reachable only via a string literal, e.g. ExecuteFunc(\"Name\"). A "
+            + "dead-code pass must pin these or it will delete live code.")
+        { mapArg, jsonOption };
+        scriptRoots.SetHandler(ctx => RunSafely(() =>
+        {
+            var p4 = ctx.ParseResult;
+            var doc4 = MapDocument.Load(p4.GetValueForArgument(mapArg));
+            var r4 = ScriptRootsCommand.Run(doc4);
+            Emit(p4.GetValueForOption(jsonOption), r4, () => Render.ScriptRoots(r4));
+        }));
+        // Remove functions nothing can reach, as the alternative to the porter's trimming (which
+        // is what breaks ported maps: an unresolvable call commented out leaves a local declared
+        // and never assigned, or strips an iterator's advance so its loop can never exit).
+        // Deleting a whole unreachable function cannot cause either, since nothing left refers to it.
+        var stripOut = new Option<string?>(new[] { "-o", "--out" },
+            "Output map path. Default: '<map>.stripped.<ext>' next to the input.");
+        var scriptStrip = new Command("strip",
+            "Remove unreachable functions from war3map.j by call-graph closure from the engine's "
+            + "entry points plus every function named in a string literal. Globals are untouched.")
+        { mapArg, stripOut, jsonOption };
+        scriptStrip.SetHandler(ctx => RunSafely(() =>
+        {
+            var p5 = ctx.ParseResult;
+            string map5 = p5.GetValueForArgument(mapArg);
+            var doc5 = MapDocument.Load(map5);
+            var r5 = ScriptStripCommand.Run(doc5);
+            FileEditCommand.WriteText(doc5, "war3map.j", r5.NewScript);
+            var dest5 = p5.GetValueForOption(stripOut) ?? Path.Combine(
+                Path.GetDirectoryName(map5) ?? "",
+                Path.GetFileNameWithoutExtension(map5) + ".stripped" + Path.GetExtension(map5));
+            doc5.Save(dest5);
+            Emit(p5.GetValueForOption(jsonOption), new { r5.FunctionsBefore, r5.FunctionsAfter,
+                r5.FunctionsRemoved, r5.PercentRemoved, r5.LinesBefore, r5.LinesAfter,
+                r5.EntryPoints, r5.StringRoots, SavedTo = dest5 }, () => Render.ScriptStrip(r5, dest5));
+        }));
         var script = new Command("script", "Map script queries.");
         var scriptFunctions = new Command("functions", "List functions declared in the map script.") { mapArg };
         scriptFunctions.SetHandler((string map, bool json) => RunSafely(() =>
@@ -526,6 +623,52 @@ public static class Program
             if (!r.Ok) exitCode[0] = 1;
         }));
         script.AddCommand(scriptLeaks);
+
+        var refsName = new Argument<string>("name", "Function or global name to find uses of.");
+        var scriptRefs = new Command("refs",
+            "Find every use of a name in the map script: direct calls, and the places it is passed "
+            + "as a code value (Condition, Filter, TriggerAddAction), which a text search for "
+            + "'name(' cannot see.") { mapArg, refsName };
+        scriptRefs.SetHandler((string map, string name, bool json) => RunSafely(() =>
+        {
+            var r = ScriptCommand.References(MapDocument.Load(map), name);
+            Emit(json, r, () => Render.ScriptReferences(r));
+        }), mapArg, refsName, jsonOption);
+        script.AddCommand(scriptRefs);
+
+        script.AddCommand(scriptLoops);
+        script.AddCommand(scriptRoots);
+        script.AddCommand(scriptStrip);
+        var repairOut = new Option<string?>(new[] { "-o", "--out" },
+            "Output map path. Default: '<map>.repaired.<ext>' next to the input - the original is never overwritten.");
+        var scriptRepair = new Command("repair",
+            "Repair a map whose script cannot compile (restores declarations whose initializer was dropped by a port). "
+            + "An un-compilable war3map.j is why a hosted map shows no player slots.")
+        { mapArg, repairOut };
+        scriptRepair.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            bool json = p.GetValueForOption(jsonOption);
+            var doc = MapDocument.Load(map);
+            var r = ScriptRepairCommand.Execute(doc);
+
+            // Nothing changed means nothing to write, so the original is left exactly as it is.
+            string? dest = null;
+            if (r.Repairs > 0)
+            {
+                dest = p.GetValueForOption(repairOut) ?? Path.Combine(
+                    Path.GetDirectoryName(map) ?? "",
+                    Path.GetFileNameWithoutExtension(map) + ".repaired" + Path.GetExtension(map));
+                doc.Save(dest);
+            }
+            if (!r.Ok) exitCode[0] = 2;
+            Emit(json, new { r.Ok, r.Message, r.Repairs, r.Remaining, SavedTo = dest }, () =>
+                r.Message
+                + (dest is null ? "" : $"\nsaved: {dest}")
+                + (r.Remaining.Count == 0 ? "" : "\n" + string.Join("\n", r.Remaining.Select(x => "  ! " + x))));
+        }));
+        script.AddCommand(scriptRepair);
 
         var internalPathArg = new Argument<string?>("internal-path", () => null, "Exact internal file path to extract.");
         var outOption = new Option<string?>(new[] { "-o", "--out" },
@@ -628,10 +771,25 @@ public static class Program
             "Port object data + assets + strings only; skip the best-effort JASS script closure append.");
         var dryRunOption = new Option<bool>("--dry-run",
             "Preview the port: print the full report (remaps, objects, files, strings, script) without writing anything.");
+        var synthDispatchOption = new Option<bool>("--synth-dispatch",
+            "Single-unit port only. Instead of carrying the source's shared cast dispatcher (every gate it was "
+            + "written to satisfy on the source map — a placed-hero registration array, a map rect that reads "
+            + "null off the source map, a cooldown hashtable), read the unit's OWN branch of it and synthesize "
+            + "a fresh, minimal, self-contained dispatcher for exactly its abilities. Does not make the unit "
+            + "dependency-free (spell handlers still need their own carried state), only replaces the SHARED "
+            + "entry point into them. Default off: a plain port is unaffected.");
+        var bootstrapStateOption = new Option<bool>("--bootstrap-state",
+            "Construct every carried global the ported code reads but nothing ever assigns (a region "
+            + "CreateRegions never carried, a timer only a hand-written Init reached through "
+            + "ExecuteFunc(\"Init\") ever built), so it holds a real handle instead of silently sitting "
+            + "at its type default. Only timer, group, hashtable, trigger, rect and force are ever "
+            + "constructed this way (a rect is built empty, never guessed at). Anything else this cannot "
+            + "safely build, unit, item, destructable, effect, code, framehandle, an array, is left alone "
+            + "and reported instead. Default off, a plain port is unaffected.");
         var port = new Command("port", "Port content between maps.");
         var portUnit = new Command("unit",
             "Port a unit (its custom objects + assets + strings, and best-effort its trigger script) from one map into another, auto-remapping rawcode collisions.")
-        { portSource, portRawcodes, portTarget, outOption, noScriptOption, dryRunOption };
+        { portSource, portRawcodes, portTarget, outOption, noScriptOption, dryRunOption, synthDispatchOption, bootstrapStateOption };
         portUnit.SetHandler(ctx => RunSafely(() =>
         {
             var p = ctx.ParseResult;
@@ -644,7 +802,11 @@ public static class Program
             bool json = p.GetValueForOption(jsonOption);
             bool dryRun = p.GetValueForOption(dryRunOption);
             bool includeScript = !p.GetValueForOption(noScriptOption);
+            bool synthDispatch = p.GetValueForOption(synthDispatchOption);
+            bool bootstrapState = p.GetValueForOption(bootstrapStateOption);
             string? gameDir = p.GetValueForOption(gameDirOption);
+            if (synthDispatch && rawcodes.Length != 1)
+                throw new ArgumentException("--synth-dispatch only applies when porting a single unit");
 
             var source = MapDocument.Load(sourcePath);
             var target = MapDocument.Load(targetPath);
@@ -659,8 +821,8 @@ public static class Program
             {
                 var bundle = BundleCommand.ResolveUnit(source, rawcodes[0], gameDir);
                 var result = dryRun
-                    ? PortCommand.PreviewPort(source, bundle, target, includeScript)
-                    : PortCommand.PortUnit(source, bundle, target, includeScript);
+                    ? PortCommand.PreviewPort(source, bundle, target, includeScript, synthDispatch, bootstrapState)
+                    : PortCommand.PortUnit(source, bundle, target, includeScript, synthDispatch, bootstrapState);
                 if (outPath is not null) target.Save(outPath);
                 Emit(json, result, () => Render.Port(result, outPath));
             }
@@ -668,23 +830,299 @@ public static class Program
             {
                 var bundles = rawcodes.Select(rc => BundleCommand.ResolveUnit(source, rc, gameDir)).ToList();
                 var result = dryRun
-                    ? PortCommand.PreviewPorts(source, bundles, target, includeScript)
-                    : PortCommand.PortUnits(source, bundles, target, includeScript);
+                    ? PortCommand.PreviewPorts(source, bundles, target, includeScript, bootstrapState)
+                    : PortCommand.PortUnits(source, bundles, target, includeScript, bootstrapState);
                 if (outPath is not null) target.Save(outPath);
                 Emit(json, result, () => Render.PortBatch(result, outPath));
             }
         }));
         port.AddCommand(portUnit);
 
-        var validate = new Command("validate",
-            "Check a map for problems (missing/empty files, loader errors). Exits 2 if invalid.")
-            { mapArg };
-        validate.SetHandler((string map, bool json) => RunSafely(() =>
+        var auditHeroArg = new Argument<string?>("hero", () => null,
+            "Hero rawcode to audit. Omit to audit every hero placed on the map.");
+        var audit = new Command("audit", "Check that a map really wires up what it should.");
+        var auditHero = new Command("hero",
+            "Verify every ability of a placed hero is wired end to end (object present, dispatch carried, "
+            + "trigger attached, event covers the player, handler not empty, identity array registered, "
+            + "init called exactly once). Reports the exact missing link per ability. Exits 2 if any fail.")
+        { mapArg, auditHeroArg };
+        auditHero.SetHandler(ctx => RunSafely(() =>
         {
-            var r = ValidateCommand.Execute(MapDocument.Load(map));
-            Emit(json, r, () => Render.Validate(r));
-            if (!r.Valid) exitCode[0] = 2;
-        }), mapArg, jsonOption);
+            var p = ctx.ParseResult;
+            var doc = MapDocument.Load(p.GetValueForArgument(mapArg));
+            string? hero = p.GetValueForArgument(auditHeroArg);
+
+            var results = hero is null
+                ? HeroWiringAudit.AuditPlacedHeroes(doc)
+                : new[] { HeroWiringAudit.Audit(doc, hero, ownerId: 0) };
+
+            Emit(p.GetValueForOption(jsonOption), results, () =>
+            {
+                var sb = new System.Text.StringBuilder();
+                foreach (var r in results)
+                {
+                    sb.AppendLine($"{r.Hero}  \"{r.Name}\"  (player {r.OwnerId})  "
+                        + $"{r.Wired}/{r.Abilities.Count - r.NotCastable} castable abilities wired"
+                        + (r.NotCastable > 0 ? $", {r.NotCastable} passive/aura" : "")
+                        + (r.Problems.Count > 0 ? $", {r.Problems.Count} problem(s)" : ""));
+                    foreach (var a in r.Abilities)
+                    {
+                        // Three states, not two. A passive is neither wired nor broken, and printing
+                        // FAIL beside one was the exact false alarm the reclassification removed.
+                        string mark = a.Status switch
+                        {
+                            WiringStatus.Ok => "ok  ",
+                            WiringStatus.NotCastDispatched => "info",
+                            _ => "FAIL",
+                        };
+                        sb.AppendLine($"  {mark} {a.Ability}  \"{a.Name}\"  "
+                            + (a.Status == WiringStatus.Ok ? "" : a.Status + ": ") + a.Detail);
+                    }
+                }
+                if (results.Count == 0) sb.AppendLine("no placed heroes found");
+                return sb.ToString().TrimEnd();
+            });
+            if (results.Any(r => r.Problems.Count > 0)) exitCode[0] = 2;
+        }));
+        audit.AddCommand(auditHero);
+
+        var auditAbilityArg = new Argument<string?>("hero", () => null,
+            "Hero rawcode to audit. Omit to audit every hero placed on the map.");
+        var auditAbility = new Command("ability",
+            "Walk each ability's own runtime chain, not just whether a cast reaches a live trigger: is "
+            + "the handler carried and not gutted, does its follow-up loop actually start, does anything "
+            + "in its closure deal damage, is every pause matched by an unpause, does a timer callback "
+            + "still point at a declared function, is every global it reads actually assigned, does a "
+            + "special-effect asset still exist. 'audit hero' only proves dispatch, a hero can read '8 of "
+            + "8 wired' there and still do nothing in game. Exits 2 if any ability fails a check.")
+        { mapArg, auditAbilityArg };
+        auditAbility.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var doc = MapDocument.Load(p.GetValueForArgument(mapArg));
+            string? hero = p.GetValueForArgument(auditAbilityArg);
+
+            var results = hero is null
+                ? AbilityAuditCommand.AuditPlacedHeroes(doc)
+                : new[] { AbilityAuditCommand.Audit(doc, hero, ownerId: 0) };
+
+            Emit(p.GetValueForOption(jsonOption), results, () =>
+            {
+                var columns = new (AbilityCheck Check, string Label)[]
+                {
+                    (AbilityCheck.Dispatch, "DISP"), (AbilityCheck.Handler, "HNDLR"),
+                    (AbilityCheck.Loop, "LOOP"), (AbilityCheck.Damage, "DMG"),
+                    (AbilityCheck.PauseBalance, "PAUSE"), (AbilityCheck.TimerCallbacks, "CB"),
+                    (AbilityCheck.State, "STATE"), (AbilityCheck.Effects, "FX"),
+                };
+                string Mark(AbilityAuditRow a, AbilityCheck c)
+                {
+                    var chk = a.Checks.FirstOrDefault(x => x.Check == c);
+                    return chk is null ? "?" : chk.Verdict switch
+                    {
+                        CheckVerdict.Pass => "ok",
+                        CheckVerdict.NotApplicable => "-",
+                        _ => "FAIL",
+                    };
+                }
+
+                var sb = new System.Text.StringBuilder();
+                foreach (var r in results)
+                {
+                    sb.AppendLine($"{r.Hero}  \"{r.Name}\"  (player {r.OwnerId})  "
+                        + $"{r.Passed}/{r.Total} abilities fully verified");
+                    sb.Append("  ").Append("ABILITY".PadRight(9)).Append("NAME".PadRight(28));
+                    foreach (var col in columns) sb.Append(col.Label.PadRight(7));
+                    sb.AppendLine("VERDICT");
+                    foreach (var a in r.Abilities)
+                    {
+                        string name = a.Name ?? "";
+                        if (name.Length > 26) name = name[..26];
+                        sb.Append("  ").Append(a.Ability.PadRight(9)).Append(name.PadRight(28));
+                        foreach (var col in columns) sb.Append(Mark(a, col.Check).PadRight(7));
+                        sb.AppendLine(a.Pass ? "PASS" : "FAIL");
+                    }
+                    foreach (var a in r.Abilities.Where(a => !a.Pass))
+                        foreach (var f in a.Failures)
+                            sb.AppendLine($"    {a.Ability} {f.Check}: {f.Detail}");
+                }
+                if (results.Count == 0) sb.AppendLine("no placed heroes found");
+                return sb.ToString().TrimEnd();
+            });
+            if (results.Any(r => r.Abilities.Any(a => !a.Pass))) exitCode[0] = 2;
+        }));
+        audit.AddCommand(auditAbility);
+
+        var fidSource = new Argument<string>("source-map", "Path to the SOURCE map the object was ported FROM.");
+        var fidTarget = new Argument<string>("target-map", "Path to the TARGET map the object was ported INTO.");
+        var fidRawcode = new Argument<string>("rawcode", "Root object rawcode to compare (the same rawcode in both maps).");
+        var auditFidelity = new Command("fidelity",
+            "Compare an object and its whole custom closure between a source and target map, reporting fields, "
+            + "per-level values, levels, and objects the port failed to carry. Rawcode remaps and inlined trigger "
+            + "strings are accounted for and not counted as faults. Exits 2 if any real data loss is found.")
+        { fidSource, fidTarget, fidRawcode };
+        auditFidelity.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var source = MapDocument.Load(p.GetValueForArgument(fidSource));
+            var target = MapDocument.Load(p.GetValueForArgument(fidTarget));
+            var rawcode = p.GetValueForArgument(fidRawcode);
+            var r = ObjectFidelityCommand.Compare(source, target, rawcode, p.GetValueForOption(gameDirOption));
+
+            Emit(p.GetValueForOption(jsonOption), r, () =>
+            {
+                var sb = new System.Text.StringBuilder();
+                sb.AppendLine($"{r.Root}  \"{r.Name}\"  ({r.RootKind})  source vs target");
+                foreach (var g in r.Findings.GroupBy(f => f.SourceRawcode)
+                                            .OrderBy(g => g.Key, StringComparer.Ordinal))
+                {
+                    var head = g.First();
+                    sb.AppendLine($"  {g.Key}  \"{head.Name}\"  ({head.Kind})");
+                    foreach (var f in g.OrderBy(f => f.Severity).ThenBy(f => f.Field, StringComparer.Ordinal))
+                    {
+                        string tag = f.Severity == FidelitySeverity.Error ? "LOSS" : "info";
+                        string field = f.Field.Length > 0 ? " " + f.Field : "";
+                        string vals = f.SourceValue is not null || f.TargetValue is not null
+                            ? $"  (source={f.SourceValue ?? "<none>"}  target={f.TargetValue ?? "<none>"})" : "";
+                        sb.AppendLine($"    {tag} {f.Issue}{field}  {f.Detail}{vals}");
+                    }
+                }
+                sb.AppendLine();
+                sb.AppendLine(r.Faithful
+                    ? $"faithful, {r.ObjectsCompared} object(s) compared, no real loss found ({r.Infos} informational)"
+                    : $"{r.Errors} real loss(es) across {r.ObjectsWithLosses} of {r.ObjectsCompared} object(s), {r.Infos} informational");
+                foreach (var d in r.Diagnostics) sb.AppendLine("  note, " + d);
+                return sb.ToString().TrimEnd();
+            });
+            if (!r.Faithful) exitCode[0] = 2;
+        }));
+        audit.AddCommand(auditFidelity);
+
+        var auditReadinessArg = new Argument<string?>("hero", () => null,
+            "Hero rawcode to check. Omit to check every hero placed on the map.");
+        var auditReadiness = new Command("readiness",
+            "Check whether a placed hero's script would actually run, not just fire. Verifies InitGlobals "
+            + "and RunInitializationTriggers are both carried and called, and that every udg_ global the "
+            + "hero's own carried code reads is assigned somewhere in the script. A hero can audit clean on "
+            + "'audit hero' and still do nothing in game if its damage, range or duration values were never "
+            + "initialized. Exits 2 if any problem is found.")
+        { mapArg, auditReadinessArg };
+        auditReadiness.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var doc = MapDocument.Load(p.GetValueForArgument(mapArg));
+            string? hero = p.GetValueForArgument(auditReadinessArg);
+
+            var results = hero is null
+                ? RuntimeReadinessCommand.CheckPlacedHeroes(doc)
+                : new[] { RuntimeReadinessCommand.Check(doc, hero, ownerId: 0) };
+
+            Emit(p.GetValueForOption(jsonOption), results, () =>
+            {
+                var sb = new System.Text.StringBuilder();
+                foreach (var r in results)
+                {
+                    sb.AppendLine($"{r.Hero}  \"{r.Name}\"  (player {r.OwnerId})  "
+                        + (r.Ready ? "ready" : $"{r.Errors} problem(s)"));
+                    foreach (var f in r.Findings)
+                        sb.AppendLine($"  {(f.Global is null ? "" : f.Global + "  ")}{f.Issue}  {f.Detail}");
+                    foreach (var d in r.Diagnostics) sb.AppendLine("  note, " + d);
+                }
+                if (results.Count == 0) sb.AppendLine("no placed heroes found");
+                return sb.ToString().TrimEnd();
+            });
+            if (results.Any(r => !r.Ready)) exitCode[0] = 2;
+        }));
+        audit.AddCommand(auditReadiness);
+
+        // ---- debug: instrument a map so the running game reports what it is doing ----
+        var debugWiringHeroArg = new Argument<string?>("hero", () => null,
+            "Hero rawcode to add a per-hero branch checkpoint for. Omit to instrument only the "
+            + "checkpoints shared by every cast, with no per-hero branch print.");
+        var debugWiringOut = new Option<string?>(new[] { "-o", "--out" },
+            "Output map path. Default is '<map>.debug.<ext>' next to the input, the original is "
+            + "never overwritten.");
+        var debug = new Command("debug",
+            "Instrument a map so the running game reports what it is doing, for problems static analysis cannot see.");
+        var debugWiring = new Command("wiring",
+            "Instruments an already-ported map's cast-dispatch chain with BJDebugMsg calls, so the running "
+            + "game reports exactly where a hero's cast attempt stops. Use this when a hero audits clean on "
+            + "'audit hero' and 'audit readiness' and still cannot cast in game, since neither static check "
+            + "can see whether the dispatcher's own gate passes, whether its own per-hero branch is ever "
+            + "entered, or whether a deferred trigger registration ran before the cast. Opt in, meant for a "
+            + "disposable copy of a map, never run as part of an ordinary port.")
+        { mapArg, debugWiringHeroArg, debugWiringOut };
+        debugWiring.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            string? hero = p.GetValueForArgument(debugWiringHeroArg);
+            var r = DebugWiringCommand.Instrument(doc, hero);
+
+            string? dest = null;
+            if (r.Ok)
+            {
+                dest = p.GetValueForOption(debugWiringOut) ?? Path.Combine(
+                    Path.GetDirectoryName(map) ?? "",
+                    Path.GetFileNameWithoutExtension(map) + ".debug" + Path.GetExtension(map));
+                doc.Save(dest);
+            }
+            else
+            {
+                exitCode[0] = 1;
+            }
+
+            Emit(p.GetValueForOption(jsonOption), new { r.Ok, r.Message, r.Targets, r.Diagnostics, SavedTo = dest }, () =>
+            {
+                var sb = new System.Text.StringBuilder();
+                sb.AppendLine(r.Message);
+                foreach (var t in r.Targets)
+                {
+                    sb.AppendLine($"  {t.Function}  (trigger {t.Trigger})");
+                    foreach (var c in t.Checkpoints) sb.AppendLine($"    + {c}");
+                }
+                foreach (var d in r.Diagnostics) sb.AppendLine("  note, " + d);
+                if (dest is not null) sb.AppendLine("saved to " + dest);
+                return sb.ToString().TrimEnd();
+            });
+        }));
+        debug.AddCommand(debugWiring);
+
+        var deepOption = new Option<bool>("--deep",
+            "Also run pjass, the game's own JASS parser, over the map script (needs a Warcraft III install).");
+        var validate = new Command("validate",
+            "Check a map for problems (missing/empty files, loader errors, a script that cannot compile). Exits 2 if invalid.")
+            { mapArg, deepOption };
+        validate.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            bool json = p.GetValueForOption(jsonOption);
+            var doc = MapDocument.Load(map);
+            var r = ValidateCommand.Execute(doc);
+
+            PjassResult? deep = null;
+            if (p.GetValueForOption(deepOption))
+            {
+                var entry = doc.GetFile("war3map.j") ?? doc.GetFile("scripts\\war3map.j");
+                byte[]? bytes = entry?.CurrentBytes;
+                if (bytes is { Length: > 0 })
+                    deep = PjassGate.Check(System.Text.Encoding.Latin1.GetString(bytes),
+                        p.GetValueForOption(gameDirOption));
+            }
+
+            // pjass is the game's own parser, so its findings become real issues and change the
+            // verdict. Printing "OK, valid" above a list of undefined functions is worse than
+            // printing nothing, and that is exactly what this used to do.
+            r = ValidateCommand.WithPjass(r, deep);
+
+            Emit(json, new { r.Valid, r.Errors, r.Warnings, r.Issues, Pjass = deep }, () =>
+                Render.Validate(r)
+                + (deep is null ? "" : $"\npjass: {deep.Note}"));
+
+            if (!r.Valid || deep is { Ran: true, Passed: false }) exitCode[0] = 2;
+        }));
 
         // Behavioural audit. validate answers whether a map LOADS, audit answers whether its
         // abilities do what they claim, by checking the object data against the tooltips the
@@ -693,11 +1131,13 @@ public static class Program
             "Limit to named checks. Repeatable. Default runs all: "
             + string.Join(", ", AuditCommand.AllChecks))
         { AllowMultipleArgumentsPerToken = true };
-        var audit = new Command("audit",
+        audit.Description =
             "Check abilities against the map's own tooltips, plus inherited requirements, "
             + "portrait-risk models, dangling object references and model paths that load no file. "
-            + "Read-only. Exits 2 if any error-level issue is found.")
-            { mapArg, auditCheck };
+            + "Read-only. Exits 2 if any error-level issue is found. The subcommands check a hero's "
+            + "wiring, one ability, object data fidelity and runtime readiness.";
+        audit.AddArgument(mapArg);
+        audit.AddOption(auditCheck);
         audit.SetHandler(ctx => RunSafely(() =>
         {
             var p = ctx.ParseResult;
@@ -1005,7 +1445,18 @@ public static class Program
 
         // Generic save-and-report for any (Ok, Message) mutation result. On failure emits the
         // message and sets exit 1; on success saves to --out (or a sibling .edited) and reports.
-        void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok, string message)
+        static bool TryParseEcaKind(string text, out War3Net.Build.Script.TriggerFunctionType kind)
+{
+    switch (text.Trim().ToLowerInvariant())
+    {
+        case "event": kind = War3Net.Build.Script.TriggerFunctionType.Event; return true;
+        case "condition": kind = War3Net.Build.Script.TriggerFunctionType.Condition; return true;
+        case "action": kind = War3Net.Build.Script.TriggerFunctionType.Action; return true;
+        default: kind = default; return false;
+    }
+}
+
+void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok, string message)
         {
             if (!ok)
             {
@@ -1134,15 +1585,598 @@ public static class Program
             FinishTerrain(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message, r.TilesChanged);
         }));
 
+        // Fill: the rectangle counterpart to the brush commands above. Every bulk terrain
+        // operation lived in Wc3.Commands with no caller at all, so filling a region meant
+        // clicking a brush repeatedly. They go behind ONE verb rather than a rectangle variant
+        // of each, because selecting a region and acting on it is one concept.
+        var fX0 = new Argument<int>("x0", "First corner column, 0-based.");
+        var fY0 = new Argument<int>("y0", "First corner row, 0-based.");
+        var fX1 = new Argument<int>("x1", "Second corner column, 0-based (inclusive, any order).");
+        var fY1 = new Argument<int>("y1", "Second corner row, 0-based (inclusive, any order).");
+        var fTool = new Argument<TerrainFillCommand.FillTool>("tool",
+            "What to apply over the rectangle.");
+        var fValue = new Option<float>("--value",
+            () => 1f,
+            "Height, cliff step count, or ground tile index, depending on the tool. Ignored by "
+            + "Flatten, Ramp, RampOff, WaterRemove, Blight and BlightOff.");
+
+        var terrainFill = new Command("fill",
+            "Apply a tool over an inclusive rectangle of corners, instead of one brush dab at a "
+            + "time. Corners may be given in any order and an off-grid rectangle is clipped.")
+        { mapArg, fX0, fY0, fX1, fY1, fTool, fValue, setOut };
+        terrainFill.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = TerrainFillCommand.Fill(doc,
+                p.GetValueForArgument(fX0), p.GetValueForArgument(fY0),
+                p.GetValueForArgument(fX1), p.GetValueForArgument(fY1),
+                p.GetValueForArgument(fTool), p.GetValueForOption(fValue));
+            FinishTerrain(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message, r.TilesChanged);
+        }));
+
         var terrain = new Command("terrain",
-            "Terrain editing: height, cliffs, ramps, textures, water, blight.");
+            "Terrain editing: height, cliffs, ramps, textures, water, blight. Brush commands "
+            + "work a radius at a time, 'fill' works a rectangle at a time.");
+        terrain.AddCommand(terrainFill);
         terrain.AddCommand(terrainStats);
         terrain.AddCommand(terrainDeform);
         terrain.AddCommand(terrainCliff);
         terrain.AddCommand(terrainRamp);
         terrain.AddCommand(terrainPaint);
         terrain.AddCommand(terrainWater);
+        var colArg = new Argument<int>("col", "Corner column, 0-based.");
+        var rowArg = new Argument<int>("row", "Corner row, 0-based.");
+
+        var terrainInfo = new Command("info",
+            "Grid extents in corners, plus the map's ground and cliff tile lists. Texture fields "
+            + "are indexes into those lists.")
+        { mapArg, jsonOption };
+        terrainInfo.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var i = TerrainEditCommand.GetInfo(MapDocument.Load(p.GetValueForArgument(mapArg)));
+            if (i is null)
+            {
+                Emit(p.GetValueForOption(jsonOption), new { Ok = false, Message = "no terrain file" },
+                    () => "this map has no war3map.w3e");
+                exitCode[0] = 1;
+                return;
+            }
+            Emit(p.GetValueForOption(jsonOption), i, () => string.Join("\n", new[]
+            {
+                $"grid          {i.Width} x {i.Height} corners",
+                $"ground tiles  {string.Join(" ", i.GroundTiles)}",
+                $"cliff tiles   {string.Join(" ", i.CliffTiles)}",
+            }));
+        }));
+
+        var cornerGet = new Command("get", "Show one terrain corner's full state.")
+        { mapArg, colArg, rowArg, jsonOption };
+        cornerGet.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            int col = p.GetValueForArgument(colArg), row = p.GetValueForArgument(rowArg);
+            var c = TerrainEditCommand.GetCorner(MapDocument.Load(p.GetValueForArgument(mapArg)), col, row);
+            if (c is null)
+            {
+                Emit(p.GetValueForOption(jsonOption),
+                    new { Ok = false, Message = $"no corner at ({col}, {row})" },
+                    () => $"no terrain corner at ({col}, {row}). Try 'terrain info' for the extents.");
+                exitCode[0] = 1;
+                return;
+            }
+            Emit(p.GetValueForOption(jsonOption), c, () => Render.TerrainCorner(c));
+        }));
+
+        var cornerFieldArg = new Argument<string>("field",
+            "Field: " + string.Join("|", TerrainCornerFields.Fields) + ".");
+        var cornerValueArg = new Argument<string>("value", "New value.");
+        var cornerSet = new Command("set",
+            "Set a field on ONE terrain corner and save the edited map. For area work use "
+            + "'terrain deform', 'terrain paint' and the other brush commands.")
+        { mapArg, colArg, rowArg, cornerFieldArg, cornerValueArg, setOut, jsonOption };
+        cornerSet.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = TerrainCornerFields.SetField(doc, p.GetValueForArgument(colArg),
+                p.GetValueForArgument(rowArg), p.GetValueForArgument(cornerFieldArg),
+                p.GetValueForArgument(cornerValueArg));
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc,
+                r.Ok, r.Message);
+        }));
+
+        var corner = new Command("corner",
+            "One terrain corner at a time: get, set. The brush commands cover areas.");
+        corner.AddCommand(cornerGet);
+        corner.AddCommand(cornerSet);
+        terrain.AddCommand(terrainInfo);
+        terrain.AddCommand(corner);
+
         terrain.AddCommand(terrainBlight);
+
+        static string Trim(string t) =>
+            t.Length <= 88 ? t.Replace("\n", " ") : t[..88].Replace("\n", " ") + "...";
+
+        // ---- unit-type abilities and field options: what a unit can do, and what a field accepts ----
+        var abilRawcodeArg = new Argument<string>("rawcode", "Unit type's four-character rawcode.");
+        var placedOpt = new Option<int?>("--placed",
+            "Show abilities for a placed unit instance by creation number instead.");
+        var unitAbilities = new Command("abilities",
+            "List all abilities for a unit, grouped by source (normal, hero, "
+            + "spellbook, placed unit, morph form, script).")
+        { mapArg, abilRawcodeArg, placedOpt, jsonOption, gameDirOption };
+        unitAbilities.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var abilities = UnitAbilitiesCommand.Execute(
+                MapDocument.Load(p.GetValueForArgument(mapArg)),
+                p.GetValueForArgument(abilRawcodeArg), p.GetValueForOption(gameDirOption),
+                p.GetValueForOption(placedOpt));
+            Emit(p.GetValueForOption(jsonOption), abilities, () => Render.UnitAbilities(abilities));
+        }));
+
+        var optKindOpt = new Option<string>("--kind", () => "unit",
+            "Object type: unit|item|ability|destructable|doodad|buff|upgrade.");
+        var optFieldArg = new Argument<string>("field", "The field's four-character code.");
+        var objectOptions = new Command("options",
+            "The legal values for an object field, taken from what the base game data uses for it. "
+            + "Ask before 'object set' on an enumerated field.")
+        { optFieldArg, optKindOpt, jsonOption, gameDirOption };
+        objectOptions.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = ObjectFieldOptionsCommand.Execute(
+                ObjectKinds.Parse(p.GetValueForOption(optKindOpt)!),
+                p.GetValueForArgument(optFieldArg), p.GetValueForOption(gameDirOption));
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.FieldOptions(r));
+        }));
+        obj.AddCommand(objectOptions);
+
+        // ---- asset list: the paths an icon or model field can actually be set to ----
+        var assetFamilyOpt = new Option<string>("--family", () => "icon",
+            "Asset family: icon|model. Taken from the field's metadata type, so an icon field is "
+            + "'icon' and a model field is 'model'.");
+        var assetSourceOpt = new Option<string>("--source", () => "all",
+            "Where to look: map|game|all.");
+        var assetMapArg = new Argument<string?>("map", () => null,
+            "Optional .w3x/.w3m map. Without one, only the base game's paths are listed.");
+        var assetList = new Command("list",
+            "List the asset paths an icon or model field can be set to, from the map's own imports "
+            + "and from the base game. Use this instead of guessing a path, because a field "
+            + "naming a file that does not resolve renders as nothing with no error.")
+        { assetMapArg, assetFamilyOpt, assetSourceOpt, jsonOption, gameDirOption };
+        assetList.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var mapPath = p.GetValueForArgument(assetMapArg);
+            var doc = mapPath is null ? null : MapDocument.Load(mapPath);
+            var r = AssetListCommand.Execute(doc,
+                AssetListCommand.ParseFamily(p.GetValueForOption(assetFamilyOpt)!),
+                p.GetValueForOption(gameDirOption));
+
+            var source = (p.GetValueForOption(assetSourceOpt) ?? "all").ToLowerInvariant();
+            var shown = source switch
+            {
+                "map" => r.MapPaths,
+                "game" => r.GamePaths,
+                _ => r.All,
+            };
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.AssetList(r, shown, source));
+        }));
+        var asset = new Command("asset", "Asset paths available to an object field.");
+        asset.AddCommand(assetList);
+        root.AddCommand(asset);
+
+        // ---- strings / imports / trigger read: reachable from the GUI, previously not here ----
+        var stringsList = new Command("list",
+            "List the map's string table (war3map.wts). Every TRIGSTR_ reference resolves here.")
+        { mapArg, jsonOption };
+        stringsList.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = StringsCommand.List(MapDocument.Load(p.GetValueForArgument(mapArg)));
+            Emit(p.GetValueForOption(jsonOption), r,
+                () => r.Entries.Count == 0
+                    ? "(no string table)"
+                    : string.Join("\n", r.Entries.Select(e =>
+                        $"TRIGSTR_{e.Id,-6} {Trim(e.Text)}")));
+        }));
+        var strings = new Command("strings", "The map's string table (war3map.wts).");
+        strings.AddCommand(stringsList);
+        root.AddCommand(strings);
+
+        var importsList = new Command("list",
+            "List the import table (war3map.imp) against what the archive holds, so an entry with "
+            + "no file and a file absent from the table both show up.")
+        { mapArg, jsonOption };
+        importsList.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = ImportsCommand.Execute(MapDocument.Load(p.GetValueForArgument(mapArg)));
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.Imports(r));
+        }));
+        var imports = new Command("imports", "The map's import table (war3map.imp).");
+        imports.AddCommand(importsList);
+        root.AddCommand(imports);
+
+        var triggerRead = new Command("read",
+            "Read the GUI trigger tree (war3map.wtg) plus the custom-text bodies (war3map.wct). "
+            + "Use the sibling verbs to add, remove, rename and re-flag triggers.")
+        { mapArg, jsonOption };
+        triggerRead.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var t = TriggerReadCommand.GetTriggers(MapDocument.Load(p.GetValueForArgument(mapArg)));
+            Emit(p.GetValueForOption(jsonOption), t, () => Render.Triggers(t));
+        }));
+
+        // ---- repairing a map wc3ctl generated ----
+        // This existed complete and tested and was reachable from nothing, which is the same
+        // defect the four trigger edits had. It is deliberately narrow: it looks for the
+        // wc3ctl_WirePlacedHeroSpells helper, so it repairs maps this tool generated rather than
+        // maps in general, and it says so rather than appearing to be a general repair.
+        var repairHeroes = new Command("repair-generated",
+            "Repair a map that wc3ctl generated, whose preplaced-hero helper block is too narrow "
+            + "for the heroes installed into it. Widens the player slots, rewrites the hero "
+            + "owners in the script, and brings war3map.w3i and the map header into line. Only "
+            + "applies to maps carrying wc3ctl's own generated helper, and refuses others.")
+        { mapArg, setOut };
+        repairHeroes.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = GeneratedMapRepairCommand.RepairGeneratedHeroes(doc);
+
+            // The detail goes in the message rather than in a second print, so the --json shape
+            // and the human shape carry the same facts through the one shared helper.
+            string detail = r.Ok
+                ? $"{r.Message} Player slots {r.PlayerSlotsBefore} to {r.PlayerSlotsAfter}. "
+                  + $"Script {(r.ScriptUpdated ? "updated" : "unchanged")}, "
+                  + $"war3map.w3i {(r.MapInfoUpdated ? "updated" : "unchanged")}, "
+                  + $"header {(r.HeaderUpdated ? "updated" : "unchanged")}. "
+                  + $"{r.Heroes.Count} hero(es) reassigned."
+                : r.Message;
+
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut),
+                map, doc, r.Ok, detail);
+        }));
+
+        // ---- trigger edits ----
+        // These four already existed in Wc3.Commands, worked, and were reachable from NO
+        // front-end at all. Verified to survive a save and to touch only war3map.wtg before being
+        // exposed, because a trigger edit that silently did not persist is worse than none.
+        var trigIdArg = new Argument<int>("id", "Trigger item id, as shown by 'trigger read'.");
+        var trigOnArg = new Argument<bool>("on", "true or false.");
+        var trigNewName = new Argument<string>("name", "New name.");
+        var trigParentOpt = new Option<int>(new[] { "-p", "--parent" },
+            () => -1, "Parent item id, or -1 for the top level.");
+        var trigParentReq = new Argument<int>("parent",
+            "Id of the category to add the trigger to, or -1 for the top level.");
+        var trigCommentOpt = new Option<bool>("--comment",
+            "Create a comment rather than a GUI trigger.");
+        var ecaKindArg = new Argument<string>("kind", "event, condition or action.");
+        var ecaNameArg = new Argument<string>("name",
+            "Function name from the World-Editor table, for example DisplayTextToForce. "
+            + "Use 'trigger catalog list' to find one.");
+        // An OPTION rather than a trailing variadic argument, because System.CommandLine binds a
+        // ZeroOrMore positional greedily: it swallowed the id, the kind and the name, and the
+        // command then reported "MapInitializationEvent takes 0 parameter(s), but 3 were given".
+        // Repeating -p is unambiguous and reads better for values that contain spaces.
+        var ecaParamsOpt = new Option<string[]>(new[] { "-p", "--param" },
+            "A parameter value, repeated once per parameter, in the order the function declares "
+            + "them. Any you leave off are filled from the World-Editor table's own defaults.")
+        { AllowMultipleArgumentsPerToken = false };
+        var ecaIndexArg = new Argument<int>("index",
+            "Zero-based position of the function within the trigger, as 'trigger read' lists it.");
+
+        var trigRecursiveOpt = new Option<bool>(new[] { "-r", "--recursive" },
+            "Remove the item's descendants too, rather than refusing to orphan them.");
+
+        // ---- events, conditions and actions ----
+        // war3map.wtg stores a function's parameters but not how many there are, so the count is
+        // taken from the World-Editor table on read. Writing the wrong number makes the file
+        // unreadable rather than merely wrong, which is why the arity is not negotiable here.
+        var ecaAdd = new Command("add-eca",
+            "Add an event, condition or action to a GUI trigger and save the edited map. "
+            + "Parameters you leave off are filled from the World-Editor table's own defaults, "
+            + "because a function written with the wrong number of parameters produces a map "
+            + "nothing can read. This edits the World Editor's trigger source (war3map.wtg), not "
+            + "the compiled script the game runs (war3map.j), so the trigger takes effect only "
+            + "after the map is opened and saved in the World Editor.")
+        { mapArg, trigIdArg, ecaKindArg, ecaNameArg, ecaParamsOpt, setOut };
+        ecaAdd.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            if (!TryParseEcaKind(p.GetValueForArgument(ecaKindArg), out var kind))
+            {
+                Console.Error.WriteLine("kind must be event, condition or action.");
+                Environment.ExitCode = 1;
+                return;
+            }
+            var doc = MapDocument.Load(map);
+            var r = TriggerCommand.AddFunction(doc, p.GetValueForArgument(trigIdArg), kind,
+                p.GetValueForArgument(ecaNameArg), p.GetValueForOption(ecaParamsOpt));
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message);
+        }));
+
+        var ecaRemove = new Command("remove-eca",
+            "Remove one event, condition or action from a GUI trigger by its position.")
+        { mapArg, trigIdArg, ecaIndexArg, setOut };
+        ecaRemove.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = TriggerCommand.RemoveFunction(doc, p.GetValueForArgument(trigIdArg),
+                p.GetValueForArgument(ecaIndexArg));
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message);
+        }));
+
+        var ecaEnabled = new Command("set-eca-enabled",
+            "Enable or disable ONE event, condition or action within a trigger, which is the "
+            + "World Editor's per-line toggle rather than the whole-trigger one.")
+        { mapArg, trigIdArg, ecaIndexArg, trigOnArg, setOut };
+        ecaEnabled.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = TriggerCommand.SetFunctionEnabled(doc, p.GetValueForArgument(trigIdArg),
+                p.GetValueForArgument(ecaIndexArg), p.GetValueForArgument(trigOnArg));
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message);
+        }));
+
+        var trigAddCat = new Command("add-category",
+            "Add a category to the trigger tree and save the edited map.")
+        { mapArg, trigNewName, trigParentOpt, setOut };
+        trigAddCat.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = TriggerCommand.AddCategory(doc, p.GetValueForArgument(trigNewName),
+                p.GetValueForOption(trigParentOpt));
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message);
+        }));
+
+        var trigAdd = new Command("add",
+            "Add a trigger under a category and save the edited map. The new trigger is enabled "
+            + "and initially on, matching the World Editor. Custom-text triggers cannot be added, "
+            + "because their body lives in war3map.wct, which cannot be written back. This edits "
+            + "the World Editor's trigger source, not the compiled war3map.j the game runs, so "
+            + "the trigger takes effect only after a World Editor save.")
+        { mapArg, trigNewName, trigParentReq, trigCommentOpt, setOut };
+        trigAdd.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = TriggerCommand.AddTrigger(doc, p.GetValueForArgument(trigNewName),
+                p.GetValueForArgument(trigParentReq),
+                p.GetValueForOption(trigCommentOpt)
+                    ? TriggerCommand.NewTriggerKind.Comment
+                    : TriggerCommand.NewTriggerKind.Gui);
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message);
+        }));
+
+        var trigRemove = new Command("remove",
+            "Remove a trigger item and save the edited map. Refuses to orphan a category's "
+            + "children (pass --recursive to take the subtree) and refuses when it would shift a "
+            + "war3map.wct code body onto the wrong trigger.")
+        { mapArg, trigIdArg, trigRecursiveOpt, setOut };
+        trigRemove.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = TriggerCommand.Remove(doc, p.GetValueForArgument(trigIdArg),
+                p.GetValueForOption(trigRecursiveOpt));
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message);
+        }));
+
+        var trigRename = new Command("rename",
+            "Rename a trigger item (a category, a trigger or a deleted stub) and save the edited map.")
+        { mapArg, trigIdArg, trigNewName, setOut };
+        trigRename.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = TriggerCommand.Rename(doc, p.GetValueForArgument(trigIdArg),
+                p.GetValueForArgument(trigNewName));
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message);
+        }));
+
+        var trigEnabled = new Command("set-enabled",
+            "Enable or disable a trigger. A disabled trigger is not compiled into the map script.")
+        { mapArg, trigIdArg, trigOnArg, setOut };
+        trigEnabled.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = TriggerCommand.SetEnabled(doc, p.GetValueForArgument(trigIdArg),
+                p.GetValueForArgument(trigOnArg));
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message);
+        }));
+
+        var trigInitiallyOn = new Command("set-initially-on",
+            "Set whether a trigger starts switched on. One that is off at map start never fires "
+            + "until something turns it on.")
+        { mapArg, trigIdArg, trigOnArg, setOut };
+        trigInitiallyOn.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = TriggerCommand.SetInitiallyOn(doc, p.GetValueForArgument(trigIdArg),
+                p.GetValueForArgument(trigOnArg));
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message);
+        }));
+
+        var trigRunOnInit = new Command("set-run-on-map-init",
+            "Set whether a trigger runs on map initialization.")
+        { mapArg, trigIdArg, trigOnArg, setOut };
+        trigRunOnInit.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = TriggerCommand.SetRunOnMapInit(doc, p.GetValueForArgument(trigIdArg),
+                p.GetValueForArgument(trigOnArg));
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message);
+        }));
+
+        // ---- unit / doodad: the units and doodads ALREADY PLACED on the map ----
+        // 'place' adds one. These read, edit and remove what is there, which is most of what an
+        // editor is for and was previously reachable only from the GUI.
+        var cnArg = new Argument<int>("creation-number",
+            "The instance's creation number, as shown by 'list'. Stable for the life of the map.");
+
+        var unitInstList = new Command("list", "List every placed unit, with its creation number.")
+        { mapArg, jsonOption };
+        unitInstList.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var units = UnitInstanceCommand.List(MapDocument.Load(p.GetValueForArgument(mapArg)));
+            Emit(p.GetValueForOption(jsonOption), units,
+                () => units.Count == 0
+                    ? "(no placed units)"
+                    : string.Join("\n", units.Select(u =>
+                        $"{u.CreationNumber,6}  {u.TypeRawcode}  {u.Name ?? "",-24} "
+                        + $"owner={u.OwnerId,-3} at ({u.X:0.#}, {u.Y:0.#})"
+                        + (u.HeroLevel > 0 ? $"  lvl={u.HeroLevel}" : ""))));
+        }));
+
+        var unitInstGet = new Command("get", "Show one placed unit's full state.")
+        { mapArg, cnArg, jsonOption };
+        unitInstGet.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            int cn = p.GetValueForArgument(cnArg);
+            var u = UnitInstanceCommand.Get(MapDocument.Load(p.GetValueForArgument(mapArg)), cn);
+            if (u is null)
+            {
+                Emit(p.GetValueForOption(jsonOption), new { Ok = false, Message = $"no placed unit {cn}" },
+                    () => $"no placed unit with creation number {cn}");
+                exitCode[0] = 1;
+                return;
+            }
+            Emit(p.GetValueForOption(jsonOption), u, () => Render.PlacedUnit(u));
+        }));
+
+        var instFieldArg = new Argument<string>("field", "Field to set.");
+        var instValueArg = new Argument<string>("value",
+            "New value. A position or scale takes a comma-separated tuple, and a single number "
+            + "scales uniformly.");
+
+        var unitInstSet = new Command("set",
+            "Set a field on a placed unit and save the edited map. Fields: "
+            + string.Join("|", PlacedInstanceFields.UnitFields) + ".")
+        { mapArg, cnArg, instFieldArg, instValueArg, setOut, jsonOption };
+        unitInstSet.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = PlacedInstanceFields.SetUnitField(doc, p.GetValueForArgument(cnArg),
+                p.GetValueForArgument(instFieldArg), p.GetValueForArgument(instValueArg));
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc,
+                r.Ok, r.Message);
+        }));
+
+        var unitInstRemove = new Command("remove", "Remove a placed unit and save the edited map.")
+        { mapArg, cnArg, setOut, jsonOption };
+        unitInstRemove.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = UnitInstanceCommand.Delete(doc, p.GetValueForArgument(cnArg));
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc,
+                r.Ok, r.Message);
+        }));
+
+        var unitInst = new Command("unit",
+            "Placed units (war3mapUnits.doo): list, get, set, remove. Use 'place unit' to add one.");
+        unitInst.AddCommand(unitInstList);
+        unitInst.AddCommand(unitInstGet);
+        unitInst.AddCommand(unitInstSet);
+        unitInst.AddCommand(unitInstRemove);
+        unitInst.AddCommand(unitAbilities);
+        root.AddCommand(unitInst);
+
+        var doodadInstList = new Command("list", "List every placed doodad, with its creation number.")
+        { mapArg, jsonOption };
+        doodadInstList.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var ds = DoodadInstanceCommand.List(MapDocument.Load(p.GetValueForArgument(mapArg)));
+            Emit(p.GetValueForOption(jsonOption), ds,
+                () => ds.Count == 0
+                    ? "(no placed doodads)"
+                    : string.Join("\n", ds.Select(d =>
+                        $"{d.CreationNumber,6}  {d.TypeRawcode}  at ({d.X:0.#}, {d.Y:0.#}, {d.Z:0.#})"
+                        + $"  var={d.Variation}")));
+        }));
+
+        var doodadInstGet = new Command("get", "Show one placed doodad's full state.")
+        { mapArg, cnArg, jsonOption };
+        doodadInstGet.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            int cn = p.GetValueForArgument(cnArg);
+            var d = DoodadInstanceCommand.Get(MapDocument.Load(p.GetValueForArgument(mapArg)), cn);
+            if (d is null)
+            {
+                Emit(p.GetValueForOption(jsonOption), new { Ok = false, Message = $"no placed doodad {cn}" },
+                    () => $"no placed doodad with creation number {cn}");
+                exitCode[0] = 1;
+                return;
+            }
+            Emit(p.GetValueForOption(jsonOption), d, () => Render.PlacedDoodad(d));
+        }));
+
+        var doodadInstSet = new Command("set",
+            "Set a field on a placed doodad and save the edited map. Fields: "
+            + string.Join("|", PlacedInstanceFields.DoodadFields) + ".")
+        { mapArg, cnArg, instFieldArg, instValueArg, setOut, jsonOption };
+        doodadInstSet.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = PlacedInstanceFields.SetDoodadField(doc, p.GetValueForArgument(cnArg),
+                p.GetValueForArgument(instFieldArg), p.GetValueForArgument(instValueArg));
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc,
+                r.Ok, r.Message);
+        }));
+
+        var doodadInstRemove = new Command("remove", "Remove a placed doodad and save the edited map.")
+        { mapArg, cnArg, setOut, jsonOption };
+        doodadInstRemove.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = DoodadInstanceCommand.Delete(doc, p.GetValueForArgument(cnArg));
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc,
+                r.Ok, r.Message);
+        }));
+
+        var doodadInst = new Command("doodad",
+            "Placed doodads (war3map.doo): list, get, set, remove. Use 'place doodad' to add one.");
+        doodadInst.AddCommand(doodadInstList);
+        doodadInst.AddCommand(doodadInstGet);
+        doodadInst.AddCommand(doodadInstSet);
+        doodadInst.AddCommand(doodadInstRemove);
+        root.AddCommand(doodadInst);
 
         // ---- sound: edit the map's sound catalog (war3map.w3s) ----
         var soundList = new Command("list", "List the map's sound definitions.") { mapArg };
@@ -1414,8 +2448,8 @@ public static class Program
         // colour codes that no shell quotes cleanly.
         var feNameArg = new Argument<string>("internal-path",
             "Internal archive path, for example war3mapSkin.txt.");
-        var feFrom = new Option<string>(new[] { "--from" },
-            "Disk file whose exact bytes become the new payload.") { IsRequired = true };
+        var feFrom = new Option<string?>(new[] { "--from" },
+            "Disk file whose exact bytes become the new payload (or give it as the third argument).");
 
         var fileList = new Command("list",
             "List archive entries with their CURRENT size, reflecting pending replacements.")
@@ -1441,15 +2475,20 @@ public static class Program
                 new { Name = p.GetValueForArgument(feNameArg), Text = text }, () => text);
         }));
 
+        // The source may come positionally or as --from. Both shapes existed in the two lines of
+        // this tool before they merged, so both keep working.
+        var feSourceArg = new Argument<string?>("source", () => null,
+            "Disk file whose bytes are written into the archive verbatim (or use --from).");
         var fileSet = new Command("set",
-            "Replace an internal file's bytes from a disk file and save the edited map.")
-        { mapArg, feNameArg, feFrom, setOut };
+            "Write a disk file into the map, replacing that entry or adding it, and save the edited map.")
+        { mapArg, feNameArg, feSourceArg, feFrom, setOut };
         fileSet.SetHandler(ctx => RunSafely(() =>
         {
             var p = ctx.ParseResult;
             string map = p.GetValueForArgument(mapArg);
             string name = p.GetValueForArgument(feNameArg);
-            string from = p.GetValueForOption(feFrom)!;
+            string from = p.GetValueForArgument(feSourceArg) ?? p.GetValueForOption(feFrom)
+                ?? throw new ArgumentException("name the disk file to write, as a third argument or with --from");
             var doc = MapDocument.Load(map);
             var r = FileEditCommand.AddOrReplace(doc, name, File.ReadAllBytes(from));
             FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc,
@@ -1566,7 +2605,9 @@ public static class Program
         newMap.SetHandler(ctx => RunSafely(() =>
         {
             var p = ctx.ParseResult;
-            var opts = new BlankMapOptions();
+            // Real start-location markers so the map opens a proper host lobby (a marker-less map shows
+            // an empty "0/N" slot list on Battle.net).
+            var opts = new BlankMapOptions { IncludeStartLocations = true };
             if (p.GetValueForOption(newNameOpt) is { } n && n.Length > 0) opts = opts with { MapName = n };
             if (p.GetValueForOption(newTilesOpt) is { } t) opts = opts with { TileEdge = t };
             byte[] bytes = BlankMap.CreateArchiveBytes(opts);
@@ -1642,8 +2683,373 @@ public static class Program
         trigCatalog.AddCommand(trigList);
         trigCatalog.AddCommand(trigDescribe);
 
-        var trigger = new Command("trigger", "GUI trigger tooling (World-Editor catalog).");
+        // Recovery goes one way only. Regenerating the script from a tree is destructive, so
+        // this rebuilds the TREE from the script the game already runs, and refuses any map
+        // that still has a tree of its own. See TriggerRecoverCommand for the measurements.
+        var trigRecover = new Command("recover-from-script",
+            "Rebuild a browsable GUI trigger tree for a map that has NONE, by decompiling the "
+            + "compiled script. The script is not modified. Refuses when the map already has a "
+            + "tree, because a decompiled tree cannot be trusted to replace a real one.")
+        { mapArg, setOut };
+        trigRecover.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = TriggerRecoverCommand.Recover(doc);
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message);
+        }));
+
+        var trigger = new Command("trigger", "GUI triggers: read the tree, edit a trigger's name "
+            + "and flags, browse the World-Editor catalog, and recover a tree from the script.");
         trigger.AddCommand(trigCatalog);
+        trigger.AddCommand(trigRecover);
+
+        // ---- editor, the World Editor's catalogs (UI\WorldEditData.txt, read-only) ----
+        var editorCatalogList = new Command("list",
+            "List the catalog names the installed game defines, with entry counts.");
+        editorCatalogList.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var res = EditorCatalogCommand.Names(p.GetValueForOption(gameDirOption));
+            Emit(p.GetValueForOption(jsonOption), res,
+                () => string.Join("\n", res.Catalogs.Select(c => $"{c.Name,-24} {c.Entries,4}"))
+                      + $"\n\n{res.Total} catalog(s)");
+        }));
+
+        var editorCatalogNameArg = new Argument<string>("name",
+            "Catalog name, e.g. TileSets (see 'editor catalog list').");
+        var editorCatalogGet = new Command("get",
+            "Show one catalog's entries, stored key, display name and payload fields.")
+        { editorCatalogNameArg };
+        editorCatalogGet.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var res = EditorCatalogCommand.List(
+                p.GetValueForArgument(editorCatalogNameArg), p.GetValueForOption(gameDirOption));
+            Emit(p.GetValueForOption(jsonOption), res,
+                () => string.Join("\n", res.Entries.Select(e =>
+                          $"{e.Key,-18} {e.Label,-30} {string.Join(", ", e.Values)}"))
+                      + $"\n\n{res.Total} entry(ies) in {res.Catalog}");
+        }));
+
+        var editorCatalog = new Command("catalog",
+            "The World Editor's catalogs from UI\\WorldEditData.txt (list, get).");
+        editorCatalog.AddCommand(editorCatalogList);
+        editorCatalog.AddCommand(editorCatalogGet);
+
+        var editor = new Command("editor",
+            "World Editor base data (TileSets, SkyModels, LoadingScreens, brushes and more).");
+        editor.AddCommand(editorCatalog);
+
+        // ---- region: list and remove regions (war3map.w3r). Add via 'place region' ----
+        var regionList = new Command("list", "List the map's regions.") { mapArg };
+        regionList.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var regions = PlacementCommand.ListRegions(MapDocument.Load(p.GetValueForArgument(mapArg)));
+            Emit(p.GetValueForOption(jsonOption), regions,
+                () => regions.Count == 0 ? "(no regions)" : string.Join("\n", regions.Select(rg =>
+                    $"[{rg.CreationNumber}] {rg.Name}  [{rg.Left:0},{rg.Bottom:0}]..[{rg.Right:0},{rg.Top:0}]")));
+        }));
+
+        var regionNameArg = new Argument<string>("name", "Region name to remove.");
+        var regionRemove = new Command("remove", "Remove a region by name and save the edited map.")
+        { mapArg, regionNameArg, setOut };
+        regionRemove.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = PlacementCommand.RemoveRegion(doc, p.GetValueForArgument(regionNameArg));
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message);
+        }));
+
+        var region = new Command("region", "Region tooling for war3map.w3r, list and remove. Add via 'place region'.");
+        region.AddCommand(regionList);
+        region.AddCommand(regionRemove);
+
+        // Pre-flight checks that exist because their absence cost real debugging time. Every
+        // rule here corresponds to a failure that a green build, passing tests and a clean
+        // 'validate' all let through while a user could not host or load their map.
+        var lintAgainst = new Option<string?>("--against",
+            "Original map to compare against, enabling the checks that need a before/after: no file "
+            + "lost, and none of the target's own assets overwritten by a port.");
+        var lint = new Command("lint",
+            "Run pre-flight checks on a map: does the script compile, is war3map.imp consistent, do "
+            + "referenced assets resolve, are all file types loadable, and (with --against) did a "
+            + "rebuild lose or clobber anything.")
+        { mapArg, lintAgainst, jsonOption };
+        lint.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var doc = MapDocument.Load(p.GetValueForArgument(mapArg));
+            var against = p.GetValueForOption(lintAgainst) is { } a ? MapDocument.Load(a) : null;
+            var r = LintCommand.Run(doc, against);
+            if (!r.Ok) exitCode[0] = 1;
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.Lint(r));
+        }));
+        // Unattended load test. Closes the feedback loop that previously required a human to
+        // launch a 250 MB map and describe what they saw, which is where this toolchain's
+        // diagnoses went wrong most often.
+        var tlTimeout = new Option<double>("--timeout", () => 120, "Seconds to wait for the marker.");
+        var tlDocs = new Option<string?>("--documents",
+            @"Warcraft III documents folder. Default: DocumentsWarcraft III (the game writes markers there).");
+        var testLoad = new Command("test-load",
+            "Load a map in Warcraft III unattended and report whether it reached the end of main(). "
+            + "Injects a PreloadGenEnd marker into a COPY, launches the game windowed, waits for the "
+            + "marker, and on timeout measures whether the game is spinning or blocked.")
+        { mapArg, tlTimeout, tlDocs, jsonOption };
+        testLoad.SetHandler(ctx => RunSafely(() =>
+        {
+            var p6 = ctx.ParseResult;
+            var docs = p6.GetValueForOption(tlDocs) ?? Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Warcraft III");
+            var gd = Wc3.GameData.GameInstall.Locate(p6.GetValueForOption(gameDirOption))
+                ?? throw new InvalidOperationException("Could not locate the Warcraft III install; pass --game-dir.");
+            var r6 = TestLoadCommand.Run(p6.GetValueForArgument(mapArg), gd, docs,
+                p6.GetValueForOption(tlTimeout));
+            if (r6.Verdict != "LOADED") exitCode[0] = 1;
+            Emit(p6.GetValueForOption(jsonOption), r6, () => Render.TestLoad(r6));
+        }));
+        root.AddCommand(testLoad);
+
+        // A map's HERO INTEGRATION CONTRACT: what a unit must be registered with before the map's
+        // own systems treat it as playable. The piece nothing else models, and where ported heroes
+        // actually die - correct objects, correct assets, compiling script, and still no hero,
+        // because the roster is built by the map's own script.
+        var contractRef = new Option<string?>("--reference",
+            "Rawcode of a hero the map ALREADY supports. Lists every function that mentions it, "
+            + "which is the map's real integration contract stated by example rather than guessed "
+            + "from shape.");
+        var contractAgainst = new Option<string?>("--against",
+            "Rawcode of a candidate hero. With --reference, reports only what the reference is "
+            + "wired into and the candidate is not, which is the checklist to complete.");
+        var contract = new Command("contract",
+            "Discover what a map requires before it will treat a unit as a playable hero: roster "
+            + "registration calls, spell dispatchers, and per-player hero arrays.")
+        { mapArg, contractRef, contractAgainst, jsonOption };
+        contract.SetHandler(ctx => RunSafely(() =>
+        {
+            var p7 = ctx.ParseResult;
+            var doc7 = MapDocument.Load(p7.GetValueForArgument(mapArg));
+            var refCode = p7.GetValueForOption(contractRef);
+            if (refCode is not null)
+            {
+                var cand = p7.GetValueForOption(contractAgainst) ?? "____";
+                var gap = ContractCommand.CompareIntegration(doc7, refCode, cand);
+                Emit(p7.GetValueForOption(jsonOption), gap, () => Render.IntegrationGap(gap));
+                return;
+            }
+            var r7 = ContractCommand.Run(doc7);
+            Emit(p7.GetValueForOption(jsonOption), r7, () => Render.Contract(r7));
+        }));
+        root.AddCommand(contract);
+
+        // The format's 'import' verb: a hero as a reviewable artifact instead of something inferred
+        // out of a host map every time. Deliberately exports only the hero's REAL dependencies and
+        // REPORTS the script-closure carry as review notes, because silently including it is what
+        // produced thousands of foreign functions and the trimming damage that followed.
+        var heroRawcode = new Argument<string>("rawcode", "Four-character rawcode of the hero to export.");
+        var heroOut = new Option<string?>(new[] { "-o", "--out" },
+            "Output directory. Default: './<rawcode>-hero'.");
+        var heroExport = new Command("export",
+            "Export a hero from a map as a reviewable definition (hero.json), its assets, and its "
+            + "script. Reports what it deliberately left out.")
+        { mapArg, heroRawcode, heroOut, jsonOption };
+        heroExport.SetHandler(ctx => RunSafely(() =>
+        {
+            var p8 = ctx.ParseResult;
+            string map8 = p8.GetValueForArgument(mapArg);
+            string code8 = p8.GetValueForArgument(heroRawcode);
+            var dir8 = p8.GetValueForOption(heroOut) ?? Path.Combine(".", code8 + "-hero");
+            var r8 = HeroExportCommand.Run(MapDocument.Load(map8), code8, map8, dir8,
+                p8.GetValueForOption(gameDirOption));
+            Emit(p8.GetValueForOption(jsonOption), r8, () => Render.HeroExport(r8));
+        }));
+
+        var installDefArg = new Argument<string>("definition", "Folder containing hero.json.");
+        var installForce = new Option<bool>("--force", () => false,
+            "Overwrite the target's own assets on a hash collision. Off by default, because "
+            + "silently replacing a target's textures changes how ITS content renders.");
+        var installRole = new Option<string?>("--role",
+            "Role to register the hero under, when the target's roster takes one (GGGA: Stalker, "
+            + "Bruiser, Striker, Tanker, Tech, Supporter). Without this the role is copied from a "
+            + "neighbouring registration, which is a guess and usually the wrong tab.");
+        var installKeepStats = new Option<bool>("--keep-source-stats", () => false,
+            "Keep the attributes and hit/mana pools the hero was exported with. By default the "
+            + "target's own heroes are measured and their stat convention is applied, because a "
+            + "hero carries the stat MODEL of the map she came from (GGGA pins every hero's "
+            + "attributes at 0 and states a flat pool instead, so source attributes make her "
+            + "unplayable there). Use this when both maps model heroes the same way.");
+        var heroInstall = new Command("install",
+            "Install a hero definition into any map. Refuses asset collisions, remaps rawcodes, "
+            + "and reports what the target must still be wired with.")
+        { installDefArg, mapArg, heroOut, installForce, installRole, installKeepStats, jsonOption };
+        heroInstall.SetHandler(ctx => RunSafely(() =>
+        {
+            var p9 = ctx.ParseResult;
+            string tgt = p9.GetValueForArgument(mapArg);
+            var doc9 = MapDocument.Load(tgt);
+            var r9 = HeroInstallCommand.Run(p9.GetValueForArgument(installDefArg), doc9,
+                p9.GetValueForOption(installForce), p9.GetValueForOption(gameDirOption),
+                p9.GetValueForOption(installRole), p9.GetValueForOption(installKeepStats));
+            string? saved = null;
+            if (r9.Ok)
+            {
+                saved = p9.GetValueForOption(heroOut) ?? Path.Combine(
+                    Path.GetDirectoryName(tgt) ?? "",
+                    Path.GetFileNameWithoutExtension(tgt) + ".installed" + Path.GetExtension(tgt));
+                doc9.Save(saved);
+            }
+            else exitCode[0] = 1;
+            Emit(p9.GetValueForOption(jsonOption), new { r9.Ok, r9.Message, r9.ObjectsCreated,
+                r9.FieldsApplied, r9.AssetsWritten, r9.AssetsSkippedIdentical, r9.Collisions,
+                r9.UnmetRequirements, r9.NextSteps, SavedTo = saved },
+                () => Render.HeroInstall(r9, saved));
+        }));
+
+        var heroLintDir = new Argument<string>("definition", "Folder containing hero.json.");
+        var heroLint = new Command("lint",
+            "Validate a hero definition before installing it: assets present and hash-matched, "
+            + "objects installable, declared script functions present, no dangling references.")
+        { heroLintDir, jsonOption };
+        heroLint.SetHandler(ctx => RunSafely(() =>
+        {
+            var pa = ctx.ParseResult;
+            var ra = HeroLintCommand.Run(pa.GetValueForArgument(heroLintDir));
+            if (!ra.Ok) exitCode[0] = 1;
+            Emit(pa.GetValueForOption(jsonOption), ra, () => Render.HeroLint(ra));
+        }));
+
+        // Counting triggers is not counting heroes, and on a bundled map the two differ by a
+        // factor of four. This reports the roster the map actually registers, with the trigger
+        // that holds each hero's code beside it.
+        var heroRoster = new Command("roster",
+            "List the playable heroes the map registers, and which trigger holds each one's "
+            + "code. A hero is not a trigger: a map can register 170 heroes whose code is "
+            + "bundled into a handful of triggers, so counting triggers under-counts heroes.")
+        { mapArg, gameDirOption };
+        heroRoster.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var doc = MapDocument.Load(p.GetValueForArgument(mapArg));
+            var r = HeroRosterCommand.Run(doc, p.GetValueForOption(gameDirOption));
+            Emit(p.GetValueForOption(jsonOption), r, () =>
+            {
+                if (!r.Ok) return r.Message;
+                // Only the tags that read as labels. A registration call usually carries a role
+                // and an asset path, and the path is both the longer and the less useful of the
+                // two, so it would push the role out of the column. The JSON keeps every tag.
+                var lines = r.Heroes.Select(h =>
+                    $"{h.Rawcode}  {Trunc(h.Name, 28),-28} "
+                    + $"{Trunc(string.Join("/", h.Tags.Where(t => !t.Contains('.') && !t.Contains('\\') && !t.Contains('/'))), 16),-16} "
+                    + (h.Trigger is null
+                        ? "(not in any trigger)"
+                        : h.TriggerMatches > 1
+                            ? $"{h.Trigger} (+{h.TriggerMatches - 1} more)"
+                            : h.Trigger));
+                return string.Join("\n", lines) + "\n\n" + r.Message;
+            });
+        }));
+
+        var hero = new Command("hero", "Hero definitions: the portable, reviewable form of a hero.");
+        hero.AddCommand(heroExport);
+        hero.AddCommand(heroInstall);
+        hero.AddCommand(heroLint);
+        hero.AddCommand(heroRoster);
+        root.AddCommand(hero);
+
+        // Records HOW FAR initialisation gets, not just whether it finished. A hang on the loading
+        // screen otherwise gives nothing at all: no error, no log, no crash dump.
+        var trTimeout = new Option<double>("--timeout", () => 180, "Seconds to wait.");
+        var trDocs = new Option<string?>("--documents",
+            @"Warcraft III documents folder. Default: Documents\Warcraft III.");
+        var traceLoad = new Command("trace-load",
+            "Instrument a map's initialisation with numbered markers, load it, and report the last "
+            + "step that ran and the first that did not. Turns 'stuck on loading' into a line number.")
+        { mapArg, trTimeout, trDocs, jsonOption };
+        traceLoad.SetHandler(ctx => RunSafely(() =>
+        {
+            var pt = ctx.ParseResult;
+            var docs = pt.GetValueForOption(trDocs) ?? Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Warcraft III");
+            var gd = Wc3.GameData.GameInstall.Locate(pt.GetValueForOption(gameDirOption))
+                ?? throw new InvalidOperationException("Could not locate the Warcraft III install; pass --game-dir.");
+            var rt = TraceLoadCommand.Run(pt.GetValueForArgument(mapArg), gd, docs,
+                pt.GetValueForOption(trTimeout));
+            if (rt.Verdict != "COMPLETED") exitCode[0] = 1;
+            Emit(pt.GetValueForOption(jsonOption), rt, () => Render.TraceLoad(rt));
+        }));
+        debug.AddCommand(traceLoad);
+
+        root.AddCommand(lint);
+
+        // Container-level comparison. 'diff' compares file CONTENTS, which is why a rebuilt
+        // archive with byte-identical files could fail to load and no tool we owned could say
+        // why. This reports how files are STORED, plus hash-table crowding.
+        var mapArgB = new Argument<string>("mapB", "Second map to compare against.");
+        var mpqDiff = new Command("mpq-diff",
+            "Compare two archives structurally: header, sector size, hash table capacity and "
+            + "crowding, and each file's storage flags, compressed size and offset. Use when two "
+            + "maps have identical contents but behave differently.")
+        { mapArg, mapArgB, jsonOption };
+        mpqDiff.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var d = MpqStructureCommand.Diff(p.GetValueForArgument(mapArg), p.GetValueForArgument(mapArgB));
+            Emit(p.GetValueForOption(jsonOption), d, () => Render.MpqDiff(d));
+        }));
+        root.AddCommand(mpqDiff);
+
+        // Hash table viewer. MPQ resolves a name by probing forward from its home slot and stops
+        // only at a NEVER-USED slot; a DELETED slot does not stop it. An archive with zero
+        // never-used slots therefore gives a failed lookup no terminator, and the probe runs
+        // forever. That is invisible unless the two are counted separately, which is exactly what
+        // this does.
+        var hashSample = new Option<int>("--slots", () => 0,
+            "Also dump this many slots from the start of the table.");
+        var mpqHash = new Command("mpq-hash",
+            "Inspect an archive's hash table: occupied, deleted and never-used slot counts, the "
+            + "worst-case probe length for a name that is absent, and whether a failed lookup can "
+            + "loop forever.")
+        { mapArg, hashSample, jsonOption };
+        mpqHash.SetHandler(ctx => RunSafely(() =>
+        {
+            var p2 = ctx.ParseResult;
+            var v = MpqHashTableCommand.Read(p2.GetValueForArgument(mapArg), p2.GetValueForOption(hashSample));
+            if (v.LookupCanLoopForever) exitCode[0] = 1;
+            Emit(p2.GetValueForOption(jsonOption), v, () => Render.MpqHash(v));
+        }));
+        root.AddCommand(mpqHash);
+
+        // Observe the running game. Static comparison could not explain a map that sits forever on
+        // the loading screen while being measurably equivalent to one that loads, so the behaviour
+        // has to be sampled instead of inferred. Read-only: reads OS counters, attaches nothing.
+        var hangSeconds = new Option<double>("--seconds", () => 5.0,
+            "How long to sample. Longer is steadier; 5s is enough to tell spinning from waiting.");
+        var hangThreads = new Option<int>("--threads", () => 6, "How many busiest threads to list.");
+        var hangIp = new Option<int>("--locate", () => 0,
+            "Take this many live instruction-pointer samples of the busiest thread and report which "
+            + "module it is executing in. Needs to briefly suspend that thread, so it is opt-in. "
+            + "Use 40 or so; 0 disables it.");
+        var hangName = new Option<string?>("--process",
+            "Process name override, if the game runs under a name this does not know.");
+        var gameHang = new Command("game-hang",
+            "Sample a running Warcraft III process to tell whether it is SPINNING (looping in its "
+            + "own code) or WAITING (blocked on I/O or a lock). Run it while a map is stuck on the "
+            + "loading screen.")
+        { hangSeconds, hangThreads, hangIp, hangName, jsonOption };
+        gameHang.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = GameHangCommand.Sample(p.GetValueForOption(hangSeconds),
+                p.GetValueForOption(hangThreads), p.GetValueForOption(hangName),
+                p.GetValueForOption(hangIp));
+            if (!r.Found) exitCode[0] = 1;
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.GameHang(r));
+        }));
+        debug.AddCommand(gameHang);
 
         // Blizzard publishes no diff of what a patch changes inside the game data, so the only
         // way to see it is to have kept the previous copy. Snapshot, commit, re-run after every
@@ -1669,17 +3075,27 @@ public static class Program
         var gamedata = new Command("gamedata", "Base game data, for tracking what a patch changes.");
         gamedata.AddCommand(gamedataSnapshot);
 
+        root.AddCommand(file);
         root.AddCommand(info); root.AddCommand(ls); root.AddCommand(rt);
         root.AddCommand(search); root.AddCommand(diff); root.AddCommand(obj);
         root.AddCommand(extract); root.AddCommand(render); root.AddCommand(renderModel);
         root.AddCommand(script); root.AddCommand(bundle); root.AddCommand(port);
-        root.AddCommand(convert); root.AddCommand(validate); root.AddCommand(audit);
-        root.AddCommand(deprotect);
+        root.AddCommand(convert); root.AddCommand(validate);
+        root.AddCommand(audit); root.AddCommand(deprotect);
+        root.AddCommand(debug);
         root.AddCommand(place); root.AddCommand(palette); root.AddCommand(terrain);
         root.AddCommand(sound); root.AddCommand(camera); root.AddCommand(pathing);
         root.AddCommand(mapInfo); root.AddCommand(player); root.AddCommand(force);
-        root.AddCommand(file); root.AddCommand(repair);
-        root.AddCommand(newMap); root.AddCommand(trigger); root.AddCommand(gamedata);
+        root.AddCommand(region); root.AddCommand(newMap); trigger.AddCommand(triggerRead);
+        trigger.AddCommand(trigRename); trigger.AddCommand(trigEnabled);
+        trigger.AddCommand(trigInitiallyOn); trigger.AddCommand(trigRunOnInit);
+        trigger.AddCommand(trigAddCat); trigger.AddCommand(trigAdd);
+        trigger.AddCommand(trigRemove);
+        trigger.AddCommand(ecaAdd); trigger.AddCommand(ecaRemove);
+        trigger.AddCommand(ecaEnabled);
+        root.AddCommand(repairHeroes); root.AddCommand(repair);
+        root.AddCommand(trigger);
+        root.AddCommand(editor); root.AddCommand(gamedata);
 
         return root;
     }

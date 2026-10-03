@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
@@ -30,13 +31,13 @@ public partial class DependencyGraphView : UserControl, IMapPanel
     // Palette shared by the canvas and the detail lists: gold accent = custom
     // to this map (matches the object editor's modified-field highlight),
     // grey = base game, steel blue = file assets, red tint = not in the map.
-    private static readonly IBrush AccentText = new SolidColorBrush(Color.Parse("#E8C56A"));
-    private static readonly IBrush NormalText = new SolidColorBrush(Color.Parse("#C8CDD3"));
-    private static readonly IBrush MutedText = new SolidColorBrush(Color.Parse("#8FA3B8"));
-    private static readonly IBrush MissingText = new SolidColorBrush(Color.Parse("#D98C8C"));
+    private static readonly IBrush AccentText = StudioPalette.Accent;
+    private static readonly IBrush NormalText = StudioPalette.Normal;
+    private static readonly IBrush MutedText = StudioPalette.Muted;
+    private static readonly IBrush MissingText = StudioPalette.Missing;
 
     // Canvas node fills/borders.
-    private static readonly IBrush CustomBorder = new SolidColorBrush(Color.Parse("#E8C56A"));
+    private static readonly IBrush CustomBorder = StudioPalette.Accent;
     private static readonly IBrush CustomFill = new SolidColorBrush(Color.Parse("#26E8C56A"));
     private static readonly IBrush BaseBorder = new SolidColorBrush(Color.Parse("#66808893"));
     private static readonly IBrush BaseFill = new SolidColorBrush(Color.Parse("#14808893"));
@@ -45,13 +46,19 @@ public partial class DependencyGraphView : UserControl, IMapPanel
     private static readonly IBrush MissingBorder = new SolidColorBrush(Color.Parse("#C76B6B"));
     private static readonly IBrush MissingFill = new SolidColorBrush(Color.Parse("#14C76B6B"));
     private static readonly IBrush EdgeStroke = new SolidColorBrush(Color.Parse("#55889CB0"));
+    // A node the user excluded from the port (left click toggles it) renders greyed out
+    // with struck-through text, distinct from every other state above (custom/base/file/
+    // missing all still read at a glance, excluded reads as "not part of this port").
+    private static readonly IBrush ExcludedBorder = new SolidColorBrush(Color.Parse("#8F6B6B6B"));
+    private static readonly IBrush ExcludedFill = new SolidColorBrush(Color.Parse("#146B6B6B"));
+    private const double ExcludedOpacity = 0.45;
 
-    // Layered layout constants (device-independent pixels): objects sit in
-    // columns by depth from the root, files in a wrapped band underneath.
+    // Layered layout constants (device independent pixels). Objects sit in
+    // rows by depth from the root, files in a wrapped band underneath.
     private const double Pad = 24;
     private const double ObjW = 180, ObjH = 48;
-    private const double ColGap = 130;
-    private const double RowGap = 28;
+    private const double SiblingGapX = 130;
+    private const double LevelGapY = 28;
     private const double FileW = 250, FileH = 40;
     private const double FileGapX = 26, FileGapY = 26;
     private const double BandGap = 100;
@@ -61,13 +68,30 @@ public partial class DependencyGraphView : UserControl, IMapPanel
     // dragging a node repositions it (its edges re-anchor live).
     private const double MinScale = 0.2, MaxScale = 3.0;
     private const double WheelZoomStep = 1.1, ButtonZoomStep = 1.25;
+    /// <summary>A press that moves less than this many pixels before release is a click
+    /// (toggles the node's excluded state), not a drag.</summary>
+    private const double ClickMoveThreshold = 3;
     private readonly ScaleTransform _zoomTransform = new();
     private readonly TranslateTransform _panTransform = new();
     /// <summary>Rendered edges keyed by their endpoint visuals, so a node drag can
     /// re-anchor just the lines/labels touching that node.</summary>
     private readonly List<GraphEdge> _edges = new();
+    /// <summary>Object node visuals keyed by rawcode, kept across the graph's lifetime so
+    /// a click can restyle exactly one node (exclude/include) without a full re-layout,
+    /// which would also throw away any manual dragging the user had done.</summary>
+    private readonly Dictionary<string, Border> _objVisuals = new(StringComparer.Ordinal);
+    /// <summary>File node visuals keyed by path (case-insensitive, WC3 paths compare that
+    /// way), same reasoning as <see cref="_objVisuals"/>.</summary>
+    private readonly Dictionary<string, Border> _fileVisuals = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>Rawcodes/paths the user has excluded from the port for the bundle currently
+    /// shown (left click on a node toggles membership). Cleared on every fresh resolve.
+    /// The root itself can never be a member, it is the object being ported.</summary>
+    private readonly HashSet<string> _excluded = new(StringComparer.Ordinal);
     /// <summary>Node being dragged, null while panning or idle.</summary>
     private Border? _dragNode;
+    /// <summary>True once the current press has moved past <see cref="ClickMoveThreshold"/>,
+    /// which marks it a drag rather than a toggle-click.</summary>
+    private bool _dragMoved;
     /// <summary>True while a press on empty canvas space is panning the view.</summary>
     private bool _panning;
     /// <summary>Pointer position at press, viewport coordinates (shared by pan and drag).</summary>
@@ -90,6 +114,10 @@ public partial class DependencyGraphView : UserControl, IMapPanel
     private List<SearchableComboBoxItem>? _options;
     /// <summary>Rawcode to select-and-resolve once the in-flight object list lands.</summary>
     private string? _pendingSelect;
+
+    /// <summary>The last resolved closure, kept so the hide toggle can rebuild the tree and
+    /// graph without resolving again. Null when nothing is rendered.</summary>
+    private UnitBundle? _lastBundle;
 
     public DependencyGraphView()
     {
@@ -137,6 +165,7 @@ public partial class DependencyGraphView : UserControl, IMapPanel
             return;
         }
         _dragNode = node;
+        _dragMoved = false;
         _pressPoint = e.GetPosition(GraphViewport);
         _pressOrigin = new Point(Canvas.GetLeft(node), Canvas.GetTop(node));
         // Capture to the viewport so its Moved/Released handlers drive the drag.
@@ -149,6 +178,8 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         var delta = e.GetPosition(GraphViewport) - _pressPoint;
         if (_dragNode is { } node)
         {
+            if (!_dragMoved && delta.X * delta.X + delta.Y * delta.Y > ClickMoveThreshold * ClickMoveThreshold)
+                _dragMoved = true;
             // Viewport delta → canvas delta: divide out the zoom (pan cancels).
             double scale = _zoomTransform.ScaleX;
             Canvas.SetLeft(node, _pressOrigin.X + delta.X / scale);
@@ -166,12 +197,74 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         }
     }
 
+    /// <summary>A press that never moved past the click threshold is a plain left click,
+    /// not a drag, toggle that node's excluded state rather than leaving it where it was
+    /// (which a drag of zero distance would do anyway, so this only ever adds behaviour).</summary>
     private void OnViewportPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
+        if (_dragNode is { } node && !_dragMoved)
+            ToggleExcluded(node);
         _dragNode = null;
         _panning = false;
         if (ReferenceEquals(e.Pointer.Captured, GraphViewport))
             e.Pointer.Capture(null);
+    }
+
+    /// <summary>Left click on a node flips whether it is excluded from the port (default
+    /// included). The root cannot be excluded, it is the object being ported, clicking it
+    /// is a no-op. Restyles just this one node, everything else on the canvas is untouched.</summary>
+    private void ToggleExcluded(Border node)
+    {
+        string? key = node.Tag switch
+        {
+            BundleNode n => n.Rawcode,
+            BundleFile f => f.Path,
+            _ => null,
+        };
+        if (key is null || key == SelectedRawcode)
+            return;
+        if (!_excluded.Remove(key))
+            _excluded.Add(key);
+        RestyleNode(node);
+        ExclusionChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>(Re)applies the excluded-or-not look to one node border, driven entirely by
+    /// its Tag (the BundleNode or BundleFile it represents) and current membership in
+    /// <see cref="_excluded"/>, so this is idempotent and safe to call any time.</summary>
+    private void RestyleNode(Border visual)
+    {
+        (IBrush border, IBrush fill, string tip, bool excluded) = visual.Tag switch
+        {
+            BundleNode n when _excluded.Contains(n.Rawcode) =>
+                (ExcludedBorder, ExcludedFill,
+                    $"{n.Rawcode}, {n.Name ?? "(unnamed)"}\n{n.Kind}, EXCLUDED, left click to include it in the port again",
+                    true),
+            BundleNode n =>
+                (n.CustomToMap ? CustomBorder : BaseBorder, n.CustomToMap ? CustomFill : BaseFill,
+                    $"{n.Rawcode}, {n.Name ?? "(unnamed)"}\n{n.Kind}, "
+                    + (n.CustomToMap ? "custom to this map (must port)" : "base game (already in any target)")
+                    + "\nleft click to exclude it from the port",
+                    false),
+            BundleFile f when _excluded.Contains(f.Path) =>
+                (ExcludedBorder, ExcludedFill,
+                    $"{f.Path}\n{f.Category}, EXCLUDED, left click to include it in the port again", true),
+            BundleFile f =>
+                (f.PresentInMap ? FileBorder : MissingBorder, f.PresentInMap ? FileFill : MissingFill,
+                    $"{f.Path}\n{f.Category}, "
+                    + (f.PresentInMap
+                        ? "imported in this map (ports with the bundle)"
+                        : "not in this map, a base game asset or a missing import")
+                    + "\nleft click to exclude it from the port",
+                    false),
+            _ => (BaseBorder, BaseFill, "", false),
+        };
+        visual.BorderBrush = border;
+        visual.Background = fill;
+        visual.Opacity = excluded ? ExcludedOpacity : 1.0;
+        ToolTip.SetTip(visual, tip);
+        if (visual.Child is StackPanel { Children.Count: > 0 } stack && stack.Children[0] is TextBlock title)
+            title.TextDecorations = excluded ? TextDecorations.Strikethrough : null;
     }
 
     /// <summary>Wheel (plain or Ctrl) zooms about the cursor.</summary>
@@ -257,13 +350,32 @@ public partial class DependencyGraphView : UserControl, IMapPanel
     /// <summary>Raised whenever the selected object changes (including cleared).</summary>
     public event EventHandler? SelectionChanged;
 
+    /// <summary>Rawcodes/file paths the user has excluded from the port via a left click
+    /// on this graph's nodes (default is everything included, an empty set). Scoped to
+    /// whatever bundle is currently shown, a fresh resolve clears it. The workspace reads
+    /// this at port time and narrows the bundle through <c>BundleFilter.Apply</c>.</summary>
+    public IReadOnlySet<string> ExcludedKeys => _excluded;
+
+    /// <summary>Raised whenever a node's excluded state toggles.</summary>
+    public event EventHandler? ExclusionChanged;
+
+    /// <summary>The only writer of the status line, so a message can never land in the wrong
+    /// colour by being set somewhere that forgot. The line used to be described as unobtrusive
+    /// and carried one uniform grey, which is right for a resolver note and wrong for "this
+    /// result is incomplete".</summary>
+    private void SetStatus(string text, IBrush? brush = null)
+    {
+        StatusText.Text = text;
+        StatusText.Foreground = brush ?? StudioPalette.Muted;
+    }
+
     public void ShowMap(MapSession session)
     {
         _session = session;
         int gen = ++_generation; // drop anything still in flight for the old map
         ClearSelection();
         ClearRendered();
-        StatusText.Text = "";
+        SetStatus("");
         SummaryText.Text = "";
         _listDoc = null;
 
@@ -361,7 +473,7 @@ public partial class DependencyGraphView : UserControl, IMapPanel
                 if (items is null)
                 {
                     SummaryText.Text = "";
-                    StatusText.Text = $"Failed to list {kindWord}: {error}";
+                    SetStatus($"Failed to list {kindWord}. {error}", StudioPalette.Problem);
                     return;
                 }
                 _options = items;
@@ -462,8 +574,8 @@ public partial class DependencyGraphView : UserControl, IMapPanel
                 if (bundle is null)
                 {
                     SummaryText.Text = "";
-                    GraphHint.Text = "Resolve failed - see the status line below.";
-                    StatusText.Text = $"Failed to resolve {rawcode}: {error}";
+                    GraphHint.Text = "Resolve failed, see the status line below.";
+                    SetStatus($"Failed to resolve {rawcode}. {error}", StudioPalette.Problem);
                     return;
                 }
                 RenderBundle(bundle);
@@ -474,11 +586,31 @@ public partial class DependencyGraphView : UserControl, IMapPanel
     /// <summary>Render a freshly resolved closure into every view of this panel.</summary>
     private void RenderBundle(UnitBundle bundle)
     {
-        int custom = bundle.Objects.Count(o => o.CustomToMap);
+        _excluded.Clear(); // a fresh resolve starts with everything included
+        _lastBundle = bundle;
+        // This panel is about the selected unit, so every count here is the unit's own. What the
+        // script closure carries belongs to other heroes and is not reported at all. The port
+        // report is where the over-carry is accounted for, since that is where it costs something.
+        var realObjects = BundleStructure.RealObjects(bundle);
+        int realFiles = BundleStructure.RealFiles(bundle).Count;
+        int realStrings = bundle.Strings.Count(BundleStructure.RealStrings(bundle).Contains);
+        int custom = bundle.Objects.Count(o => realObjects.Contains(o.Rawcode) && o.CustomToMap);
+        // Naming whose counts these are, because a hero whose bundle holds five hundred objects
+        // showing "8 objects" here reads like a failed resolve unless the line says otherwise.
+        // Reporting the over-carry itself was tried and reverted, see the note above and
+        // DependencyGraphTreeStructureTests, which pin its absence.
+        var shape = BundleStructure.Summarize(bundle);
         SummaryText.Text =
-            $"{bundle.Objects.Count} objects ({custom} custom / {bundle.Objects.Count - custom} base)"
-            + $", {bundle.Files.Count} files, {bundle.Strings.Count} strings";
-        StatusText.Text = bundle.Diagnostics.Count > 0 ? string.Join("; ", bundle.Diagnostics) : "";
+            $"{realObjects.Count} objects, {realFiles} files, {realStrings} strings"
+            + $", {custom} custom to this map  (this unit's own)";
+
+        // A carry cap means the bundle is INCOMPLETE, which matters more than every other
+        // diagnostic and used to be one entry in a joined list of four, in the same grey.
+        if (shape.Truncated)
+            SetStatus(BundleStructure.TruncatedWarning + " " + string.Join("; ", bundle.Diagnostics),
+                StudioPalette.Problem);
+        else
+            SetStatus(bundle.Diagnostics.Count > 0 ? string.Join("; ", bundle.Diagnostics) : "");
         BuildTree(bundle);
         BuildFilesList(bundle);
         BuildStringsList(bundle);
@@ -487,85 +619,238 @@ public partial class DependencyGraphView : UserControl, IMapPanel
 
     /// <summary>
     /// Structured fallback view: root object → object deps grouped by kind, each
-    /// with a custom/base badge and the field codes ("via") that pull it in.
+    /// with a custom/base badge and the field codes ("via") that pull it in. Each
+    /// ability additionally nests the trigger functions attributed to it (and
+    /// whatever helpers those pulled in), so the script closure reads as "this
+    /// ability's own logic" instead of a flat, unrelated function list.
     /// </summary>
     private void BuildTree(UnitBundle bundle)
     {
         DepTree.Items.Clear();
 
-        // Field codes referencing each node, e.g. "via uhab" on an ability.
+        // A via label names the object-data field that pulls a dependency in, so the synthetic
+        // vias are excluded. Without this every row on a shared arena map read "via uhab, script
+        // closure", because the closure seed also names objects the unit already references.
         var viaInto = bundle.Edges
+            .Where(e => e.Via != BundleStructure.ScriptClosureVia && e.Via != BundleStructure.StringVia)
             .GroupBy(e => e.To, StringComparer.Ordinal)
             .ToDictionary(
                 g => g.Key,
                 g => string.Join(", ", g.Select(e => e.Via).Distinct()),
                 StringComparer.Ordinal);
 
+        var (childrenOf, seedsByOwner) = AttributeFunctions(bundle);
+        var realAdjacency = BundleStructure.RealAdjacency(bundle);
+        var realParents = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+        foreach (var (from, targets) in realAdjacency)
+        {
+            foreach (var to in targets)
+            {
+                if (!realParents.TryGetValue(to, out var parents))
+                    realParents[to] = parents = new HashSet<string>(StringComparer.Ordinal);
+                parents.Add(from);
+            }
+        }
+        var byCode = bundle.Objects.ToDictionary(o => o.Rawcode, StringComparer.Ordinal);
+
+        void AddAbilityFunctions(TreeViewItem item, BundleNode node)
+        {
+            if (node.Kind == ObjectKind.Ability && seedsByOwner.TryGetValue(node.Rawcode, out var ownSeeds))
+                item.Items.Add(FunctionGroupItem(ownSeeds, childrenOf));
+        }
+
+        TreeViewItem CreateObjectItem(BundleNode node)
+        {
+            var via = viaInto.TryGetValue(node.Rawcode, out var v) ? $", via {v}" : "";
+            var item = new TreeViewItem
+            {
+                Header = MakeTreeLabel(
+                    $"{node.Rawcode} - {node.Name ?? "(base game)"}"
+                    + $", {(node.CustomToMap ? "custom" : "base")}{via}",
+                    node.CustomToMap, bold: false),
+            };
+            AddAbilityFunctions(item, node);
+            return item;
+        }
+
+        void AddObjectChildren(
+            TreeViewItem parentItem,
+            string parentRawcode,
+            HashSet<string> visited,
+            HashSet<string>? allowedRawcodes)
+        {
+            if (!realAdjacency.TryGetValue(parentRawcode, out var childCodes))
+                return;
+
+            foreach (var childRawcode in childCodes)
+            {
+                if (allowedRawcodes is not null && !allowedRawcodes.Contains(childRawcode))
+                    continue;
+                if (!visited.Add(childRawcode))
+                    continue;
+                if (!byCode.TryGetValue(childRawcode, out var childNode))
+                    continue;
+
+                var childItem = CreateObjectItem(childNode);
+                parentItem.Items.Add(childItem);
+                AddObjectChildren(childItem, childRawcode, visited, allowedRawcodes);
+            }
+        }
+
         var rootNode = bundle.Objects.FirstOrDefault(o => o.Rawcode == bundle.RootRawcode);
         var rootKindWord = (rootNode?.Kind ?? SelectedObjectKind).ToString().ToLowerInvariant();
+        var rootCustom = rootNode?.CustomToMap ?? false;
         var rootItem = new TreeViewItem
         {
             Header = MakeTreeLabel(
-                $"{bundle.RootName ?? bundle.RootRawcode} ({bundle.RootRawcode}) - root {rootKindWord}",
+                $"{bundle.RootRawcode} - {bundle.RootName ?? "(base game)"}"
+                + $", {(rootCustom ? "custom" : "base")}, root {rootKindWord}",
                 rootNode?.CustomToMap, bold: true),
             IsExpanded = true,
         };
+        if (rootNode is not null)
+            AddAbilityFunctions(rootItem, rootNode);
 
-        foreach (var group in bundle.Objects
-                     .Where(o => o.Rawcode != bundle.RootRawcode)
-                     .GroupBy(o => o.Kind))
-        {
-            var groupItem = new TreeViewItem
-            {
-                Header = MakeTreeLabel($"{KindPlural(group.Key)} ({group.Count()})", custom: null, bold: true),
-                IsExpanded = true,
-            };
-            foreach (var node in group)
-            {
-                var via = viaInto.TryGetValue(node.Rawcode, out var v) ? $", via {v}" : "";
-                groupItem.Items.Add(new TreeViewItem
-                {
-                    Header = MakeTreeLabel(
-                        $"{node.Rawcode} - {node.Name ?? "(base game)"}"
-                        + $", {(node.CustomToMap ? "custom" : "base")}{via}",
-                        node.CustomToMap, bold: false),
-                });
-            }
-            rootItem.Items.Add(groupItem);
-        }
+        var expandedReal = new HashSet<string>(StringComparer.Ordinal) { bundle.RootRawcode };
+        AddObjectChildren(rootItem, bundle.RootRawcode, expandedReal, allowedRawcodes: null);
+
+        // Nothing else. No carried-objects group, and no "Other triggers" group either. What the
+        // script closure drags in is another hero's kit and another hero's logic, and the functions
+        // that group held are exactly the ones that could NOT be attributed to any ability of this
+        // unit. Trigger functions still appear, nested under the ability they belong to, which is
+        // the only place they are this unit's.
 
         DepTree.Items.Add(rootItem);
+    }
+
+    /// <summary>Sentinel owner key for a seed function that names no ability present in
+    /// this bundle (references the hero itself, an out-of-closure rawcode, or nothing),
+    /// never a real rawcode (those are always exactly 4 characters).</summary>
+    private const string OtherOwnerKey = "";
+
+    private static readonly Regex QuotedRawcode = new(@"'([^']{4})'", RegexOptions.Compiled);
+
+    /// <summary>
+    /// Attributes every script-closure function to the one ability it belongs under. A
+    /// seed function ("references '...'") is owned by the first quoted rawcode that is an
+    /// ability actually in this bundle, or <see cref="OtherOwnerKey"/> when none match. A
+    /// discovered function ("called by Name") is not a seed at all, it nests as a CHILD of
+    /// whichever function pulled it in (<paramref name="bundle"/>'s BFS already recorded
+    /// exactly one discoverer per function), so helpers land under their calling trigger
+    /// rather than under an ability directly.
+    /// </summary>
+    private static (Dictionary<string, List<BundleFunction>> ChildrenOf,
+        Dictionary<string, List<BundleFunction>> SeedsByOwner) AttributeFunctions(UnitBundle bundle)
+    {
+        var abilityRawcodes = bundle.Objects
+            .Where(o => o.Kind == ObjectKind.Ability)
+            .Select(o => o.Rawcode)
+            .ToHashSet(StringComparer.Ordinal);
+
+        var childrenOf = new Dictionary<string, List<BundleFunction>>(StringComparer.Ordinal);
+        var seedsByOwner = new Dictionary<string, List<BundleFunction>>(StringComparer.Ordinal);
+        foreach (var f in bundle.Functions)
+        {
+            if (f.Reason.StartsWith("called by ", StringComparison.Ordinal))
+            {
+                var caller = f.Reason["called by ".Length..];
+                if (!childrenOf.TryGetValue(caller, out var kids)) childrenOf[caller] = kids = new();
+                kids.Add(f);
+                continue;
+            }
+            string owner = OtherOwnerKey;
+            foreach (Match m in QuotedRawcode.Matches(f.Reason))
+            {
+                if (!abilityRawcodes.Contains(m.Groups[1].Value)) continue;
+                owner = m.Groups[1].Value;
+                break; // first named ability wins, mirrors the reason's own discovery order
+            }
+            if (!seedsByOwner.TryGetValue(owner, out var seeds)) seedsByOwner[owner] = seeds = new();
+            seeds.Add(f);
+        }
+        return (childrenOf, seedsByOwner);
+    }
+
+    /// <summary>A collapsible "Trigger functions (N)" node holding <paramref name="seeds"/>,
+    /// each nested with whatever helpers it pulled in (recursively, via
+    /// <paramref name="childrenOf"/>).</summary>
+    private static TreeViewItem FunctionGroupItem(
+        IReadOnlyList<BundleFunction> seeds, Dictionary<string, List<BundleFunction>> childrenOf,
+        string label = "Trigger functions")
+    {
+        var group = new TreeViewItem
+        {
+            Header = MakeTreeLabel($"{label} ({seeds.Count})", custom: null, bold: true),
+            IsExpanded = false,
+        };
+        foreach (var seed in seeds.OrderBy(f => f.StartLine))
+            group.Items.Add(FunctionItem(seed, childrenOf, new HashSet<string>(StringComparer.Ordinal)));
+        return group;
+    }
+
+    /// <summary>One function's row, its own "called by" discoveries nested as children.
+    /// <paramref name="ancestry"/> guards against a cyclic caller chain (should never
+    /// happen given the BFS that assigns Reason, defensive only) turning into infinite
+    /// recursion, a foreign/self-referential edge is simply not descended into twice.</summary>
+    private static TreeViewItem FunctionItem(
+        BundleFunction fn, Dictionary<string, List<BundleFunction>> childrenOf, HashSet<string> ancestry)
+    {
+        var item = new TreeViewItem
+        {
+            Header = MakeTreeLabel($"{fn.Name} ({fn.Reason})", custom: null, bold: false),
+        };
+        if (ancestry.Add(fn.Name))
+        {
+            if (childrenOf.TryGetValue(fn.Name, out var kids))
+                foreach (var kid in kids.OrderBy(k => k.StartLine))
+                    item.Items.Add(FunctionItem(kid, childrenOf, ancestry));
+            ancestry.Remove(fn.Name);
+        }
+        return item;
     }
 
     private void BuildFilesList(UnitBundle bundle)
     {
         FilesList.Children.Clear();
-        FilesExpander.Header = $"Files ({bundle.Files.Count})";
-        FilesExpander.IsExpanded = bundle.Files.Count > 0;
-        foreach (var file in bundle.Files)
+
+        // The unit's own assets only, decided by WHICH object asked for them. Every foreign icon
+        // arrives through a perfectly ordinary art field, just on a foreign object, so the field
+        // code cannot tell them apart. Asta needs 17 of the closure's 498, his icons, his model,
+        // and that model's textures.
+        var realFiles = BundleStructure.RealFiles(bundle);
+        var own = bundle.Files.Where(f => realFiles.Contains(f.Path)).ToList();
+
+        FilesExpander.Header = $"Files ({own.Count})";
+        FilesExpander.IsExpanded = own.Count > 0;
+        foreach (var file in own) FilesList.Children.Add(FileRow(file));
+    }
+
+    private Control FileRow(BundleFile file)
+    {
+        var row = new TextBlock
         {
-            var row = new TextBlock
-            {
-                Text = $"{CategoryPrefix(file.Category)} {file.Path}"
-                    + $" - [{(file.PresentInMap ? "in map" : "not in map")}]",
-                FontSize = 11,
-                Foreground = file.PresentInMap ? NormalText : MissingText,
-                TextTrimming = TextTrimming.CharacterEllipsis,
-            };
-            ToolTip.SetTip(row, $"{file.Path}\n{file.Category} - "
-                + (file.PresentInMap
-                    ? "imported in this map (ports with the bundle)"
-                    : "not in this map - base-game asset or a missing import"));
-            FilesList.Children.Add(row);
-        }
+            Text = $"{CategoryPrefix(file.Category)} {file.Path}"
+                + $" - [{(file.PresentInMap ? "in map" : "not in map")}]",
+            FontSize = 11,
+            Foreground = file.PresentInMap ? NormalText : MissingText,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+        ToolTip.SetTip(row, $"{file.Path}\n{file.Category} - "
+            + (file.PresentInMap
+                ? "imported in this map (ports with the bundle)"
+                : "not in this map - base-game asset or a missing import"));
+        return row;
     }
 
     private void BuildStringsList(UnitBundle bundle)
     {
         StringsList.Children.Clear();
-        StringsExpander.Header = $"Strings ({bundle.Strings.Count})";
+        // The root's own tooltips and names, not every hero's. Same owner rule as the files.
+        var realStrings = BundleStructure.RealStrings(bundle);
+        var shown = bundle.Strings.Where(realStrings.Contains).ToList();
+        StringsExpander.Header = $"Strings ({shown.Count})";
         StringsExpander.IsExpanded = false; // usually the longest list; opt-in
-        foreach (var s in bundle.Strings)
+        foreach (var s in shown)
         {
             var row = new TextBlock
             {
@@ -626,21 +911,24 @@ public partial class DependencyGraphView : UserControl, IMapPanel
     };
 
     /// <summary>
-    /// Node-link graph with a simple deterministic layered layout: column 0 is
-    /// the root unit, each further column the next BFS depth of object deps;
-    /// files get their own wrapped band along the bottom. Edges are straight
-    /// lines between node anchors, labeled with their field codes (parallel
-    /// edges between the same pair coalesce into one labeled line). The layout
-    /// is only the starting arrangement - nodes drag freely afterwards, with
-    /// <see cref="PositionEdge"/> re-anchoring their edges live.
+    /// Node-link graph with a simple deterministic layered layout. Level 0 is the
+    /// root unit at the top, each level below it the next BFS depth of object deps,
+    /// so a hero's abilities branch across the row beneath it. Files get their own
+    /// wrapped band along the bottom. Edges are straight lines between node anchors,
+    /// labeled with their field codes (parallel edges between the same pair coalesce
+    /// into one labeled line). The layout is only the starting arrangement, nodes
+    /// drag freely afterwards, with <see cref="PositionEdge"/> re-anchoring their
+    /// edges live.
     /// </summary>
     private void RenderGraph(UnitBundle bundle)
     {
         GraphCanvas.Children.Clear();
         _edges.Clear();
+        _objVisuals.Clear();
+        _fileVisuals.Clear();
         _dragNode = null;
         _panning = false;
-        ResetView(); // a fresh graph starts at 100%, origin top-left
+        ResetView();
         if (bundle.Objects.Count == 0)
         {
             GraphHint.IsVisible = true;
@@ -649,8 +937,16 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         }
         GraphHint.IsVisible = false;
 
-        // --- object depth from the root (BFS over object→object edges) ---
-        var byCode = bundle.Objects.ToDictionary(o => o.Rawcode, StringComparer.Ordinal);
+        // View only. The canvas lays out the unit's real dependencies, never the closure over-carry,
+        // which on a shared arena script is hundreds of other heroes' objects. Their edges fall away
+        // with them, and TryGetVisual skips endpoints that were not laid out. The bundle itself and
+        // the port exclusion set are untouched by this.
+        var hidden = BundleStructure.CarriedByScriptClosure(bundle);
+        var objects = bundle.Objects.Where(o => !hidden.Contains(o.Rawcode)).ToList();
+        bundle = bundle with { Objects = objects };
+
+        // Object depth from the root, BFS over object to object edges.
+        var byCode = objects.ToDictionary(o => o.Rawcode, StringComparer.Ordinal);
         var adjacency = bundle.Edges
             .Where(e => byCode.ContainsKey(e.From) && byCode.ContainsKey(e.To))
             .GroupBy(e => e.From, StringComparer.Ordinal)
@@ -673,49 +969,53 @@ public partial class DependencyGraphView : UserControl, IMapPanel
                     queue.Enqueue(to);
             }
         }
-        foreach (var node in bundle.Objects) // unreachable nodes still get drawn
+        foreach (var node in bundle.Objects)
             depth.TryAdd(node.Rawcode, 1);
 
-        // --- columns: one per depth, bundle order within a column, all
-        //     vertically centered against the tallest column ---
-        var columns = bundle.Objects
+        // Levels, one row per depth, bundle order across a row, each row
+        // horizontally centered against the widest row.
+        var levels = objects
             .GroupBy(o => depth[o.Rawcode])
             .OrderBy(g => g.Key)
             .Select(g => g.ToList())
             .ToList();
-        double maxColHeight = columns.Max(c => c.Count * ObjH + (c.Count - 1) * RowGap);
+        double maxLevelWidth = levels.Max(level => level.Count * ObjW + (level.Count - 1) * SiblingGapX);
         var objRects = new Dictionary<string, Rect>(StringComparer.Ordinal);
-        for (int ci = 0; ci < columns.Count; ci++)
+        for (int li = 0; li < levels.Count; li++)
         {
-            double x = Pad + ci * (ObjW + ColGap);
-            double colHeight = columns[ci].Count * ObjH + (columns[ci].Count - 1) * RowGap;
-            double y = Pad + (maxColHeight - colHeight) / 2;
-            foreach (var node in columns[ci])
+            double y = Pad + li * (ObjH + LevelGapY);
+            double levelWidth = levels[li].Count * ObjW + (levels[li].Count - 1) * SiblingGapX;
+            double x = Pad + (maxLevelWidth - levelWidth) / 2;
+            foreach (var node in levels[li])
             {
                 objRects[node.Rawcode] = new Rect(x, y, ObjW, ObjH);
-                y += ObjH + RowGap;
+                x += ObjW + SiblingGapX;
             }
         }
 
         // --- files band: wrapped rows under the object area (case-insensitive
         //     keys - WC3 paths compare case-insensitively) ---
+        // Only the object's real dependencies appear as file nodes. What the closure carries is
+        // listed separately in the panel and would just swamp the graph.
+        var objectDeps = BundleStructure.RealFiles(bundle);
+        var depFiles = bundle.Files.Where(f => objectDeps.Contains(f.Path)).ToList();
+
         var fileRects = new Dictionary<string, Rect>(StringComparer.OrdinalIgnoreCase);
-        double objAreaWidth = columns.Count * (ObjW + ColGap) - ColGap;
-        double bandTop = Pad + maxColHeight + BandGap;
-        int perRow = Math.Max(3, (int)((objAreaWidth + FileGapX) / (FileW + FileGapX)));
-        for (int i = 0; i < bundle.Files.Count; i++)
+        double objAreaWidth = maxLevelWidth;
+        double bandTop = objRects.Values.Max(r => r.Bottom) + BandGap;
+        int perRow = Math.Max(1, (int)((objAreaWidth + FileGapX) / (FileW + FileGapX)));
+        for (int i = 0; i < depFiles.Count; i++)
         {
-            fileRects[bundle.Files[i].Path] = new Rect(
+            fileRects[depFiles[i].Path] = new Rect(
                 Pad + i % perRow * (FileW + FileGapX),
                 bandTop + i / perRow * (FileH + FileGapY),
                 FileW, FileH);
         }
-        if (bundle.Files.Count > 0)
+        if (depFiles.Count > 0)
         {
-            int usedPerRow = Math.Min(perRow, bundle.Files.Count);
             var separator = new Border
             {
-                Width = usedPerRow * (FileW + FileGapX) - FileGapX,
+                Width = Math.Max(objAreaWidth, Math.Min(perRow, depFiles.Count) * (FileW + FileGapX) - FileGapX),
                 Height = 1,
                 Background = EdgeStroke,
             };
@@ -735,8 +1035,9 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         }
 
         // --- node visuals: created and positioned first so edges can anchor to
-        //     them, but added to the canvas after the edges (nodes draw on top) ---
-        var objVisuals = new Dictionary<string, Border>(StringComparer.Ordinal);
+        //     them, but added to the canvas after the edges (nodes draw on top).
+        //     Tagged with their own BundleNode/BundleFile and restyled through the
+        //     current exclusion state, so a click later only ever touches one node. ---
         foreach (var node in bundle.Objects)
         {
             var rect = objRects[node.Rawcode];
@@ -744,24 +1045,25 @@ public partial class DependencyGraphView : UserControl, IMapPanel
             Canvas.SetLeft(visual, rect.X);
             Canvas.SetTop(visual, rect.Y);
             MakeDraggable(visual);
-            objVisuals[node.Rawcode] = visual;
+            RestyleNode(visual);
+            _objVisuals[node.Rawcode] = visual;
         }
-        var fileVisuals = new Dictionary<string, Border>(StringComparer.OrdinalIgnoreCase);
-        foreach (var file in bundle.Files)
+        foreach (var file in depFiles)
         {
             var rect = fileRects[file.Path];
             var visual = MakeFileNode(file);
             Canvas.SetLeft(visual, rect.X);
             Canvas.SetTop(visual, rect.Y);
             MakeDraggable(visual);
-            fileVisuals[file.Path] = visual;
+            RestyleNode(visual);
+            _fileVisuals[file.Path] = visual;
         }
 
         // --- edges (below the nodes), parallel edges coalesced ---
         foreach (var group in bundle.Edges.GroupBy(e => (e.From, e.To)))
         {
-            if (!TryGetVisual(group.Key.From, objVisuals, fileVisuals, out var from, out _)
-                || !TryGetVisual(group.Key.To, objVisuals, fileVisuals, out var to, out var toIsFile))
+            if (!TryGetVisual(group.Key.From, _objVisuals, _fileVisuals, out var from, out _)
+                || !TryGetVisual(group.Key.To, _objVisuals, _fileVisuals, out var to, out var toIsFile))
             {
                 continue; // endpoint we didn't lay out; resolver guarantees make this rare
             }
@@ -783,9 +1085,9 @@ public partial class DependencyGraphView : UserControl, IMapPanel
 
         // --- nodes on top of the wiring ---
         foreach (var node in bundle.Objects)
-            GraphCanvas.Children.Add(objVisuals[node.Rawcode]);
-        foreach (var file in bundle.Files)
-            GraphCanvas.Children.Add(fileVisuals[file.Path]);
+            GraphCanvas.Children.Add(_objVisuals[node.Rawcode]);
+        foreach (var file in depFiles)
+            GraphCanvas.Children.Add(_fileVisuals[file.Path]);
 
         // Explicit size = the graph's extent, which Fit scales into the viewport;
         // slack for edge labels.
@@ -830,9 +1132,10 @@ public partial class DependencyGraphView : UserControl, IMapPanel
     }
 
     /// <summary>
-    /// (Re)anchor an edge's line and label to its endpoints' current rects:
-    /// object → file drops from the bottom edge; otherwise the line leaves the
-    /// side facing the target (falling back to centers in the same column).
+    /// (Re)anchor an edge's line and label to its endpoints' current rects. An
+    /// object to file edge drops from the bottom edge. Otherwise the line leaves the
+    /// face toward the target (the bottom for a deeper level, the top for a back
+    /// edge), falling back to centers on the same level.
     /// </summary>
     private static void PositionEdge(GraphEdge edge)
     {
@@ -842,22 +1145,22 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         Point p1, p2;
         if (edge.ToIsFile)
         {
-            p1 = new Point(from.Center.X, from.Bottom);   // object → file: drop down
+            p1 = new Point(from.Center.X, from.Bottom);   // object to file, drop straight down
             p2 = new Point(to.Center.X, to.Y);
         }
-        else if (to.X > from.X)
+        else if (to.Y > from.Y)
         {
-            p1 = new Point(from.Right, from.Center.Y);    // deeper column: left→right
-            p2 = new Point(to.X, to.Center.Y);
+            p1 = new Point(from.Center.X, from.Bottom);   // deeper level sits below, leave the bottom
+            p2 = new Point(to.Center.X, to.Y);
         }
-        else if (to.X < from.X)
+        else if (to.Y < from.Y)
         {
-            p1 = new Point(from.X, from.Center.Y);        // back-edge (cycle)
-            p2 = new Point(to.Right, to.Center.Y);
+            p1 = new Point(from.Center.X, from.Y);        // back edge points up, leave the top
+            p2 = new Point(to.Center.X, to.Bottom);
         }
         else
         {
-            p1 = from.Center;                             // same column
+            p1 = from.Center;                             // same level, connect centers
             p2 = to.Center;
         }
 
@@ -892,6 +1195,7 @@ public partial class DependencyGraphView : UserControl, IMapPanel
             BorderThickness = new Thickness(isRoot ? 2 : 1),
             BorderBrush = node.CustomToMap ? CustomBorder : BaseBorder,
             Background = node.CustomToMap ? CustomFill : BaseFill,
+            Tag = node, // read back by RestyleNode/ToggleExcluded to key the exclusion set
             Child = new StackPanel
             {
                 Margin = new Thickness(8, 5, 8, 5),
@@ -931,6 +1235,7 @@ public partial class DependencyGraphView : UserControl, IMapPanel
             BorderThickness = new Thickness(1),
             BorderBrush = file.PresentInMap ? FileBorder : MissingBorder,
             Background = file.PresentInMap ? FileFill : MissingFill,
+            Tag = file, // read back by RestyleNode/ToggleExcluded to key the exclusion set
             Child = new StackPanel
             {
                 Margin = new Thickness(8, 4, 8, 4),
@@ -965,6 +1270,10 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         GraphCanvas.Width = 0;
         GraphCanvas.Height = 0;
         _edges.Clear();
+        _objVisuals.Clear();
+        _fileVisuals.Clear();
+        _excluded.Clear();
+        _lastBundle = null;
         _dragNode = null;
         _panning = false;
         ResetView();

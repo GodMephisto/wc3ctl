@@ -1,0 +1,38 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="using:Wc3.Studio.Controls"
+        x:Class="Wc3.Studio.Dialogs.SettingsDialog"
+        Title="Settings"
+        Width="580" SizeToContent="Height"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner">
+    <StackPanel Margin="18" Spacing="16">
+
+        <controls:SectionHeader Text="Folders"/>
+
+        <StackPanel Spacing="4">
+            <TextBlock Text="Warcraft III install folder" FontWeight="SemiBold"/>
+            <controls:FilePathBox Name="GameDirBox" PickFolder="True"
+                                  DialogTitle="Choose your Warcraft III install folder"
+                                  Watermark="(auto-detect)"/>
+            <TextBlock Foreground="#8FA3B8" FontSize="11" TextWrapping="Wrap"
+                       Text="Leave this empty to auto-detect. Point it at a specific install to load base game data (units, abilities, icons) from there."/>
+        </StackPanel>
+
+        <StackPanel Spacing="4">
+            <TextBlock Text="Default map folder" FontWeight="SemiBold"/>
+            <controls:FilePathBox Name="MapsDirBox" PickFolder="True"
+                                  DialogTitle="Choose your default map folder"
+                                  Watermark="(none)"/>
+            <TextBlock Foreground="#8FA3B8" FontSize="11" TextWrapping="Wrap"
+                       Text="Open Map and the other file dialogs start here, so you do not have to browse to the same place every time."/>
+        </StackPanel>
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+            <Button Content="Cancel" Click="OnCancel" Padding="18,4"/>
+            <Button Content="Save" Click="OnSave" Padding="18,4" Classes="accent"
+                    ToolTip.Tip="Save these folders and remember them next time"/>
+        </StackPanel>
+
+    </StackPanel>
+</Window>

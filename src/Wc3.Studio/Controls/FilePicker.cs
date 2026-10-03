@@ -71,6 +71,36 @@ public static class FilePicker
         return null;
     }
 
+    /// <summary>Shows a folder-picker dialog starting at the remembered folder; returns the
+    /// chosen folder path, or null if cancelled. Remembers the picked folder itself, so the
+    /// next dialog opens there (used for the Warcraft III and map folder settings).</summary>
+    public static async Task<string?> PickFolderAsync(Visual owner, string title)
+    {
+        var storage = TopLevel.GetTopLevel(owner)?.StorageProvider;
+        if (storage is null) return null;
+
+        var folders = await storage.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        {
+            Title = title,
+            AllowMultiple = false,
+            SuggestedStartLocation = await StartFolderAsync(storage),
+        });
+        if (folders.Count == 1 && folders[0].TryGetLocalPath() is { } path)
+        {
+            _lastDirectory = path;
+            return path;
+        }
+        return null;
+    }
+
+    /// <summary>Seeds the remembered folder, e.g. from saved settings on startup, so the first
+    /// Open Map opens at the user's map folder. A missing directory is ignored.</summary>
+    public static void SeedLastDirectory(string? dir)
+    {
+        if (!string.IsNullOrEmpty(dir) && Directory.Exists(dir))
+            _lastDirectory = dir;
+    }
+
     private static async Task<IStorageFolder?> StartFolderAsync(IStorageProvider storage) =>
         _lastDirectory is not null ? await storage.TryGetFolderFromPathAsync(_lastDirectory) : null;
 

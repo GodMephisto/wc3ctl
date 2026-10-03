@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using Wc3.GameData;
 using System.ComponentModel;
 using Avalonia;
 using Avalonia.Controls;
@@ -65,6 +66,18 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     private bool _suppress;
     /// <summary>Fields applied via ObjectSetCommand but not yet written to disk.</summary>
     private int _unsavedEdits;
+
+    /// <summary>
+    /// The value a field held BEFORE this session first changed it, keyed by kind, object and
+    /// field. Captured on the first edit only, so reverting always returns to what the map was
+    /// opened with rather than to the previous keystroke.
+    /// </summary>
+    /// <remarks>
+    /// Nothing recorded this before, so once a value was typed over there was no copy of it
+    /// anywhere in the app and no way back short of closing the map without saving. Editing
+    /// without a visible original and an undo is guesswork.
+    /// </remarks>
+    private readonly Dictionary<(ObjectKind Kind, string Rawcode, string Field), string> _originalValues = new();
     /// <summary>The current kind's full object list; SearchBox filters this in memory.</summary>
     private List<ObjectRow> _allRows = new();
     /// <summary>rawcode → display name across every kind's map objects, for reference
@@ -101,12 +114,23 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     private ObjectRow? _anchor;
 
     // --- typed field editor: one control shown per field, chosen from its metadata ---
-    private enum EditorMode { Text, Combo, Multi, RefList }
+    private enum EditorMode { Text, Numeric, Combo, Multi, RefList }
     private EditorMode _editorMode = EditorMode.Text;
     /// <summary>Multiselect tokens in display order, so Apply joins deterministically.</summary>
     private IReadOnlyList<string> _editorMultiTokens = Array.Empty<string>();
     /// <summary>Reference-list builder entries (rawcodes in list order); Apply joins them.</summary>
     private List<string> _refListTokens = new();
+    /// <summary>Whether the numeric editor holds a whole-number type, so Apply writes
+    /// "3" and never "3.0" into an int field.</summary>
+    private bool _numericIsInt;
+    /// <summary>The numeric editor's note, built where the bounds are known (see
+    /// <see cref="ShowNumericEditor"/>) because <see cref="UpdateEditNote"/> only sees
+    /// the option result, not the field's own metadata row.</summary>
+    private string _numericEditNote = "";
+    /// <summary>Invalidates in-flight asset picker loads. The base game's path list lands
+    /// async (first CASC open takes seconds) and must not repopulate a picker that a later
+    /// field selection, editor reset or map switch already owns.</summary>
+    private int _assetPickerGeneration;
     /// <summary>Above this many derivable options a field is treated as free text (paths,
     /// ids, and other high-cardinality fields aren't real enumerations).</summary>
     private const int MaxEditorOptions = 200;
@@ -122,6 +146,9 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         // Tunnel so right-click retargets the selection BEFORE the context menu opens.
         ObjectList.AddHandler(PointerPressedEvent, OnObjectListPointerPressed,
             RoutingStrategies.Tunnel);
+        // The picker fills the text editor rather than replacing it, so a hand-typed
+        // path (a file the map does not hold yet) keeps working.
+        AssetPickerCombo.SelectionChanged += (_, item) => EditorBox.Text = item.Id;
     }
 
     /// <summary>
@@ -324,12 +351,19 @@ public partial class ObjectEditorView : UserControl, IMapPanel
 
         try
         {
-            var result = ObjectGetCommand.Execute(doc, SelectedKind.Kind, first.Rawcode, _session.GameDir);
-            var baseInfo = result.BaseRawcode is null ? "no base" : $"base {result.BaseRawcode}";
+            // The form, not the raw field list: grouped, ordered, applicability-filtered and
+            // bounds-annotated from the game's own metadata. Building that here would put map
+            // logic in a panel, so it lives in Wc3.Commands and is shared with the CLI and MCP.
+            var form = ObjectFormCommand.Execute(doc, SelectedKind.Kind, first.Rawcode, _session.GameDir);
+            var baseInfo = form.BaseRawcode is null ? "no base" : $"base {form.BaseRawcode}";
+            var hiddenNote = form.HiddenFieldCount > 0
+                ? $", {form.HiddenFieldCount} hidden"
+                : "";
             SelectedHeader.Text =
-                $"{result.Name ?? first.Rawcode} ({first.Rawcode}) - {baseInfo} - {result.Fields.Count} field(s)";
+                $"{form.Name ?? first.Rawcode} ({first.Rawcode}) - {baseInfo} - "
+                + $"{form.FieldCount} field(s) in {form.Groups.Count} group(s){hiddenNote}";
 
-            var rows = BuildFieldRows(result.Fields);
+            var rows = BuildFieldRows(form);
             _suppress = true;
             FieldList.ItemsSource = rows;
             _suppress = false;
@@ -339,13 +373,13 @@ public partial class ObjectEditorView : UserControl, IMapPanel
             // Sub-rows are display-only children and never the preserved selection.
             var keep = string.IsNullOrEmpty(preserveFieldCode)
                 ? null
-                : rows.FirstOrDefault(r => !r.IsSubRow && r.Code == preserveFieldCode);
+                : rows.FirstOrDefault(r => r.IsSelectable && r.Code == preserveFieldCode);
             FieldList.SelectedItem = keep;
             if (keep is null)
                 ResetEditor();
 
-            if (result.Diagnostics.Count > 0)
-                StatusText.Text = string.Join("; ", result.Diagnostics);
+            if (form.Diagnostics.Count > 0)
+                StatusText.Text = string.Join("; ", form.Diagnostics);
         }
         catch (Exception ex)
         {
@@ -384,20 +418,49 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     /// LIST as indented read-only sub-rows ("A000 - Naginata Combo") under the parent
     /// row, one per entry. Every other field is one plain row, exactly as before.
     /// </summary>
-    private List<FieldRow> BuildFieldRows(IReadOnlyList<MergedField> fields)
+    /// <summary>
+    /// Flattens the form into list rows: one heading per category, then that category's fields in
+    /// the metadata's own order, with reference lists still expanded beneath their field.
+    /// </summary>
+    private List<FieldRow> BuildFieldRows(ObjectForm form)
+    {
+        var rows = new List<FieldRow>(form.FieldCount + form.Groups.Count);
+        foreach (var group in form.Groups)
+        {
+            rows.Add(FieldRow.GroupHeader(group.Title, group.Fields.Count));
+            rows.AddRange(BuildGroupRows(group.Fields));
+        }
+        return rows;
+    }
+
+    /// <summary>Legal range and target layer, shown beside the value so an edit that the game
+    /// would reject, or that would land in the layer the game ignores, is visible before it is
+    /// made rather than after the map fails to load.</summary>
+    private static string HintFor(FormField f)
+    {
+        var bounds = f.MinValue is null && f.MaxValue is null
+            ? ""
+            : $"{f.MinValue ?? "*"}..{f.MaxValue ?? "*"}";
+        var layer = f.Layer == ObjectLayer.Skin ? "skin" : "";
+        return string.Join("  ", new[] { bounds, layer }.Where(x => x.Length > 0));
+    }
+
+    private List<FieldRow> BuildGroupRows(IReadOnlyList<FormField> fields)
     {
         var kind = SelectedKind.Kind;
         var rows = new List<FieldRow>(fields.Count);
-        foreach (var f in fields)
+        foreach (var ff in fields)
         {
+            var f = new MergedField(ff.Code, ff.Name, ff.Value, ff.Source) { Display = ff.Display };
+            var hint = HintFor(ff);
             if (!LooksLikeRawcodes(f.Value) || !IsReferenceField(kind, f.Code, out var isList))
             {
-                rows.Add(new FieldRow(f));
+                rows.Add(new FieldRow(f, null, hint, ff));
                 continue;
             }
             if (isList)
             {
-                rows.Add(new FieldRow(f));
+                rows.Add(new FieldRow(f, null, hint, ff));
                 bool mapSource = f.Source == "map";
                 foreach (var token in f.Value.Split(',',
                     StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
@@ -409,7 +472,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
                 var display = RefNames().TryGetValue(token, out var name)
                     ? $"{token} ({name})"
                     : f.Display;
-                rows.Add(new FieldRow(f, display));
+                rows.Add(new FieldRow(f, display, hint, ff));
             }
         }
         return rows;
@@ -701,7 +764,9 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         if (entry?.FileName is not null)
         {
             _modelEntryName = entry.FileName;
-            ModelText.Text = $"{rawcode} model: {entry.FileName} - in map ({entry.RawBytes.Length:N0} bytes)";
+            // Only the size is wanted here, so RawSize avoids decompressing a model that is about
+            // to be described and not read.
+            ModelText.Text = $"{rawcode} model: {entry.FileName} - in map ({entry.RawSize:N0} bytes)";
             ExtractModelButton.IsEnabled = true;
             StartPreview(doc, entry.FileName);
         }
@@ -913,8 +978,8 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         var dest = Path.Combine(dir, baseName);
         try
         {
-            await Task.Run(() => File.WriteAllBytes(dest, entry.RawBytes));
-            StatusText.Text = $"Extracted {_modelEntryName} → {dest} ({entry.RawBytes.Length:N0} bytes)";
+            await Task.Run(() => File.WriteAllBytes(dest, entry.CurrentBytes));
+            StatusText.Text = $"Extracted {_modelEntryName} → {dest} ({entry.CurrentBytes.Length:N0} bytes)";
         }
         catch (Exception ex)
         {
@@ -935,9 +1000,12 @@ public partial class ObjectEditorView : UserControl, IMapPanel
             return;
         // Sub-rows (a reference list's expanded entries) are display-only; their
         // containers are disabled, but guard anyway so they never reach the editor.
-        if (FieldList.SelectedItem is FieldRow { IsSubRow: false } row)
+        // A category heading is not a field. Its containers are disabled so a click cannot
+        // select one, but keyboard navigation can, and it would arrive here as "Art ()".
+        if (FieldList.SelectedItem is FieldRow { IsSelectable: true } row)
         {
             FieldEditLabel.Text = $"{row.Name} ({row.Code})";
+            ShowValueContext(row);
             ConfigureEditor(row);
             UpdateApplyState();
         }
@@ -947,11 +1015,13 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         }
     }
 
-    /// <summary>Pick the editor control from the field's metadata: object-reference LISTS
-    /// (a unit's abilities, an item drop set, …) get the add/remove/reorder builder;
+    /// <summary>Pick the editor control from the field's metadata. Object-reference LISTS
+    /// (a unit's abilities, an item drop set, …) get the add/remove/reorder builder,
     /// other enumerated fields get a searchable dropdown (single value) or a checklist
-    /// (list types); everything else - ints, reals, strings, paths, or fields with no
-    /// derivable option set - stays free text. The current value is always kept
+    /// (list types), int, real and unreal fields get a spin editor bounded by the
+    /// metadata, icon and model fields keep the text box but gain a picker over paths
+    /// that actually exist, and everything else (strings, paths, fields with no
+    /// derivable option set) stays free text. The current value is always kept
     /// selectable so out-of-range data is never silently lost.</summary>
     private void ConfigureEditor(FieldRow row)
     {
@@ -962,7 +1032,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         }
         catch
         {
-            opt = new ObjectFieldOptionsResult("", false, Array.Empty<string>());
+            opt = new ObjectFieldOptionsResult("", false, Array.Empty<EnumOption>());
         }
 
         bool freeText = opt.Options.Count == 0
@@ -976,9 +1046,12 @@ public partial class ObjectEditorView : UserControl, IMapPanel
             ShowMultiEditor(row, opt.Options);
         else if (!freeText)
             ShowComboEditor(row, opt.Options);
+        else if (NumericFieldEditor.IsNumericType(opt.Type) && NumericFieldEditor.CanEdit(row.Value))
+            ShowNumericEditor(row, opt.Type);
         else
             ShowTextEditor(row);
 
+        ConfigureAssetPicker(row, opt.Type);
         UpdateEditNote(opt);
         // The grid shows resolved text for wts references; the editor holds the raw token,
         // so flag it rather than let the user think the box "lost" the readable value.
@@ -995,53 +1068,179 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         _ => false,
     };
 
+    /// <summary>Exactly one editor control is visible at a time. Every Show* method routes
+    /// through here so adding an editor cannot leave a stale one showing.</summary>
+    private void ShowEditor(Control editor)
+    {
+        EditorBox.IsVisible = ReferenceEquals(editor, EditorBox);
+        EditorNum.IsVisible = ReferenceEquals(editor, EditorNum);
+        EditorCombo.IsVisible = ReferenceEquals(editor, EditorCombo);
+        EditorMultiHost.IsVisible = ReferenceEquals(editor, EditorMultiHost);
+        RefListHost.IsVisible = ReferenceEquals(editor, RefListHost);
+    }
+
     private void ShowTextEditor(FieldRow row)
     {
         _editorMode = EditorMode.Text;
         EditorBox.Text = row.Value;
-        EditorBox.IsVisible = true;
-        EditorCombo.IsVisible = false;
-        EditorMultiHost.IsVisible = false;
-        RefListHost.IsVisible = false;
+
+        // The metadata marks long text with stringext, and a tooltip or a description is exactly
+        // that. Editing several lines of it through a one-line box, where the newlines are present
+        // but invisible and Enter does nothing, is the worst affordance in this panel.
+        bool longText = row.Form?.MultiLine == true
+            || (row.Value?.Contains('|') == true)   // WC3 uses |n as its line break in tooltips
+            || (row.Value?.Length ?? 0) > 120;
+        EditorBox.AcceptsReturn = longText;
+        EditorBox.TextWrapping = longText
+            ? Avalonia.Media.TextWrapping.Wrap
+            : Avalonia.Media.TextWrapping.NoWrap;
+        EditorBox.MinHeight = longText ? 96 : 0;
+        EditorBox.MaxHeight = longText ? 220 : double.PositiveInfinity;
+
+        ShowEditor(EditorBox);
     }
 
-    private void ShowComboEditor(FieldRow row, IReadOnlyList<string> options)
+    /// <summary>Bounded spin editor for int, real and unreal fields. The bounds come from
+    /// the field metadata (see <see cref="NumericFieldEditor.Bounds"/> for why they widen
+    /// to include an out-of-range stored value), so a value the game rejects can no longer
+    /// be typed here, it clamps at input time instead of failing on Apply.</summary>
+    private void ShowNumericEditor(FieldRow row, string type)
+    {
+        _editorMode = EditorMode.Numeric;
+        _numericIsInt = NumericFieldEditor.IsIntType(type);
+        var stored = NumericFieldEditor.Parse(row.Value);
+        var (min, max) = NumericFieldEditor.Bounds(row.Form, stored);
+        EditorNum.Minimum = min;
+        EditorNum.Maximum = max;
+        EditorNum.Increment = _numericIsInt ? 1m : 0.1m;
+        // Object data is invariant-culture text, so the editor parses and renders the
+        // same way regardless of the OS locale, and int fields refuse decimal input.
+        EditorNum.NumberFormat = System.Globalization.CultureInfo.InvariantCulture.NumberFormat;
+        EditorNum.ParsingNumberStyle = _numericIsInt
+            ? System.Globalization.NumberStyles.Integer
+            : System.Globalization.NumberStyles.Float;
+        EditorNum.Value = stored;
+        if (stored is null)
+            EditorNum.Text = "";
+
+        var legalMin = row.Form?.MinValue;
+        var legalMax = row.Form?.MaxValue;
+        var range = legalMin is null && legalMax is null
+            ? "no declared range"
+            : $"legal range {legalMin ?? "unbounded"} to {legalMax ?? "unbounded"}";
+        if (row.Form?.ForceNonNegative == true)
+            range += ", never negative";
+        _numericEditNote = $"Numeric field (type '{type}'), {range}, out-of-range input clamps.";
+
+        ShowEditor(EditorNum);
+    }
+
+    /// <summary>
+    /// Shows the asset path picker above the text editor for icon and model fields,
+    /// populated with paths that actually exist. The map's own imports land immediately,
+    /// the base game's merge in when the install answers (async, and cached per install,
+    /// because the first CASC listfile pass takes seconds). On a machine with no install
+    /// the picker still offers the map's imports, and with no game data at all the field
+    /// type is unknown, so the plain text editor is all that shows.
+    /// </summary>
+    private void ConfigureAssetPicker(FieldRow row, string type)
+    {
+        _assetPickerGeneration++;
+        var family = AssetCatalog.FamilyForFieldType(type);
+        if (family is null || _editorMode != EditorMode.Text || _session?.Current is not { } doc)
+        {
+            AssetPickerCombo.IsVisible = false;
+            return;
+        }
+
+        var generation = _assetPickerGeneration;
+        var current = (row.Value ?? "").Trim();
+        var mapPaths = AssetCatalog.MapPaths(doc, family.Value);
+        AssetPickerCombo.Watermark = family == AssetFamily.Icon
+            ? "Search existing icon paths…"
+            : "Search existing model paths…";
+        // No auto-selection, and the initial selection never raises SelectionChanged, so
+        // just opening a field cannot rewrite its value.
+        AssetPickerCombo.SetItems(AssetItems(mapPaths, Array.Empty<string>()),
+            selectId: current.Length > 0 ? current : null, selectFirstWhenNoMatch: false);
+        AssetPickerCombo.IsVisible = true;
+
+        AssetCatalog.GamePathsAsync(_session.GameDir, family.Value).ContinueWith(t =>
+        {
+            if (t.Result.Count == 0)
+                return;
+            Dispatcher.UIThread.Post(() =>
+            {
+                // A later field selection or a reset owns the picker now, leave it alone.
+                if (generation != _assetPickerGeneration || !AssetPickerCombo.IsVisible)
+                    return;
+                AssetPickerCombo.SetItems(AssetItems(mapPaths, t.Result),
+                    selectId: AssetPickerCombo.SelectedId, selectFirstWhenNoMatch: false);
+            });
+        }, TaskContinuationOptions.OnlyOnRanToCompletion);
+    }
+
+    /// <summary>Map imports first (a map file shadows the same-named game file at load),
+    /// then the base game's paths, duplicates folded toward the map entry.</summary>
+    private static List<SearchableComboBoxItem> AssetItems(
+        IReadOnlyList<string> mapPaths, IReadOnlyList<string> gamePaths)
+    {
+        var items = new List<SearchableComboBoxItem>(mapPaths.Count + gamePaths.Count);
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var p in mapPaths)
+            if (seen.Add(p))
+                items.Add(new SearchableComboBoxItem("", p));
+        foreach (var p in gamePaths)
+            if (seen.Add(p))
+                items.Add(new SearchableComboBoxItem("", p));
+        return items;
+    }
+
+    private void ShowComboEditor(FieldRow row, IReadOnlyList<EnumOption> options)
     {
         _editorMode = EditorMode.Combo;
-        var tokens = options.ToList();
+        // The id is the value the game stores. The label is what the World Editor calls it, from
+        // UnitEditorData.txt. Showing the token where a name exists makes a closed set unreadable.
+        var items = options
+            .Select(o => new SearchableComboBoxItem(o.Value, o.Label))
+            .ToList();
         var current = (row.Value ?? "").Trim();
-        if (current.Length > 0 && !tokens.Contains(current, StringComparer.OrdinalIgnoreCase))
-            tokens.Insert(0, current);
-        EditorCombo.SetItems(
-            tokens.Select(t => new SearchableComboBoxItem(t, t)).ToList(),
-            selectId: current.Length > 0 ? current : null);
-        EditorBox.IsVisible = false;
-        EditorCombo.IsVisible = true;
-        EditorMultiHost.IsVisible = false;
-        RefListHost.IsVisible = false;
+        if (current.Length > 0
+            && !items.Any(i => string.Equals(i.Id, current, StringComparison.OrdinalIgnoreCase)))
+            // The stored value is not one the game defines. Keep it selectable and say so, rather
+            // than silently dropping data the map already relies on.
+            items.Insert(0, new SearchableComboBoxItem(current, $"{current}  (not a listed value)"));
+        EditorCombo.SetItems(items, selectId: current.Length > 0 ? current : null);
+        ShowEditor(EditorCombo);
     }
 
-    private void ShowMultiEditor(FieldRow row, IReadOnlyList<string> options)
+    private void ShowMultiEditor(FieldRow row, IReadOnlyList<EnumOption> options)
     {
         _editorMode = EditorMode.Multi;
         var selected = new HashSet<string>(
             (row.Value ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
             StringComparer.OrdinalIgnoreCase);
-        // Options ∪ any current tokens outside the option set, so nothing is dropped.
-        var tokens = options.ToList();
+
+        // The listed values, plus any the field already holds that the game does not list. Keeping
+        // the strays visible and selected is what stops an Apply from dropping data the map relies
+        // on.
+        var tokens = options.Select(o => o.Value).ToList();
         foreach (var s in selected)
             if (!tokens.Contains(s, StringComparer.OrdinalIgnoreCase))
                 tokens.Add(s);
         _editorMultiTokens = tokens;
+
+        // Deliberately the raw values here, NOT the display names. CurrentEditorValue rebuilds the
+        // field by matching SelectedItems against these exact strings, so showing labels would make
+        // every Apply write an empty list. The single-value combo is where names are safe, because
+        // it carries the id separately from the label.
         EditorMulti.ItemsSource = tokens;
         EditorMulti.SelectedItems?.Clear();
         foreach (var t in tokens)
             if (selected.Contains(t))
                 EditorMulti.SelectedItems?.Add(t);
-        EditorBox.IsVisible = false;
-        EditorCombo.IsVisible = false;
-        EditorMultiHost.IsVisible = true;
-        RefListHost.IsVisible = false;
+
+        ShowEditor(EditorMultiHost);
     }
 
     // --- object-reference LIST builder (EditorMode.RefList) ---
@@ -1066,10 +1265,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         // No auto-selection: adding is a deliberate pick, never a default first item.
         RefListAddCombo.SetItems(RefListCandidates(type), selectId: null,
             selectFirstWhenNoMatch: false);
-        EditorBox.IsVisible = false;
-        EditorCombo.IsVisible = false;
-        EditorMultiHost.IsVisible = false;
-        RefListHost.IsVisible = true;
+        ShowEditor(RefListHost);
     }
 
     /// <summary>
@@ -1182,6 +1378,10 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     /// <summary>The value to write, read from whichever editor is currently shown.</summary>
     private string CurrentEditorValue() => _editorMode switch
     {
+        // The visible text, not just Value, so an uncommitted keystroke still counts
+        // (NumericUpDown commits its text on focus loss, which the Apply click races).
+        EditorMode.Numeric => NumericFieldEditor.ValueText(
+            EditorNum.Text, EditorNum.Value, EditorNum.Minimum, EditorNum.Maximum, _numericIsInt),
         EditorMode.Combo => EditorCombo.SelectedId ?? "",
         EditorMode.Multi => string.Join(",",
             _editorMultiTokens.Where(t => EditorMulti.SelectedItems?.Contains(t) == true)),
@@ -1193,10 +1393,13 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     {
         EditNote.Text = _editorMode switch
         {
+            EditorMode.Numeric => _numericEditNote,
             EditorMode.Combo => $"Enumerated field (type '{opt.Type}') — pick a value the base game already uses.",
             EditorMode.Multi => $"List field (type '{opt.Type}') — check tokens to include; saved comma-separated.",
             EditorMode.RefList => $"Object-reference list (type '{opt.Type}') — add, remove and reorder entries; "
                 + "Apply saves the rawcodes comma-separated in list order.",
+            _ when AssetPickerCombo.IsVisible =>
+                $"Asset path field (type '{opt.Type}'), pick an existing map or game path above, or type one.",
             _ when opt.Diagnostic is { } d => $"Free-text field. ({d})",
             _ => "Free-text field; leveled fields (code:N) edit that level/variation only.",
         };
@@ -1208,11 +1411,10 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         _editorMode = EditorMode.Text;
         _editorMultiTokens = Array.Empty<string>();
         _refListTokens = new List<string>();
+        _assetPickerGeneration++; // orphan any in-flight game path load
         EditorBox.Text = "";
-        EditorBox.IsVisible = true;
-        EditorCombo.IsVisible = false;
-        EditorMultiHost.IsVisible = false;
-        RefListHost.IsVisible = false;
+        ShowEditor(EditorBox);
+        AssetPickerCombo.IsVisible = false;
         EditNote.Text = "";
         UpdateApplyState();
     }
@@ -1234,7 +1436,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
             StatusText.Text = "No map open.";
             return;
         }
-        if (FieldList.SelectedItem is not FieldRow { IsSubRow: false } row)
+        if (FieldList.SelectedItem is not FieldRow { IsSelectable: true } row)
         {
             StatusText.Text = "Select a field first.";
             return;
@@ -1247,6 +1449,17 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         }
 
         var value = CurrentEditorValue();
+
+        // The metadata states the legal range and whether a blank is allowed, and until now the
+        // panel showed those and enforced nothing, so a value the game rejects could be written and
+        // would only surface as a map that misbehaves. The rule lives in the command layer, so ask
+        // it rather than re-deriving it here.
+        if (row.Form?.Validate(value) is { } problem)
+        {
+            StatusText.Text = $"not applied. {problem}";
+            return;
+        }
+
         int applied = 0;
         var warnings = new List<string>();
         var problems = new List<string>();
@@ -1254,6 +1467,12 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         {
             try
             {
+                // Remember what the field held before the FIRST change to it, so Revert can
+                // return to the value the map was opened with rather than to the last keystroke.
+                var key = (SelectedKind.Kind, target.Rawcode, row.Code);
+                if (!_originalValues.ContainsKey(key))
+                    _originalValues[key] = StoredValue(doc, target.Rawcode, row.Code) ?? "";
+
                 var result = ObjectSetCommand.Execute(doc, SelectedKind.Kind, target.Rawcode, row.Code, value);
                 if (result.Ok)
                 {
@@ -1568,18 +1787,29 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     /// </summary>
     public sealed class FieldRow
     {
-        private static readonly IBrush BaseBrush = new SolidColorBrush(Color.Parse("#C8CDD3"));
-        private static readonly IBrush MapBrush = new SolidColorBrush(Color.Parse("#E8C56A"));
+        private static readonly IBrush BaseBrush = StudioPalette.Normal;
+        private static readonly IBrush MapBrush = StudioPalette.Accent;
+        private static readonly IBrush HeaderBrush = StudioPalette.Header;
 
         private readonly bool _mapSource;
 
-        public FieldRow(MergedField field, string? displayOverride = null)
+        /// <summary>
+        /// The form field this row was built from, when it came from one. Carried so the panel can
+        /// ask the command layer whether a value is legal instead of re-deriving the rules, and so
+        /// the multi-line hint reaches the editor.
+        /// </summary>
+        public FormField? Form { get; private init; }
+
+        public FieldRow(MergedField field, string? displayOverride = null, string hint = "",
+            FormField? form = null)
         {
+            Form = form;
             Code = field.Code;
             Name = field.Name;
             Value = field.Value;
             DisplayValue = displayOverride ?? field.Display;
             Source = field.Source;
+            Hint = hint;
             _mapSource = field.Source == "map";
         }
 
@@ -1597,6 +1827,22 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         /// <summary>An expanded reference-list entry rendered beneath its field row.</summary>
         public static FieldRow SubRow(string display, bool mapSource) => new(display, mapSource);
 
+        private FieldRow(string title, int count, bool header)
+        {
+            Code = "";
+            Name = title;
+            Value = "";
+            DisplayValue = "";
+            Source = "";
+            Hint = $"{count} field(s)";
+            IsGroupHeader = header;
+            _mapSource = false;
+        }
+
+        /// <summary>A category heading. The World Editor shows these as collapsible sections and
+        /// they are the difference between a form and a list of 169 rows.</summary>
+        public static FieldRow GroupHeader(string title, int count) => new(title, count, true);
+
         public string Code { get; }
         public string Name { get; }
         /// <summary>Raw stored value (TRIGSTR_ refs intact) — what the editor edits and writes back.</summary>
@@ -1607,9 +1853,123 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         /// <summary>Display-only child of a reference-list field (not a field itself).</summary>
         public bool IsSubRow { get; }
 
-        public IBrush RowBrush => _mapSource ? MapBrush : BaseBrush;
-        public FontWeight RowWeight => _mapSource && !IsSubRow ? FontWeight.SemiBold : FontWeight.Normal;
+        /// <summary>A category heading rather than an editable field.</summary>
+        public bool IsGroupHeader { get; private init; }
+
+        /// <summary>Legal range and target layer, from the game's own field metadata. Empty when
+        /// there is no install to read it from.</summary>
+        public string Hint { get; private init; } = "";
+
+        /// <summary>Only a real field row can be picked up by the editor pane.</summary>
+        public bool IsSelectable => !IsSubRow && !IsGroupHeader;
+
+        public IBrush RowBrush => IsGroupHeader ? HeaderBrush : _mapSource ? MapBrush : BaseBrush;
+        public FontWeight RowWeight =>
+            IsGroupHeader || (_mapSource && !IsSubRow) ? FontWeight.SemiBold : FontWeight.Normal;
+        /// <summary>Headings get air above them so the groups read as blocks.</summary>
+        public Thickness RowMargin => IsGroupHeader ? new Thickness(0, 8, 0, 2) : new Thickness(0);
         /// <summary>Sub-rows indent their text under the parent's value column.</summary>
         public Thickness ValueMargin => IsSubRow ? new Thickness(24, 0, 4, 0) : new Thickness(4, 0);
+    }
+
+    /// <summary>The value a field holds in the document right now, or null when it holds none.</summary>
+    private string? StoredValue(MapDocument doc, string rawcode, string fieldCode)
+    {
+        try
+        {
+            var merged = ObjectGetCommand.Execute(doc, SelectedKind.Kind, rawcode, _session?.GameDir);
+            return merged.Fields
+                .FirstOrDefault(f => string.Equals(f.Code, fieldCode, StringComparison.OrdinalIgnoreCase))
+                ?.Value;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Shows what the selected field holds now and, when this session has changed it, what it held
+    /// when the map was opened. Also decides whether Revert and Reset Box can do anything.
+    /// </summary>
+    private void ShowValueContext(FieldRow row)
+    {
+        FieldCurrentText.IsVisible = false;
+        FieldOriginalText.IsVisible = false;
+        RevertButton.IsEnabled = false;
+        ResetBoxButton.IsEnabled = false;
+
+        if (row.Code.Length == 0) return;
+
+        var current = row.DisplayValue;
+        FieldCurrentText.Text = $"stored: {Trim(current)}   [{row.Source}]";
+        FieldCurrentText.IsVisible = true;
+        ResetBoxButton.IsEnabled = true;
+
+        // Only the single-selection case has one unambiguous original to offer.
+        var targets = SelectedObjects();
+        if (targets.Count != 1) return;
+
+        if (_originalValues.TryGetValue((SelectedKind.Kind, targets[0].Rawcode, row.Code), out var original))
+        {
+            FieldOriginalText.Text = $"changed this session, was: {Trim(original)}";
+            FieldOriginalText.IsVisible = true;
+            RevertButton.IsEnabled = true;
+        }
+    }
+
+    private static string Trim(string v)
+    {
+        v = (v ?? "").Replace('\n', ' ').Replace('\r', ' ');
+        if (v.Length == 0) return "(empty)";
+        return v.Length <= 120 ? v : v[..120] + "...";
+    }
+
+    /// <summary>Discards what was typed and shows the field's stored value again.</summary>
+    private void OnResetBoxClick(object? sender, RoutedEventArgs e)
+    {
+        if (FieldList.SelectedItem is FieldRow { IsSelectable: true } row)
+        {
+            ConfigureEditor(row);
+            UpdateApplyState();
+            StatusText.Text = $"editor reset to the stored value of {row.Code}";
+        }
+    }
+
+    /// <summary>
+    /// Puts the field back to the value it held when the map was opened, through the same write
+    /// path as any other edit, then forgets the record so the field reads as untouched again.
+    /// </summary>
+    private void OnRevertClick(object? sender, RoutedEventArgs e)
+    {
+        if (_session?.Current is not { } doc) { StatusText.Text = "No map open."; return; }
+        if (FieldList.SelectedItem is not FieldRow { IsSelectable: true } row) return;
+
+        var targets = SelectedObjects();
+        if (targets.Count != 1)
+        {
+            StatusText.Text = "Revert works on one object at a time.";
+            return;
+        }
+        var key = (SelectedKind.Kind, targets[0].Rawcode, row.Code);
+        if (!_originalValues.TryGetValue(key, out var original))
+        {
+            StatusText.Text = "This field has not been changed in this session.";
+            return;
+        }
+
+        var result = ObjectSetCommand.Execute(doc, SelectedKind.Kind, targets[0].Rawcode, row.Code, original);
+        if (!result.Ok)
+        {
+            StatusText.Text = $"could not revert {row.Code}: {result.Message}";
+            return;
+        }
+
+        // Reverting is itself an unsaved change to the document, so the counter goes UP, not down.
+        // The field matches the opened map again; the file on disk does not yet.
+        _originalValues.Remove(key);
+        _unsavedEdits++;
+        RefreshFieldPane(row.Code);
+        StatusText.Text = $"{row.Code} reverted to {Trim(original)}. Save Edits to write it.";
     }
 }

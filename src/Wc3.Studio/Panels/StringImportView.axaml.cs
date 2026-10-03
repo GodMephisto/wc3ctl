@@ -8,7 +8,7 @@ namespace Wc3.Studio.Panels;
 /// Trigger strings (war3map.wts) + imports panel. Thin shell over StringsCommand /
 /// ImportsCommand: the list shows read-only rows and all editing happens in the single
 /// dedicated editor + Apply (an editable TextBox inside a ListBox loses its value to
-/// virtualization/focus recycling — see src/Wc3.Studio/CLAUDE.md).
+/// virtualization/focus recycling).
 /// </summary>
 public partial class StringImportView : UserControl, IMapPanel
 {

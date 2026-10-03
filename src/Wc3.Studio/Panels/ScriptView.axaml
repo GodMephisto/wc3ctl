@@ -1,42 +1,59 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="using:Wc3.Studio.Controls"
              x:Class="Wc3.Studio.Panels.ScriptView">
     <Grid RowDefinitions="Auto,*">
 
-        <!-- Header: "<N> functions in <file>" -->
-        <TextBlock Name="HeaderText" Grid.Row="0" Margin="8,6"
-                   FontWeight="SemiBold" Text="No script in map"/>
+        <!-- Header: "<N> functions in <file>" plus the caret's position, so the line number the
+             gutter shows and the line a diagnostic names are visibly the same number. -->
+        <DockPanel Grid.Row="0" Margin="8,6">
+            <TextBlock Name="CaretText" DockPanel.Dock="Right" FontSize="11"
+                       Foreground="#8FA3B8" VerticalAlignment="Center"
+                       FontFamily="Cascadia Mono,Consolas,monospace" Text=""/>
+            <TextBlock Name="HeaderText" FontWeight="SemiBold" Text="No script in map"/>
+        </DockPanel>
 
-        <Grid Grid.Row="1" ColumnDefinitions="280,4,*">
+        <Grid Grid.Row="1" ColumnDefinitions="300,4,*">
 
-            <!-- Left: search + function list -->
-            <Grid Grid.Column="0" RowDefinitions="Auto,*" Margin="8,0,0,8">
-                <TextBox Name="SearchBox" Grid.Row="0" Margin="0,0,0,6"
-                         Watermark="Filter functions…"/>
-                <ListBox Name="FunctionList" Grid.Row="1"/>
+            <!-- Left: the symbol list. Filter, then click to jump. -->
+            <Grid Grid.Column="0" RowDefinitions="Auto,Auto,*" Margin="8,0,0,8">
+                <TextBox Name="SearchBox" Grid.Row="0" Margin="0,0,0,4"
+                         Watermark="Filter functions by name…"/>
+                <DockPanel Grid.Row="1" Margin="0,0,0,6">
+                    <TextBlock Name="ListCountText" DockPanel.Dock="Right" FontSize="11"
+                               Foreground="#8FA3B8" VerticalAlignment="Center" Text=""/>
+                    <CheckBox Name="SearchBodiesCheck" FontSize="11"
+                              Content="search bodies too"
+                              ToolTip.Tip="Also match the text inside each function, not just its name"/>
+                </DockPanel>
+                <ListBox Name="FunctionList" Grid.Row="2"
+                         FontFamily="Cascadia Mono,Consolas,monospace" FontSize="11"/>
             </Grid>
 
             <GridSplitter Grid.Column="1" ResizeDirection="Columns" Background="Transparent"/>
 
-            <!-- Right: selected signature + editable source (SourceBox is a standalone
-                 TextBox, NOT inside the ListBox item template, so editing is safe). -->
+            <!-- Right: the whole script in the JASS editor, scrolled to the picked function. -->
             <Grid Grid.Column="2" RowDefinitions="Auto,*,Auto" Margin="0,0,8,8">
                 <TextBlock Name="SignatureText" Grid.Row="0" Margin="0,0,0,6"
-                           FontFamily="Consolas,Cascadia Mono,Menlo,monospace"
+                           FontFamily="Cascadia Mono,Consolas,monospace"
+                           Foreground="#C586C0"
                            TextTrimming="CharacterEllipsis"/>
-                <TextBox Name="SourceBox" Grid.Row="1"
-                         Watermark="Select a function to view or edit its source"
-                         AcceptsReturn="True" TextWrapping="NoWrap"
-                         FontFamily="Consolas,Cascadia Mono,Menlo,monospace"
-                         ScrollViewer.VerticalScrollBarVisibility="Auto"
-                         ScrollViewer.HorizontalScrollBarVisibility="Auto"/>
+
+                <controls:JassEditorView Name="Editor" Grid.Row="1"/>
+
                 <DockPanel Grid.Row="2" Margin="0,6,0,0">
                     <Button Name="SaveButton" DockPanel.Dock="Right" Content="Save Edited Map"
                             Margin="6,0,0,0" IsEnabled="False" Click="OnSaveClick"
                             ToolTip.Tip="Write the map to &lt;map&gt;.edited&lt;ext&gt; next to the original (never overwrites it)"/>
                     <Button Name="ApplyButton" DockPanel.Dock="Right" Content="Apply"
                             Margin="6,0,0,0" IsEnabled="False" Click="OnApplyClick"
-                            ToolTip.Tip="Replace the selected function's lines with the editor text (in-memory)"/>
+                            ToolTip.Tip="Put the edited script back into the in-memory map and re-check that it still compiles"/>
+                    <Button Name="RevertButton" DockPanel.Dock="Right" Content="Revert"
+                            Margin="6,0,0,0" IsEnabled="False" Click="OnRevertClick"
+                            ToolTip.Tip="Throw away the unapplied edits and reload the script from the map"/>
+                    <Button Name="CheckButton" DockPanel.Dock="Right" Content="Check"
+                            Margin="6,0,0,0" IsEnabled="False" Click="OnCheckClick"
+                            ToolTip.Tip="Check whether the script in the editor would still compile"/>
                     <TextBlock Name="StatusText" TextWrapping="Wrap"
                                VerticalAlignment="Center" Margin="0,0,8,0" Text=""/>
                 </DockPanel>

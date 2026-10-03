@@ -14,10 +14,10 @@ using Wc3.Studio.Panels;
 namespace Wc3.Studio.Tests;
 
 /// <summary>
-/// Headless drive of the Trigger panel's basic edit surface: select a trigger or
-/// category in the tree, change the editor controls exactly like a user would,
-/// click Apply, and verify that the underlying war3map.wtg mutation reached the
-/// command layer and that the panel raised its dirty event.
+/// Headless drive of the Trigger panel's rename and flag controls: select a trigger or
+/// category in the tree, change the controls exactly like a user would, and verify that
+/// the war3map.wtg mutation reached the command layer, that the panel raised its edited
+/// event, and that the workspace reports the map as edited.
 /// </summary>
 public class TriggerViewTests
 {
@@ -74,7 +74,7 @@ public class TriggerViewTests
     }
 
     [AvaloniaFact]
-    public void Apply_updates_trigger_name_and_flags()
+    public void Rename_and_flag_toggles_reach_the_trigger()
     {
         var doc = Doc();
         var view = new TriggerView();
@@ -86,13 +86,13 @@ public class TriggerViewTests
         view.ShowMap(new MapSession { Current = doc });
 
         SelectTreeItem(view, item => item.Tag is TriggerInfo { Id: 2 });
-
         Field<TextBox>(view, "NameBox").Text = "Renamed Trigger";
-        Field<CheckBox>(view, "EnabledCheckBox").IsChecked = false;
-        Field<CheckBox>(view, "InitiallyOnCheckBox").IsChecked = false;
-        Field<CheckBox>(view, "RunOnMapInitCheckBox").IsChecked = true;
-        Field<Button>(view, "ApplyEditButton")
-            .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Click(view, "RenameButton");
+        // The flag boxes apply on change, each one its own edit.
+        SelectTreeItem(view, item => item.Tag is TriggerInfo { Id: 2 });
+        Field<CheckBox>(view, "EnabledCheck").IsChecked = false;
+        Field<CheckBox>(view, "InitiallyOnCheck").IsChecked = false;
+        Field<CheckBox>(view, "MapInitCheck").IsChecked = true;
         Dispatcher.UIThread.RunJobs();
 
         var changed = TriggerCommand.List(doc).Single(i => i.Id == 2);
@@ -100,11 +100,11 @@ public class TriggerViewTests
         Assert.False(changed.IsEnabled);
         Assert.False(changed.IsInitiallyOn);
         Assert.True(changed.RunOnMapInit);
-        Assert.Equal(1, edited);
+        Assert.Equal(4, edited);
     }
 
     [AvaloniaFact]
-    public void Apply_renames_category_without_trigger_flags()
+    public void Rename_works_on_a_category_too()
     {
         var doc = Doc();
         var view = new TriggerView();
@@ -116,15 +116,10 @@ public class TriggerViewTests
         view.ShowMap(new MapSession { Current = doc });
 
         SelectTreeItem(view, item => item.Tag is TriggerCategoryInfo { Id: 1 });
-
         Field<TextBox>(view, "NameBox").Text = "Renamed Category";
-        Field<Button>(view, "ApplyEditButton")
-            .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        Dispatcher.UIThread.RunJobs();
+        Click(view, "RenameButton");
 
-        var changed = TriggerCommand.List(doc).Single(i => i.Id == 1);
-        Assert.Equal("Renamed Category", changed.Name);
-        Assert.False(Field<StackPanel>(view, "TriggerFlagsPanel").IsVisible);
+        Assert.Equal("Renamed Category", TriggerCommand.List(doc).Single(i => i.Id == 1).Name);
         Assert.Equal(1, edited);
     }
 
@@ -143,14 +138,18 @@ public class TriggerViewTests
 
         SelectTreeItem(triggers, item => item.Tag is TriggerInfo { Id: 2 });
         Field<TextBox>(triggers, "NameBox").Text = "Dirty Trigger";
-        Field<Button>(triggers, "ApplyEditButton")
-            .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        Dispatcher.UIThread.RunJobs();
+        Click(triggers, "RenameButton");
 
         Assert.True(Field<Button>(workspace, "SaveButton").IsEnabled);
         Assert.Equal("Edited triggers (unsaved) - click Save to write it to the map.",
             Field<TextBlock>(workspace, "StatusText").Text);
         Assert.Equal("Dirty Trigger", TriggerCommand.List(doc).Single(i => i.Id == 2).Name);
+    }
+
+    private static void Click(Control owner, string button)
+    {
+        Field<Button>(owner, button).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Dispatcher.UIThread.RunJobs();
     }
 
     private static void SelectTreeItem(TriggerView view, Func<TreeViewItem, bool> match)

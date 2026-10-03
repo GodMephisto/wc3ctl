@@ -108,6 +108,9 @@
             <TabItem Header="Dependencies" Name="DependenciesTab">
                 <panels:DependencyGraphView Name="DependenciesPanel"/>
             </TabItem>
+            <TabItem Header="Hero Audit" Name="HeroWiringTab">
+                <panels:HeroWiringView Name="HeroWiringPanel"/>
+            </TabItem>
         </TabControl>
 
     </DockPanel>

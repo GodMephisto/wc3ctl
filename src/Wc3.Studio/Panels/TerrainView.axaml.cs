@@ -150,8 +150,9 @@ public partial class TerrainView : UserControl, IMapPanel
         try
         {
             _xform = Wc3.Render.TerrainRenderer.GetTransform(session.Current);
-            GlView.SetMap(session.Current, BuildModelResolver(session));
-            GlView.DriveReset(); // fresh map -> default framing
+            // The GL build runs off the UI thread now, so frame the camera once it is ready
+            // (DriveReset needs the built mesh's center and radius).
+            GlView.SetMap(session.Current, BuildModelResolver(session), onReady: () => GlView.DriveReset());
             // Placement owner: keep the user's pick when one is set, else Player 1.
             PlaceOwnerPicker.Load(session.Current, PlaceOwnerPicker.SelectedOwnerId ?? 0);
         }

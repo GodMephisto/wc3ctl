@@ -22,6 +22,8 @@ public static class Wc3McpServer
     {
         var options = new JsonSerializerOptions(McpJsonUtilities.DefaultOptions);
         options.Converters.Add(new JsonStringEnumConverter());
+        // A placed unit's or doodad's scale is a tuple, which printed as {} (see the converter).
+        options.Converters.Add(new Wc3.Commands.ScaleJsonConverter());
         return options;
     }
 

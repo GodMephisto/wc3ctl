@@ -22,7 +22,7 @@
 
         <!-- Dropdown: ONE search box above a display-only list. Never put an
              editable TextBox inside the virtualized rows - recycling/focus wipes
-             in-progress edits (see src/Wc3.Studio/CLAUDE.md). -->
+             in-progress edits. -->
         <Popup Name="DropDown" Placement="BottomEdgeAlignedLeft"
                IsLightDismissEnabled="True">
             <Border Background="#FF23272B" BorderBrush="#33555555"
