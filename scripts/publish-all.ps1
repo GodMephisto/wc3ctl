@@ -37,12 +37,20 @@ foreach ($root in $roots) {
 
         # A locked exe (Studio still open) is the common failure, so report it plainly and keep going
         # rather than aborting the whole run and leaving the other targets stale.
-        & dotnet publish $proj -c $Configuration --self-contained -r $Runtime -o $out | Out-Null
+        # Into a fresh folder, then swapped in. Publishing over the old folder keeps any older-version
+        # DLL whose file date is newer, which once left the CLI unable to start its MCP server.
+        $fresh = "$out.new"
+        if (Test-Path $fresh) { Remove-Item -Recurse -Force $fresh }
+        & dotnet publish $proj -c $Configuration --self-contained -r $Runtime -o $fresh | Out-Null
+        if ($LASTEXITCODE -eq 0 -and (Test-Path $out)) {
+            try { Remove-Item -Recurse -Force $out } catch { $LASTEXITCODE = 1 }
+        }
         if ($LASTEXITCODE -ne 0) {
             Write-Host "  FAILED ($($t.Name)). If this is Studio, close it and re-run." -ForegroundColor Red
             $results += [pscustomobject]@{ Target = $t.Name; Path = $out; Stamp = 'FAILED' }
             continue
         }
+        Move-Item $fresh $out
 
         $exe = Join-Path $out $t.Exe
         $stamp = if (Test-Path $exe) { (Get-Item $exe).LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss') } else { 'missing' }

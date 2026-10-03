@@ -1,0 +1,7 @@
+<Project>
+  <!-- One version for the CLI, Studio and the MCP server inside them. A release tag vX.Y.Z must
+       match it, which the release workflow checks against what the published exe reports. -->
+  <PropertyGroup>
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+</Project>

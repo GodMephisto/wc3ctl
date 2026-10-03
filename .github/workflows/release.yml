@@ -1,0 +1,71 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Test
+        run: dotnet test -c Release --filter "Category!=Corpus&Category!=GameData"
+
+      # Each into a fresh folder. Publishing over an old folder keeps any older-version DLL whose
+      # file date is newer, which once left the CLI unable to start its MCP server.
+      - name: Publish the CLI and Studio
+        run: |
+          dotnet publish src/wc3ctl/wc3ctl.csproj -c Release --self-contained -r win-x64 -o stage/wc3ctl
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          dotnet publish src/Wc3.Studio/Wc3.Studio.csproj -c Release --self-contained -r win-x64 -o stage/studio
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          foreach ($d in 'stage/wc3ctl', 'stage/studio') {
+            Copy-Item LICENSE, NOTICE, THIRD-PARTY-NOTICES.md, CREDITS.md -Destination $d
+            if (!(Test-Path "$d/CascLib.dll")) { Write-Error "CascLib.dll missing from $d"; exit 1 }
+          }
+          if (!(Test-Path stage/wc3ctl/wc3ctl.exe)) { Write-Error "wc3ctl.exe missing"; exit 1 }
+          if (!(Test-Path stage/studio/Wc3.Studio.exe)) { Write-Error "Wc3.Studio.exe missing"; exit 1 }
+
+      # The tag and the exe must carry one version.
+      - name: Match the exe's version to the tag
+        run: |
+          $out = (stage/wc3ctl/wc3ctl.exe mcp version) | Out-String
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          $want = "${{ github.ref_name }}".TrimStart('v')
+          if ($out.Trim() -ne "wc3ctl mcp $want") { Write-Error "exe says '$($out.Trim())', tag is $want"; exit 1 }
+
+      # Start the published server the way an AI app does and ask it for its tools.
+      - name: Smoke test the MCP server in the published CLI
+        run: pwsh scripts/smoke-mcp.ps1 -Exe stage/wc3ctl/wc3ctl.exe -Arguments 'mcp serve'
+
+      - name: Create zips and checksums
+        run: |
+          $tag = "${{ github.ref_name }}"
+          foreach ($pair in @(@('stage/wc3ctl', "wc3ctl-$tag-win-x64.zip"), @('stage/studio', "wc3ctl-studio-$tag-win-x64.zip"))) {
+            Compress-Archive -Path "$($pair[0])/*" -DestinationPath $pair[1]
+            $hash = (Get-FileHash -Path $pair[1] -Algorithm SHA256).Hash.ToLowerInvariant()
+            Set-Content -Path "$($pair[1]).sha256" -Value "$hash  $($pair[1])" -NoNewline -Encoding ascii
+          }
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh release create ${{ github.ref_name }}
+          wc3ctl-${{ github.ref_name }}-win-x64.zip
+          wc3ctl-${{ github.ref_name }}-win-x64.zip.sha256
+          wc3ctl-studio-${{ github.ref_name }}-win-x64.zip
+          wc3ctl-studio-${{ github.ref_name }}-win-x64.zip.sha256
+          --generate-notes

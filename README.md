@@ -55,13 +55,35 @@ in a command reaches all of them.
 ## What you need
 
 - 64-bit Windows. The game data reader (CascLib) is a Windows library.
-- The .NET 8 SDK to build it.
 - Warcraft III Reforged, only for the commands that read base game data. Without
   it, commands work on the map's own data and say so.
+- Nothing else. The release carries its own .NET.
 
-## Build and install
+## Install
 
-There is no prebuilt release yet, so build it from source in PowerShell.
+Open PowerShell and run
+
+```powershell
+irm https://raw.githubusercontent.com/GodMephisto/wc3ctl/master/install.ps1 | iex
+```
+
+That downloads the latest release and checks its SHA-256. It puts `wc3ctl` in
+`%LOCALAPPDATA%\Programs\wc3ctl` and on your PATH, adds **wc3ctl Studio** to the
+Start menu, and sets up every supported AI app it finds to use the MCP server.
+No admin rights are needed. Run the same line again to update. Open a new
+terminal afterwards so `wc3ctl` is found, and restart any AI app.
+
+To skip parts of it, download `install.ps1` and run it with `-NoStudio`,
+`-NoRegister` (no AI app setup) or `-NoPath`.
+
+Prefer to do it by hand? The [Releases page](https://github.com/GodMephisto/wc3ctl/releases)
+has `wc3ctl-<version>-win-x64.zip` (the CLI and MCP server) and
+`wc3ctl-studio-<version>-win-x64.zip` (the editor), each with a `.sha256`.
+Unzip them anywhere and keep `CascLib.dll` beside each exe.
+
+## Build from source
+
+With the .NET 8 SDK installed, in PowerShell,
 
 ```powershell
 git clone https://github.com/GodMephisto/wc3ctl
@@ -143,8 +165,10 @@ tree and drops the ported skill code.
 
 ## Use it from an AI app
 
+The installer already did this. To redo it, or after building from source, run
+
 ```powershell
-.\dist\wc3ctl.exe mcp install --all
+wc3ctl mcp install --all
 ```
 
 That registers `wc3ctl.exe mcp serve` with every supported AI app it finds and
