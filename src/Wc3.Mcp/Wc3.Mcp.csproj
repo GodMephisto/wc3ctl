@@ -6,7 +6,17 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
+    <!-- The server's identity (see ServerIdentity.cs). The public wc3-mcp repository is exported
+         from this source and overrides these, with AssemblyName and Version, in its
+         Directory.Build.props, so this file never has to differ between the two. -->
+    <McpProductId Condition="'$(McpProductId)' == ''">wc3ctl</McpProductId>
+    <McpServerName Condition="'$(McpServerName)' == ''">wc3ctl</McpServerName>
   </PropertyGroup>
+
+  <ItemGroup>
+    <AssemblyMetadata Include="McpProductId" Value="$(McpProductId)" />
+    <AssemblyMetadata Include="McpServerName" Value="$(McpServerName)" />
+  </ItemGroup>
 
   <ItemGroup>
     <!-- Official MCP C# SDK (stable). Its Microsoft.Extensions.* transitives stay

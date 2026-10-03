@@ -240,11 +240,11 @@ public static class CodexToml
 /// <summary>Writes a config file safely, keeping the previous version beside it.</summary>
 public static class ConfigFile
 {
-    /// <summary>The suffix of the copy kept before each change.</summary>
-    public const string BackupSuffix = ".wc3ctl.bak";
+    /// <summary>The suffix of the copy kept before each change, <c>.wc3ctl.bak</c> or <c>.wc3-mcp.bak</c>.</summary>
+    public static string BackupSuffix { get; } = "." + ServerIdentity.ProductId + ".bak";
 
     /// <summary>
-    /// Copies the current file to <c>NAME.wc3ctl.bak</c>, writes the new text to a temp file in the
+    /// Copies the current file to NAME plus <see cref="BackupSuffix"/>, writes the new text to a temp file in the
     /// same folder, then moves it into place, so a crash never leaves a half-written config.
     /// </summary>
     public static void ReplaceWithBackup(string path, string text)

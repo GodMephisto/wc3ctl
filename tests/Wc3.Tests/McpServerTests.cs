@@ -46,10 +46,25 @@ public class McpServerTests
     {
         await WithClient(async (client, ct) =>
         {
-            Assert.Equal("wc3ctl", client.ServerInfo.Name);
+            Assert.Equal(ServerIdentity.ProductId, client.ServerInfo.Name);
+            Assert.Equal(ServerIdentity.Version, client.ServerInfo.Version);
             var tools = await client.ListToolsAsync(cancellationToken: ct);
             Assert.Equal(ExpectedTools, tools.Select(t => t.Name).OrderBy(n => n, StringComparer.Ordinal).ToArray());
         });
+    }
+
+    [Fact]
+    public void The_identity_comes_from_the_build_not_the_fallbacks()
+    {
+        // Both values must be written into the assembly by Wc3.Mcp.csproj. If the metadata went
+        // missing, the fallbacks would quietly make the public build call itself wc3ctl.
+        var metadata = typeof(ServerIdentity).Assembly
+            .GetCustomAttributes(typeof(System.Reflection.AssemblyMetadataAttribute), false)
+            .Cast<System.Reflection.AssemblyMetadataAttribute>()
+            .ToDictionary(a => a.Key, a => a.Value);
+        Assert.Equal(metadata["McpProductId"], ServerIdentity.ProductId);
+        Assert.Equal(metadata["McpServerName"], ServerIdentity.ServerName);
+        Assert.Equal("." + ServerIdentity.ProductId + ".bak", Wc3.Mcp.Setup.ConfigFile.BackupSuffix);
     }
 
     [Fact]

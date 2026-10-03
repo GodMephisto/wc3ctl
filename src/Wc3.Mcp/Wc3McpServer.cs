@@ -35,7 +35,7 @@ public static class Wc3McpServer
             tools.Add(tool);
         return new McpServerOptions
         {
-            ServerInfo = new Implementation { Name = "wc3ctl", Version = "0.1.0" },
+            ServerInfo = new Implementation { Name = ServerIdentity.ProductId, Version = ServerIdentity.Version },
             ToolCollection = tools,
         };
     }

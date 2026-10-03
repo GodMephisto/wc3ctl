@@ -9,14 +9,14 @@ namespace Wc3.Mcp.Setup;
 /// </summary>
 public sealed record SetupProduct(string Command, string DefaultServerName, IReadOnlyList<string> ServeArgs, string Version)
 {
-    private static string AssemblyVersion =>
-        typeof(SetupProduct).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
-
-    /// <summary>The MCP server run as its own exe, which is the server when started with no arguments.</summary>
+    /// <summary>
+    /// The MCP server run as its own exe, which is the server when started with no arguments.
+    /// Wc3.Mcp in this repository, wc3-mcp (registered as "wc3") from the public one.
+    /// </summary>
     public static SetupProduct Standalone { get; } =
-        new("Wc3.Mcp", "wc3ctl", Array.Empty<string>(), AssemblyVersion);
+        new(ServerIdentity.ExeName, ServerIdentity.ServerName, Array.Empty<string>(), ServerIdentity.Version);
 
     /// <summary>The server reached through the CLI, as 'wc3ctl mcp serve'.</summary>
     public static SetupProduct Wc3ctl { get; } =
-        new("wc3ctl mcp", "wc3ctl", new[] { "mcp", "serve" }, AssemblyVersion);
+        new("wc3ctl mcp", "wc3ctl", new[] { "mcp", "serve" }, ServerIdentity.Version);
 }
