@@ -41,7 +41,14 @@ public static class TargetBuildSettings
 {
     private const string SettingsKey = "targetBuild";
 
-    private static readonly Lazy<string?> SettingsDir = new(() =>
+    private static Lazy<string?> SettingsDir = new(() =>
+    {
+        var envDir = Environment.GetEnvironmentVariable("WC3CTL_SETTINGS_DIR");
+        return string.IsNullOrWhiteSpace(envDir) ? null : envDir;
+    });
+
+    /// <summary>Reset the cached settings directory. For testing only.</summary>
+    internal static void ResetSettingsDir() => SettingsDir = new(() =>
     {
         var envDir = Environment.GetEnvironmentVariable("WC3CTL_SETTINGS_DIR");
         return string.IsNullOrWhiteSpace(envDir) ? null : envDir;
@@ -77,7 +84,16 @@ public static class TargetBuildSettings
     /// </param>
     public static TargetBuildResult Get(string? option = null, string? schemasDir = null)
     {
-        // Tier 1 explicit option.
+        // Tier 1: explicit option.
+        if (option is not null && option.Length > 0)
+            return new TargetBuildResult(option, TargetSource.Option);
+
+        // Tier 2: environment variable.
+        var envBuild = Environment.GetEnvironmentVariable("WC3_TARGET_BUILD");
+        if (envBuild is not null && envBuild.Length > 0)
+            return new TargetBuildResult(envBuild, TargetSource.Environment);
+
+        // Tier 3: settings file.
         try
         {
             string path = FilePath;
@@ -211,35 +227,11 @@ public static class TargetBuildSettings
             if (!File.Exists(manifestPath)) continue;
 
             var schema = GameSchemaCommand.Load(subDir);
-            var sections = new List<string>();
-
-            if (schema.Script is not null)
-            {
-                foreach (var entry in schema.Script)
-                {
-                    // Use the short name (scripts/common.j -> "script").
-                    string name = entry.Key.Split('/').LastOrDefault() ?? entry.Key;
-                    sections.Add("script:" + name);
-                }
-            }
-            if (schema.Objects is not null)
-            {
-                foreach (var (schemaFile, _) in schema.Objects)
-                {
-                    sections.Add("objects:" + schemaFile);
-                }
-            }
-            // Add trigger section if present.
-            if (schema.Triggers is not null)
-            {
-                sections.Add("triggers:" + string.Join(",", schema.Triggers.Categories));
-                sections.Add("triggers:" + string.Join(",", schema.Triggers.Types.Select(t => t.Name)));
-                sections.Add("triggers:" + string.Join(",", schema.Triggers.Functions.Select(f => f.Name)));
-            }
 
             bool hasObjects = schema.Objects is not null && schema.Objects.Count > 0;
             if (fullOnly && !hasObjects) continue;
 
+            var sections = GameSchemaCommand.Sections(schema);
             result.Add(new BuildInfo(schema.Build, sections));
         }
 

@@ -7,9 +7,51 @@ namespace Wc3Ctl;
 
 public static class Program
 {
+    /// <summary>Convert TargetSource enum to plain English for display.</summary>
+    private static string TargetSourceLabel(TargetSource src) => src switch
+    {
+        TargetSource.Option => "option",
+        TargetSource.Environment => "environment variable",
+        TargetSource.Settings => "settings",
+        TargetSource.Default => "default",
+        _ => "unknown",
+    };
+
+    /// <summary>Game install build version, or "not found".</summary>
+    private static string GameInstallLine(string? schemasDir)
+    {
+        try
+        {
+            string? installDir = Wc3.GameData.GameInstall.Locate();
+            if (installDir is not null)
+            {
+                string? ib = Wc3.GameData.GameInstall.ReadBuildVersion(installDir);
+                if (ib is not null) return ib;
+            }
+        }
+        catch { /* no game install */ }
+        return "not found";
+    }
+
     public static async Task<int> Main(string[] args)
     {
         if (McpCommand.TryRun(args) is { } mcp) return await mcp;
+
+        // Handle --version before any command processing.
+        // System.CommandLine auto-adds a --version handler, but we override it here.
+        if (Array.IndexOf(args, "--version") >= 0)
+        {
+            var asm = typeof(Program).Assembly;
+            var v = asm.GetName().Version;
+            Console.WriteLine(v?.ToString(3) ?? "0.0.0");
+            try
+            {
+                var settings = TargetBuildSettings.Get();
+                Console.WriteLine("target  " + settings.Build + "  (" + TargetSourceLabel(settings.Source) + "), game install " + GameInstallLine(null));
+            }
+            catch { /* schemas unavailable */ }
+            return 0;
+        }
 
         var root = BuildRoot(out var exitCode);
         int parseResult = await root.InvokeAsync(args);
@@ -3001,7 +3043,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
             {
                 // Resolve default from settings.
                 var settings = TargetBuildSettings.Get(option: null, schemasDir: schemas);
-                Console.WriteLine("target  " + settings.Build + "  (from " + settings.Source + ")");
+                Console.WriteLine("target  " + settings.Build + "  (" + TargetSourceLabel(settings.Source) + "), game install " + GameInstallLine(schemas));
 
                 try
                 {
@@ -3411,14 +3453,22 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
 
             // Resolve target: option > default from settings.
             string actualTarget;
+            TargetSource source;
             if (targetArg is not null)
             {
                 actualTarget = targetArg;
+                source = TargetSource.Option;
             }
             else
             {
                 var settings = TargetBuildSettings.Get(option: null, schemasDir: schemas);
                 actualTarget = settings.Build;
+                source = settings.Source;
+            }
+
+            if (!json)
+            {
+                Console.WriteLine("target  " + actualTarget + "  (" + TargetSourceLabel(source) + "), game install " + GameInstallLine(schemas));
             }
 
             var result = TargetCompatCommand.Execute(map, actualTarget, schemas);
@@ -3444,34 +3494,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         {
             var schemas = ctx.ParseResult.GetValueForOption(targetSchemas);
             var result = TargetBuildSettings.Get(schemasDir: schemas);
-            // Try to list sections for this build.
-            try
-            {
-                var builds = TargetBuildSettings.List(schemasDir: schemas);
-                var info = builds.FirstOrDefault(b => b.Build == result.Build);
-                Console.Write("target  " + result.Build + "  (from " + result.Source + ")");
-                if (info is not null && info.Sections.Count > 0)
-                {
-                    Console.Write("  sections");
-                    foreach (var s in info.Sections) Console.Write(" " + s);
-                }
-                // Also show installed game build.
-                try
-                {
-                    string? installDir = Wc3.GameData.GameInstall.Locate();
-                    if (installDir is not null)
-                    {
-                        string? ib = Wc3.GameData.GameInstall.ReadBuildVersion(installDir);
-                        if (ib is not null) Console.Write("  game " + ib);
-                    }
-                }
-                catch { /* no game install, skip */ }
-                Console.WriteLine();
-            }
-            catch (DirectoryNotFoundException)
-            {
-                Console.WriteLine("target  " + result.Build + "  (from " + result.Source + ")");
-            }
+            Console.WriteLine("target  " + result.Build + "  (" + TargetSourceLabel(result.Source) + "), game install " + GameInstallLine(schemas));
         }));
         // target set -> set the target.
         var targetSet = new Command("set", "Set the target build.");
@@ -3509,8 +3532,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
                     Console.Write(b.Build);
                     if (b.Sections.Count > 0)
                     {
-                        Console.Write("  sections");
-                        foreach (var s in b.Sections) Console.Write(" " + s);
+                        Console.Write("  sections " + string.Join(", ", b.Sections));
                     }
                     Console.WriteLine();
                 }
