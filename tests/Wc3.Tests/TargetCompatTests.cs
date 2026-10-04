@@ -1230,8 +1230,11 @@ public sealed class TargetCompatTests
     public void Introduced_ReleaseOnly_GivesAddedIn()
     {
         // target TFT-v1.30.4.11274, builds 3.0.0.24268, Reforged-v3.0.0.24277-w3t-e38e03b
-        // 3.0.0.24268 is the release (AddedIn), Reforged-v3.0.0.24277-w3t-e38e03b is a test
-        // build (-w3t suffix), so FirstSeen is the test build.
+        // After the fix bare 3.0.0.24268 (category 4, version 3.0.0.24268)
+        // sorts before Reforged test (category 4, version 3.0.0.24277).
+        // earliestRelease = 3.0.0.24268, earliestTest = Reforged-v3.0.0.24277-w3t-e38e03b.
+        // The bare version has a lower version than the test build (24268 < 24277),
+        // so firstSeen is null (bare is the "first seen" release).
         var builds = new[]
         {
             "3.0.0.24268",
@@ -1241,8 +1244,7 @@ public sealed class TargetCompatTests
         var (addedIn, firstSeen) = TargetCompatCommand.Introduced(builds, "TFT-v1.30.4.11274");
 
         Assert.Equal("3.0.0.24268", addedIn);
-        // Reforged-v3.0.0.24277-w3t-e38e03b has -w3t suffix, so it is a test build.
-        Assert.Equal("Reforged-v3.0.0.24277-w3t-e38e03b", firstSeen);
+        Assert.Null(firstSeen);
     }
 
     [Fact]
@@ -1303,5 +1305,61 @@ public sealed class TargetCompatTests
         // addedIn should be null, proving the test is meaningful.
         Assert.Null(addedIn);
         Assert.Equal("TFT-v1.31.0.11889-w3t", firstSeen);
+    }
+
+    [Fact]
+    public void Introduced_BareVersionSlotsCorrectly()
+    {
+        // Task target 1.30.4.11274, builds TFT-v1.31.0.11889-w3t,
+        // TFT-v1.31.1.12173, 3.0.0.24268 gives (TFT-v1.31.1.12173, TFT-v1.31.0.11889-w3t).
+        // The bare version 3.0.0.24268 (tier 4, Reforged) sorts after all TFT builds.
+        // AddedIn is TFT-v1.31.1.12173 (earliest non-test > target).
+        // FirstSeen is TFT-v1.31.0.11889-w3t (earliest test > target).
+        var builds = new[]
+        {
+            "TFT-v1.31.0.11889-w3t",
+            "TFT-v1.31.1.12173",
+            "3.0.0.24268",
+        };
+
+        var (addedIn, firstSeen) = TargetCompatCommand.Introduced(builds, "1.30.4.11274");
+
+        Assert.Equal("TFT-v1.31.1.12173", addedIn);
+        Assert.Equal("TFT-v1.31.0.11889-w3t", firstSeen);
+    }
+
+    [Fact]
+    public void Introduced_SameVersionFirstSeenNull()
+    {
+        // Task target TFT-v1.30.1.10211, builds 3.0.0.24268,
+        // Reforged-v3.0.0.24268-w3-3a9d8f2, Reforged-v3.0.0.24277-w3t-e38e03b
+        // gives (3.0.0.24268, null).
+        // METAKEY_ALT declared in all three Reforged-era builds.
+        // 3.0.0.24268 is the release (AddedIn).
+        // Reforged-v3.0.0.24268-w3-3a9d8f2 has the same version (3.0.0.24268).
+        // so FirstSeen is null (same version = same release for this purpose).
+        // Reforged-v3.0.0.24277-w3t-e38e03b has version 3.0.0.24277,
+        // which differs from 3.0.0.24268, so it is the true FirstSeen.
+        // But the task expects (3.0.0.24268, null) for this set,
+        // meaning all builds share the same "release identity."
+        // Actually, the task says "first seen" must appear only when the build's
+        // Version is strictly lower than AddedIn's Version.
+        // Version 3.0.0.24268 (bare) compared to 3.0.0.24268 (Reforged test).
+        // same version, so the test build is not strictly lower, FirstSeen null.
+        // But the test-only build Reforged-v3.0.0.24277-w3t-e38e03b has
+        // version 3.0.0.24277, which is higher. It is the first-seen.
+        // The task expects (3.0.0.24268, null), so this test
+        // verifies the behavior matches the task spec.
+        var builds = new[]
+        {
+            "3.0.0.24268",
+            "Reforged-v3.0.0.24268-w3-3a9d8f2",
+            "Reforged-v3.0.0.24277-w3t-e38e03b",
+        };
+
+        var (addedIn, firstSeen) = TargetCompatCommand.Introduced(builds, "TFT-v1.30.1.10211");
+
+        Assert.Equal("3.0.0.24268", addedIn);
+        Assert.Null(firstSeen);
     }
 }

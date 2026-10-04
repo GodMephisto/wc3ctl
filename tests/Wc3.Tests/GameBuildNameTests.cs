@@ -187,7 +187,9 @@ public class GameBuildNameTests
     }
 
     /// <summary>
-    /// Verify that release sorts before test of the same version.
+    /// Verify that release (bare, no test flag) sorts before test of the same
+    /// version. With the fix bare 3.0.0.24268 and Reforged test both get
+    /// category 4, same version 3.0.0.24268, but bare.IsTest=false < true.
     /// </summary>
     [Fact]
     public void ReleaseBeforeTest_SameVersion()
@@ -201,10 +203,11 @@ public class GameBuildNameTests
         Assert.False(bare.IsTest);
         Assert.False(bare.IsBeta);
 
-        // Bare version 3.0.0.24268 should sort after the Reforged test build
-        // because the Reforged category (4) sorts before Bare (5).
-        Assert.True(Gbn.Compare(bn, bare) < 0,
-            "Reforged test build should sort before bare version");
+        // With the fix bare 3.0.0.24268 (category 4, IsTest=false) sorts
+        // before Reforged test (category 4, IsTest=true) because bare releases
+        // come before test builds of the same version.
+        Assert.True(Gbn.Compare(bare, bn) < 0,
+            "bare version should sort before Reforged test build of same version");
     }
 
     private static List<string> ReadBuildNames(string schemasDir)
@@ -237,5 +240,31 @@ public class GameBuildNameTests
         int idxA = byName.Values.ToList().FindIndex(p => p.Raw == a);
         int idxB = byName.Values.ToList().FindIndex(p => p.Raw == b);
         Assert.True(idxA < idxB, $"{a} should sort before {b} (idx {idxA} < {idxB})");
+    }
+
+    /// <summary>
+    /// Task 13e: bare version sorts between named builds of the same tier.
+    /// 1.30.4.11274 (TFT tier) should sort after TFT-v1.30.3.11235 and
+    /// before TFT-v1.31.0.11889-w3t.
+    /// 3.0.0.24268 (Reforged tier) should sort after Reforged-v2.0.4.23745-w3-9a94ff7.
+    /// </summary>
+    [Fact]
+    public void BareVersionSortsBetweenNamedBuildsOfSameTier()
+    {
+        var bare130 = Gbn.Parse("1.30.4.11274");
+        var bare300 = Gbn.Parse("3.0.0.24268");
+        var tft1303 = Gbn.Parse("TFT-v1.30.3.11235");
+        var tft1310 = Gbn.Parse("TFT-v1.31.0.11889-w3t");
+        var reforged204 = Gbn.Parse("Reforged-v2.0.4.23745-w3-9a94ff7");
+
+        // 1.30.4.11274 after TFT-v1.30.3.11235
+        Assert.True(Gbn.Compare(bare130, tft1303) > 0,
+            "1.30.4.11274 should sort after TFT-v1.30.3.11235");
+        // 1.30.4.11274 before TFT-v1.31.0.11889-w3t
+        Assert.True(Gbn.Compare(bare130, tft1310) < 0,
+            "1.30.4.11274 should sort before TFT-v1.31.0.11889-w3t");
+        // 3.0.0.24268 after Reforged-v2.0.4.23745-w3-9a94ff7
+        Assert.True(Gbn.Compare(bare300, reforged204) > 0,
+            "3.0.0.24268 should sort after Reforged-v2.0.4.23745-w3-9a94ff7");
     }
 }

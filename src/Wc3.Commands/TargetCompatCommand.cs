@@ -238,7 +238,8 @@ public static class TargetCompatCommand
     /// <param name="target">The target build name string.</param>
     /// <returns>(AddedIn, FirstSeen). AddedIn is the earliest non-test/non-beta build
     /// strictly newer than the target. FirstSeen is the earliest build (tests included)
-    /// strictly newer than the target. If FirstSeen equals AddedIn, FirstSeen is null.
+    /// strictly newer than the target, only when that build's Version is strictly lower
+    /// than AddedIn's Version. If FirstSeen equals AddedIn, FirstSeen is null.
     /// If AddedIn is null but test builds exist, AddedIn stays null and FirstSeen is
     /// the earliest test build.</returns>
     /// </summary>
@@ -294,8 +295,14 @@ public static class TargetCompatCommand
             return (null, earliestTest);
         }
 
-        return (earliestRelease,
-            earliestTest == earliestRelease ? null : earliestTest);
+        // FirstSeen is only included when that build sorts before AddedIn,
+        // meaning it "actually appeared" first. Two builds with the same
+        // version are the same release for this purpose.
+        if (earliestTest is not null && Gbn.Compare(Gbn.Parse(earliestTest), Gbn.Parse(earliestRelease)) < 0)
+        {
+            return (earliestRelease, earliestTest);
+        }
+        return (earliestRelease, null);
     }
 
     /// <summary>

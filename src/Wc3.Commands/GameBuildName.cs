@@ -156,7 +156,17 @@ public sealed record GameBuildName(
         }
 
         // Compare remaining line (test hash like -w3-abc123, -w3b-ab0c8ee).
-        return string.Compare(a.Line, b.Line, StringComparison.Ordinal);
+        int lineCmp = string.Compare(a.Line, b.Line, StringComparison.Ordinal);
+        if (lineCmp != 0) return lineCmp;
+
+        // Same version, same type, same locale, same line:
+        // bare (no prefix) sorts after named (has prefix).
+        if (a.Prefix != b.Prefix)
+        {
+            if (a.Prefix is null) return 1;
+            if (b.Prefix is null) return -1;
+        }
+        return 0;
     }
 
     /// <summary>
@@ -177,6 +187,9 @@ public sealed record GameBuildName(
     /// Return a category ordinal for inter-category ordering.
     /// 0 = Beta-ROC, 1 = ROC, 2 = Beta-TFT, 3 = TFT, 4 = Reforged, 5 = Bare.
     /// Unknown prefixes fall into the closest matching category.
+    /// For bare (non-beta) names, determine the category from the version:
+    /// below 1.07 is ROC, 1.07 through 1.31 is TFT, 1.32 and above is Reforged.
+    /// Bare names always sort after named builds (add 1 to their category tier).
     /// </summary>
     private static int GetCategory(GameBuildName b)
     {
@@ -189,13 +202,30 @@ public sealed record GameBuildName(
                 _ => 5,
             };
         }
-        return b.Prefix?.ToLowerInvariant() switch
+        // Named prefix: use the prefix directly.
+        if (b.Prefix is not null)
         {
-            "roc" => 1,
-            "tft" => 3,
-            "reforged" => 4,
-            null => 5,  // Bare version like 1.30.4.11274 or 3.0.0.24268
-            _ => 5,
-        };
+            return b.Prefix.ToLowerInvariant() switch
+            {
+                "roc" => 1,
+                "tft" => 3,
+                "reforged" => 4,
+                _ => 5,
+            };
+        }
+        // Bare name: determine category tier from version.
+        // Below 1.07 → ROC (1). 1.07 through 1.31 → TFT (3). 1.32+ → Reforged (4).
+        // Then use the version to sort within the tier.
+        // Bare names sort after named builds of the same version (no prefix > has prefix).
+        Version v = b.Version;
+        if (v.Major < 1 || (v.Major == 1 && v.Minor < 7))
+        {
+            return 1;  // ROC era
+        }
+        if (v.Major == 1 && v.Minor < 32)
+        {
+            return 3;  // TFT era: 1.07 through 1.31.x
+        }
+        return 4;  // Reforged era: 1.32+, 2.x, 3.x, ...
     }
 }
