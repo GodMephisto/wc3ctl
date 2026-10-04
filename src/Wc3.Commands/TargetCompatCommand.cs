@@ -58,33 +58,23 @@ public static class TargetCompatCommand
         // Resolve schemasDir.
         var resolvedSchemas = ResolveSchemasDir(schemasDir);
 
-        // Build the "any schema" union for this schemas directory.
+        // Build a single identifier-to-builds index across all schemas.
         var allNatives = new Dictionary<string, JassNativeDecl>(StringComparer.Ordinal);
         var allGlobals = new Dictionary<string, JassGlobalDecl>(StringComparer.Ordinal);
         var allTypes = new Dictionary<string, JassTypeDecl>(StringComparer.Ordinal);
         var allFunctions = new Dictionary<string, JassFunctionDecl>(StringComparer.Ordinal);
-        var newestBuildForNative = new Dictionary<string, string>(StringComparer.Ordinal);
-        var newestBuildForGlobal = new Dictionary<string, string>(StringComparer.Ordinal);
-        var newestBuildForType = new Dictionary<string, string>(StringComparer.Ordinal);
-        var newestBuildForFunction = new Dictionary<string, string>(StringComparer.Ordinal);
-
-        var earliestBuildForNative = new Dictionary<string, string>(StringComparer.Ordinal);
-        var earliestBuildForGlobal = new Dictionary<string, string>(StringComparer.Ordinal);
-        var earliestBuildForType = new Dictionary<string, string>(StringComparer.Ordinal);
-        var earliestBuildForFunction = new Dictionary<string, string>(StringComparer.Ordinal);
+        var identifierBuilds = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
 
         BuildUnionIndex(resolvedSchemas, allNatives, allGlobals, allTypes, allFunctions,
-            newestBuildForNative, newestBuildForGlobal, newestBuildForType, newestBuildForFunction,
-            earliestBuildForNative, earliestBuildForGlobal, earliestBuildForType, earliestBuildForFunction);
+            identifierBuilds);
 
         // Load the map.
         MapDocument doc = MapDocument.Load(mapPath);
 
         // 1. Script check (Compile).
-        CheckScript(doc, target, resolvedSchemas, allNatives, allGlobals, allTypes, allFunctions,
-            newestBuildForNative, newestBuildForGlobal, newestBuildForType, newestBuildForFunction,
-            earliestBuildForNative, earliestBuildForGlobal, earliestBuildForType, earliestBuildForFunction,
-            findings, notChecked);
+        CheckScript(doc, target, resolvedSchemas,
+            allNatives, allGlobals, allTypes, allFunctions,
+            identifierBuilds, findings, notChecked);
 
         // 2. Display check (object fields).
         CheckObjects(doc, target, resolvedSchemas, findings, notChecked);
@@ -128,21 +118,17 @@ public static class TargetCompatCommand
             + "<AppContext.BaseDirectory>/schemas or walk up from the base directory to data/schemas.");
     }
 
-    /// <summary>Build a union index across all schema folders, keyed by newest and earliest build.</summary>
+    /// <summary>
+    /// Build a union index across all schema folders. One dictionary maps each
+    /// identifier name to all build names that declare it, regardless of kind.
+    /// </summary>
     private static void BuildUnionIndex(
         string schemasDir,
         Dictionary<string, JassNativeDecl> allNatives,
         Dictionary<string, JassGlobalDecl> allGlobals,
         Dictionary<string, JassTypeDecl> allTypes,
         Dictionary<string, JassFunctionDecl> allFunctions,
-        Dictionary<string, string> newestBuildForNative,
-        Dictionary<string, string> newestBuildForGlobal,
-        Dictionary<string, string> newestBuildForType,
-        Dictionary<string, string> newestBuildForFunction,
-        Dictionary<string, string> earliestBuildForNative,
-        Dictionary<string, string> earliestBuildForGlobal,
-        Dictionary<string, string> earliestBuildForType,
-        Dictionary<string, string> earliestBuildForFunction)
+        Dictionary<string, HashSet<string>> identifierBuilds)
     {
         foreach (var subDir in Directory.EnumerateDirectories(schemasDir))
         {
@@ -166,112 +152,44 @@ public static class TargetCompatCommand
                 foreach (var nat in api.Natives)
                 {
                     if (!allNatives.ContainsKey(nat.Name))
-                    {
                         allNatives[nat.Name] = nat;
-                        newestBuildForNative[nat.Name] = build;
-                        earliestBuildForNative[nat.Name] = build;
-                    }
-                    else if (Gbn.Compare(Gbn.Parse(build), Gbn.Parse(newestBuildForNative[nat.Name])) > 0)
-                    {
-                        newestBuildForNative[nat.Name] = build;
-                    }
-                    else if (earliestBuildForNative.TryGetValue(nat.Name, out var earliestNativeBuild)
-                        && (Gbn.Compare(Gbn.Parse(build), Gbn.Parse(earliestNativeBuild)) < 0
-                            || (Gbn.Compare(Gbn.Parse(build), Gbn.Parse(earliestNativeBuild)) == 0
-                                && Gbn.Parse(build).IsTest && !Gbn.Parse(earliestNativeBuild).IsTest)))
-                    {
-                        if (Gbn.Parse(build).Prefix != null)
-                        {
-                            earliestBuildForNative[nat.Name] = build;
-                        }
-                    }
+                    AddBuild(identifierBuilds, nat.Name, build);
                 }
 
                 foreach (var gl in api.Globals)
                 {
                     if (!allGlobals.ContainsKey(gl.Name))
-                    {
                         allGlobals[gl.Name] = gl;
-                        newestBuildForGlobal[gl.Name] = build;
-                        if (Gbn.Parse(build).Prefix != null)
-                        {
-                            earliestBuildForGlobal[gl.Name] = build;
-                        }
-                    }
-                    else if (Gbn.Compare(Gbn.Parse(build), Gbn.Parse(newestBuildForGlobal[gl.Name])) > 0)
-                    {
-                        newestBuildForGlobal[gl.Name] = build;
-                    }
-                    else if (earliestBuildForGlobal.TryGetValue(gl.Name, out var earliestGlobalBuild)
-                        && (Gbn.Compare(Gbn.Parse(build), Gbn.Parse(earliestGlobalBuild)) < 0
-                            || (Gbn.Compare(Gbn.Parse(build), Gbn.Parse(earliestGlobalBuild)) == 0
-                                && Gbn.Parse(build).IsTest && !Gbn.Parse(earliestGlobalBuild).IsTest)))
-                    {
-                        if (Gbn.Parse(build).Prefix != null)
-                        {
-                            earliestBuildForGlobal[gl.Name] = build;
-                        }
-                    }
+                    AddBuild(identifierBuilds, gl.Name, build);
                 }
 
                 foreach (var tp in api.Types)
                 {
                     if (!allTypes.ContainsKey(tp.Name))
-                    {
                         allTypes[tp.Name] = tp;
-                        newestBuildForType[tp.Name] = build;
-                        if (Gbn.Parse(build).Prefix != null)
-                        {
-                            earliestBuildForType[tp.Name] = build;
-                        }
-                    }
-                    else if (Gbn.Compare(Gbn.Parse(build), Gbn.Parse(newestBuildForType[tp.Name])) > 0)
-                    {
-                        newestBuildForType[tp.Name] = build;
-                    }
-                    else if (earliestBuildForType.TryGetValue(tp.Name, out var earliestTypeBuild)
-                        && (Gbn.Compare(Gbn.Parse(build), Gbn.Parse(earliestTypeBuild)) < 0
-                            || (Gbn.Compare(Gbn.Parse(build), Gbn.Parse(earliestTypeBuild)) == 0
-                                && Gbn.Parse(build).IsTest && !Gbn.Parse(earliestTypeBuild).IsTest)))
-                    {
-                        if (Gbn.Parse(build).Prefix != null)
-                        {
-                            earliestBuildForType[tp.Name] = build;
-                        }
-                    }
+                    AddBuild(identifierBuilds, tp.Name, build);
                 }
 
                 foreach (var fn in api.Functions)
                 {
                     if (!allFunctions.ContainsKey(fn.Name))
-                    {
                         allFunctions[fn.Name] = fn;
-                        newestBuildForFunction[fn.Name] = build;
-                        if (Gbn.Parse(build).Prefix != null)
-                        {
-                            earliestBuildForFunction[fn.Name] = build;
-                        }
-                    }
-                    else if (string.Compare(build, newestBuildForFunction[fn.Name], StringComparison.Ordinal) > 0)
-                    {
-                        newestBuildForFunction[fn.Name] = build;
-                    }
-                    // Track earliest by parsed version. If this build's version is less than
-                    // the tracked earliest, replace it. On a version tie, prefer release
-                    // over -w3t/-w3b test builds, since release sorts "later" in our scheme.
-                    else if (earliestBuildForFunction.TryGetValue(fn.Name, out var earliestFunctionBuild)
-                        && (Gbn.Compare(Gbn.Parse(build), Gbn.Parse(earliestFunctionBuild)) < 0
-                            || (Gbn.Compare(Gbn.Parse(build), Gbn.Parse(earliestFunctionBuild)) == 0
-                                && Gbn.Parse(build).IsTest && !Gbn.Parse(earliestFunctionBuild).IsTest)))
-                    {
-                        if (Gbn.Parse(build).Prefix != null)
-                        {
-                            earliestBuildForFunction[fn.Name] = build;
-                        }
-                    }
+                    AddBuild(identifierBuilds, fn.Name, build);
                 }
             }
         }
+    }
+
+    /// <summary>Add a build name to the set for an identifier.</summary>
+    private static void AddBuild(
+        Dictionary<string, HashSet<string>> identifierBuilds, string name, string build)
+    {
+        if (!identifierBuilds.TryGetValue(name, out var set))
+        {
+            set = new HashSet<string>(StringComparer.Ordinal);
+            identifierBuilds[name] = set;
+        }
+        set.Add(build);
     }
 
     /// <summary>Load the target schema by name or path.</summary>
@@ -314,6 +232,73 @@ public static class TargetCompatCommand
     }
 
     /// <summary>
+    /// Compute when an identifier was introduced relative to a target build.
+    ///
+    /// <param name="builds">Build names that declare the identifier (from all kinds).</param>
+    /// <param name="target">The target build name string.</param>
+    /// <returns>(AddedIn, FirstSeen). AddedIn is the earliest non-test/non-beta build
+    /// strictly newer than the target. FirstSeen is the earliest build (tests included)
+    /// strictly newer than the target. If FirstSeen equals AddedIn, FirstSeen is null.
+    /// If AddedIn is null but test builds exist, AddedIn stays null and FirstSeen is
+    /// the earliest test build.</returns>
+    /// </summary>
+    public static (string? AddedIn, string? FirstSeen) Introduced(
+        IEnumerable<string> builds, string target)
+    {
+        var targetParsed = Gbn.Parse(target);
+        string? targetLocale = targetParsed.Locale;
+
+        // Parse and filter: keep only builds strictly newer than the target.
+        var newer = builds
+            .Select(b => (Raw: b, Parsed: Gbn.Parse(b)))
+            .Where(pair => Gbn.Compare(pair.Parsed, targetParsed) > 0)
+            .ToList();
+
+        if (newer.Count == 0)
+            return (null, null);
+
+        // When target has a locale, prefer builds of the same locale.
+        var candidates = targetLocale is null
+            ? newer
+            : newer.Where(pair => pair.Parsed.Locale == targetLocale);
+        if (targetLocale is not null && !candidates.Any())
+            candidates = newer; // fallback: ignore locale
+
+        var sorted = candidates.ToList();
+
+        // Sort by parsed version (ascending).
+        sorted.Sort((a, b) => Gbn.Compare(a.Parsed, b.Parsed));
+
+        // Find earliest release (non-test, non-beta) and earliest overall.
+        string? earliestRelease = null;
+        string? earliestTest = null;
+        foreach ((string raw, _) in sorted)
+        {
+            var parsed = Gbn.Parse(raw);
+            if (parsed.IsTest || parsed.IsBeta)
+            {
+                if (earliestTest is null)
+                    earliestTest = raw;
+            }
+            else
+            {
+                if (earliestRelease is null)
+                    earliestRelease = raw;
+            }
+        }
+
+        // When AddedIn is null but test builds exist, firstSeen is the earliest test.
+        // When AddedIn equals FirstSeen, FirstSeen stays null.
+        if (earliestRelease is null)
+        {
+            return (null, earliestTest);
+        }
+
+        return (earliestRelease,
+            earliestTest == earliestRelease ? null : earliestTest);
+    }
+
+    /// <summary>
     /// Check the map's script against the target build.
     /// Declared identifiers in the map's own script are skipped (declared = used by the map author).
     /// Every OTHER identifier that is a native, global, type or function in ANY schema but
@@ -327,14 +312,7 @@ public static class TargetCompatCommand
         Dictionary<string, JassGlobalDecl> allGlobals,
         Dictionary<string, JassTypeDecl> allTypes,
         Dictionary<string, JassFunctionDecl> allFunctions,
-        Dictionary<string, string> newestBuildForNative,
-        Dictionary<string, string> newestBuildForGlobal,
-        Dictionary<string, string> newestBuildForType,
-        Dictionary<string, string> newestBuildForFunction,
-        Dictionary<string, string> earliestBuildForNative,
-        Dictionary<string, string> earliestBuildForGlobal,
-        Dictionary<string, string> earliestBuildForType,
-        Dictionary<string, string> earliestBuildForFunction,
+        Dictionary<string, HashSet<string>> identifierBuilds,
         List<CompatFinding> findings,
         List<string> notChecked)
     {
@@ -417,37 +395,40 @@ public static class TargetCompatCommand
 
             if (!inTarget)
             {
-                (string? earliestRelease, string? earliestTest) = FindEarliestBuilds(name, targetSchema.Build,
-                    earliestBuildForNative, earliestBuildForGlobal,
-                    earliestBuildForType, earliestBuildForFunction,
-                    newestBuildForNative, newestBuildForGlobal,
-                    newestBuildForType, newestBuildForFunction);
                 string countText = ", used " + count + " time" + (count > 1 ? "s" : "");
                 string detail;
-                // If the earliest release is a bare build (no prefix), skip the "added in"
-                // line. The bare build cannot be substituted without per-schema feature
-                // data, so we report "not in <target>" instead of reporting the wrong build.
-                if (earliestRelease is not null && Gbn.Parse(earliestRelease).Prefix != null)
+
+                // Get all builds for this identifier and compute Introduced.
+                var builds = identifierBuilds.TryGetValue(name, out var buildSet)
+                    ? buildSet.ToList()
+                    : Enumerable.Empty<string>().ToList();
+
+                (string? addedIn, string? firstSeen) = Introduced(builds, targetSchema.Build);
+
+                // Build detail text.
+                if (addedIn is not null && firstSeen is not null)
                 {
-                    if (earliestTest != null && earliestTest != earliestRelease)
-                    {
-                        detail = "added in " + earliestRelease
-                            + " (first seen in " + earliestTest + ")"
-                            + ", not in " + targetSchema.Build + countText;
-                    }
-                    else
-                    {
-                        detail = "added in " + earliestRelease + ", not in " + targetSchema.Build + countText;
-                    }
+                    // Both: "added in A (first seen in F), not in T, used N times"
+                    detail = "added in " + addedIn
+                        + " (first seen in " + firstSeen + ")"
+                        + ", not in " + targetSchema.Build + countText;
                 }
-                else if (earliestTest != null)
+                else if (addedIn is not null)
                 {
-                    detail = "added in " + earliestTest + ", not in " + targetSchema.Build + countText;
+                    // Only A: "added in A, not in T, used N times"
+                    detail = "added in " + addedIn + ", not in " + targetSchema.Build + countText;
+                }
+                else if (firstSeen is not null)
+                {
+                    // Only F: "only in test builds, first seen in F, not in T, used N times"
+                    detail = "only in test builds, first seen in " + firstSeen
+                        + ", not in " + targetSchema.Build + countText;
                 }
                 else
                 {
                     detail = "not in " + targetSchema.Build + countText;
                 }
+
                 findings.Add(new CompatFinding(
                     "error",
                     kind,
@@ -665,90 +646,6 @@ public static class TargetCompatCommand
             "function" => targetFunctions.Contains(name),
             _ => false,
         };
-    }
-
-    /// <summary>Find the newest build that declares an identifier, using GameBuildName ordering.</summary>
-    private static string? FindNewestBuild(string name,
-        Dictionary<string, string> newestBuildForNative,
-        Dictionary<string, string> newestBuildForGlobal,
-        Dictionary<string, string> newestBuildForType,
-        Dictionary<string, string> newestBuildForFunction)
-    {
-        // Collect all build names across all categories where this identifier appears.
-        List<string> builds = new();
-        if (newestBuildForNative.TryGetValue(name, out var nb)) builds.Add(nb);
-        if (newestBuildForGlobal.TryGetValue(name, out var gb)) builds.Add(gb);
-        if (newestBuildForType.TryGetValue(name, out var tb)) builds.Add(tb);
-        if (newestBuildForFunction.TryGetValue(name, out var fb)) builds.Add(fb);
-        if (builds.Count == 0) return null;
-
-        builds.Sort((a, b) => Gbn.Compare(Gbn.Parse(a), Gbn.Parse(b)));
-        return builds[^1];
-    }
-
-    /// <summary>
-    /// Find the earliest release build and the earliest test/beta build that declare
-    /// an identifier and are newer than the target. Uses GameBuildName for ordering.
-    /// Returns (null, null) when no build newer than the target declares the identifier.
-    /// Ignores builds of a different locale than the target when a same-locale build exists.
-    /// </summary>
-    private static (string? earliestRelease, string? earliestTest) FindEarliestBuilds(
-        string name, string targetBuild,
-        Dictionary<string, string> earliestBuildForNative,
-        Dictionary<string, string> earliestBuildForGlobal,
-        Dictionary<string, string> earliestBuildForType,
-        Dictionary<string, string> earliestBuildForFunction,
-        Dictionary<string, string> newestBuildForNative,
-        Dictionary<string, string> newestBuildForGlobal,
-        Dictionary<string, string> newestBuildForType,
-        Dictionary<string, string> newestBuildForFunction)
-    {
-        List<string> builds = new();
-        if (earliestBuildForNative.TryGetValue(name, out var nb)) builds.Add(nb);
-        if (earliestBuildForGlobal.TryGetValue(name, out var gb)) builds.Add(gb);
-        if (earliestBuildForType.TryGetValue(name, out var tb)) builds.Add(tb);
-        if (earliestBuildForFunction.TryGetValue(name, out var fb)) builds.Add(fb);
-        // Also include the newest builds (release versions) for identifiers where
-        // the earliest is a test build but a later release also declares it.
-        if (newestBuildForNative.TryGetValue(name, out var nbn)) builds.Add(nbn);
-        if (newestBuildForGlobal.TryGetValue(name, out var nbg)) builds.Add(nbg);
-        if (newestBuildForType.TryGetValue(name, out var nbt)) builds.Add(nbt);
-        if (newestBuildForFunction.TryGetValue(name, out var nbf)) builds.Add(nbf);
-        if (builds.Count == 0) return (null, null);
-
-        Gbn targetParsed = Gbn.Parse(targetBuild);
-        string? targetLocale = targetParsed.Locale;
-
-        // Filter to builds strictly newer than the target.
-        builds.RemoveAll(b => Gbn.Compare(Gbn.Parse(b), targetParsed) <= 0);
-        if (builds.Count == 0) return (null, null);
-
-        // When target has a locale, prefer same-locale builds.
-        // If a same-locale build exists for the same version category, use it.
-        var localeFilter = builds.Where(b =>
-            targetLocale is null
-            || Gbn.Parse(b).Locale == targetLocale);
-        var candidate = localeFilter.Any() ? localeFilter : builds;
-
-        var allParsed = candidate.Select(b => (Raw: b, Parsed: Gbn.Parse(b))).ToList();
-        allParsed.Sort((a, b) => Gbn.Compare(a.Parsed, b.Parsed));
-
-        // Find earliest RELEASE build (non-test, non-beta).
-        string? earliestRelease = null;
-        string? earliestTest = null;
-        foreach ((string raw, Gbn parsed) in allParsed)
-        {
-            if (parsed.IsTest || parsed.IsBeta)
-            {
-                if (earliestTest is null) earliestTest = raw;
-            }
-            else
-            {
-                if (earliestRelease is null) earliestRelease = raw;
-            }
-        }
-
-        return (earliestRelease, earliestTest);
     }
 
     /// <summary>

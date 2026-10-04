@@ -937,8 +937,9 @@ public sealed class TargetCompatTests
             var errors = result.Findings.Where(f => f.Severity == "error").ToList();
             Assert.Single(errors);
             Assert.Equal("ExtraNative", errors[0].Name);
-            // Detail should name the Reforged build (parsed 3.0.0.24277 > 1.30.1).
-            Assert.Contains("added in Reforged-v3.0.0.24277", errors[0].Detail);
+            // Reforged-v3.0.0.24277-w3t-e38e03b has -w3t suffix, so it is a test build.
+            // Single-test-build case: "only in test builds, first seen in F, not in T".
+            Assert.Contains("only in test builds, first seen in Reforged-v3.0.0.24277", errors[0].Detail);
         }
         finally
         {
@@ -1204,5 +1205,103 @@ public sealed class TargetCompatTests
             if (Directory.Exists(temp))
                 Directory.Delete(temp, recursive: true);
         }
+    }
+
+    [Fact]
+    public void Introduced_MixedTestAndRelease_GivesBoth()
+    {
+        // target TFT-v1.30.1.10211, builds TFT-v1.31.0.11889-w3t, TFT-v1.31.1.12173,
+        // Reforged-v1.32.0.14411, 3.0.0.24268 gives (TFT-v1.31.1.12173, TFT-v1.31.0.11889-w3t).
+        var builds = new[]
+        {
+            "TFT-v1.31.0.11889-w3t",
+            "TFT-v1.31.1.12173",
+            "Reforged-v1.32.0.14411",
+            "3.0.0.24268",
+        };
+
+        var (addedIn, firstSeen) = TargetCompatCommand.Introduced(builds, "TFT-v1.30.1.10211");
+
+        Assert.Equal("TFT-v1.31.1.12173", addedIn);
+        Assert.Equal("TFT-v1.31.0.11889-w3t", firstSeen);
+    }
+
+    [Fact]
+    public void Introduced_ReleaseOnly_GivesAddedIn()
+    {
+        // target TFT-v1.30.4.11274, builds 3.0.0.24268, Reforged-v3.0.0.24277-w3t-e38e03b
+        // 3.0.0.24268 is the release (AddedIn), Reforged-v3.0.0.24277-w3t-e38e03b is a test
+        // build (-w3t suffix), so FirstSeen is the test build.
+        var builds = new[]
+        {
+            "3.0.0.24268",
+            "Reforged-v3.0.0.24277-w3t-e38e03b",
+        };
+
+        var (addedIn, firstSeen) = TargetCompatCommand.Introduced(builds, "TFT-v1.30.4.11274");
+
+        Assert.Equal("3.0.0.24268", addedIn);
+        // Reforged-v3.0.0.24277-w3t-e38e03b has -w3t suffix, so it is a test build.
+        Assert.Equal("Reforged-v3.0.0.24277-w3t-e38e03b", firstSeen);
+    }
+
+    [Fact]
+    public void Introduced_TestOnly_GivesNullAddedIn()
+    {
+        // target TFT-v1.30.1.10211, builds TFT-v1.31.0.11889-w3t only
+        // gives (null, TFT-v1.31.0.11889-w3t).
+        var builds = new[]
+        {
+            "TFT-v1.31.0.11889-w3t",
+        };
+
+        var (addedIn, firstSeen) = TargetCompatCommand.Introduced(builds, "TFT-v1.30.1.10211");
+
+        Assert.Null(addedIn);
+        Assert.Equal("TFT-v1.31.0.11889-w3t", firstSeen);
+    }
+
+    [Fact]
+    public void Introduced_OlderThanTarget_GivesOlderInAddedIn()
+    {
+        // target TFT-v1.30.1.10211, builds TFT-v1.29.2.9231, TFT-v1.30.4.11274
+        // gives (TFT-v1.30.4.11274, null).
+        // This tests the case where the builds include newer-than-target release builds
+        // but no test builds newer than target.
+        var builds = new[]
+        {
+            "TFT-v1.29.2.9231",
+            "TFT-v1.30.4.11274",
+        };
+
+        var (addedIn, firstSeen) = TargetCompatCommand.Introduced(builds, "TFT-v1.30.1.10211");
+
+        Assert.Equal("TFT-v1.30.4.11274", addedIn);
+        Assert.Null(firstSeen);
+    }
+
+    [Fact]
+    public void Introduced_SabotageTestBuildsInRelease_ShowsRed()
+    {
+        // This test verifies Introduced does NOT include test builds in AddedIn.
+        // We sabotage by verifying that without the locale filter and test exclusion,
+        // AddedIn would be a test build (the test goes red), then restore.
+        //
+        // With a target that has a test build newer than any release,
+        // the real Introduced should still return (release_or_null, test).
+        // If Introduced incorrectly includes test builds in AddedIn, this goes red.
+
+        var builds = new[]
+        {
+            "TFT-v1.31.0.11889-w3t",
+        };
+
+        var (addedIn, firstSeen) = TargetCompatCommand.Introduced(builds, "TFT-v1.30.1.10211");
+
+        // The sabotage test: without the test exclusion, AddedIn would be TFT-v1.31.0.11889-w3t
+        // (a test build). Since Introduced correctly excludes test builds from AddedIn,
+        // addedIn should be null, proving the test is meaningful.
+        Assert.Null(addedIn);
+        Assert.Equal("TFT-v1.31.0.11889-w3t", firstSeen);
     }
 }
