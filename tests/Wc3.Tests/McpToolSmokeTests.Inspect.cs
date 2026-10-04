@@ -254,4 +254,52 @@ public sealed class McpSmokeInspectTests : McpSmokeBase
         Assert.Contains(tilesets, t => Prop(t, "displayName").GetString() == "Ashenvale");
         await CallError("editor_catalog_get", Args(("name", "NoSuchCatalog")));
     }
+
+    [Fact, Trait("Category", "GameData"), Covers("target_get", "target_set", "target_list")]
+    public async Task Target_tools_view_and_set_the_current_target()
+    {
+        // Determine schemas directory: env override > test output > default location.
+        string? schemasDir = Environment.GetEnvironmentVariable("WC3_SCHEMAS_DIR");
+        if (string.IsNullOrWhiteSpace(schemasDir))
+        {
+            var schemasPath = Path.Combine(AppContext.BaseDirectory, "data", "schemas");
+            if (Directory.Exists(schemasPath))
+                schemasDir = schemasPath;
+        }
+
+        // If no schemas, this test cannot validate the feature.
+        if (schemasDir is null)
+        {
+            throw new Xunit.Sdk.XunitException("no schemas directory available");
+        }
+
+        var args = new Dictionary<string, object?> { ["schemas_dir"] = schemasDir };
+
+        // target_get returns the build and source.
+        var get = await Call("target_get", args);
+        var build = Prop(get, "build").GetString();
+        Assert.False(string.IsNullOrEmpty(build));
+        var source = Prop(get, "source").GetString();
+        Assert.True(source == "default" || source == "settings" || source == "environment",
+            "source was " + source);
+
+        // target_list returns an array of builds.
+        var list = await Call("target_list", args);
+        var builds = list.EnumerateArray().ToList();
+        Assert.True(builds.Any());
+
+        // target_set with an invalid build fails.
+        var badSet = await Call("target_set", Args(("build", "NoSuchBuild12345"), ("schemas_dir", schemasDir)));
+        Assert.False(Prop(badSet, "ok").GetBoolean());
+
+        // target_set with a valid build succeeds.
+        // Use the first build from target_list.
+        string firstBuild = builds.First().GetProperty("build").GetString()!;
+        var goodSet = await Call("target_set", Args(("build", firstBuild), ("schemas_dir", schemasDir)));
+        Assert.True(Prop(goodSet, "ok").GetBoolean());
+
+        // Verify target_get now shows settings as source.
+        var get2 = await Call("target_get", args);
+        Assert.Equal("settings", Prop(get2, "source").GetString());
+    }
 }

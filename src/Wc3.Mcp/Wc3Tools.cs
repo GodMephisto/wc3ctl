@@ -1525,12 +1525,55 @@ public static class Wc3Tools
     // ---- gamedata schema tools --------------------------------------------
 
     [McpServerTool(Name = "map_compat", ReadOnly = true, Idempotent = true, OpenWorld = false)]
-    [Description("Check a Warcraft III map against a target build (a schema folder path or build name). Reports compile-time incompatibilities (missing natives, globals, types, functions used by the map but absent from the target's scripts/common.j and scripts/blizzard.j) and display-time incompatibilities (object fields modified in the map but not defined in the target's object data). Returns IdentifiersChecked and FieldsChecked so you can tell 'checked and fine' from 'no script section to check'. Pass schemas_dir to override the schemas location.")]
+    [Description("Check a Warcraft III map against a target build (a schema folder path or build name). Reports compile-time incompatibilities (missing natives, globals, types, functions used by the map but absent from the target's scripts/common.j and scripts/blizzard.j) and display-time incompatibilities (object fields modified in the map but not defined in the target's object data). Returns IdentifiersChecked and FieldsChecked so you can tell 'checked and fine' from 'no script section to check'. Omit target to use the configured default from settings, environment, or the newest available schema. Pass schemas_dir to override the schemas location.")]
     public static CompatResult MapCompat(
         [Description("Path to a .w3x/.w3m map file.")] string map,
-        [Description("Target build name or schema folder path to check compatibility against.")] string target,
+        [Description("Target build name or schema folder path to check compatibility against. Omit to use the configured default from settings, environment, or the newest available schema.")] string? target = null,
         [Description("Optional path to schemas directory containing schema folders with manifest.json. When omitted, searches <AppContext.BaseDirectory>/schemas first, then walks up from the base directory.")] string? schemas_dir = null)
-        => Run(() => TargetCompatCommand.Execute(map, target, schemas_dir));
+        => Run(() => TargetCompatCommand.Execute(map, ResolveTarget(target, schemas_dir), schemas_dir));
+
+    [McpServerTool(Name = "target_get", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("View the current target build setting: which build maps are checked against when compat or lint omit --target, where it comes from (option, environment, settings, default), and which schema sections are available. Also shows the installed game build version.")]
+    public static TargetGetResult TargetGet(
+        [Description("Optional path to schemas directory containing schema folders with manifest.json.")] string? schemas_dir = null)
+        => Run(() =>
+        {
+            var result = TargetBuildSettings.Get(option: null, schemasDir: schemas_dir);
+            string? installBuild = null;
+            try
+            {
+                string? installDir = Wc3.GameData.GameInstall.Locate();
+                if (installDir is not null)
+                    installBuild = Wc3.GameData.GameInstall.ReadBuildVersion(installDir);
+            }
+            catch { /* no game install */ }
+            return new TargetGetResult(result.Build, result.Source.ToString(), installBuild);
+        });
+
+    [McpServerTool(Name = "target_set", ReadOnly = false, Idempotent = true, OpenWorld = false)]
+    [Description("Set the target build that compat and lint use when --target is omitted. Validates the build exists in the schemas folder.")]
+    public static TargetSetResult TargetSet(
+        [Description("Target build name or schema folder path to set as the default.")] string build,
+        [Description("Optional path to schemas directory containing schema folders with manifest.json.")] string? schemas_dir = null)
+        => Run(() =>
+        {
+            try
+            {
+                TargetBuildSettings.Set(build, schemasDir: schemas_dir);
+                return new TargetSetResult(true, "set target " + build, SavedTo: null);
+            }
+            catch (FileNotFoundException ex)
+            {
+                return new TargetSetResult(false, ex.Message, SavedTo: null);
+            }
+        });
+
+    [McpServerTool(Name = "target_list", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("List all available builds in the schemas directory, with their sections. Use --full_only to skip scripts-only builds.")]
+    public static IReadOnlyList<BuildInfo> TargetList(
+        [Description("Optional path to schemas directory containing schema folders with manifest.json.")] string? schemas_dir = null,
+        [Description("When true, skip scripts-only builds that have no object data.")] bool full_only = false)
+        => Run(() => TargetBuildSettings.List(schemasDir: schemas_dir, fullOnly: full_only));
 
     [McpServerTool(Name = "gamedata_schema_diff", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Compare two schema folders (produced by gamedata schema) and report added, removed and changed object fields, trigger functions, script types and natives. Groups output by section (objects, triggers, script) then by file or category. A section only one build has is listed as not compared rather than everything added or removed. Use this to track what a patch changes across builds, or to check whether two maps targeting different patches are compatible.")]
@@ -1550,8 +1593,25 @@ public static class Wc3Tools
         : Environment.GetEnvironmentVariable(GameDirVariable) is var env && IsSet(env) ? env
         : null;
 
+    /// <summary>Resolve the target build: use the explicit value or fall through to settings.</summary>
+    internal static string ResolveTarget(string? target, string? schemas_dir)
+    {
+        if (target is not null)
+            return target;
+        var settings = TargetBuildSettings.Get(option: null, schemasDir: schemas_dir);
+        return settings.Build;
+    }
+
     private static bool IsSet(string? value) =>
         !string.IsNullOrWhiteSpace(value) && !value.Contains("${", StringComparison.Ordinal);
+
+    // ---- target_* result POCOs ------------------------------------------
+
+    /// <summary>Target get outcome: the build, its source, and the installed game build.</summary>
+    public sealed record TargetGetResult(string Build, string Source, string? InstallBuild);
+
+    /// <summary>Target set outcome: whether it succeeded and the message.</summary>
+    public sealed record TargetSetResult(bool Ok, string Message, string? SavedTo);
 }
 
 /// <summary>render_model outcome: where the PNG landed and whether it was also inlined.</summary>

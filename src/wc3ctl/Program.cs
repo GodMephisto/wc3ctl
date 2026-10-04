@@ -2979,12 +2979,14 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
             string target = p.GetValueForOption(lintTarget);
             string? schemas = p.GetValueForOption(lintSchemas);
             Emit(p.GetValueForOption(jsonOption), r, () => Render.Lint(r));
-            // Run compat check if --target was given.
-            if (target is not null)
+            // Run compat check if --target was given or resolved from settings.
+            string? actualTarget = p.GetValueForOption(lintTarget);
+
+            if (actualTarget is not null)
             {
                 try
                 {
-                    var compat = TargetCompatCommand.Execute(p.GetValueForArgument(mapArg), target, schemas);
+                    var compat = TargetCompatCommand.Execute(p.GetValueForArgument(mapArg), actualTarget, schemas);
                     Emit(p.GetValueForOption(jsonOption), compat, () => Render.CompatResult(compat));
                     int hasErrors = compat.Findings.Any(f => f.Severity == "error") ? 1 : 0;
                     if (hasErrors != 0) exitCode[0] = hasErrors;
@@ -2994,6 +2996,23 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
                     Console.Error.WriteLine("error: " + ex.Message);
                     exitCode[0] = 1;
                 }
+            }
+            else
+            {
+                // Resolve default from settings.
+                var settings = TargetBuildSettings.Get(option: null, schemasDir: schemas);
+                Console.WriteLine("target  " + settings.Build + "  (from " + settings.Source + ")");
+
+                try
+                {
+                    var compat = TargetCompatCommand.Execute(
+                        p.GetValueForArgument(mapArg), settings.Build, schemas);
+                    Emit(p.GetValueForOption(jsonOption), compat, () => Render.CompatResult(compat));
+                    int hasErrors = compat.Findings.Any(f => f.Severity == "error") ? 1 : 0;
+                    if (hasErrors != 0) exitCode[0] = hasErrors;
+                }
+                catch (DirectoryNotFoundException) { /* no schemas, skip compat */ }
+                catch (FileNotFoundException) { /* bad build name, skip compat */ }
             }
         }));
         // Unattended load test. Closes the feedback loop that previously required a human to
@@ -3369,26 +3388,149 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         root.AddCommand(editor); root.AddCommand(gamedata);
         // Standalone compat: check a map against a target build.
         var compatMapArg = new Argument<string>("map", "Path to a .w3x/.w3m map.");
-        var compatTarget = new Option<string>("--target", () => throw new ArgumentNullException(
-            "target is required for compat"), "Target build name or schema folder path.");
+        var compatTarget = new Option<string?>("--target",
+            () => null, "Target build name or schema folder path. Omit to use the configured default.");
         var compatSchemas = new Option<string?>("--schemas",
             "Path to schemas directory containing schema folders with manifest.json.");
         var compat = new Command("compat",
             "Check a map against a target game build (a schema folder or build name). "
             + "Reports compile-time incompatibilities (missing natives, globals, types, functions) "
             + "and display-time incompatibilities (modified object fields the target build no longer defines). "
-            + "Exits 2 if any error findings.")
-        { compatMapArg, compatTarget, compatSchemas, jsonOption };
-        compat.SetHandler((string map, string target, string? schemas, bool json) => RunSafely(() =>
+            + "Exits 2 if any error findings. Omit --target to use the configured default.");
+        compat.AddArgument(compatMapArg);
+        compat.AddOption(compatTarget);
+        compat.AddOption(compatSchemas);
+        compat.AddOption(jsonOption);
+        compat.SetHandler(ctx => RunSafely(() =>
         {
-            var result = TargetCompatCommand.Execute(map, target, schemas);
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(compatMapArg);
+            string? targetArg = p.GetValueForOption(compatTarget);
+            string? schemas = p.GetValueForOption(compatSchemas);
+            bool json = p.GetValueForOption(jsonOption);
+
+            // Resolve target: option > default from settings.
+            string actualTarget;
+            if (targetArg is not null)
+            {
+                actualTarget = targetArg;
+            }
+            else
+            {
+                var settings = TargetBuildSettings.Get(option: null, schemasDir: schemas);
+                actualTarget = settings.Build;
+            }
+
+            var result = TargetCompatCommand.Execute(map, actualTarget, schemas);
             Emit(json, result, () => Render.CompatResult(result));
             if (result.Findings.Any(f => f.Severity == "error")) exitCode[0] = 2;
-        }), compatMapArg, compatTarget, compatSchemas, jsonOption);
+        }));
 
         root.AddCommand(compat);
         root.AddCommand(McpCommand.Build());
 
+        // ---- target: set and view the current target build ----
+        var targetBuildArg = new Argument<string>("build",
+            "Target build name or schema folder path.");
+        var targetListFull = new Option<bool>("--full-only",
+            "Skip scripts-only builds.");
+        var targetSchemas = new Option<string?>("--schemas",
+            "Path to schemas directory containing schema folders with manifest.json.");
+        // The root target command shows the current target (no args needed).
+        var target = new Command("target",
+            "View or set the target game build used by compat and lint when --target is omitted.");
+        target.AddOption(targetSchemas);
+        target.SetHandler(ctx => RunSafely(() =>
+        {
+            var schemas = ctx.ParseResult.GetValueForOption(targetSchemas);
+            var result = TargetBuildSettings.Get(schemasDir: schemas);
+            // Try to list sections for this build.
+            try
+            {
+                var builds = TargetBuildSettings.List(schemasDir: schemas);
+                var info = builds.FirstOrDefault(b => b.Build == result.Build);
+                Console.Write("target  " + result.Build + "  (from " + result.Source + ")");
+                if (info is not null && info.Sections.Count > 0)
+                {
+                    Console.Write("  sections");
+                    foreach (var s in info.Sections) Console.Write(" " + s);
+                }
+                // Also show installed game build.
+                try
+                {
+                    string? installDir = Wc3.GameData.GameInstall.Locate();
+                    if (installDir is not null)
+                    {
+                        string? ib = Wc3.GameData.GameInstall.ReadBuildVersion(installDir);
+                        if (ib is not null) Console.Write("  game " + ib);
+                    }
+                }
+                catch { /* no game install, skip */ }
+                Console.WriteLine();
+            }
+            catch (DirectoryNotFoundException)
+            {
+                Console.WriteLine("target  " + result.Build + "  (from " + result.Source + ")");
+            }
+        }));
+        // target set -> set the target.
+        var targetSet = new Command("set", "Set the target build.");
+        targetSet.AddArgument(targetBuildArg);
+        targetSet.AddOption(targetSchemas);
+        targetSet.SetHandler(ctx => RunSafely(() =>
+        {
+            var schemas = ctx.ParseResult.GetValueForOption(targetSchemas);
+            string build = ctx.ParseResult.GetValueForArgument(targetBuildArg);
+            try
+            {
+                TargetBuildSettings.Set(build, schemasDir: schemas);
+                Console.WriteLine("set target " + build);
+            }
+            catch (FileNotFoundException ex)
+            {
+                Console.Error.WriteLine("error: " + ex.Message);
+                exitCode[0] = 1;
+            }
+        }));
+        target.AddCommand(targetSet);
+        // target list -> list builds.
+        var targetList = new Command("list", "List all available builds.");
+        targetList.AddOption(targetSchemas);
+        targetList.AddOption(targetListFull);
+        targetList.SetHandler(ctx =>
+        {
+            try
+            {
+                var schemas = ctx.ParseResult.GetValueForOption(targetSchemas);
+                var builds = TargetBuildSettings.List(
+                    schemasDir: schemas, fullOnly: ctx.ParseResult.GetValueForOption(targetListFull));
+                foreach (var b in builds)
+                {
+                    Console.Write(b.Build);
+                    if (b.Sections.Count > 0)
+                    {
+                        Console.Write("  sections");
+                        foreach (var s in b.Sections) Console.Write(" " + s);
+                    }
+                    Console.WriteLine();
+                }
+            }
+            catch (DirectoryNotFoundException)
+            {
+                Console.Error.WriteLine("error: could not find schemas directory");
+                exitCode[0] = 1;
+            }
+        });
+        target.AddCommand(targetList);
+        // target clear -> clear the setting.
+        var targetClear = new Command("clear", "Clear the target setting.");
+        targetClear.SetHandler(() =>
+        {
+            TargetBuildSettings.Clear();
+            Console.WriteLine("cleared target setting");
+        });
+        target.AddCommand(targetClear);
+        root.AddCommand(target);
         return root;
     }
 }
