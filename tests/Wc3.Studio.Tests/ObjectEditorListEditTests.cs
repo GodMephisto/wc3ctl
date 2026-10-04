@@ -14,31 +14,25 @@ using Wc3.Tests;
 namespace Wc3.Studio.Tests;
 
 /// <summary>
-/// Drives the object editor's reference-list builder headlessly, exactly like a user:
-/// open a map, select a unit, select an ability-LIST field (the builder editor), pick
-/// a candidate in the Add dropdown and press Add - then check the value the Apply
+/// Drives the object editor's reference-list builder headlessly, exactly like a user.
+/// Open a map, select a unit, select an ability-LIST field (the builder editor), pick
+/// a candidate in the Add dropdown and press Add. Then check the value the Apply
 /// path would write. Corpus-gated on the map AND on game data (field metadata needs
-/// a WC3 install): silently passes when either is missing on this machine.
+/// a WC3 install). Tests skip when either is missing on this machine.
 /// </summary>
 public class ObjectEditorListEditTests
 {
     private static readonly string MapPath =
-        TestCorpus.Map(@"Anime_WOS2_0.27d3.w3x");
+        TestCorpus.Map(@"Anime_WOS2_0.32I.w3x");
 
-    /// <summary>Unit ability-list field codes ('uabi' abilList, 'uhab' heroAbilList) -
-    /// the canonical object-reference LIST fields the builder targets.</summary>
+    /// <summary>Unit ability-list field codes ('uabi' abilList, 'uhab' heroAbilList).
+    /// These are the canonical object-reference LIST fields the builder targets.</summary>
     private static readonly string[] AbilityListCodes = { "uabi", "uhab" };
 
-    [AvaloniaFact]
+    [CorpusAvaloniaFact("Anime_WOS2_0.32I.w3x", needsGameData: true)]
     [Trait("Category", "Corpus")]
     public void Adding_a_reference_list_entry_reaches_the_editor_value()
     {
-        if (!File.Exists(MapPath)) return;
-        // Without game data the field never classifies as a reference list and the
-        // editor falls back to free text by design - nothing to drive here.
-        if (ObjectFieldOptionsCommand.Execute(ObjectKind.Unit, "uabi", null).Type.Length == 0)
-            return;
-
         var view = new ObjectEditorView();
         var window = new Window { Width = 900, Height = 650, Content = view };
         window.Show();
@@ -76,7 +70,7 @@ public class ObjectEditorListEditTests
     }
 
     /// <summary>Select units in turn and, on each, select the first ability-list field
-    /// row; true once a selection lands the private editor in RefList mode.</summary>
+    /// row. True once a selection lands the private editor in RefList mode.</summary>
     private static bool SelectRefListField(ObjectEditorView view, ListBox objectList, int maxUnits)
     {
         var fieldList = Field<ListBox>(view, "FieldList");

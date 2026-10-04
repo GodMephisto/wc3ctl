@@ -9,29 +9,29 @@ using Wc3.Studio.Panels;
 
 using Wc3.Tests;
 
+using CorpusAvaloniaFactAttribute = Wc3.Studio.Tests.CorpusAvaloniaFactAttribute;
+
 namespace Wc3.Studio.Tests;
 
 /// <summary>
-/// Drives the palette panel headlessly, exactly like a user: open a map, wait for the
-/// async catalog load to land, then arm a tile. The catalog builds off the UI thread
-/// (Task.Run + a dispatcher post), so the tests pump the headless dispatcher in a
-/// bounded loop until groups appear. Corpus-gated: silently passes when the map isn't
-/// on this machine.
+/// Drives the palette panel headlessly, exactly like a user. Open a map, wait for
+/// the async catalog load to land, then arm a tile. The catalog builds off the UI
+/// thread (Task.Run + a dispatcher post), so the tests pump the headless dispatcher
+/// in a bounded loop until groups appear. Corpus-gated tests skip when the map is
+/// not on this machine.
 /// </summary>
 public class PaletteViewTests
 {
     private static readonly string MapPath =
-        TestCorpus.Map(@"Anime_WOS2_0.27d3.w3x");
+        TestCorpus.Map(@"Anime_WOS2_0.32I.w3x");
 
     /// <summary>The first load may open CASC (seconds); bounded so a hang still fails.</summary>
     private static readonly TimeSpan LoadTimeout = TimeSpan.FromSeconds(120);
 
-    [AvaloniaFact]
+    [CorpusAvaloniaFact("Anime_WOS2_0.32I.w3x")]
     [Trait("Category", "Corpus")]
     public void Opening_a_map_loads_grouped_entries_asynchronously()
     {
-        if (!File.Exists(MapPath)) return;
-
         var view = new PaletteView();
         var window = new Window { Width = 900, Height = 650, Content = view };
         window.Show();
@@ -49,12 +49,10 @@ public class PaletteViewTests
         Assert.True(tiles.Any(r => r.Kind == ObjectKind.Unit), "palette should list at least one unit");
     }
 
-    [AvaloniaFact]
+    [CorpusAvaloniaFact("Anime_WOS2_0.32I.w3x")]
     [Trait("Category", "Corpus")]
     public void Selecting_a_tile_arms_placement()
     {
-        if (!File.Exists(MapPath)) return;
-
         var view = new PaletteView();
         var window = new Window { Width = 900, Height = 650, Content = view };
         window.Show();
@@ -88,7 +86,7 @@ public class PaletteViewTests
             Dispatcher.UIThread.RunJobs();
             var groups = Groups(view);
             if (groups.Count > 0) return groups;
-            Thread.Sleep(50); // background load still running; let it progress
+            Thread.Sleep(50); // background load still running, let it progress
         }
         throw new TimeoutException($"palette did not load within {LoadTimeout.TotalSeconds:F0}s");
     }

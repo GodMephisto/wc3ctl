@@ -11,11 +11,13 @@ using Wc3.Studio.Panels;
 
 using Wc3.Tests;
 
+using CorpusAvaloniaFactAttribute = Wc3.Studio.Tests.CorpusAvaloniaFactAttribute;
+
 namespace Wc3.Studio.Tests;
 
 /// <summary>
 /// Drives the hero wiring audit panel headlessly against real, previously-verified maps.
-/// Corpus-gated, silently passes when a map is not on this machine.
+/// Corpus-gated, skips when a map is not on this machine.
 /// </summary>
 public class HeroWiringViewTests
 {
@@ -26,12 +28,10 @@ public class HeroWiringViewTests
 
     private static readonly TimeSpan LoadTimeout = TimeSpan.FromSeconds(60);
 
-    [AvaloniaFact]
+    [CorpusAvaloniaFact(@"1\1\Shiki_Tohno_v3.w3x", @"1\ShikiArena.w3x")]
     [Trait("Category", "Corpus")]
     public void A_clean_hero_reports_every_castable_wired_and_zero_problems()
     {
-        if (!File.Exists(TohnoV3)) return;
-
         var view = new HeroWiringView();
         var window = new Window { Width = 1000, Height = 700, Content = view };
         window.Show();
@@ -54,12 +54,10 @@ public class HeroWiringViewTests
         Assert.True(itemHost.Children.Count > 0, "the hero's card should be in the visual tree");
     }
 
-    [AvaloniaFact]
+    [CorpusAvaloniaFact(@"1\ShikiArena.w3x")]
     [Trait("Category", "Corpus")]
     public void Auditing_every_placed_hero_needs_no_input_and_covers_all_of_them()
     {
-        if (!File.Exists(ShikiArena)) return;
-
         var view = new HeroWiringView();
         var window = new Window { Width = 1000, Height = 700, Content = view };
         window.Show();

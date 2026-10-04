@@ -9,27 +9,25 @@ using Wc3.Studio.Panels;
 
 using Wc3.Tests;
 
+using CorpusAvaloniaFactAttribute = Wc3.Studio.Tests.CorpusAvaloniaFactAttribute;
+
 namespace Wc3.Studio.Tests;
 
 /// <summary>
-/// Reference-field readability: an object-reference LIST field (e.g. a unit's ability
+/// Reference-field readability means an object-reference LIST field (e.g. a unit's ability
 /// list) must expand into read-only sub-rows showing each referenced object's name
-/// beside its rawcode. Corpus-gated: silently passes when the map (or the WC3 install
-/// that provides the field metadata types) isn't on this machine.
+/// beside its rawcode. Corpus-gated tests skip when the map (or the WC3 install
+/// that provides the field metadata types) is not on this machine.
 /// </summary>
 public class ObjectEditorRefFieldsTests
 {
     private static readonly string MapPath =
-        TestCorpus.Map(@"Anime_WOS2_0.27d3.w3x");
+        TestCorpus.Map(@"Anime_WOS2_0.32I.w3x");
 
-    [AvaloniaFact]
+    [CorpusAvaloniaFact("Anime_WOS2_0.32I.w3x", needsGameData: true)]
     [Trait("Category", "Corpus")]
     public void Unit_ability_list_field_expands_into_named_sub_rows()
     {
-        if (!File.Exists(MapPath)) return;
-        // Reference detection reads the base metadata types; skip without an install.
-        if (ObjectFieldOptionsCommand.Execute(ObjectKind.Unit, "uabi", null).Type.Length == 0) return;
-
         var view = new ObjectEditorView();
         var window = new Window { Width = 900, Height = 650, Content = view };
         window.Show();

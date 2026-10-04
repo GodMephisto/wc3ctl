@@ -130,11 +130,10 @@ public class DependencyGraphTreeStructureTests
     /// grants excluded the closure is 17 abilities, all Asta's own (his 5 plus the sub-abilities his
     /// handlers grant at runtime, Q2, W2, TR, T2 and the two swords), and 6 of them are direct.
     /// </summary>
-    [AvaloniaFact]
+    [CorpusAvaloniaFact("Anime_WOS2_0.28a2.w3x", needsGameData: true)]
     [Trait("Category", "Corpus")]
     public void Asta_H028_shows_only_his_own_six_abilities_and_seventeen_files()
     {
-        if (!File.Exists(AstaMap)) return;
         var view = ShowHero(AstaMap, "H028", expectedDirectRows: 6,
             expectedTotalAbilities: 17, expectedCarried: 18);
 
@@ -161,11 +160,10 @@ public class DependencyGraphTreeStructureTests
     /// <summary>Second hero, so the rule is not overfitted to Asta. Shadow Nanaya (H0DA) in
     /// Anime Choice Arena V0.31C has 9 real direct abilities out of 40 in the closure, with the
     /// deeper real structure (buffs and spellbook entries) hanging under them.</summary>
-    [AvaloniaFact]
+    [CorpusAvaloniaFact("Anime Choice Arena V0.31C.w3x", needsGameData: true)]
     [Trait("Category", "Corpus")]
     public void Second_hero_H0DA_shows_nine_direct_abilities()
     {
-        if (!File.Exists(ChoiceArenaMap)) return;
         ShowHero(ChoiceArenaMap, "H0DA", expectedDirectRows: 9,
             expectedTotalAbilities: 40, expectedCarried: 66);
     }

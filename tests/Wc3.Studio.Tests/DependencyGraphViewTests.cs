@@ -13,20 +13,22 @@ using Wc3.Studio.Panels;
 
 using Wc3.Tests;
 
+using CorpusAvaloniaFactAttribute = Wc3.Studio.Tests.CorpusAvaloniaFactAttribute;
+
 namespace Wc3.Studio.Tests;
 
 /// <summary>
-/// Drives the dependency graph panel headlessly, exactly like a user: push an
+/// Drives the dependency graph panel headlessly, exactly like a user. Push an
 /// object at it (the Objects-tab path), wait for the off-thread resolve to land,
 /// then exercise the interactive canvas. The pipeline is two background hops
 /// (object list, then closure resolve), so the test pumps the headless dispatcher
-/// in a bounded loop until the canvas gains children. Corpus-gated: silently
-/// passes when the map isn't on this machine.
+/// in a bounded loop until the canvas gains children. Corpus-gated tests skip
+/// when the map is not on this machine.
 /// </summary>
 public class DependencyGraphViewTests
 {
     private static readonly string MapPath =
-        TestCorpus.Map(@"Anime_WOS2_0.27d3.w3x");
+        TestCorpus.Map(@"Anime_WOS2_0.32I.w3x");
 
     /// <summary>A real hero closure runs into the hundreds of objects, used here to prove
     /// the exclusion toggle and the nested trigger-function tree hold up at that size, not
@@ -37,12 +39,10 @@ public class DependencyGraphViewTests
     /// <summary>The first load may open CASC (seconds); bounded so a hang still fails.</summary>
     private static readonly TimeSpan LoadTimeout = TimeSpan.FromSeconds(120);
 
-    [AvaloniaFact]
+    [CorpusAvaloniaFact("Anime_WOS2_0.32I.w3x")]
     [Trait("Category", "Corpus")]
     public void Showing_a_unit_renders_graph_nodes_and_zoom_scales_the_canvas()
     {
-        if (!File.Exists(MapPath)) return;
-
         var view = new DependencyGraphView();
         var window = new Window { Width = 1200, Height = 800, Content = view };
         window.Show();
@@ -83,12 +83,10 @@ public class DependencyGraphViewTests
     /// node click toggles its excluded state and restyles, at real closure size, not just
     /// on a small hand-built fixture.
     /// </summary>
-    [AvaloniaFact]
+    [CorpusAvaloniaFact("GGGA_V0.02b.w3x")]
     [Trait("Category", "Corpus")]
     public void Large_hero_closure_nests_trigger_functions_and_supports_click_to_exclude()
     {
-        if (!File.Exists(GggaPath)) return;
-
         var view = new DependencyGraphView();
         var window = new Window { Width = 1200, Height = 800, Content = view };
         window.Show();
@@ -149,7 +147,7 @@ public class DependencyGraphViewTests
         {
             Dispatcher.UIThread.RunJobs();
             if (canvas.Children.Count > 0) return;
-            Thread.Sleep(50); // background resolve still running; let it progress
+            Thread.Sleep(50); // background resolve still running, let it progress
         }
         throw new TimeoutException(
             $"dependency graph did not render within {LoadTimeout.TotalSeconds:F0}s");

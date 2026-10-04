@@ -10,6 +10,10 @@ using Wc3.Studio;
 using Wc3.Studio.Controls;
 using Wc3.Studio.Panels;
 
+using Wc3.Tests;
+
+using CorpusAvaloniaFactAttribute = Wc3.Studio.Tests.CorpusAvaloniaFactAttribute;
+
 namespace Wc3.Studio.Tests;
 
 /// <summary>
@@ -229,14 +233,13 @@ public class ScriptPanelTests
     /// separate their script with a bare carriage return, and the Script panel showed "0 functions"
     /// on every one of them while displaying a perfectly readable script beside the empty list.
     /// </summary>
-    [AvaloniaFact]
+    [CorpusAvaloniaFact("Tom_and_Jerry_2014_v1.05.w3x")]
     [Trait("Category", "Corpus")]
     public void The_panel_lists_functions_in_a_carriage_return_separated_script()
     {
         var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
                                "Warcraft III", "Maps", "Download");
         var map = Path.Combine(dir, "Tom_and_Jerry_2014_v1.05.w3x");
-        if (!File.Exists(map)) return;
 
         var doc = MapDocument.Load(map);
         var view = Shown();
