@@ -175,11 +175,15 @@ public static class TargetCompatCommand
                     {
                         newestBuildForNative[nat.Name] = build;
                     }
-                    else if (Gbn.Compare(Gbn.Parse(build), Gbn.Parse(earliestBuildForNative[nat.Name])) < 0
-                        || (Gbn.Compare(Gbn.Parse(build), Gbn.Parse(earliestBuildForNative[nat.Name])) == 0
-                            && Gbn.Parse(build).IsTest && !Gbn.Parse(earliestBuildForNative[nat.Name]).IsTest))
+                    else if (earliestBuildForNative.TryGetValue(nat.Name, out var earliestNativeBuild)
+                        && (Gbn.Compare(Gbn.Parse(build), Gbn.Parse(earliestNativeBuild)) < 0
+                            || (Gbn.Compare(Gbn.Parse(build), Gbn.Parse(earliestNativeBuild)) == 0
+                                && Gbn.Parse(build).IsTest && !Gbn.Parse(earliestNativeBuild).IsTest)))
                     {
-                        earliestBuildForNative[nat.Name] = build;
+                        if (Gbn.Parse(build).Prefix != null)
+                        {
+                            earliestBuildForNative[nat.Name] = build;
+                        }
                     }
                 }
 
@@ -189,17 +193,24 @@ public static class TargetCompatCommand
                     {
                         allGlobals[gl.Name] = gl;
                         newestBuildForGlobal[gl.Name] = build;
-                        earliestBuildForGlobal[gl.Name] = build;
+                        if (Gbn.Parse(build).Prefix != null)
+                        {
+                            earliestBuildForGlobal[gl.Name] = build;
+                        }
                     }
                     else if (Gbn.Compare(Gbn.Parse(build), Gbn.Parse(newestBuildForGlobal[gl.Name])) > 0)
                     {
                         newestBuildForGlobal[gl.Name] = build;
                     }
-                    else if (Gbn.Compare(Gbn.Parse(build), Gbn.Parse(earliestBuildForGlobal[gl.Name])) < 0
-                        || (Gbn.Compare(Gbn.Parse(build), Gbn.Parse(earliestBuildForGlobal[gl.Name])) == 0
-                            && Gbn.Parse(build).IsTest && !Gbn.Parse(earliestBuildForGlobal[gl.Name]).IsTest))
+                    else if (earliestBuildForGlobal.TryGetValue(gl.Name, out var earliestGlobalBuild)
+                        && (Gbn.Compare(Gbn.Parse(build), Gbn.Parse(earliestGlobalBuild)) < 0
+                            || (Gbn.Compare(Gbn.Parse(build), Gbn.Parse(earliestGlobalBuild)) == 0
+                                && Gbn.Parse(build).IsTest && !Gbn.Parse(earliestGlobalBuild).IsTest)))
                     {
-                        earliestBuildForGlobal[gl.Name] = build;
+                        if (Gbn.Parse(build).Prefix != null)
+                        {
+                            earliestBuildForGlobal[gl.Name] = build;
+                        }
                     }
                 }
 
@@ -209,17 +220,24 @@ public static class TargetCompatCommand
                     {
                         allTypes[tp.Name] = tp;
                         newestBuildForType[tp.Name] = build;
-                        earliestBuildForType[tp.Name] = build;
+                        if (Gbn.Parse(build).Prefix != null)
+                        {
+                            earliestBuildForType[tp.Name] = build;
+                        }
                     }
                     else if (Gbn.Compare(Gbn.Parse(build), Gbn.Parse(newestBuildForType[tp.Name])) > 0)
                     {
                         newestBuildForType[tp.Name] = build;
                     }
-                    else if (Gbn.Compare(Gbn.Parse(build), Gbn.Parse(earliestBuildForType[tp.Name])) < 0
-                        || (Gbn.Compare(Gbn.Parse(build), Gbn.Parse(earliestBuildForType[tp.Name])) == 0
-                            && Gbn.Parse(build).IsTest && !Gbn.Parse(earliestBuildForType[tp.Name]).IsTest))
+                    else if (earliestBuildForType.TryGetValue(tp.Name, out var earliestTypeBuild)
+                        && (Gbn.Compare(Gbn.Parse(build), Gbn.Parse(earliestTypeBuild)) < 0
+                            || (Gbn.Compare(Gbn.Parse(build), Gbn.Parse(earliestTypeBuild)) == 0
+                                && Gbn.Parse(build).IsTest && !Gbn.Parse(earliestTypeBuild).IsTest)))
                     {
-                        earliestBuildForType[tp.Name] = build;
+                        if (Gbn.Parse(build).Prefix != null)
+                        {
+                            earliestBuildForType[tp.Name] = build;
+                        }
                     }
                 }
 
@@ -229,7 +247,10 @@ public static class TargetCompatCommand
                     {
                         allFunctions[fn.Name] = fn;
                         newestBuildForFunction[fn.Name] = build;
-                        earliestBuildForFunction[fn.Name] = build;
+                        if (Gbn.Parse(build).Prefix != null)
+                        {
+                            earliestBuildForFunction[fn.Name] = build;
+                        }
                     }
                     else if (string.Compare(build, newestBuildForFunction[fn.Name], StringComparison.Ordinal) > 0)
                     {
@@ -238,11 +259,15 @@ public static class TargetCompatCommand
                     // Track earliest by parsed version. If this build's version is less than
                     // the tracked earliest, replace it. On a version tie, prefer release
                     // over -w3t/-w3b test builds, since release sorts "later" in our scheme.
-                    else if (Gbn.Compare(Gbn.Parse(build), Gbn.Parse(earliestBuildForFunction[fn.Name])) < 0
-                        || (Gbn.Compare(Gbn.Parse(build), Gbn.Parse(earliestBuildForFunction[fn.Name])) == 0
-                            && Gbn.Parse(build).IsTest && !Gbn.Parse(earliestBuildForFunction[fn.Name]).IsTest))
+                    else if (earliestBuildForFunction.TryGetValue(fn.Name, out var earliestFunctionBuild)
+                        && (Gbn.Compare(Gbn.Parse(build), Gbn.Parse(earliestFunctionBuild)) < 0
+                            || (Gbn.Compare(Gbn.Parse(build), Gbn.Parse(earliestFunctionBuild)) == 0
+                                && Gbn.Parse(build).IsTest && !Gbn.Parse(earliestFunctionBuild).IsTest)))
                     {
-                        earliestBuildForFunction[fn.Name] = build;
+                        if (Gbn.Parse(build).Prefix != null)
+                        {
+                            earliestBuildForFunction[fn.Name] = build;
+                        }
                     }
                 }
             }
@@ -399,7 +424,10 @@ public static class TargetCompatCommand
                     newestBuildForType, newestBuildForFunction);
                 string countText = ", used " + count + " time" + (count > 1 ? "s" : "");
                 string detail;
-                if (earliestRelease is not null)
+                // If the earliest release is a bare build (no prefix), skip the "added in"
+                // line. The bare build cannot be substituted without per-schema feature
+                // data, so we report "not in <target>" instead of reporting the wrong build.
+                if (earliestRelease is not null && Gbn.Parse(earliestRelease).Prefix != null)
                 {
                     if (earliestTest != null && earliestTest != earliestRelease)
                     {

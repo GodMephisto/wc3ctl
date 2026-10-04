@@ -629,7 +629,7 @@ public sealed class TargetCompatTests
             var mapPath = Path.Combine(temp, "test.w3x");
             File.WriteAllBytes(mapPath, mapBytes);
 
-            var result = TargetCompatCommand.Execute(mapPath, schemaDir, null);
+            var result = TargetCompatCommand.Execute(mapPath, schemaDir, temp);
 
             Assert.Empty(result.Findings);
             Assert.True(result.IdentifiersChecked > 0);
@@ -814,7 +814,8 @@ public sealed class TargetCompatTests
             Directory.CreateDirectory(oldDir);
             GameSchemaCommand.Save(oldSchema, oldDir);
 
-            // Uses a bare version (no dash prefix) that is numerically newer.
+            // Uses a TFT release (with dash prefix) that is numerically newer than the target.
+            // When a bare schema also declares ExtraNative, the detail reports the TFT build name.
             var newJass = new JassApi(
                 Array.Empty<JassTypeDecl>(),
                 new[]
@@ -825,7 +826,7 @@ public sealed class TargetCompatTests
                 Array.Empty<JassGlobalDecl>(),
                 Array.Empty<JassFunctionDecl>());
 
-            var newSchema = new GameSchema(1, "3.0.0.24268", "3.0.0.24268",
+            var newSchema = new GameSchema(1, "TFT-v1.31.1.12173", "TFT-v1.31.1.12173",
                 Array.Empty<SchemaInput>(), new[] { "script" },
                 null, (SchemaTriggers?)null,
                 new Dictionary<string, JassApi>(StringComparer.Ordinal)
@@ -833,7 +834,7 @@ public sealed class TargetCompatTests
                     ["scripts/common.j"] = newJass,
                 });
 
-            var newDir = Path.Combine(temp, "3.0.0.24268");
+            var newDir = Path.Combine(temp, "TFT-v1.31.1.12173");
             Directory.CreateDirectory(newDir);
             GameSchemaCommand.Save(newSchema, newDir);
 
@@ -855,8 +856,8 @@ public sealed class TargetCompatTests
             var errors = result.Findings.Where(f => f.Severity == "error").ToList();
             Assert.Single(errors);
             Assert.Equal("ExtraNative", errors[0].Name);
-            // Detail should name the bare version 3.0.0.24268 (parsed numerically, newer than v1.30.1).
-            Assert.Contains("added in 3.0.0.24268", errors[0].Detail);
+            // Detail should name the TFT release (with dash prefix).
+            Assert.Contains("added in TFT-v1.31.1.12173", errors[0].Detail);
         }
         finally
         {
