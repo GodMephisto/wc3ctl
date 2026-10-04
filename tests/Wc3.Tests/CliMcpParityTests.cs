@@ -103,6 +103,8 @@ public class CliMcpParityTests
         ["player_set_force"] = "player set-force",
         ["force_list"] = "force list",
         ["force_set_flags"] = "force set-flags",
+        ["gamedata_schema_diff"] = "gamedata schema-diff",
+        ["map_compat"] = "compat",
         ["region_list"] = "region list",
         ["region_remove"] = "region remove",
         ["new_map"] = "new",
@@ -126,6 +128,8 @@ public class CliMcpParityTests
     // CLI commands that intentionally have no MCP tool (local dev / query utilities).
     private static readonly HashSet<string> CliOnly = new(StringComparer.Ordinal)
     {
+        "gamedata schema",
+        "gamedata schema-index",
         "roundtrip", "search", "diff", "render", "bundle object",
         "script functions", "extract", "convert", "validate",
         "repair generated-heroes", "repair reforged-3",

@@ -2,6 +2,7 @@
 // Read-only analysis (validate, lint, diff, search, script and string listings, the audits) and
 // the hero definition tools. Each read is checked against content put there through MCP first,
 // so an empty answer cannot pass for a correct one.
+using System.Text;
 using System.Text.Json;
 using Wc3.Commands;
 using Wc3.Model;
@@ -30,6 +31,87 @@ public sealed class McpSmokeInspectTests : McpSmokeBase
             $"script-compiles was {severity}: {Prop(compiles, "summary").GetString()}");
 
         Assert.True(Prop(await Call("roundtrip", Args(("map", Fixture))), "faithful").GetBoolean());
+    }
+
+    [Fact, Covers("map_compat")]
+    public async Task Map_compat_reports_missing_targets_and_checks_counts()
+    {
+        // Create a temp schema that declares MapCompatTestNative, plus copy the real target.
+        // MapCompatTestNative is not in data/schemas, so it will be a finding when targeting
+        // any build that does not declare it.
+        var tempSchemas = Path.Combine(Path.GetTempPath(), "wc3ctl-mcp-compat-test");
+        Directory.CreateDirectory(tempSchemas);
+        try
+        {
+            var jass = new JassApi(
+                Array.Empty<JassTypeDecl>(),
+                new[]
+                {
+                    new JassNativeDecl("MapCompatTestNative", Array.Empty<JassParameter>(), "boolean", false),
+                },
+                Array.Empty<JassGlobalDecl>(),
+                Array.Empty<JassFunctionDecl>());
+
+            var schema = new GameSchema(1, "MyCompatBuild", "MyCompatBuild",
+                Array.Empty<SchemaInput>(), new[] { "script" },
+                null, (SchemaTriggers?)null,
+                new Dictionary<string, JassApi>(StringComparer.Ordinal)
+                {
+                    ["scripts/common.j"] = jass,
+                });
+
+            var schemaDir = Path.Combine(tempSchemas, "MyCompatBuild");
+            Directory.CreateDirectory(schemaDir);
+            GameSchemaCommand.Save(schema, schemaDir);
+
+            // Also add a target schema that does NOT declare MapCompatTestNative.
+            var targetJass = new JassApi(
+                Array.Empty<JassTypeDecl>(),
+                Array.Empty<JassNativeDecl>(),
+                Array.Empty<JassGlobalDecl>(),
+                Array.Empty<JassFunctionDecl>());
+
+            var targetSchema = new GameSchema(1, "TFT-v1.30.1.10211", "TFT-v1.30.1.10211",
+                Array.Empty<SchemaInput>(), new[] { "script" },
+                null, (SchemaTriggers?)null,
+                new Dictionary<string, JassApi>(StringComparer.Ordinal)
+                {
+                    ["scripts/common.j"] = targetJass,
+                });
+
+            var targetSchemaDir = Path.Combine(tempSchemas, "TFT-v1.30.1.10211");
+            Directory.CreateDirectory(targetSchemaDir);
+            GameSchemaCommand.Save(targetSchema, targetSchemaDir);
+
+            // Write a script that calls MapCompatTestNative.
+            var scriptText = "function InitTriggers takes nothing returns nothing\n"
+                + "    call MapCompatTestNative()\n"
+                + "endfunction\n";
+            var mapPath = Fixture + ".test.w3x";
+            var bytes = SyntheticMap.Build(new Dictionary<string, byte[]>
+            {
+                ["war3map.j"] = Encoding.UTF8.GetBytes(scriptText),
+            });
+            await File.WriteAllBytesAsync(mapPath, bytes);
+            try
+            {
+                var compat = await Call("map_compat", Args(("map", mapPath), ("target", "TFT-v1.30.1.10211"), ("schemas_dir", tempSchemas)));
+                var findings = compat.EnumerateObject().Single(p => p.Name == "findings").Value.EnumerateArray().ToList();
+                Assert.Single(findings);
+                var el = findings[0];
+                Assert.Equal("error", Prop(el, "severity").GetString());
+                Assert.Equal("MapCompatTestNative", Prop(el, "name").GetString());
+                Assert.True(Prop(compat, "identifiersChecked").GetInt32() > 0);
+            }
+            finally
+            {
+                if (File.Exists(mapPath)) File.Delete(mapPath);
+            }
+        }
+        finally
+        {
+            if (Directory.Exists(tempSchemas)) Directory.Delete(tempSchemas, true);
+        }
     }
 
     [Fact, Covers("diff")]

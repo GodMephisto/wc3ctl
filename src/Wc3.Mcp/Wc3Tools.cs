@@ -1520,8 +1520,25 @@ public static class Wc3Tools
         catch (ArgumentException ex) { throw new McpException(ex.Message); }
     }
 
-    /// <summary>The variable that names the Warcraft III folder for every tool call.</summary>
     internal const string GameDirVariable = "WC3_GAME_DIR";
+
+    // ---- gamedata schema tools --------------------------------------------
+
+    [McpServerTool(Name = "map_compat", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Check a Warcraft III map against a target build (a schema folder path or build name). Reports compile-time incompatibilities (missing natives, globals, types, functions used by the map but absent from the target's scripts/common.j and scripts/blizzard.j) and display-time incompatibilities (object fields modified in the map but not defined in the target's object data). Returns IdentifiersChecked and FieldsChecked so you can tell 'checked and fine' from 'no script section to check'. Pass schemas_dir to override the schemas location.")]
+    public static CompatResult MapCompat(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Target build name or schema folder path to check compatibility against.")] string target,
+        [Description("Optional path to schemas directory containing schema folders with manifest.json. When omitted, searches <AppContext.BaseDirectory>/schemas first, then walks up from the base directory.")] string? schemas_dir = null)
+        => Run(() => TargetCompatCommand.Execute(map, target, schemas_dir));
+
+    [McpServerTool(Name = "gamedata_schema_diff", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Compare two schema folders (produced by gamedata schema) and report added, removed and changed object fields, trigger functions, script types and natives. Groups output by section (objects, triggers, script) then by file or category. A section only one build has is listed as not compared rather than everything added or removed. Use this to track what a patch changes across builds, or to check whether two maps targeting different patches are compatible.")]
+    public static SchemaDiffResult GameDataSchemaDiff(
+        [Description("Path to the first schema folder (from gamedata schema).")] string a,
+        [Description("Path to the second schema folder (from gamedata schema).")] string b,
+        [Description("Show changes for one section only: objects, triggers, or script. Omit for all.")] string? section = null)
+        => Run(() => GameSchemaCommand.Filter(GameSchemaCommand.Diff(a, b), section));
 
     /// <summary>
     /// A tool's game_dir argument, else WC3_GAME_DIR, else null (auto-detect). A value still holding
