@@ -1411,6 +1411,82 @@ public static class Program
         }));
         root.AddCommand(uabiProfile);
 
+        // ---- doctor: Devo's Map Doctor, run as an external program ----
+        var doctor = new Command("doctor",
+            "Run Devo's Map Doctor (MIT, github.com/devoltzz/devos-map-doctor) on a map. Found through "
+            + "WC3_DOCTOR or %LOCALAPPDATA%\\wc3ctl\\doctor\\<version>\\, and only a pinned build runs.");
+        void EmitDoctor(System.CommandLine.Parsing.ParseResult p, MapDoctorResult r)
+        {
+            Emit(p.GetValueForOption(jsonOption), r, () =>
+            {
+                var sb = new System.Text.StringBuilder();
+                sb.AppendLine($"doctor {r.Doctor}, {r.Command}, exit {r.ExitCode}");
+                if (r.Output is not null) sb.AppendLine($"wrote {r.Output}");
+                if (r.Result is { } j)
+                    sb.AppendLine(System.Text.Json.JsonSerializer.Serialize(j,
+                        new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+                if (r.Stderr is not null) sb.AppendLine(r.Stderr);
+                return sb.ToString().TrimEnd();
+            });
+            if (r.ExitCode != 0) Environment.ExitCode = r.ExitCode;
+        }
+
+        var docCheckMap = new Argument<string>("map", "Path to a .w3x/.w3m map.");
+        var docCheckGame = new Option<string?>("--game", "Check an older game instead, such as 1.27.");
+        var docCheck = new Command("check",
+            "Will the map run on Reforged 3.0, and what stops it. Read-only, never starts the game.")
+        { docCheckMap, docCheckGame };
+        docCheck.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            EmitDoctor(p, MapDoctorCommand.Check(p.GetValueForArgument(docCheckMap), p.GetValueForOption(docCheckGame)));
+        }));
+        doctor.AddCommand(docCheck);
+
+        var docInspectMap = new Argument<string>("map", "Path to a .w3x/.w3m map.");
+        var docInspectReport = new Option<string>("--report", () => "diag",
+            "One of diag, files, card, rawcodes, recipes.");
+        var docInspect = new Command("inspect",
+            "A read-only doctor report: protection and editor needs (diag), files, card, rawcodes or recipes.")
+        { docInspectMap, docInspectReport };
+        docInspect.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            EmitDoctor(p, MapDoctorCommand.ReadOnly(p.GetValueForOption(docInspectReport)!, p.GetValueForArgument(docInspectMap)));
+        }));
+        doctor.AddCommand(docInspect);
+
+        var docCompareA = new Argument<string>("map", "The first map.");
+        var docCompareB = new Argument<string>("other", "The map to compare it with.");
+        var docCompare = new Command("compare",
+            "What differs between two versions of a map, with names recovered on protected archives.")
+        { docCompareA, docCompareB };
+        docCompare.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            EmitDoctor(p, MapDoctorCommand.Compare(p.GetValueForArgument(docCompareA), p.GetValueForArgument(docCompareB)));
+        }));
+        doctor.AddCommand(docCompare);
+
+        var docFixMap = new Argument<string>("map", "Path to a .w3x/.w3m map.");
+        var docFixSteps = new Option<string[]>("--step",
+            "A fix step or extra, such as listfile, data, portraits, uabi. Repeatable. Prefix no- to drop "
+            + "a default step. None applies the steps the doctor picks for this map.")
+        { AllowMultipleArgumentsPerToken = true };
+        var docFixOut = new Option<string?>(new[] { "-o", "--out" },
+            "Where to write the repaired copy. Default <map>_doctor.<ext>. Never overwritten.");
+        var docFix = new Command("fix",
+            "Repair a COPY of the map for Reforged 3.0 with the doctor's Fix map. The original is never written.")
+        { docFixMap, docFixSteps, docFixOut };
+        docFix.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            EmitDoctor(p, MapDoctorCommand.Fix(p.GetValueForArgument(docFixMap),
+                p.GetValueForOption(docFixSteps), p.GetValueForOption(docFixOut)));
+        }));
+        doctor.AddCommand(docFix);
+        root.AddCommand(doctor);
+
         // ---- terrain editing ----
         void FinishTerrain(bool json, string? outOpt, string map, MapDocument doc,
             bool ok, string message, int tiles)

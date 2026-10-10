@@ -1292,6 +1292,57 @@ public static class Wc3Tools
         [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var).")] string? game_dir = null)
         => Run(() => EditorCatalogCommand.List(name, ResolveGameDir(game_dir)));
 
+    // ---- Devo's Map Doctor, run as an external program --------------------
+
+    private const string DoctorNote = " Runs Devo's Map Doctor (MIT, github.com/devoltzz/devos-map-doctor), "
+        + "found through WC3_DOCTOR or %LOCALAPPDATA%\\wc3ctl\\doctor\\<version>\\, and only a pinned build. "
+        + "Returns the doctor's own JSON unchanged.";
+
+    [McpServerTool(Name = "doctor_check", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Will this map run on Reforged 3.0, and if not, why. A verdict plus findings, each with a "
+        + "code, a severity (blocker, warning, info), the affected files or models, and whether the doctor "
+        + "can fix it. Catches what stops a map loading that wc3ctl's own checks do not, such as half "
+        + "written Buttonpos in SLK profile tables and models with more than 255 matrix groups. Never "
+        + "starts the game." + DoctorNote)]
+    public static MapDoctorResult DoctorCheck(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Check against an older game instead, 1.24a to 1.28.5 or 1.29.2, such as 1.27.")] string? game = null)
+        => Run(() => MapDoctorCommand.Check(map, game));
+
+    [McpServerTool(Name = "doctor_inspect", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Read-only doctor reports on one map. diag is what protects the map and what the World "
+        + "Editor needs, including whether it runs in SLK mode and the fix steps that apply. files lists "
+        + "the archive's files with recovered names, card the name, author, players and loading screen, "
+        + "rawcodes the object ids with names, recipes the item recipes the script makes." + DoctorNote)]
+    public static MapDoctorResult DoctorInspect(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("One of diag, files, card, rawcodes, recipes.")] string report = "diag")
+        => Run(() => MapDoctorCommand.ReadOnly(report, map));
+
+    [McpServerTool(Name = "doctor_compare", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("What differs between two versions of a map, file by file (added, removed, changed) "
+        + "with names recovered on protected archives, plus object, script and string summaries. The "
+        + "fastest way to see what someone else's fix actually changed." + DoctorNote)]
+    public static MapDoctorResult DoctorCompare(
+        [Description("The first map.")] string map,
+        [Description("The map to compare it with.")] string other)
+        => Run(() => MapDoctorCommand.Compare(map, other));
+
+    [McpServerTool(Name = "doctor_fix", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Repair a COPY of a map for Reforged 3.0 with the doctor's Fix map: protection, fake "
+        + "file tables, scrambled ids, data the 3.0 engine refuses, broken SLK tables, crashing models, "
+        + "portrait cameras, data pointers, ability lists. The original is never written and an existing "
+        + "output is never overwritten. Run doctor_inspect (diag) first to see which steps apply." + DoctorNote)]
+    public static MapDoctorResult DoctorFix(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Where to write the repaired copy. Default <map>_doctor.<ext> beside the input.")] string? out_path = null,
+        [Description("Steps and extras, without dashes, such as listfile, data, portraits, uabi. Prefix no- to "
+            + "drop a default step. Empty applies the steps the doctor picks for this map. Allowed: unprotect, "
+            + "fake-files, listfile, ids, data, script-back, editor-files, counts, doodads, gui-triggers, "
+            + "script-objects, safe-units, models, model-names, portraits, data-pointers, kk-textures, "
+            + "green-icons, uabi, preload, single-player, shrink, strip-indent.")] string[]? options = null)
+        => Run(() => MapDoctorCommand.Fix(map, options, out_path));
+
     // ---- shared plumbing -------------------------------------------------
 
     /// <summary>Expected failures become clean MCP tool errors, never stack traces.</summary>
