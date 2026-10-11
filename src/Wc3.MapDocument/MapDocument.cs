@@ -587,10 +587,11 @@ public sealed class MapDocument
         return false;
     }
 
-    /// <summary>Block index to payload size, for every entry with no name.</summary>
+    /// <summary>Block index to payload size, for every entry with no name. RawSize, so asking
+    /// for sizes decompresses nothing.</summary>
     public IReadOnlyDictionary<int, int> UnnamedBlocks() =>
         _files.Where(f => f.FileName is null)
-            .ToDictionary(f => f.BlockIndex, f => f.RawBytes.Length);
+            .ToDictionary(f => f.BlockIndex, f => f.RawSize);
 
     /// <summary>
     /// What an entry actually is, read from its own bytes rather than from its name.
@@ -634,7 +635,9 @@ public sealed class MapDocument
                 int end = body.IndexOf((byte)0);
                 return System.Text.Encoding.Latin1.GetString(end < 0 ? body : body[..end]);
             }
-            if (size == 0) break;
+            // A size past the bytes in hand ends the walk. Callers pass a prefix, and a garbage size
+            // over int.MaxValue would otherwise step backwards and never stop.
+            if (size == 0 || size > (uint)(data.Length - p - 8)) break;
             p += 8 + (int)size;
         }
         return "";
@@ -714,6 +717,31 @@ public sealed class MapDocument
         var blockSize = SourceBlockSize();
         bool needsBlockSize = blockSize != MpqArchiveCreateOptions.DefaultBlockSize;
 
+        try
+        {
+            WriteArchive(builder, mpq, dropListFile, dropAttributes, grown, blockSize, needsBlockSize);
+        }
+        catch (ArgumentException ex) when (ex.Message.Contains("Fixed position files overlap", StringComparison.Ordinal))
+        {
+            // A protection, not a defect. The archive places files on top of each other and on the
+            // header on purpose, which the game reads happily and no rebuild can reproduce. Measured
+            // on GGGA_V0.07e.w3x, where every save path failed with War3Net's bare message.
+            throw new InvalidOperationException(
+                "This map is protected so that its archive files overlap each other and the header. "
+                + "It reads normally but cannot be rebuilt, so it cannot be saved or round-tripped. "
+                + "Unprotect a copy first (doctor_fix, or wc3ctl doctor fix), then edit that copy.", ex);
+        }
+
+        using var outStream = new MemoryStream();
+        outStream.Write(PreArchiveData, 0, PreArchiveData.Length);
+        mpq.Position = 0;
+        mpq.CopyTo(outStream);
+        return outStream.ToArray();
+    }
+
+    private static void WriteArchive(MpqArchiveBuilder builder, MemoryStream mpq, bool dropListFile,
+        bool dropAttributes, ushort? grown, ushort blockSize, bool needsBlockSize)
+    {
         if (dropListFile || dropAttributes)
             builder.SaveTo(mpq, new MpqArchiveCreateOptions
             {
@@ -730,12 +758,6 @@ public sealed class MapDocument
                 BlockSize = blockSize,
                 HashTableSize = grown,
             }, leaveOpen: true);
-
-        using var outStream = new MemoryStream();
-        outStream.Write(PreArchiveData, 0, PreArchiveData.Length);
-        mpq.Position = 0;
-        mpq.CopyTo(outStream);
-        return outStream.ToArray();
     }
 
     /// <summary>
