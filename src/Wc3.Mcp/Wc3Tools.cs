@@ -222,6 +222,20 @@ public static class Wc3Tools
             return r;
         });
 
+    [McpServerTool(Name = "script_decompile", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Turn every Lua entry of a map that ships as precompiled Lua 5.3 bytecode (war3map.lua or a module it requires, common in YDWE maps) back into Lua source that runs the same, and save the map to out_path. The source is a transcription of the bytecode, one statement per instruction with gotos, not the author's original text. Both standard Lua 5.3 and the KK YDWE engine's opcode numbering are read. Nothing is written when the map holds no bytecode. The input map is NEVER modified.")]
+    public static object ScriptDecompile(
+        [Description("Path to a .w3x/.w3m map file or map folder.")] string map,
+        [Description("Where to save the decompiled map.")] string out_path)
+        => Run(() =>
+        {
+            var full = ResolveOutPath(map, out_path);
+            var doc = LoadMap(map);
+            var r = LuaDecompileCommand.Decompile(doc);
+            if (r.Files.Count > 0) doc.Save(full);
+            return new { r.Files, r.Failed, SavedTo = r.Files.Count > 0 ? full : null };
+        });
+
     [McpServerTool(Name = "terrain_info", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("The terrain grid's extents in corners, plus the map's ground and cliff tile lists. Texture fields on a corner are indexes into those lists, so read this first to know what an index means.")]
     public static TerrainEditCommand.TerrainInfo TerrainInfoTool(

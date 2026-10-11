@@ -20,4 +20,21 @@ public sealed partial class McpToolSmokeTests
 
         Assert.Contains("already Lua", await CallError("script_to_lua", Args(("map", outPath), ("out_path", NewOut("to-lua-again")))));
     }
+
+    [Fact, Covers("script_decompile")]
+    public async Task Script_decompile_turns_bytecode_back_into_source()
+    {
+        var none = await Call("script_decompile", Args(("map", Fixture), ("out_path", NewOut("decompile-none"))));
+        Assert.Equal(0, Prop(none, "files").GetArrayLength());
+
+        var folder = FolderFixture();
+        File.Delete(Path.Combine(folder, "war3map.j"));
+        File.Copy(Path.Combine(AppContext.BaseDirectory, "Fixtures", "Lua", "bytecode-ops.luac"), Path.Combine(folder, "war3map.lua"));
+        var outPath = NewOut("decompile");
+        var r = await Call("script_decompile", Args(("map", folder), ("out_path", outPath)));
+        Assert.Equal("war3map.lua", Prop(Prop(r, "files")[0], "fileName").GetString());
+
+        var check = await Call("script_check", Args(("map", outPath)));
+        Assert.True(Prop(check, "ok").GetBoolean());
+    }
 }

@@ -740,6 +740,39 @@ public static class Program
         }));
         script.AddCommand(scriptToLua);
 
+        var decompileOut = new Option<string?>(new[] { "-o", "--out" },
+            "Output map path. Default '<map>.decompiled.<ext>' next to the input. An existing file is never overwritten.");
+        var scriptDecompile = new Command("decompile",
+            "Turn Lua entries shipped as Lua 5.3 bytecode back into Lua source that runs the same. "
+            + "Nothing is written when the map holds no bytecode.")
+        { mapArg, decompileOut };
+        scriptDecompile.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            string trimmed = Path.TrimEndingDirectorySeparator(map);
+            string dest = p.GetValueForOption(decompileOut) ?? Path.Combine(
+                Path.GetDirectoryName(trimmed) ?? "",
+                Path.GetFileNameWithoutExtension(trimmed) + ".decompiled" + Path.GetExtension(trimmed));
+            if (File.Exists(dest) || Directory.Exists(dest))
+                throw new IOException($"{dest} already exists, choose another path with -o.");
+            var doc = MapDocument.Load(map);
+            var r = LuaDecompileCommand.Decompile(doc);
+            string? saved = null;
+            if (r.Files.Count > 0)
+            {
+                doc.Save(dest);
+                saved = dest;
+            }
+            if (r.Failed.Count > 0) exitCode[0] = 1;
+            Emit(p.GetValueForOption(jsonOption), new { r.Files, r.Failed, SavedTo = saved }, () =>
+                (r.Files.Count == 0 && r.Failed.Count == 0 ? "no Lua bytecode in this map, nothing written" : "")
+                + string.Concat(r.Files.Select(f => $"{f.FileName} ({f.OpcodeTable}), {f.Functions} function(s), {f.BytesBefore} to {f.BytesAfter} bytes\n"))
+                + string.Concat(r.Failed.Select(f => $"  ! {f}\n"))
+                + (saved is null ? "" : $"saved: {saved}"));
+        }));
+        script.AddCommand(scriptDecompile);
+
         var internalPathArg = new Argument<string?>("internal-path", () => null, "Exact internal file path to extract.");
         var outOption = new Option<string?>(new[] { "-o", "--out" },
             "Output directory (or output file for a single named extraction). Default: current directory.");
