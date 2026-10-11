@@ -45,7 +45,20 @@ public sealed class MapDocument
 
     private MapDocument(byte[] originalBytes) => _originalBytes = originalBytes;
 
-    public static MapDocument Load(string path) => Load(File.ReadAllBytes(path));
+    /// <summary>
+    /// The folder a folder-mode map was loaded from, or null for an archive. Save writes such a
+    /// document back as a folder (see <see cref="FolderMap"/>).
+    /// </summary>
+    public string? SourceFolder { get; private set; }
+
+    /// <summary>Loads a .w3x/.w3m archive, or a map saved in folder mode when the path is a directory.</summary>
+    public static MapDocument Load(string path)
+    {
+        if (!Directory.Exists(path)) return Load(File.ReadAllBytes(path));
+        var doc = Load(FolderMap.Pack(path));
+        doc.SourceFolder = Path.GetFullPath(path);
+        return doc;
+    }
 
     public static MapDocument Load(byte[] fileBytes)
     {
@@ -627,7 +640,15 @@ public sealed class MapDocument
         return "";
     }
 
-    public void Save(string path) => File.WriteAllBytes(path, SaveToBytes());
+    /// <summary>
+    /// Saves to <paramref name="path"/> in the form the map was loaded in, a folder for a folder
+    /// map and an archive otherwise.
+    /// </summary>
+    public void Save(string path)
+    {
+        if (SourceFolder is not null) FolderMap.Unpack(SaveToBytes(), path);
+        else File.WriteAllBytes(path, SaveToBytes());
+    }
 
     public byte[] SaveToBytes()
     {

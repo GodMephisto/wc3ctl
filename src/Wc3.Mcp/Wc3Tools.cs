@@ -1357,7 +1357,7 @@ public static class Wc3Tools
     {
         if (string.IsNullOrWhiteSpace(map))
             throw new McpException("map path is required");
-        if (!File.Exists(map))
+        if (!File.Exists(map) && !Directory.Exists(map))
             throw new McpException($"map not found: {map}");
         try { return MapDocument.Load(map); }
         catch (Exception ex) { throw new McpException($"could not load '{map}': {ex.Message}"); }
@@ -1455,9 +1455,13 @@ public static class Wc3Tools
     {
         if (string.IsNullOrWhiteSpace(outPath))
             throw new McpException("out_path is required");
-        string full = Path.GetFullPath(outPath);
-        if (string.Equals(full, Path.GetFullPath(map), StringComparison.OrdinalIgnoreCase))
+        string full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(outPath));
+        string input = Path.TrimEndingDirectorySeparator(Path.GetFullPath(map));
+        if (string.Equals(full, input, StringComparison.OrdinalIgnoreCase))
             throw new McpException("out_path must not be the input map file itself");
+        // A folder map's copy cannot live inside the folder it was read from.
+        if (Directory.Exists(input) && full.StartsWith(input + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            throw new McpException("out_path must not be inside the input map folder");
         return full;
     }
 
