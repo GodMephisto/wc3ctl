@@ -208,6 +208,20 @@ public static class Wc3Tools
             return new { r.ScriptFile, r.Style, r.Changed, r.BytesBefore, r.BytesAfter, SavedTo = r.Changed ? full : null };
         });
 
+    [McpServerTool(Name = "script_to_lua", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Convert a JASS map to a Lua map and save it to out_path. The script becomes war3map.lua, which keeps the JASS rules Lua lacks (32 bit integer wrap, integer division toward zero, division by zero gives zero, a null string concatenates as empty, unset array slots read their type default), and the w3i script language is set to Lua so the game runs it. war3map.j is left as a one line stub. Warnings name untyped calls, and custom text triggers the World Editor would regenerate as JASS. Lua maps are refused. The input map is NEVER modified.")]
+    public static JassToLuaSummary ScriptToLua(
+        [Description("Path to a .w3x/.w3m map file or map folder.")] string map,
+        [Description("Where to save the converted map.")] string out_path)
+        => Run(() =>
+        {
+            var full = ResolveOutPath(map, out_path);
+            var doc = LoadMap(map);
+            var r = JassToLuaCommand.Convert(doc);
+            doc.Save(full);
+            return r;
+        });
+
     [McpServerTool(Name = "terrain_info", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("The terrain grid's extents in corners, plus the map's ground and cliff tile lists. Texture fields on a corner are indexes into those lists, so read this first to know what an index means.")]
     public static TerrainEditCommand.TerrainInfo TerrainInfoTool(

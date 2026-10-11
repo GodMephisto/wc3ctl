@@ -714,6 +714,32 @@ public static class Program
         }));
         script.AddCommand(scriptFormat);
 
+        var toLuaOut = new Option<string?>(new[] { "-o", "--out" },
+            "Output map path. Default '<map>.lua.<ext>' next to the input. An existing file is never overwritten.");
+        var scriptToLua = new Command("to-lua",
+            "Convert a JASS map to a Lua map. The script becomes war3map.lua with the JASS integer, division "
+            + "and null string rules kept, and the w3i script language is set to Lua.")
+        { mapArg, toLuaOut };
+        scriptToLua.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            string trimmed = Path.TrimEndingDirectorySeparator(map);
+            string dest = p.GetValueForOption(toLuaOut) ?? Path.Combine(
+                Path.GetDirectoryName(trimmed) ?? "",
+                Path.GetFileNameWithoutExtension(trimmed) + ".lua" + Path.GetExtension(trimmed));
+            if (File.Exists(dest) || Directory.Exists(dest))
+                throw new IOException($"{dest} already exists, choose another path with -o.");
+            var doc = MapDocument.Load(map);
+            var r = JassToLuaCommand.Convert(doc);
+            doc.Save(dest);
+            Emit(p.GetValueForOption(jsonOption), new { r.ScriptFile, r.Functions, r.ExsLiterals, r.LuaChunks, r.BytesBefore, r.BytesAfter, r.UsedGameHeaders, r.Warnings, SavedTo = dest }, () =>
+                $"{r.ScriptFile} converted to war3map.lua, {r.Functions} function(s), {r.BytesBefore} to {r.BytesAfter} bytes\nsaved: {dest}"
+                + (r.Warnings.Count == 0 ? "" : $"\n{r.Warnings.Count} warning(s)" + string.Concat(r.Warnings.Take(20).Select(w => "\n  ! " + w))
+                   + (r.Warnings.Count > 20 ? $"\n  ... {r.Warnings.Count - 20} more, see --json" : "")));
+        }));
+        script.AddCommand(scriptToLua);
+
         var internalPathArg = new Argument<string?>("internal-path", () => null, "Exact internal file path to extract.");
         var outOption = new Option<string?>(new[] { "-o", "--out" },
             "Output directory (or output file for a single named extraction). Default: current directory.");

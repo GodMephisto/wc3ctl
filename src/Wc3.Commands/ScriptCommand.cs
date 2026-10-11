@@ -180,9 +180,16 @@ public static class ScriptCommand
     /// <summary>True when the script entry is a Lua script rather than JASS.</summary>
     public static bool IsLua(string scriptFile) => scriptFile.EndsWith(".lua", StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>The map's script entry, war3map.j first, else war3map.lua.</summary>
+    /// <summary>
+    /// The map's script entry, war3map.j first, else war3map.lua. A map whose w3i says Lua runs
+    /// its Lua whatever JASS it still carries (a converted map keeps a stub war3map.j, since an
+    /// entry cannot be removed), so there the Lua comes first.
+    /// </summary>
     private static MapFileEntry ScriptEntry(MapDocument doc) =>
-        doc.GetFile("war3map.j")
+        ((doc.GetFile("war3map.w3i")?.Model as War3Net.Build.Info.MapInfo)?.ScriptLanguage == War3Net.Build.Info.ScriptLanguage.Lua
+            ? doc.GetFile("war3map.lua") ?? doc.GetFile(@"scripts\war3map.lua")
+            : null)
+        ?? doc.GetFile("war3map.j")
         ?? doc.GetFile(@"scripts\war3map.j")
         ?? doc.GetFile("war3map.lua")
         ?? doc.GetFile(@"scripts\war3map.lua")

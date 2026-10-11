@@ -35,6 +35,7 @@ public class CliMcpParityTests
         ["script_functions"] = "script functions",
         ["script_check"] = "script check",
         ["script_format"] = "script format",
+        ["script_to_lua"] = "script to-lua",
         ["repair_generated"] = "repair-generated",
         ["hero_lint"] = "hero lint",
         ["hero_install"] = "hero install",

@@ -498,7 +498,7 @@ SOFTWARE.
 
 ## Devo's Map Doctor
 
-The Lua 5.3 lexer, parser and printer under src/Wc3.Commands/Lua are ported from its lua_ast.py, and the doctor tools run its release as an external program. devoltzz, MIT, https://github.com/devoltzz/devos-map-doctor
+The Lua 5.3 lexer, parser and printer under src/Wc3.Commands/Lua are ported from its lua_ast.py, the JASS to Lua converter (src/Wc3.Commands/Lua/JassToLua.cs) from its jass2lua.py at commit 80efaf6, and the doctor tools run its release as an external program. devoltzz, MIT, https://github.com/devoltzz/devos-map-doctor
 
 ```
 MIT License
