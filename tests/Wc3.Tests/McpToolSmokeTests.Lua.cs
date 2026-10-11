@@ -3,8 +3,10 @@
 // parses as Lua 5.3, and the input map must come back unchanged.
 namespace Wc3.Tests;
 
-public sealed partial class McpToolSmokeTests
+public sealed class McpSmokeLuaTests : McpSmokeBase
 {
+    public McpSmokeLuaTests(SmokeFixture f) : base(f) { }
+
     [Fact, Covers("script_to_lua")]
     public async Task Script_to_lua_writes_a_lua_map_and_refuses_one_already_lua()
     {

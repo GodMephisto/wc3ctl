@@ -25,4 +25,4 @@ jobs:
         run: dotnet build --no-restore -c Release
 
       - name: Hermetic tests
-        run: dotnet test --no-build -c Release --filter 'Category!=Corpus&Category!=GameData'
+        run: dotnet test --no-build -c Release --filter 'Category!=Corpus&Category!=GameData&Category!=Doctor'

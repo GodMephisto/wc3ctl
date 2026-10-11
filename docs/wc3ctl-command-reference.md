@@ -1032,7 +1032,7 @@ The three filter strings, quoted from `CLAUDE.md` lines 38 to 41.
 
 ```
 dotnet build
-dotnet test --filter "Category!=Corpus&Category!=GameData"   # hermetic (CI-safe)
+dotnet test --filter "Category!=Corpus&Category!=GameData&Category!=Doctor"   # hermetic (CI-safe)
 dotnet test --filter "Category=GameData"                     # needs WC3 install at C:\Warcraft III
 dotnet test --filter "Category=Corpus"                       # needs a real .w3x on disk
 ```

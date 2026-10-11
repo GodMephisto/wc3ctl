@@ -354,7 +354,7 @@ In PowerShell,
 ```powershell
 git clone https://github.com/GodMephisto/wc3ctl
 cd wc3ctl
-dotnet test --filter "Category!=Corpus&Category!=GameData"
+dotnet test --filter "Category!=Corpus&Category!=GameData&Category!=Doctor"
 powershell -ExecutionPolicy Bypass -File .\scripts\publish-all.ps1
 ```
 
@@ -377,9 +377,10 @@ apps.
 | `tests/` | tests for the commands, the command line, the server and Studio |
 
 ```powershell
-dotnet test --filter "Category!=Corpus&Category!=GameData"   # what CI runs, needs nothing else
+dotnet test --filter "Category!=Corpus&Category!=GameData&Category!=Doctor"   # what CI runs, needs nothing else
 dotnet test --filter "Category=GameData"                     # needs a Warcraft III install
 dotnet test --filter "Category=Corpus"                       # needs real maps on disk
+dotnet test --filter "Category=Doctor"                       # needs Devo's Map Doctor installed
 ```
 
 Corpus tests read maps from `Documents\Warcraft III\Maps\Download`, or from the

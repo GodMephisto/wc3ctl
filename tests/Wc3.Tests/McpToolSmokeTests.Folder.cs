@@ -5,20 +5,9 @@ using Wc3.Model;
 
 namespace Wc3.Tests;
 
-public sealed partial class McpToolSmokeTests
+public sealed class McpSmokeFolderTests : McpSmokeBase
 {
-    private string FolderFixture()
-    {
-        var folder = Path.Combine(_f.Dir, $"folder-{Guid.NewGuid():N}.w3x");
-        foreach (var f in MapDocument.Load(Fixture).Files)
-        {
-            if (f.FileName is null || f.FileName.StartsWith('(')) continue;
-            var path = Path.Combine(folder, f.FileName.Replace('\\', Path.DirectorySeparatorChar));
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            File.WriteAllBytes(path, f.RawBytes);
-        }
-        return folder;
-    }
+    public McpSmokeFolderTests(SmokeFixture f) : base(f) { }
 
     [Fact]
     public async Task A_folder_map_reads_and_edits_through_the_tools()

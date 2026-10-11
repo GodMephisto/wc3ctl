@@ -15,6 +15,7 @@ namespace Wc3.Tests;
 /// remap plan, objects, copy/skip decisions, string inlining and script summary —
 /// one code path, so they cannot drift) while writing nothing into the target.
 /// </summary>
+[Collection("Serial")]
 public class PortPreviewTests
 {
     // Source: custom hero H000 (custom ability A000, imported icon, TRIGSTR name) plus a

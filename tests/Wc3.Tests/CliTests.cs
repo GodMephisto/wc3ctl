@@ -1,6 +1,7 @@
 // tests/Wc3.Tests/CliTests.cs
 namespace Wc3.Tests;
 
+[Collection("Serial")]
 public class CliTests
 {
     [Fact]

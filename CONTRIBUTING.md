@@ -17,7 +17,7 @@ You need Windows and the .NET 8 SDK.
 git clone https://github.com/GodMephisto/wc3ctl
 cd wc3ctl
 dotnet build
-dotnet test --filter "Category!=Corpus&Category!=GameData"
+dotnet test --filter "Category!=Corpus&Category!=GameData&Category!=Doctor"
 ```
 
 Tests marked `GameData` need a Warcraft III install, and `Corpus` tests need

@@ -21,7 +21,7 @@ jobs:
           dotnet-version: 8.0.x
 
       - name: Test
-        run: dotnet test -c Release --filter "Category!=Corpus&Category!=GameData"
+        run: dotnet test -c Release --filter "Category!=Corpus&Category!=GameData&Category!=Doctor"
 
       # Each into a fresh folder. Publishing over an old folder keeps any older-version DLL whose
       # file date is newer, which once left the CLI unable to start its MCP server.

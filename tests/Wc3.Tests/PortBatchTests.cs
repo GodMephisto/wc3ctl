@@ -17,6 +17,7 @@ namespace Wc3.Tests;
 /// custom dependencies are ported once and reused, and the merged script closure is
 /// spliced a single time.
 /// </summary>
+[Collection("Serial")]
 public class PortBatchTests
 {
     // Two heroes H000/H001 with their own custom abilities A000/A001, BOTH referencing
