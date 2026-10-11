@@ -18,7 +18,8 @@ public class McpServerTests
     {
         "asset_list", "audit_ability", "audit_fidelity", "audit_hero", "audit_map",
         "audit_readiness", "bundle_unit", "camera_add", "camera_list", "camera_remove",
-        "camera_set", "deprotect_map", "diff", "editor_catalog_get", "editor_catalog_list",
+        "camera_set", "deprotect_map", "diff", "doctor_check", "doctor_compare", "doctor_fix",
+        "doctor_inspect", "editor_catalog_get", "editor_catalog_list",
         "file_get_text", "file_list", "file_set", "force_list", "force_set_flags", "hero_install",
         "hero_lint", "hero_roster", "imports_list", "lint", "list_files", "map_info",
         "map_info_get", "map_info_set", "new_map", "object_field_options", "object_form",

@@ -115,6 +115,12 @@ public static class MapDoctorCommand
 
             // The doctor names its result <map>_fixed.<ext> beside the input it was given.
             var produced = Path.Combine(work, "map_fixed" + ext);
+
+            // On a map with nothing to repair the doctor says so, outcome "nothing" and file null,
+            // and writes no file. That is an answer, so it is returned with no output path.
+            if (!File.Exists(produced) && r.Result is { } json
+                && json.TryGetProperty("outcome", out var outcome) && outcome.GetString() == "nothing")
+                return r with { Output = null };
             if (!File.Exists(produced))
                 throw new InvalidOperationException(
                     $"the doctor exited 0 but wrote no {Path.GetFileName(produced)} in {work}.");
