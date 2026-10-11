@@ -33,6 +33,8 @@ public class CliMcpParityTests
         ["search"] = "search",
         ["diff"] = "diff",
         ["script_functions"] = "script functions",
+        ["script_check"] = "script check",
+        ["script_format"] = "script format",
         ["repair_generated"] = "repair-generated",
         ["hero_lint"] = "hero lint",
         ["hero_install"] = "hero install",

@@ -187,6 +187,27 @@ public static class Wc3Tools
         [Description("Function or global name to find uses of.")] string name)
         => Run(() => ScriptCommand.References(LoadMap(map), name));
 
+    [McpServerTool(Name = "script_check", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Check the map script for errors that stop it loading, war3map.j or war3map.lua. Lua is checked against Lua 5.3 exactly as luac 5.3.6 would, with its line and message, JASS by the built-in JASS checks. A script that fails here cannot run, and the game gives no reason, it just shows no slots.")]
+    public static ScriptCheckResult ScriptCheck(
+        [Description("Path to a .w3x/.w3m map file or map folder.")] string map)
+        => Run(() => ScriptCommand.Check(LoadMap(map)));
+
+    [McpServerTool(Name = "script_format", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Reprint a Lua map script and save the map to out_path. pretty is indented with comments kept, canonical is one fixed form for diffing two builds. The result compiles to the same Lua instructions as the original. JASS maps are refused. The input map is NEVER modified, and nothing is written when the script is already in that form.")]
+    public static object ScriptFormat(
+        [Description("Path to a .w3x/.w3m map file or map folder.")] string map,
+        [Description("Where to save the reformatted map.")] string out_path,
+        [Description("pretty or canonical.")] string style = "pretty")
+        => Run(() =>
+        {
+            var full = ResolveOutPath(map, out_path);
+            var doc = LoadMap(map);
+            var r = ScriptCommand.Format(doc, style);
+            if (r.Changed) doc.Save(full);
+            return new { r.ScriptFile, r.Style, r.Changed, r.BytesBefore, r.BytesAfter, SavedTo = r.Changed ? full : null };
+        });
+
     [McpServerTool(Name = "terrain_info", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("The terrain grid's extents in corners, plus the map's ground and cliff tile lists. Texture fields on a corner are indexes into those lists, so read this first to know what an index means.")]
     public static TerrainEditCommand.TerrainInfo TerrainInfoTool(

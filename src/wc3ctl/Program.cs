@@ -672,6 +672,48 @@ public static class Program
         }));
         script.AddCommand(scriptRepair);
 
+        var scriptCheck = new Command("check",
+            "Check the map script for errors that stop it loading. A Lua script is checked against "
+            + "Lua 5.3 exactly as luac would, a JASS script by the built-in JASS checks. Exits 1 on an error.")
+        { mapArg };
+        scriptCheck.SetHandler((string map, bool json) => RunSafely(() =>
+        {
+            var r = ScriptCommand.Check(MapDocument.Load(map));
+            if (!r.Ok) exitCode[0] = 1;
+            Emit(json, r, () =>
+                $"{r.ScriptFile} ({r.Language}): {(r.Ok ? "OK" : "errors")}"
+                + string.Concat(r.Issues.Select(i =>
+                    $"\n  {i.Severity.ToString().ToLowerInvariant()}{(i.Line > 0 ? $" line {i.Line}" : "")}. {i.Message}")));
+        }), mapArg, jsonOption);
+        script.AddCommand(scriptCheck);
+
+        var formatStyle = new Option<string>("--style", () => "pretty", "pretty (indented, comments kept) or canonical (one fixed form, for diffing).");
+        var formatOut = new Option<string?>(new[] { "-o", "--out" },
+            "Output map path. Default '<map>.formatted.<ext>' next to the input, the original is never overwritten.");
+        var scriptFormat = new Command("format",
+            "Reprint a Lua map script, pretty or canonical. The result compiles to the same Lua "
+            + "instructions as the original. JASS maps are refused.")
+        { mapArg, formatStyle, formatOut };
+        scriptFormat.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = ScriptCommand.Format(doc, p.GetValueForOption(formatStyle)!);
+            string? dest = null;
+            if (r.Changed)
+            {
+                dest = p.GetValueForOption(formatOut) ?? Path.Combine(
+                    Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(map)) ?? "",
+                    Path.GetFileNameWithoutExtension(Path.TrimEndingDirectorySeparator(map)) + ".formatted" + Path.GetExtension(Path.TrimEndingDirectorySeparator(map)));
+                doc.Save(dest);
+            }
+            Emit(p.GetValueForOption(jsonOption), new { r.ScriptFile, r.Style, r.Changed, r.BytesBefore, r.BytesAfter, SavedTo = dest }, () =>
+                r.Changed ? $"{r.ScriptFile} reprinted {r.Style}, {r.BytesBefore} to {r.BytesAfter} bytes\nsaved: {dest}"
+                          : $"{r.ScriptFile} is already {r.Style}, nothing written");
+        }));
+        script.AddCommand(scriptFormat);
+
         var internalPathArg = new Argument<string?>("internal-path", () => null, "Exact internal file path to extract.");
         var outOption = new Option<string?>(new[] { "-o", "--out" },
             "Output directory (or output file for a single named extraction). Default: current directory.");
