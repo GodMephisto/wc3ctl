@@ -19,10 +19,22 @@
 # When it stops. When the game exits, after -Minutes, or on Ctrl+C. It then runs analyze.py, which
 # writes report.md into the session folder, one entry per drop with its most likely cause.
 #
+# Forced GC, for a Lua map. Warcraft III frees Lua memory lazily, so a memory slope measured from the
+# very start of a recording overstates a leak. Before a baseline, force a collection twice in the map
+# (many Lua maps expose a chat command, otherwise a small test trigger can), then press G in this
+# window. wc3watch writes a gc_probe event, and analyze.py then reports the slope from that point and
+# marks it on the chart. See README.md.
+#
 # How to run it.
 #   pwsh -File wc3watch.ps1                 wait for the game, record until it exits
 #   pwsh -File wc3watch.ps1 -Minutes 30     stop after 30 minutes
-#   python analyze.py <session folder>      re-run the analysis on a recorded session
+#   press G in this window                  mark a forced garbage collection for a Lua map
+#
+# What analyze.py can do with a session.
+#   python analyze.py <session folder>      write report.md and print the header
+#   python analyze.py summary <session>     one screen summary
+#   python analyze.py chart <session>       an SVG line chart beside the data
+#   python analyze.py diff <a> <b>          two sessions side by side
 param(
     [int]$Minutes = 0,
     [string]$OutRoot = (Join-Path ([Environment]::GetFolderPath('MyDocuments')) "wc3watch"),
@@ -213,6 +225,15 @@ try {
                 $gpu, (Csv $topCpu), (Csv $topGpu)) -join ','
             $samplesW.WriteLine($row.Replace("`r", ''))
             $samplesW.Flush()
+
+            # Press G to mark a forced garbage collection, the Lua map baseline. KeyAvailable needs a
+            # real console, so a run with redirected input simply skips it.
+            try {
+                if ([Console]::KeyAvailable) {
+                    $key = [Console]::ReadKey($true)
+                    if ($key.Key -eq 'G') { Event "gc_probe" "operator pressed G, forced GC baseline" }
+                }
+            } catch { }
 
             Read-GameLog
             $r = Replay-Stamp
