@@ -1619,6 +1619,80 @@ public static class Wc3Tools
         [Description("Path to the second .w3x/.w3m map.")] string other)
         => Run(() => MpqBytesDiffCommand.Execute(RequireMapPath(map), RequireMapPath(other)));
 
+    [McpServerTool(Name = "mpq_rebuild", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Rebuild a map archive from scratch into a healthy one, re-placing every readable "
+        + "entry and dropping the blocks protection made unreadable or left nameless. Reports the "
+        + "entry counts before and after and the names dropped. Writes a copy, the input map is "
+        + "never modified in place.")]
+    public static MpqRebuildResult MpqRebuild(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Output map path. The input map is never overwritten.")] string? out_path,
+        [Description("Force a larger hash table. Doubles the source capacity, then raises it until 3/4 occupancy fits. Default false.")] bool grow_hash = false)
+        => Run(() => MpqRebuildCommand.Execute(RequireMapPath(map), ResolveOutPath(map, out_path), grow_hash));
+
+    [McpServerTool(Name = "mpq_merge", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Merge two map archives into one, taking every readable named entry from both. A "
+        + "name in both is resolved by the preferred side and reported as a conflict. Writes a copy "
+        + "of the first map plus both maps' entries, the input maps are never modified.")]
+    public static MpqMergeResult MpqMerge(
+        [Description("Path to the first .w3x/.w3m map.")] string map,
+        [Description("Path to the second .w3x/.w3m map.")] string other,
+        [Description("Output map path. The input maps are never overwritten.")] string? out_path,
+        [Description("Which side wins a name both maps carry, 'a' or 'b'. Default 'a'.")] string prefer = "a")
+        => Run(() => MpqMergeCommand.Execute(RequireMapPath(map), RequireMapPath(other),
+            ResolveOutPath(map, out_path), prefer));
+
+    [McpServerTool(Name = "mpq_add", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Add or replace one internal archive file from a file on disk, byte-faithfully. "
+        + "Reports whether the name was added or replaced and whether the payload round-trips. "
+        + "Writes a copy, the input map is never modified in place.")]
+    public static MpqAddResult MpqAdd(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Internal archive path, for example 'war3mapImported\\\\model.mdx'.")] string name,
+        [Description("Path to the file whose bytes become the internal file.")] string from,
+        [Description("Output map path. The input map is never overwritten.")] string? out_path)
+        => Run(() => MpqAddCommand.Execute(RequireMapPath(map), name, from, ResolveOutPath(map, out_path)));
+
+    [McpServerTool(Name = "mpq_remove", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Remove one internal file by rebuilding the archive without it, and report "
+        + "whether the rebuild actually dropped the name. Writes a copy, the input map is never "
+        + "modified in place.")]
+    public static MpqRemoveResult MpqRemove(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Internal archive path to remove, for example 'war3map.j'.")] string name,
+        [Description("Output map path. The input map is never overwritten.")] string? out_path)
+        => Run(() => MpqRemoveCommand.Execute(RequireMapPath(map), name, ResolveOutPath(map, out_path)));
+
+    [McpServerTool(Name = "mpq_extract_all", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Extract every entry of a map archive to a directory, including unnamed protected "
+        + "blocks, through the same path-safety rule 'extract' uses. Read-only over the map. "
+        + "Returns the output directory, the counts and the written file names.")]
+    public static MpqExtractAllToolResult MpqExtractAll(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Directory the entries are written under. Created if absent.")] string? out_dir)
+        => Run(() =>
+        {
+            if (string.IsNullOrWhiteSpace(out_dir)) throw new McpException("out_dir is required");
+            var r = MpqExtractAllCommand.Execute(LoadMap(map));
+            var root = Path.GetFullPath(out_dir);
+            var rootPrefix = root.EndsWith(Path.DirectorySeparatorChar) ? root : root + Path.DirectorySeparatorChar;
+            Directory.CreateDirectory(root);
+
+            var files = new List<string>();
+            foreach (var item in r.Items)
+            {
+                var relative = ExtractPaths.RelativePathFor(item);
+                var dest = Path.GetFullPath(Path.Combine(root, relative));
+                if (!dest.StartsWith(rootPrefix, StringComparison.OrdinalIgnoreCase))
+                    throw new McpException($"refusing to write outside the output directory, {item.Name}");
+                Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+                File.WriteAllBytes(dest, item.Bytes);
+                files.Add(relative);
+            }
+            return new MpqExtractAllToolResult(root, r.TotalEntries, r.NamedEntries,
+                r.UnnamedEntries, r.TotalBytes, files);
+        });
+
     [McpServerTool(Name = "file_list", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("List the archive's internal entries with their CURRENT size, which reflects a "
         + "pending replacement rather than the stale original. Name is null for an unnamed entry, "
@@ -2742,6 +2816,11 @@ public sealed record RenderModelToolResult(string SavedTo, int SizeBytes, bool I
 /// <summary>asset_thumbnails outcome: where the PNGs landed, how many, their names and any skips.</summary>
 public sealed record AssetThumbnailsToolResult(
     string OutDir, int Rendered, IReadOnlyList<string> Files, IReadOnlyList<string> Diagnostics);
+
+/// <summary>mpq_extract_all outcome: where the entries landed, the counts, and the relative file names.</summary>
+public sealed record MpqExtractAllToolResult(
+    string OutDir, int TotalEntries, int NamedEntries, int UnnamedEntries, long TotalBytes,
+    IReadOnlyList<string> Files);
 
 /// <summary>asset_convert_batch outcome: where the copies landed, how many, the target extension,
 /// their relative paths and any skips.</summary>

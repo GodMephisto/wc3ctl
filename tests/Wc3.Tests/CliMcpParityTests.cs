@@ -225,6 +225,11 @@ public class CliMcpParityTests
         ["mpq_name_recover"] = "mpq name-recover",
         ["mpq_strip_bookkeeping"] = "mpq strip-bookkeeping",
         ["mpq_bytes_diff"] = "mpq bytes-diff",
+        ["mpq_rebuild"] = "mpq rebuild",
+        ["mpq_merge"] = "mpq merge",
+        ["mpq_add"] = "mpq add",
+        ["mpq_remove"] = "mpq remove",
+        ["mpq_extract_all"] = "mpq extract-all",
     };
 
     // CLI commands that intentionally have no MCP tool (local dev / query utilities).

@@ -2,7 +2,7 @@
 
 Generated from the live tool surface by `wc3ctl docs mcp`. Do not edit by hand. Regenerate with `wc3ctl docs mcp --force`, and the CI guard fails when this file is stale.
 
-The server exposes 209 tool(s).
+The server exposes 214 tool(s).
 
 ## asset_audit
 
@@ -442,11 +442,23 @@ Export a map-imported model to Wavefront OBJ at out_path, writing an MTL and any
 
 Annotations. read-only no, destructive no, idempotent yes, open-world no.
 
+## mpq_add
+
+Add or replace one internal archive file from a file on disk, byte-faithfully. Reports whether the name was added or replaced and whether the payload round-trips. Writes a copy, the input map is never modified in place.
+
+Annotations. read-only no, destructive no, idempotent no, open-world no.
+
 ## mpq_bytes_diff
 
 Compare two archives entry by entry by name. For each name present in both, report whether the payload SHA256 matches, and list names only one side carries. The byte-level counterpart of the structural mpq-diff. Read-only.
 
 Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
+## mpq_extract_all
+
+Extract every entry of a map archive to a directory, including unnamed protected blocks, through the same path-safety rule 'extract' uses. Read-only over the map. Returns the output directory, the counts and the written file names.
+
+Annotations. read-only no, destructive no, idempotent no, open-world no.
 
 ## mpq_listfile
 
@@ -454,11 +466,29 @@ Report an archive's listfile coverage in three parts, the entries named by the l
 
 Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 
+## mpq_merge
+
+Merge two map archives into one, taking every readable named entry from both. A name in both is resolved by the preferred side and reported as a conflict. Writes a copy of the first map plus both maps' entries, the input maps are never modified.
+
+Annotations. read-only no, destructive no, idempotent no, open-world no.
+
 ## mpq_name_recover
 
 Resolve a dictionary of candidate names against the archive's hash table and report the names that hit unnamed blocks. Narrower than deprotect_map, which harvests its own candidates from the map. Read-only.
 
 Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
+## mpq_rebuild
+
+Rebuild a map archive from scratch into a healthy one, re-placing every readable entry and dropping the blocks protection made unreadable or left nameless. Reports the entry counts before and after and the names dropped. Writes a copy, the input map is never modified in place.
+
+Annotations. read-only no, destructive no, idempotent no, open-world no.
+
+## mpq_remove
+
+Remove one internal file by rebuilding the archive without it, and report whether the rebuild actually dropped the name. Writes a copy, the input map is never modified in place.
+
+Annotations. read-only no, destructive no, idempotent no, open-world no.
 
 ## mpq_strip_bookkeeping
 

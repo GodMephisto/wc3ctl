@@ -4946,11 +4946,102 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
             Emit(json, r, () => Render.MpqBytesDiff(r));
         }), mapArg, mapArgB, jsonOption);
 
+        // Editing verbs. Each writes a copy and refuses to touch the input map in place, the same
+        // stance strip-bookkeeping takes. rebuild and remove build a fresh archive from payloads
+        // rather than from the source archive, which is what lets a protected map be rewritten at
+        // all, since an MpqArchiveBuilder built FROM the archive dies on the block rows protection
+        // corrupted, while one built from payloads never reads them.
+        var mpqOut = new Option<string?>(new[] { "-o", "--out" },
+            "Output map path. The input map is never overwritten.");
+        var mpqGrowHash = new Option<bool>("--grow-hash", () => false,
+            "Force a larger hash table on the rebuilt archive. Doubles the source capacity, then "
+            + "raises it until 3/4 occupancy fits. Off by default, most maps need no growth.");
+        var mpqRebuild = new Command("rebuild",
+            "Rebuild the archive from scratch into a healthy one, re-placing every readable entry "
+            + "and dropping the blocks protection made unreadable or left nameless. Reports the "
+            + "entry counts before and after. Writes a copy.") { mapArg, mpqOut, mpqGrowHash };
+        mpqRebuild.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = MpqRebuildCommand.Execute(p.GetValueForArgument(mapArg),
+                p.GetValueForOption(mpqOut), p.GetValueForOption(mpqGrowHash));
+            if (!r.Reopens) exitCode[0] = 1;
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.MpqRebuild(r));
+        }));
+
+        var mpqPrefer = new Option<string>("--prefer", () => "a",
+            "Which side wins a name both maps carry, 'a' or 'b'. Default 'a'.");
+        var mpqMerge = new Command("merge",
+            "Merge two archives into one, taking every readable named entry from both. A name in "
+            + "both is resolved by the preferred side and reported as a conflict. Writes a copy.")
+        { mapArg, mapArgB, mpqOut, mpqPrefer };
+        mpqMerge.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = MpqMergeCommand.Execute(p.GetValueForArgument(mapArg), p.GetValueForArgument(mapArgB),
+                p.GetValueForOption(mpqOut), p.GetValueForOption(mpqPrefer)!);
+            if (!r.Reopens) exitCode[0] = 1;
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.MpqMerge(r));
+        }));
+
+        var mpqNameArg = new Argument<string>("name", "Internal archive path, for example war3map.j.");
+        var mpqFileOpt = new Option<string>(new[] { "--file" },
+            "Path to the file whose bytes become the internal file.") { IsRequired = true };
+        var mpqAdd = new Command("add",
+            "Add or replace one internal file from a file on disk, byte-faithfully. Reports whether "
+            + "it was added or replaced. Writes a copy.") { mapArg, mpqNameArg, mpqFileOpt, mpqOut };
+        mpqAdd.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = MpqAddCommand.Execute(p.GetValueForArgument(mapArg), p.GetValueForArgument(mpqNameArg),
+                p.GetValueForOption(mpqFileOpt)!, p.GetValueForOption(mpqOut));
+            if (!r.Reopens) exitCode[0] = 1;
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.MpqAdd(r));
+        }));
+
+        var mpqRemove = new Command("remove",
+            "Remove one internal file by rebuilding the container without it, and report whether the "
+            + "rebuild actually dropped the name. Writes a copy.")
+        { mapArg, mpqNameArg, mpqOut };
+        mpqRemove.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = MpqRemoveCommand.Execute(p.GetValueForArgument(mapArg),
+                p.GetValueForArgument(mpqNameArg), p.GetValueForOption(mpqOut));
+            if (!r.Reopens) exitCode[0] = 1;
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.MpqRemove(r));
+        }));
+
+        var mpqExtractDir = new Option<string?>(new[] { "-o", "--out" },
+            "Output directory. Default '<map>.extracted' beside the input. Created if absent.");
+        var mpqExtractAll = new Command("extract-all",
+            "Extract every entry of the archive to a directory, including unnamed protected blocks, "
+            + "through the same path-safety rule 'extract' uses. Read-only over the map.")
+        { mapArg, mpqExtractDir };
+        mpqExtractAll.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            string outDir = p.GetValueForOption(mpqExtractDir) is { Length: > 0 } d
+                ? d
+                : Path.GetFullPath(map) + ".extracted";
+            var r = MpqExtractAllCommand.Execute(MapDocument.Load(map));
+            var manifest = ExtractWriter.WriteAll(new ExtractResult(r.Items), outDir);
+            var report = new MpqExtractAllReport(map, Path.GetFullPath(outDir), r.TotalEntries,
+                r.NamedEntries, r.UnnamedEntries, r.TotalBytes, manifest.Files);
+            Emit(p.GetValueForOption(jsonOption), report, () => Render.MpqExtractAll(report));
+        }));
+
         mpq.AddCommand(mpqVerify);
         mpq.AddCommand(mpqListfile);
         mpq.AddCommand(mpqNameRecover);
         mpq.AddCommand(mpqStrip);
         mpq.AddCommand(mpqBytesDiff);
+        mpq.AddCommand(mpqRebuild);
+        mpq.AddCommand(mpqMerge);
+        mpq.AddCommand(mpqAdd);
+        mpq.AddCommand(mpqRemove);
+        mpq.AddCommand(mpqExtractAll);
         root.AddCommand(mpq);
 
         // Observe the running game. Static comparison could not explain a map that sits forever on

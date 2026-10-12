@@ -71,4 +71,56 @@ public sealed class McpSmokeMpqTests : McpSmokeBase
         var r = await Call("mpq_bytes_diff", Args(("map", Fixture), ("other", changed)));
         Assert.False(Prop(r, "identical").GetBoolean());
     }
+
+    [Fact, Covers("mpq_rebuild")]
+    public async Task Mpq_rebuild_writes_a_healthy_copy()
+    {
+        var outPath = await Write("mpq_rebuild", Args(("grow_hash", false)));
+        Assert.True(File.Exists(outPath));
+        var r = await Call("mpq_rebuild", Args(
+            ("map", Fixture), ("out_path", NewOut("mpq_rebuild2")), ("grow_hash", true)));
+        Assert.True(Prop(r, "reopens").GetBoolean());
+        Assert.True(Prop(r, "outputEntries").GetInt32() > 0);
+        Assert.True(Prop(r, "outputHashSlots").GetUInt32() > 0);
+    }
+
+    [Fact, Covers("mpq_merge")]
+    public async Task Mpq_merge_combines_a_map_with_itself()
+    {
+        var outPath = NewOut("mpq_merge");
+        var before = Sha(Fixture);
+        var r = await Call("mpq_merge", Args(
+            ("map", Fixture), ("other", Fixture), ("out_path", outPath), ("prefer", "a")));
+        Assert.Equal(before, Sha(Fixture));
+        Assert.True(Prop(r, "reopens").GetBoolean());
+        Assert.True(Prop(r, "mergedEntries").GetInt32() > 0);
+    }
+
+    [Fact, Covers("mpq_add", "mpq_remove")]
+    public async Task Mpq_add_then_remove_round_trips_an_internal_file()
+    {
+        var src = NewOut("payload", ".bin");
+        File.WriteAllBytes(src, new byte[] { 11, 22, 33, 44 });
+        var outPath = await Write("mpq_add", Args(
+            ("name", @"war3mapImported\SmokeAdd.bin"), ("from", src)));
+        var files = await Call("file_list", Args(("map", outPath)));
+        Assert.Contains(Rows(files), f => Prop(f, "name").GetString() == @"war3mapImported\SmokeAdd.bin");
+
+        var removed = await Write("mpq_remove",
+            Args(("name", @"war3mapImported\SmokeAdd.bin")), outPath);
+        var removedFiles = await Call("file_list", Args(("map", removed)));
+        Assert.DoesNotContain(Rows(removedFiles),
+            f => Prop(f, "name").GetString() == @"war3mapImported\SmokeAdd.bin");
+    }
+
+    [Fact, Covers("mpq_extract_all")]
+    public async Task Mpq_extract_all_writes_every_entry()
+    {
+        var outDir = Path.Combine(_f.Dir, $"extractall-{Guid.NewGuid():N}");
+        var r = await Call("mpq_extract_all", Args(("map", Fixture), ("out_dir", outDir)));
+        Assert.True(Prop(r, "totalEntries").GetInt32() > 0);
+        Assert.NotEmpty(Prop(r, "files").EnumerateArray());
+        Assert.True(Directory.Exists(outDir));
+        Assert.NotEmpty(Directory.EnumerateFiles(outDir, "*", SearchOption.AllDirectories));
+    }
 }

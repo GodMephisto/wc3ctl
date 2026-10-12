@@ -8,6 +8,16 @@ namespace Wc3Ctl;
 public sealed record ExtractManifestEntry(string? Name, int Bytes, string Path);
 public sealed record ExtractManifest(IReadOnlyList<ExtractManifestEntry> Files, int Count, long TotalBytes);
 
+/// <summary>The CLI view of mpq extract-all, what the command selected plus where the bytes landed.</summary>
+public sealed record MpqExtractAllReport(
+    string Path,
+    string OutputDir,
+    int TotalEntries,
+    int NamedEntries,
+    int UnnamedEntries,
+    long TotalBytes,
+    IReadOnlyList<ExtractManifestEntry> Files);
+
 public static class ExtractWriter
 {
     /// <summary>Writes all items under <paramref name="outDir"/>, preserving internal folder structure.</summary>
@@ -47,28 +57,10 @@ public static class ExtractWriter
         item.Name is null ? ContentTypeSniffer.Sniff(item.Bytes).Extension : "bin";
 
     /// <summary>
-    /// Maps an internal name to a safe relative path: splits on '\'/'/', drops
-    /// '.'/'..'/empty segments, replaces invalid characters. Unnamed entries
-    /// (FileName == null) go to _unnamed\block_&lt;n&gt;.&lt;ext&gt;, the extension taken
-    /// from the entry's sniffed content type so a nameless BLP extracts as a .blp.
+    /// Maps an internal name to a safe relative path. Delegates to <see cref="ExtractPaths"/>, the
+    /// single path-safety rule the CLI writer and the MCP extract tool share, so the two can never
+    /// disagree about what a name is allowed to become on disk.
     /// </summary>
     public static string SafeRelativePath(string? name, int blockIndex, string unnamedExtension = "bin")
-    {
-        if (name is null) return Path.Combine("_unnamed", $"block_{blockIndex}.{unnamedExtension}");
-        var segments = name.Split('\\', '/')
-            .Where(s => s.Length > 0 && s != "." && s != "..")
-            .Select(Sanitize)
-            .Where(s => s.Length > 0)
-            .ToArray();
-        return segments.Length == 0
-            ? Path.Combine("_unnamed", $"block_{blockIndex}.bin")
-            : Path.Combine(segments);
-    }
-
-    private static string Sanitize(string segment)
-    {
-        var invalid = Path.GetInvalidFileNameChars();
-        var cleaned = new string(segment.Select(c => invalid.Contains(c) ? '_' : c).ToArray());
-        return cleaned.TrimEnd(' ', '.');   // Windows rejects trailing dots/spaces
-    }
+        => ExtractPaths.SafeRelativePath(name, blockIndex, unnamedExtension);
 }

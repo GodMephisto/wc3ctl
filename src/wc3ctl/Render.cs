@@ -1574,6 +1574,95 @@ public static class Render
         return sb.ToString();
     }
 
+    public static string MpqRebuild(MpqRebuildResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"saved {r.SavedTo}");
+        sb.AppendLine($"  input entries   {r.InputEntries}");
+        sb.AppendLine($"  output entries  {r.OutputEntries}");
+        sb.AppendLine($"  dropped         {r.DroppedEntries}");
+        sb.AppendLine($"  hash slots      {r.InputHashSlots} -> {r.OutputHashSlots}");
+        sb.AppendLine($"  output bytes    {r.OutputBytes:N0}");
+        foreach (var d in r.Dropped.Take(40))
+            sb.AppendLine($"  dropped  {d.Name}  ({d.Reason})");
+        if (r.Dropped.Count > 40) sb.AppendLine($"  ... and {r.Dropped.Count - 40} more");
+        sb.Append(r.Reopens
+            ? "ok. The rebuilt copy opens again."
+            : $"FAILED. The rebuilt copy does not open. {r.ReopenError}");
+        return sb.ToString();
+    }
+
+    public static string MpqMerge(MpqMergeResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"saved {r.SavedTo}");
+        sb.AppendLine($"  A  {r.PathA}  ({r.EntriesA} entries)");
+        sb.AppendLine($"  B  {r.PathB}  ({r.EntriesB} entries)");
+        sb.AppendLine($"  preferred  {r.Preferred}");
+        sb.AppendLine($"  merged     {r.MergedEntries}  (from A {r.FromA}, from B {r.FromB})");
+        sb.AppendLine($"  conflicts  {r.Conflicts}");
+        foreach (var c in r.ConflictList.Take(40))
+            sb.AppendLine($"    {c.Name}  kept {c.KeptFrom} ({c.SizeKept:N0} B) over ({c.SizeOther:N0} B)"
+                + (c.Identical ? "  identical" : ""));
+        if (r.OnlyInA.Count > 0)
+            sb.AppendLine($"  only in A  {string.Join(", ", r.OnlyInA.Take(20))}");
+        if (r.OnlyInB.Count > 0)
+            sb.AppendLine($"  only in B  {string.Join(", ", r.OnlyInB.Take(20))}");
+        sb.Append(r.Reopens
+            ? "ok. The merged copy opens again."
+            : $"FAILED. The merged copy does not open. {r.ReopenError}");
+        return sb.ToString();
+    }
+
+    public static string MpqAdd(MpqAddResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"saved {r.SavedTo}");
+        sb.AppendLine($"  {r.Name}");
+        sb.AppendLine(r.Replaced ? "  replaced an existing entry" : "  added a new entry");
+        sb.AppendLine($"  payload         {r.SizeBytes:N0} bytes");
+        sb.AppendLine($"  input entries   {r.InputEntries}");
+        sb.AppendLine($"  output entries  {r.OutputEntries}");
+        sb.AppendLine($"  output bytes    {r.OutputBytes:N0}");
+        sb.Append(r.Reopens && r.ByteFaithful
+            ? "ok. The payload round-trips byte for byte."
+            : r.Reopens
+                ? "FAILED. The payload did not read back identical."
+                : $"FAILED. The copy does not open. {r.ReopenError}");
+        return sb.ToString();
+    }
+
+    public static string MpqRemove(MpqRemoveResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"saved {r.SavedTo}");
+        sb.AppendLine($"  {r.Name}");
+        sb.AppendLine(r.Found ? "  the name was present" : "  the name was not present");
+        sb.AppendLine($"  input entries   {r.InputEntries}");
+        sb.AppendLine($"  output entries  {r.OutputEntries}");
+        sb.AppendLine(r.DroppedOnRebuild
+            ? "  the rebuild dropped the name"
+            : "  the rebuild did NOT drop the name");
+        sb.AppendLine($"  output bytes    {r.OutputBytes:N0}");
+        sb.Append(r.Reopens
+            ? "ok. The copy opens again."
+            : $"FAILED. The copy does not open. {r.ReopenError}");
+        return sb.ToString();
+    }
+
+    public static string MpqExtractAll(MpqExtractAllReport r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine(r.Path);
+        sb.AppendLine($"  output dir     {r.OutputDir}");
+        sb.AppendLine($"  entries        {r.TotalEntries}  (named {r.NamedEntries}, unnamed {r.UnnamedEntries})");
+        sb.AppendLine($"  bytes          {r.TotalBytes:N0}");
+        sb.Append(r.TotalEntries == 0
+            ? "nothing to extract."
+            : $"ok. Wrote {r.Files.Count} file(s).");
+        return sb.ToString();
+    }
+
     public static string GeneratedHeroRepair(GeneratedHeroRepairResult r)
     {
         if (!r.Ok)
