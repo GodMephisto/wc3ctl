@@ -952,6 +952,43 @@ public static class Wc3Tools
             return (r.Ok, r.Message, r.TilesChanged);
         }));
 
+    [McpServerTool(Name = "terrain_export_heightmap", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Export a map's terrain heights as a 16-bit grayscale PNG of the (Width+1) by (Height+1) corner grid, one pixel per corner, to out_path. Read-only, the map is not modified, and the same file re-imports through terrain_import_heightmap.")]
+    public static ImageExportToolResult TerrainExportHeightmap(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Output PNG path. Parent directories are created as needed.")] string out_path)
+        => Run(() =>
+        {
+            var r = TerrainExportHeightmapCommand.Export(LoadMap(map));
+            if (!r.Ok || r.Png is null) throw new McpException(r.Message);
+            string full = WritePngFile(map, out_path, r.Png);
+            return new ImageExportToolResult(full, r.Message, r.Width, r.Height, r.Png.Length);
+        });
+
+    [McpServerTool(Name = "terrain_import_heightmap", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Set the terrain tile heights from a grayscale PNG and save the edited map to out_path. The PNG dimensions must match the map's corner grid exactly or the call is refused. Only ground height is written, and cliff level, texture, water and flags are untouched. The input map is NEVER modified in place.")]
+    public static TerrainToolResult TerrainImportHeightmap(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Path to the grayscale heightmap PNG, as produced by terrain_export_heightmap.")] string png)
+        => Run(() => SaveTerrain(map, out_path, doc =>
+        {
+            var r = TerrainImportHeightmapCommand.Import(doc, ReadPngFile(png));
+            return (r.Ok, r.Message, r.TilesChanged);
+        }));
+
+    [McpServerTool(Name = "terrain_smooth", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Smooth the whole map: each pass replaces every corner height with the mean of itself and its in-grid four neighbours, saving the edited map to out_path. The input map is NEVER modified in place.")]
+    public static TerrainToolResult TerrainSmooth(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Number of smoothing passes to run. 0 makes no change. Default 1.")] int passes = 1)
+        => Run(() => SaveTerrain(map, out_path, doc =>
+        {
+            var r = TerrainSmoothCommand.Smooth(doc, passes);
+            return (r.Ok, r.Message, r.TilesChanged);
+        }));
+
     [McpServerTool(Name = "deprotect_map", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Recover the file names a protected map stripped. A protected map ships no "
         + "(listfile), so most entries have no name and cannot be looked up by name at all. "
@@ -1186,6 +1223,31 @@ public static class Wc3Tools
                 ParseEnum<PathingCommand.BrushOp>(op, "op"),
                 ParseEnum<PathingCommand.BrushShape>(shape, "shape"));
             return (r.Ok, r.Ok ? $"{r.Message} ({r.CellsChanged} cells)" : r.Message);
+        }));
+
+    [McpServerTool(Name = "pathing_export_png", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Render a map's war3map.wpm pathing grid to a colour-coded PNG at out_path, one pixel per pathing cell with a legend strip of the pathing flags. Read-only, the map is not modified. The same file re-imports through pathing_import_png.")]
+    public static PathingExportToolResult PathingExportPng(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Output PNG path. Parent directories are created as needed.")] string out_path)
+        => Run(() =>
+        {
+            var r = PathingExportPngCommand.Export(LoadMap(map));
+            if (!r.Ok || r.Png is null) throw new McpException(r.Message);
+            string full = WritePngFile(map, out_path, r.Png);
+            return new PathingExportToolResult(full, r.Message, r.Width, r.Height, r.Png.Length, r.Legend ?? []);
+        });
+
+    [McpServerTool(Name = "pathing_import_png", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Set the pathing flags from a colour-coded PNG and save the edited map to out_path. Each cell's flags are replaced by the value its pixel decodes to. The image must be at least the map's Width by Height cell grid (the top-left region is read, so a legend to the right is ignored) and any unknown colour is refused. The input map is NEVER modified in place.")]
+    public static EditToolResult PathingImportPng(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Path to the colour-coded pathing PNG, as produced by pathing_export_png.")] string png)
+        => Run(() => SaveEdit(map, out_path, doc =>
+        {
+            var r = PathingImportPngCommand.Import(doc, ReadPngFile(png));
+            return (r.Ok, r.Message);
         }));
 
     // ---- scenario: map-info, players, forces (war3map.w3i) ---------------
@@ -1753,6 +1815,25 @@ public static class Wc3Tools
         catch (ArgumentException ex) { throw new McpException(ex.Message); }
     }
 
+    /// <summary>Read a PNG the caller named; a missing file is a clean MCP error.</summary>
+    private static byte[] ReadPngFile(string png)
+    {
+        if (string.IsNullOrWhiteSpace(png))
+            throw new McpException("png path is required");
+        if (!File.Exists(png))
+            throw new McpException($"png not found {png}");
+        return File.ReadAllBytes(png);
+    }
+
+    /// <summary>Write PNG bytes to a caller-named path (never the input map), creating dirs.</summary>
+    private static string WritePngFile(string map, string outPath, byte[] bytes)
+    {
+        string full = ResolveOutPath(map, outPath);
+        if (Path.GetDirectoryName(full) is { Length: > 0 } dir) Directory.CreateDirectory(dir);
+        File.WriteAllBytes(full, bytes);
+        return full;
+    }
+
     internal const string GameDirVariable = "WC3_GAME_DIR";
 
     // ---- gamedata schema tools --------------------------------------------
@@ -1896,6 +1977,14 @@ public sealed record PlacementToolResult(string SavedTo, string Message, int Cre
 
 /// <summary>terrain_* edit outcome: where the edited map was written, a message, and tiles changed.</summary>
 public sealed record TerrainToolResult(string SavedTo, string Message, int TilesChanged);
+
+/// <summary>terrain_export_heightmap outcome: where the PNG landed, its grid, and its byte size.</summary>
+public sealed record ImageExportToolResult(string SavedTo, string Message, int Width, int Height, int SizeBytes);
+
+/// <summary>pathing_export_png outcome: where the PNG landed, its grid and size, and the flag legend.</summary>
+public sealed record PathingExportToolResult(
+    string SavedTo, string Message, int Width, int Height, int SizeBytes,
+    IReadOnlyList<PathingExportPngCommand.LegendEntry> Legend);
 
 /// <summary>object_set outcome: where the edited map was written, a message, and any non-fatal warning.</summary>
 public sealed record ObjectSetToolResult(string SavedTo, string Message, string? Warning);

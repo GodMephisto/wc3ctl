@@ -1836,6 +1836,19 @@ public static class Program
                 () => $"{message}\nsaved: {dest}");
         }
 
+        // Refuse an explicit -o that names the input map itself: a mutating command must
+        // never overwrite the map it read. Returns true (and reports) when it refused.
+        bool RefusedInPlace(bool json, string? outOpt, string map)
+        {
+            if (outOpt is null) return false;
+            if (!string.Equals(Path.GetFullPath(outOpt), Path.GetFullPath(map), StringComparison.OrdinalIgnoreCase))
+                return false;
+            const string msg = "refusing to overwrite the input map, pass a different -o path";
+            Emit(json, new { Ok = false, Message = msg }, () => msg);
+            exitCode[0] = 1;
+            return true;
+        }
+
         void FinishSound(bool json, string? outOpt, string map, MapDocument doc, SoundOpResult r)
         {
             if (!r.Ok)
@@ -2025,6 +2038,63 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
             FinishTerrain(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message, r.TilesChanged);
         }));
 
+        // ---- terrain heightmap PNG round-trip and map-wide smoothing ----
+        var heightmapPngOut = new Option<string>(new[] { "-o", "--out" },
+            "Output PNG path.") { IsRequired = true };
+        var terrainExportHeightmap = new Command("export-heightmap",
+            "Write the terrain heights as a 16-bit grayscale PNG, one pixel per corner. Read-only.")
+        { mapArg, heightmapPngOut };
+        terrainExportHeightmap.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = TerrainExportHeightmapCommand.Export(MapDocument.Load(p.GetValueForArgument(mapArg)));
+            if (!r.Ok || r.Png is null)
+            {
+                Emit(p.GetValueForOption(jsonOption), new { r.Ok, r.Message }, () => r.Message);
+                exitCode[0] = 1;
+                return;
+            }
+            string dest = p.GetValueForOption(heightmapPngOut);
+            File.WriteAllBytes(dest, r.Png);
+            Emit(p.GetValueForOption(jsonOption),
+                new { Ok = true, Message = r.Message, Width = r.Width, Height = r.Height,
+                      SizeBytes = r.Png.Length, SavedTo = dest },
+                () => $"{r.Message}\nwrote {r.Png.Length:N0} bytes to {dest}");
+        }));
+
+        var heightmapPngArg = new Argument<string>("png", "Path to the grayscale heightmap PNG.");
+        var terrainImportHeightmap = new Command("import-heightmap",
+            "Set the tile heights from a grayscale PNG. The PNG must match the map's corner "
+            + "grid exactly, and a mismatch is refused.")
+        { mapArg, heightmapPngArg, setOut };
+        terrainImportHeightmap.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            string? outOpt = p.GetValueForOption(setOut);
+            if (RefusedInPlace(p.GetValueForOption(jsonOption), outOpt, map)) return;
+            var doc = MapDocument.Load(map);
+            byte[] png = File.ReadAllBytes(p.GetValueForArgument(heightmapPngArg));
+            var r = TerrainImportHeightmapCommand.Import(doc, png);
+            FinishTerrain(p.GetValueForOption(jsonOption), outOpt, map, doc, r.Ok, r.Message, r.TilesChanged);
+        }));
+
+        var smoothPasses = new Option<int>("--passes", () => 1,
+            "Number of smoothing passes, default 1.");
+        var terrainSmooth = new Command("smooth",
+            "Average every corner height with its neighbours, N times, across the whole map.")
+        { mapArg, smoothPasses, setOut };
+        terrainSmooth.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            string? outOpt = p.GetValueForOption(setOut);
+            if (RefusedInPlace(p.GetValueForOption(jsonOption), outOpt, map)) return;
+            var doc = MapDocument.Load(map);
+            var r = TerrainSmoothCommand.Smooth(doc, p.GetValueForOption(smoothPasses));
+            FinishTerrain(p.GetValueForOption(jsonOption), outOpt, map, doc, r.Ok, r.Message, r.TilesChanged);
+        }));
+
         var terrain = new Command("terrain",
             "Terrain editing: height, cliffs, ramps, textures, water, blight. Brush commands "
             + "work a radius at a time, 'fill' works a rectangle at a time.");
@@ -2035,6 +2105,9 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         terrain.AddCommand(terrainRamp);
         terrain.AddCommand(terrainPaint);
         terrain.AddCommand(terrainWater);
+        terrain.AddCommand(terrainExportHeightmap);
+        terrain.AddCommand(terrainImportHeightmap);
+        terrain.AddCommand(terrainSmooth);
         var colArg = new Argument<int>("col", "Corner column, 0-based.");
         var rowArg = new Argument<int>("row", "Corner row, 0-based.");
 
@@ -2829,6 +2902,55 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         var pathing = new Command("pathing",
             "Pathing-map editing (war3map.wpm): paint walk/build/fly/water bits over a brush.");
         pathing.AddCommand(pathPaint);
+
+        var pathingPngOut = new Option<string>(new[] { "-o", "--out" },
+            "Output PNG path.") { IsRequired = true };
+        var pathingExportPng = new Command("export-png",
+            "Render the pathing map to a colour-coded PNG with a legend of the pathing flags. Read-only.")
+        { mapArg, pathingPngOut };
+        pathingExportPng.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = PathingExportPngCommand.Export(MapDocument.Load(p.GetValueForArgument(mapArg)));
+            if (!r.Ok || r.Png is null)
+            {
+                Emit(p.GetValueForOption(jsonOption), new { r.Ok, r.Message }, () => r.Message);
+                exitCode[0] = 1;
+                return;
+            }
+            string dest = p.GetValueForOption(pathingPngOut);
+            File.WriteAllBytes(dest, r.Png);
+            Emit(p.GetValueForOption(jsonOption),
+                new { Ok = true, Message = r.Message, Width = r.Width, Height = r.Height,
+                      SizeBytes = r.Png.Length, SavedTo = dest,
+                      Legend = r.Legend!.Select(l => new { l.Name, l.Colour }) },
+                () => string.Join("\n", new[]
+                {
+                    $"{r.Message}",
+                    $"wrote {r.Png.Length:N0} bytes to {dest}",
+                    "legend",
+                    string.Join("\n", r.Legend!.Select(l => $"  {l.Name,-8} {l.Colour}")),
+                }));
+        }));
+
+        var pathingPngArg = new Argument<string>("png", "Path to the colour-coded pathing PNG.");
+        var pathingImportPng = new Command("import-png",
+            "Set the pathing flags from a colour-coded PNG. An unknown colour is refused.")
+        { mapArg, pathingPngArg, setOut };
+        pathingImportPng.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            string? outOpt = p.GetValueForOption(setOut);
+            if (RefusedInPlace(p.GetValueForOption(jsonOption), outOpt, map)) return;
+            var doc = MapDocument.Load(map);
+            byte[] png = File.ReadAllBytes(p.GetValueForArgument(pathingPngArg));
+            var r = PathingImportPngCommand.Import(doc, png);
+            FinishEdit(p.GetValueForOption(jsonOption), outOpt, map, doc,
+                r.Ok, r.Ok ? $"{r.Message}" : r.Message);
+        }));
+        pathing.AddCommand(pathingExportPng);
+        pathing.AddCommand(pathingImportPng);
 
         // ---- map-info: read/edit the editable scenario fields (war3map.w3i) ----
         var miGet = new Command("get", "Show the map's editable scenario fields.") { mapArg };
