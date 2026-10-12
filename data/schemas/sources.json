@@ -646,6 +646,82 @@
       ]
     },
     {
+      "build": "ROC-v1.00",
+      "era": "ROC",
+      "sections": [
+        "objects",
+        "triggers",
+        "script"
+      ],
+      "sectionHashes": [
+        {
+          "section": "objects",
+          "file": "objects.json",
+          "bytes": 61037,
+          "sha256": "dfcdad922a5d779954c616d571b7ec0bb0eeb5fc05bf9db700e109910f6adf07"
+        },
+        {
+          "section": "triggers",
+          "file": "triggers.json",
+          "bytes": 145243,
+          "sha256": "22969d5f543618184c9ada3994d9b304178e7bcebde96a756bbabd831c183c61"
+        },
+        {
+          "section": "script",
+          "file": "script.json",
+          "bytes": 659168,
+          "sha256": "80d48043edac8aa433b0d8ea67c21cee72ca304549cb261687fd3e2936948818"
+        }
+      ],
+      "inputs": [
+        {
+          "name": "scripts/blizzard.j",
+          "bytes": 296643,
+          "sha256": "72d5b109657ef36fbea393d99a45f1726ffd2a8c185eee4a6e1618cd942e470d"
+        },
+        {
+          "name": "scripts/common.ai",
+          "bytes": 75975,
+          "sha256": "2b5cd6bb5f0b98386e0d076e307f000cf0e6973b366504eb56320cb98fb77840"
+        },
+        {
+          "name": "scripts/common.j",
+          "bytes": 113082,
+          "sha256": "e767bed7b4b22776dba6aa7d7f0aac5058fa8b124a62b7289686f5f90da744a9"
+        },
+        {
+          "name": "ui/triggerdata.txt",
+          "bytes": 173453,
+          "sha256": "9845f3a721c4069b4bc595ccffcd37d24ed220e55226327008dfc2ff9bda6484"
+        },
+        {
+          "name": "ui/worldeditgamestrings.txt",
+          "bytes": 4547,
+          "sha256": "4290de20afd6b4c3823d931b75fb698225d592601835fa1055f5d740a3e00b98"
+        },
+        {
+          "name": "ui/worldeditstrings.txt",
+          "bytes": 142917,
+          "sha256": "9df0fa40f7d2e235e377624a80fc433db73b52545fc7629a0971aa008de9bd1a"
+        },
+        {
+          "name": "units/unitmetadata.slk",
+          "bytes": 27141,
+          "sha256": "b672483f4806f13c3b911009f859034b6b7c6812994189fbbe49ce780064bddd"
+        }
+      ],
+      "missing": [
+        "doodads/doodadmetadata.slk",
+        "ui/skinmetadata.slk",
+        "units/abilitybuffmetadata.slk",
+        "units/abilitymetadata.slk",
+        "units/destructablemetadata.slk",
+        "units/miscmetadata.slk",
+        "units/upgradeeffectmetadata.slk",
+        "units/upgrademetadata.slk"
+      ]
+    },
+    {
       "build": "ROC-v1.01-ru",
       "era": "ROC",
       "sections": [
@@ -2026,6 +2102,110 @@
       ]
     },
     {
+      "build": "TFT-v1.07",
+      "era": "TFT",
+      "sections": [
+        "objects",
+        "triggers",
+        "script"
+      ],
+      "sectionHashes": [
+        {
+          "section": "objects",
+          "file": "objects.json",
+          "bytes": 875234,
+          "sha256": "56a3a9869c7ef3795ddae32ea371a94107d3804dfb3dd448b8a2db33a4934b4d"
+        },
+        {
+          "section": "triggers",
+          "file": "triggers.json",
+          "bytes": 201647,
+          "sha256": "8abf9bc673f5fdc26998eabf92ab9e7b21089a34cf703ab11a265e0e3665578c"
+        },
+        {
+          "section": "script",
+          "file": "script.json",
+          "bytes": 836945,
+          "sha256": "bdfef3a547e1d081906982626de03d2dc8fbca01dcb4e6ae9a1f5d60ffc82bc3"
+        }
+      ],
+      "inputs": [
+        {
+          "name": "doodads/doodadmetadata.slk",
+          "bytes": 13457,
+          "sha256": "8096abdf68a08a425c181da3f70583111031e304bba9e01476d41d9759e2f4f8"
+        },
+        {
+          "name": "scripts/blizzard.j",
+          "bytes": 401162,
+          "sha256": "c7be17a10e6b2aa579b891af036e94ded7dbf437394e49dedaf6e6aa4e742249"
+        },
+        {
+          "name": "scripts/common.ai",
+          "bytes": 98325,
+          "sha256": "8babda6689a9b00a2fdde645a3a4efd08f453b67c110037f4699f26f9063028f"
+        },
+        {
+          "name": "scripts/common.j",
+          "bytes": 136697,
+          "sha256": "9e1e542d1aab346df50f697f6278d565064b9f1ce484aba9d77f5c50deab53f9"
+        },
+        {
+          "name": "ui/skinmetadata.slk",
+          "bytes": 102183,
+          "sha256": "d2b47415a36ebdbf9228965cef234f92132e21125deecefeefa5a6e42917f301"
+        },
+        {
+          "name": "ui/triggerdata.txt",
+          "bytes": 235759,
+          "sha256": "a94407934ae0024916eee75c4e9e9727f92efe5f5235df26d0eed86de00bc651"
+        },
+        {
+          "name": "ui/worldeditgamestrings.txt",
+          "bytes": 17901,
+          "sha256": "a8390d51ef913600c945906c443e4a03333a6a796c5945d1c2a3ccb3fdc125a8"
+        },
+        {
+          "name": "ui/worldeditstrings.txt",
+          "bytes": 335260,
+          "sha256": "bd05612ca253604b3f146281250ef374bfdd218edc79cefcb77a9f2ea07409e1"
+        },
+        {
+          "name": "units/abilitymetadata.slk",
+          "bytes": 181658,
+          "sha256": "f7b07fd16bbd3f94019085ea5b898a2cc1555e631b1b044ec70a7204c8aaca44"
+        },
+        {
+          "name": "units/destructablemetadata.slk",
+          "bytes": 11573,
+          "sha256": "000e0a8f3ba34c81dfa33954f2de399de75236199f62d23f62a315184a4e87cd"
+        },
+        {
+          "name": "units/miscmetadata.slk",
+          "bytes": 26138,
+          "sha256": "b0a4e2e337ccfd13fb5f1a850c1649fe2dea6256acd280394f47df11f2c05a35"
+        },
+        {
+          "name": "units/unitmetadata.slk",
+          "bytes": 61878,
+          "sha256": "159e259178496914e020a65446451fa11a37bfc4d5477aa8b36ec28e293dd5ca"
+        },
+        {
+          "name": "units/upgradeeffectmetadata.slk",
+          "bytes": 8596,
+          "sha256": "ca4e8a2b940b26c55bc92102cd3d9df292e8a27462b4e3b1843c1b4500bb9e7a"
+        },
+        {
+          "name": "units/upgrademetadata.slk",
+          "bytes": 9396,
+          "sha256": "90407a076dc5b4664a62961b2dcb111c5cc023c8d23cd5485af92c557b7e7a0b"
+        }
+      ],
+      "missing": [
+        "units/abilitybuffmetadata.slk"
+      ]
+    },
+    {
       "build": "TFT-v1.10-ru",
       "era": "TFT",
       "sections": [
@@ -2946,6 +3126,113 @@
       ]
     },
     {
+      "build": "TFT-v1.21a",
+      "era": "TFT",
+      "sections": [
+        "objects",
+        "triggers",
+        "script"
+      ],
+      "sectionHashes": [
+        {
+          "section": "objects",
+          "file": "objects.json",
+          "bytes": 1154163,
+          "sha256": "db5ea1c6653ec6caa59fb3b6551bc82175d0d8ce1adde27254d691391f0f64e6"
+        },
+        {
+          "section": "triggers",
+          "file": "triggers.json",
+          "bytes": 231628,
+          "sha256": "16a038d738716ba948bd5813012826bf9de767758d892a50c66d0c9b17621624"
+        },
+        {
+          "section": "script",
+          "file": "script.json",
+          "bytes": 918255,
+          "sha256": "125f84badce0116e61147820a509fd7f552c5c174f9293cbc607db11b85f2dc6"
+        }
+      ],
+      "inputs": [
+        {
+          "name": "doodads/doodadmetadata.slk",
+          "bytes": 7994,
+          "sha256": "30715525db91e74233bde0e482618fa682527335d4584317229398854bb0ba5a"
+        },
+        {
+          "name": "scripts/blizzard.j",
+          "bytes": 426109,
+          "sha256": "f827c021b338ee0a0e4428d5c3da91fec66ab365e94b2810681c8c2dc8db1fc8"
+        },
+        {
+          "name": "scripts/common.ai",
+          "bytes": 98429,
+          "sha256": "29f51929ff3c09988a77748dbefea319b72b32bf4bb1a5f6997760a621454818"
+        },
+        {
+          "name": "scripts/common.j",
+          "bytes": 155122,
+          "sha256": "26c2732ecf1434d127ee21cbbf32f9e6ba70814e0b4661c5c1f5227a5a415c57"
+        },
+        {
+          "name": "ui/skinmetadata.slk",
+          "bytes": 168206,
+          "sha256": "f0bce42845a7ac1ca9d28eb83a5bc38f0cc21023e347bf8ae358c570938f5712"
+        },
+        {
+          "name": "ui/triggerdata.txt",
+          "bytes": 285354,
+          "sha256": "d109ec06a513d77492cf1ab346fdcb080732b0e6b1aaa9010c585fb8df52df4d"
+        },
+        {
+          "name": "ui/worldeditgamestrings.txt",
+          "bytes": 17901,
+          "sha256": "a8390d51ef913600c945906c443e4a03333a6a796c5945d1c2a3ccb3fdc125a8"
+        },
+        {
+          "name": "ui/worldeditstrings.txt",
+          "bytes": 335260,
+          "sha256": "bd05612ca253604b3f146281250ef374bfdd218edc79cefcb77a9f2ea07409e1"
+        },
+        {
+          "name": "units/abilitybuffmetadata.slk",
+          "bytes": 5638,
+          "sha256": "6c2f12a13048dd4940dc1f12f61d0e73412ad66b047381a97b27af3e485a3764"
+        },
+        {
+          "name": "units/abilitymetadata.slk",
+          "bytes": 216026,
+          "sha256": "42249bc577463896a9b1fece959c6bd5f815eb42c4899b8c899620b547a5b3f6"
+        },
+        {
+          "name": "units/destructablemetadata.slk",
+          "bytes": 11617,
+          "sha256": "2a2b107f8d1e2ce444cdddd3b5e2dcbdc5417747ce09eacf609de8f982c46942"
+        },
+        {
+          "name": "units/miscmetadata.slk",
+          "bytes": 46551,
+          "sha256": "9e6cc2a7ad0a1dc8db7c7c54a8fdb50834ea9593c048b094c4f3a7ad68a0c8f6"
+        },
+        {
+          "name": "units/unitmetadata.slk",
+          "bytes": 66482,
+          "sha256": "4794cd724d1769cacab9a80c925d4df17a6514477d92815d5549d8e56b9a66a5"
+        },
+        {
+          "name": "units/upgradeeffectmetadata.slk",
+          "bytes": 9011,
+          "sha256": "ebabdebac615ca78711b903e8bbf013d0480217ef128a12cb45bba30002b1d3a"
+        },
+        {
+          "name": "units/upgrademetadata.slk",
+          "bytes": 9408,
+          "sha256": "a3c28ea692d1ea7967ed0b835fc8b9fd345c1554ba4b9b30365da3432861a850"
+        }
+      ],
+      "missing": []
+    },
+    {
       "build": "TFT-v1.22a-ru",
       "era": "TFT",
       "sections": [
@@ -3279,8 +3566,8 @@
         {
           "section": "objects",
           "file": "objects.json",
-          "bytes": 767795,
-          "sha256": "b9d9c71a27ac258c2c9d37c37245f625e71c4998e544ec7e359fedb3999fd453"
+          "bytes": 1204603,
+          "sha256": "a88e34e4630677741b28879e67847e5002948ba88521014405df6dccb6b17293"
         },
         {
           "section": "triggers",
@@ -3291,8 +3578,8 @@
         {
           "section": "script",
           "file": "script.json",
-          "bytes": 865324,
-          "sha256": "45013d3c0b307c258f8b99ebb6000f07a8e01e78d9c170911c212a29de9c2212"
+          "bytes": 1007964,
+          "sha256": "8fc17c293dd86b154379811697ff2c731dfea2ea844248387839e100231cc105"
         }
       ],
       "inputs": [
@@ -3307,9 +3594,19 @@
           "sha256": "d290865bd673f8394f4e6fb7b4d6720412fed3a447877523cec9e54e65b8e62c"
         },
         {
+          "name": "scripts/common.ai",
+          "bytes": 98429,
+          "sha256": "29f51929ff3c09988a77748dbefea319b72b32bf4bb1a5f6997760a621454818"
+        },
+        {
           "name": "scripts/common.j",
           "bytes": 166690,
           "sha256": "9cb04da1c75dd30025d96fec12b4302c2f6a1f1a8c864b66d6cf52c65ecde924"
+        },
+        {
+          "name": "ui/skinmetadata.slk",
+          "bytes": 168206,
+          "sha256": "f0bce42845a7ac1ca9d28eb83a5bc38f0cc21023e347bf8ae358c570938f5712"
         },
         {
           "name": "ui/triggerdata.txt",
@@ -3358,8 +3655,6 @@
         }
       ],
       "missing": [
-        "scripts/common.ai",
-        "ui/skinmetadata.slk",
         "units/upgradeeffectmetadata.slk"
       ]
     },
@@ -3762,6 +4057,113 @@
       "missing": []
     },
     {
+      "build": "TFT-v1.27b",
+      "era": "TFT",
+      "sections": [
+        "objects",
+        "triggers",
+        "script"
+      ],
+      "sectionHashes": [
+        {
+          "section": "objects",
+          "file": "objects.json",
+          "bytes": 1154163,
+          "sha256": "db5ea1c6653ec6caa59fb3b6551bc82175d0d8ce1adde27254d691391f0f64e6"
+        },
+        {
+          "section": "triggers",
+          "file": "triggers.json",
+          "bytes": 255074,
+          "sha256": "caceea159b84fdc3e601090d7244809c3c2774e85548d241814e8a102f4defe9"
+        },
+        {
+          "section": "script",
+          "file": "script.json",
+          "bytes": 1007964,
+          "sha256": "8fc17c293dd86b154379811697ff2c731dfea2ea844248387839e100231cc105"
+        }
+      ],
+      "inputs": [
+        {
+          "name": "doodads/doodadmetadata.slk",
+          "bytes": 7994,
+          "sha256": "30715525db91e74233bde0e482618fa682527335d4584317229398854bb0ba5a"
+        },
+        {
+          "name": "scripts/blizzard.j",
+          "bytes": 451847,
+          "sha256": "d290865bd673f8394f4e6fb7b4d6720412fed3a447877523cec9e54e65b8e62c"
+        },
+        {
+          "name": "scripts/common.ai",
+          "bytes": 98429,
+          "sha256": "29f51929ff3c09988a77748dbefea319b72b32bf4bb1a5f6997760a621454818"
+        },
+        {
+          "name": "scripts/common.j",
+          "bytes": 166690,
+          "sha256": "9cb04da1c75dd30025d96fec12b4302c2f6a1f1a8c864b66d6cf52c65ecde924"
+        },
+        {
+          "name": "ui/skinmetadata.slk",
+          "bytes": 168206,
+          "sha256": "f0bce42845a7ac1ca9d28eb83a5bc38f0cc21023e347bf8ae358c570938f5712"
+        },
+        {
+          "name": "ui/triggerdata.txt",
+          "bytes": 303224,
+          "sha256": "c431e96bff9d5afc738eae858c07dea17f9754e3ac81d71122ee28f75ec69ebc"
+        },
+        {
+          "name": "ui/worldeditgamestrings.txt",
+          "bytes": 17901,
+          "sha256": "a8390d51ef913600c945906c443e4a03333a6a796c5945d1c2a3ccb3fdc125a8"
+        },
+        {
+          "name": "ui/worldeditstrings.txt",
+          "bytes": 335260,
+          "sha256": "bd05612ca253604b3f146281250ef374bfdd218edc79cefcb77a9f2ea07409e1"
+        },
+        {
+          "name": "units/abilitybuffmetadata.slk",
+          "bytes": 5638,
+          "sha256": "6c2f12a13048dd4940dc1f12f61d0e73412ad66b047381a97b27af3e485a3764"
+        },
+        {
+          "name": "units/abilitymetadata.slk",
+          "bytes": 216026,
+          "sha256": "42249bc577463896a9b1fece959c6bd5f815eb42c4899b8c899620b547a5b3f6"
+        },
+        {
+          "name": "units/destructablemetadata.slk",
+          "bytes": 11617,
+          "sha256": "2a2b107f8d1e2ce444cdddd3b5e2dcbdc5417747ce09eacf609de8f982c46942"
+        },
+        {
+          "name": "units/miscmetadata.slk",
+          "bytes": 46551,
+          "sha256": "9e6cc2a7ad0a1dc8db7c7c54a8fdb50834ea9593c048b094c4f3a7ad68a0c8f6"
+        },
+        {
+          "name": "units/unitmetadata.slk",
+          "bytes": 66482,
+          "sha256": "4794cd724d1769cacab9a80c925d4df17a6514477d92815d5549d8e56b9a66a5"
+        },
+        {
+          "name": "units/upgradeeffectmetadata.slk",
+          "bytes": 9011,
+          "sha256": "ebabdebac615ca78711b903e8bbf013d0480217ef128a12cb45bba30002b1d3a"
+        },
+        {
+          "name": "units/upgrademetadata.slk",
+          "bytes": 9408,
+          "sha256": "a3c28ea692d1ea7967ed0b835fc8b9fd345c1554ba4b9b30365da3432861a850"
+        }
+      ],
+      "missing": []
+    },
+    {
       "build": "TFT-v1.28.0.7205-zhtw",
       "era": "TFT",
       "sections": [
@@ -4007,12 +4409,133 @@
       ]
     },
     {
-      "build": "TFT-v1.29.2.9231",
+      "build": "TFT-v1.29.1.9160",
       "era": "TFT",
       "sections": [
+        "objects",
+        "triggers",
         "script"
       ],
       "sectionHashes": [
+        {
+          "section": "objects",
+          "file": "objects.json",
+          "bytes": 1170536,
+          "sha256": "fb9d2a24142e05bafa07a11441662d5712e000742a47419d628f64c871243368"
+        },
+        {
+          "section": "triggers",
+          "file": "triggers.json",
+          "bytes": 275337,
+          "sha256": "f3592f742fbe81fac2dccdd39ec9299985d82af49daead043f1cbfa2d7ef8745"
+        },
+        {
+          "section": "script",
+          "file": "script.json",
+          "bytes": 1043881,
+          "sha256": "bbfcec7361f976c1829ae9767f6d160cce9c11bcf2ebfd5fb9ccd464448cecbb"
+        }
+      ],
+      "inputs": [
+        {
+          "name": "doodads/doodadmetadata.slk",
+          "bytes": 7994,
+          "sha256": "30715525db91e74233bde0e482618fa682527335d4584317229398854bb0ba5a"
+        },
+        {
+          "name": "scripts/blizzard.j",
+          "bytes": 452936,
+          "sha256": "7ca28f0ce47712a9ab6832c22bb0d0c9d2844b5831fb465b9d792731a3d5243e"
+        },
+        {
+          "name": "scripts/common.ai",
+          "bytes": 98429,
+          "sha256": "29f51929ff3c09988a77748dbefea319b72b32bf4bb1a5f6997760a621454818"
+        },
+        {
+          "name": "scripts/common.j",
+          "bytes": 178539,
+          "sha256": "c5e5005b7e1d4cbe4b34e022b105a73219f79d9fc3a55f7228485fbf7dff16ed"
+        },
+        {
+          "name": "ui/skinmetadata.slk",
+          "bytes": 168206,
+          "sha256": "f0bce42845a7ac1ca9d28eb83a5bc38f0cc21023e347bf8ae358c570938f5712"
+        },
+        {
+          "name": "ui/triggerdata.txt",
+          "bytes": 320391,
+          "sha256": "1cef921c585b64489053637b35e8b33c67f35082af717686c542efd4f616148f"
+        },
+        {
+          "name": "ui/worldeditgamestrings.txt",
+          "bytes": 18245,
+          "sha256": "279c9b21de51fe2e7436d85ccb8ce0044159d0be98e21bdb91cdcc2b720cf0cb"
+        },
+        {
+          "name": "ui/worldeditstrings.txt",
+          "bytes": 379666,
+          "sha256": "52c15141fd22aedd27e73c6341a74e00883077fa196635e61bd1225ecd27cf60"
+        },
+        {
+          "name": "units/abilitybuffmetadata.slk",
+          "bytes": 5638,
+          "sha256": "6c2f12a13048dd4940dc1f12f61d0e73412ad66b047381a97b27af3e485a3764"
+        },
+        {
+          "name": "units/abilitymetadata.slk",
+          "bytes": 216603,
+          "sha256": "ddff3e0e247928f647a54671e9d2929bf69e73c4ed8ae90c9ffe1eb70e12f986"
+        },
+        {
+          "name": "units/destructablemetadata.slk",
+          "bytes": 11617,
+          "sha256": "2a2b107f8d1e2ce444cdddd3b5e2dcbdc5417747ce09eacf609de8f982c46942"
+        },
+        {
+          "name": "units/miscmetadata.slk",
+          "bytes": 46551,
+          "sha256": "1d7cf73ca40ba3470b09657149cc5195a94e2863b0f4f71b246e9bcc1570e85b"
+        },
+        {
+          "name": "units/unitmetadata.slk",
+          "bytes": 66482,
+          "sha256": "4794cd724d1769cacab9a80c925d4df17a6514477d92815d5549d8e56b9a66a5"
+        },
+        {
+          "name": "units/upgradeeffectmetadata.slk",
+          "bytes": 9011,
+          "sha256": "ebabdebac615ca78711b903e8bbf013d0480217ef128a12cb45bba30002b1d3a"
+        },
+        {
+          "name": "units/upgrademetadata.slk",
+          "bytes": 9408,
+          "sha256": "a3c28ea692d1ea7967ed0b835fc8b9fd345c1554ba4b9b30365da3432861a850"
+        }
+      ],
+      "missing": []
+    },
+    {
+      "build": "TFT-v1.29.2.9231",
+      "era": "TFT",
+      "sections": [
+        "objects",
+        "triggers",
+        "script"
+      ],
+      "sectionHashes": [
+        {
+          "section": "objects",
+          "file": "objects.json",
+          "bytes": 1170536,
+          "sha256": "fb9d2a24142e05bafa07a11441662d5712e000742a47419d628f64c871243368"
+        },
+        {
+          "section": "triggers",
+          "file": "triggers.json",
+          "bytes": 275588,
+          "sha256": "72a7aeac828dfde3b790871c8ff68cbd0d59807faa1698f6e7d1a4b510595bbf"
+        },
         {
           "section": "script",
           "file": "script.json",
@@ -4021,6 +4544,11 @@
         }
       ],
       "inputs": [
+        {
+          "name": "doodads/doodadmetadata.slk",
+          "bytes": 7994,
+          "sha256": "30715525db91e74233bde0e482618fa682527335d4584317229398854bb0ba5a"
+        },
         {
           "name": "scripts/blizzard.j",
           "bytes": 452936,
@@ -4035,22 +4563,64 @@
           "name": "scripts/common.j",
           "bytes": 178677,
           "sha256": "3c21e998bf80d1e04718bd3f2ee7ef2bf1b83359e5b303a56cf59cd61a2afdcd"
+        },
+        {
+          "name": "ui/skinmetadata.slk",
+          "bytes": 168206,
+          "sha256": "f0bce42845a7ac1ca9d28eb83a5bc38f0cc21023e347bf8ae358c570938f5712"
+        },
+        {
+          "name": "ui/triggerdata.txt",
+          "bytes": 320608,
+          "sha256": "39695995518fbb55a3a7dd29599dbf07578778358bf6793301ea31023ef74561"
+        },
+        {
+          "name": "ui/worldeditgamestrings.txt",
+          "bytes": 18245,
+          "sha256": "279c9b21de51fe2e7436d85ccb8ce0044159d0be98e21bdb91cdcc2b720cf0cb"
+        },
+        {
+          "name": "ui/worldeditstrings.txt",
+          "bytes": 379666,
+          "sha256": "52c15141fd22aedd27e73c6341a74e00883077fa196635e61bd1225ecd27cf60"
+        },
+        {
+          "name": "units/abilitybuffmetadata.slk",
+          "bytes": 5638,
+          "sha256": "6c2f12a13048dd4940dc1f12f61d0e73412ad66b047381a97b27af3e485a3764"
+        },
+        {
+          "name": "units/abilitymetadata.slk",
+          "bytes": 216603,
+          "sha256": "ddff3e0e247928f647a54671e9d2929bf69e73c4ed8ae90c9ffe1eb70e12f986"
+        },
+        {
+          "name": "units/destructablemetadata.slk",
+          "bytes": 11617,
+          "sha256": "2a2b107f8d1e2ce444cdddd3b5e2dcbdc5417747ce09eacf609de8f982c46942"
+        },
+        {
+          "name": "units/miscmetadata.slk",
+          "bytes": 46551,
+          "sha256": "1d7cf73ca40ba3470b09657149cc5195a94e2863b0f4f71b246e9bcc1570e85b"
+        },
+        {
+          "name": "units/unitmetadata.slk",
+          "bytes": 66482,
+          "sha256": "4794cd724d1769cacab9a80c925d4df17a6514477d92815d5549d8e56b9a66a5"
+        },
+        {
+          "name": "units/upgradeeffectmetadata.slk",
+          "bytes": 9011,
+          "sha256": "ebabdebac615ca78711b903e8bbf013d0480217ef128a12cb45bba30002b1d3a"
+        },
+        {
+          "name": "units/upgrademetadata.slk",
+          "bytes": 9408,
+          "sha256": "a3c28ea692d1ea7967ed0b835fc8b9fd345c1554ba4b9b30365da3432861a850"
         }
       ],
-      "missing": [
-        "doodads/doodadmetadata.slk",
-        "ui/skinmetadata.slk",
-        "ui/triggerdata.txt",
-        "ui/worldeditgamestrings.txt",
-        "ui/worldeditstrings.txt",
-        "units/abilitybuffmetadata.slk",
-        "units/abilitymetadata.slk",
-        "units/destructablemetadata.slk",
-        "units/miscmetadata.slk",
-        "units/unitmetadata.slk",
-        "units/upgradeeffectmetadata.slk",
-        "units/upgrademetadata.slk"
-      ]
+      "missing": []
     },
     {
       "build": "TFT-v1.30.0.9655-w3t",
@@ -4725,6 +5295,113 @@
         "units/upgradeeffectmetadata.slk",
         "units/upgrademetadata.slk"
       ]
+    },
+    {
+      "build": "TFT-v1.31.1.12164",
+      "era": "TFT",
+      "sections": [
+        "objects",
+        "triggers",
+        "script"
+      ],
+      "sectionHashes": [
+        {
+          "section": "objects",
+          "file": "objects.json",
+          "bytes": 1180194,
+          "sha256": "aa9a066c0b71eaec734389ebfc4307777691b3f07cee917aea85311b1d6a124c"
+        },
+        {
+          "section": "triggers",
+          "file": "triggers.json",
+          "bytes": 311755,
+          "sha256": "b5166c48b0d9e23b018708706822aeb1a4ad1b36f54e028bfda4f867c103674a"
+        },
+        {
+          "section": "script",
+          "file": "script.json",
+          "bytes": 1411865,
+          "sha256": "71b1a2f47c91c0772065861f988f9fefc6e43f3221a6a6b47c14fbfde60feeb5"
+        }
+      ],
+      "inputs": [
+        {
+          "name": "doodads/doodadmetadata.slk",
+          "bytes": 7994,
+          "sha256": "30715525db91e74233bde0e482618fa682527335d4584317229398854bb0ba5a"
+        },
+        {
+          "name": "scripts/blizzard.j",
+          "bytes": 465816,
+          "sha256": "1bc04226272aa9e5e929acb3185176b8de1c8d391ec9053d086ada60d9c2b587"
+        },
+        {
+          "name": "scripts/common.ai",
+          "bytes": 98429,
+          "sha256": "29f51929ff3c09988a77748dbefea319b72b32bf4bb1a5f6997760a621454818"
+        },
+        {
+          "name": "scripts/common.j",
+          "bytes": 351193,
+          "sha256": "d20aa2ae764fe016fdab48b0ac086f12617e9fc7fb05c6ee92d230433fa65471"
+        },
+        {
+          "name": "ui/skinmetadata.slk",
+          "bytes": 168206,
+          "sha256": "f0bce42845a7ac1ca9d28eb83a5bc38f0cc21023e347bf8ae358c570938f5712"
+        },
+        {
+          "name": "ui/triggerdata.txt",
+          "bytes": 463354,
+          "sha256": "c1261dc322e6ee716f26b6471fe5c17eb2e692df0c938faace0356ef0267e523"
+        },
+        {
+          "name": "ui/worldeditgamestrings.txt",
+          "bytes": 18437,
+          "sha256": "f95082c9e99980f28bd7444184103d5161b11fc87c60a4719d194dfc24f7ef6c"
+        },
+        {
+          "name": "ui/worldeditstrings.txt",
+          "bytes": 451564,
+          "sha256": "b865e725c20384a3b728dd105ce0fe96b7105bd1ba5d98757b5fb22f2128be54"
+        },
+        {
+          "name": "units/abilitybuffmetadata.slk",
+          "bytes": 5638,
+          "sha256": "6c2f12a13048dd4940dc1f12f61d0e73412ad66b047381a97b27af3e485a3764"
+        },
+        {
+          "name": "units/abilitymetadata.slk",
+          "bytes": 221235,
+          "sha256": "f0200e0bf7e95ce222f97c31be6002a52c596af2176c99f5e4ce32cf72857a0b"
+        },
+        {
+          "name": "units/destructablemetadata.slk",
+          "bytes": 11611,
+          "sha256": "222e9cf8619f447e2bfb5f2ef9dc2e37971ca67a2900730cf23097483e48808a"
+        },
+        {
+          "name": "units/miscmetadata.slk",
+          "bytes": 46551,
+          "sha256": "1d7cf73ca40ba3470b09657149cc5195a94e2863b0f4f71b246e9bcc1570e85b"
+        },
+        {
+          "name": "units/unitmetadata.slk",
+          "bytes": 66991,
+          "sha256": "d84ccd5b6c7e1b97b6e14882f802f5e20994bf07b3b827e03180a9abc9b26763"
+        },
+        {
+          "name": "units/upgradeeffectmetadata.slk",
+          "bytes": 9346,
+          "sha256": "86a880d748bc0602c9cf02385ada557f1d13d588e40d5177d26f5b686d5318cf"
+        },
+        {
+          "name": "units/upgrademetadata.slk",
+          "bytes": 9408,
+          "sha256": "a3c28ea692d1ea7967ed0b835fc8b9fd345c1554ba4b9b30365da3432861a850"
+        }
+      ],
+      "missing": []
     },
     {
       "build": "TFT-v1.31.1.12173",

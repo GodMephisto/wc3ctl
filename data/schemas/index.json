@@ -462,6 +462,37 @@
     ]
   },
   {
+    "build": "ROC-v1.00",
+    "source": "Hive Installer_1.00_ROC.iso (ROC 1.00 enUS CD)",
+    "sections": [
+      "objects",
+      "triggers",
+      "script"
+    ],
+    "objectFiles": 1,
+    "fields": 117,
+    "triggerFunctions": 676,
+    "natives": {
+      "scripts/blizzard.j": 912,
+      "scripts/common.ai": 558,
+      "scripts/common.j": 1070
+    },
+    "functions": {
+      "scripts/blizzard.j": 611,
+      "scripts/common.ai": 92
+    },
+    "missing": [
+      "doodads/doodadmetadata.slk",
+      "ui/skinmetadata.slk",
+      "units/abilitybuffmetadata.slk",
+      "units/abilitymetadata.slk",
+      "units/destructablemetadata.slk",
+      "units/miscmetadata.slk",
+      "units/upgradeeffectmetadata.slk",
+      "units/upgrademetadata.slk"
+    ]
+  },
+  {
     "build": "ROC-v1.01-ru",
     "source": "folder ROC-v1.01-ru",
     "sections": [
@@ -1452,6 +1483,30 @@
     ]
   },
   {
+    "build": "TFT-v1.07",
+    "source": "Hive Installer_1.07_TFT.iso (TFT 1.07 enUS CD)",
+    "sections": [
+      "objects",
+      "triggers",
+      "script"
+    ],
+    "objectFiles": 8,
+    "fields": 1659,
+    "triggerFunctions": 833,
+    "natives": {
+      "scripts/blizzard.j": 1221,
+      "scripts/common.ai": 711,
+      "scripts/common.j": 1291
+    },
+    "functions": {
+      "scripts/blizzard.j": 760,
+      "scripts/common.ai": 120
+    },
+    "missing": [
+      "units/abilitybuffmetadata.slk"
+    ]
+  },
+  {
     "build": "TFT-v1.10-ru",
     "source": "folder TFT-v1.10-ru",
     "sections": [
@@ -2112,6 +2167,28 @@
     ]
   },
   {
+    "build": "TFT-v1.21a",
+    "source": "Hive Files_1.21a.zip (full enUS client)",
+    "sections": [
+      "objects",
+      "triggers",
+      "script"
+    ],
+    "objectFiles": 9,
+    "fields": 2243,
+    "triggerFunctions": 955,
+    "natives": {
+      "scripts/blizzard.j": 1295,
+      "scripts/common.ai": 711,
+      "scripts/common.j": 1483
+    },
+    "functions": {
+      "scripts/blizzard.j": 830,
+      "scripts/common.ai": 120
+    },
+    "missing": []
+  },
+  {
     "build": "TFT-v1.22a-ru",
     "source": "folder TFT-v1.22a-ru",
     "sections": [
@@ -2344,25 +2421,25 @@
   },
   {
     "build": "TFT-v1.24.4",
-    "source": "folder from-1244",
+    "source": "w3x2lni zhCN-1.24.4 bundle plus frozen-era SkinMetaData.slk and common.ai the bundle lacked",
     "sections": [
       "objects",
       "triggers",
       "script"
     ],
-    "objectFiles": 7,
-    "fields": 1389,
+    "objectFiles": 8,
+    "fields": 2243,
     "triggerFunctions": 1045,
     "natives": {
       "scripts/blizzard.j": 1394,
+      "scripts/common.ai": 711,
       "scripts/common.j": 1586
     },
     "functions": {
-      "scripts/blizzard.j": 923
+      "scripts/blizzard.j": 923,
+      "scripts/common.ai": 120
     },
     "missing": [
-      "scripts/common.ai",
-      "ui/skinmetadata.slk",
       "units/upgradeeffectmetadata.slk"
     ]
   },
@@ -2543,6 +2620,28 @@
     "missing": []
   },
   {
+    "build": "TFT-v1.27b",
+    "source": "archive.org multi.versions Warcraft III v1.27.1.rar \u002B War3Patch.mpq (1.27b)",
+    "sections": [
+      "objects",
+      "triggers",
+      "script"
+    ],
+    "objectFiles": 9,
+    "fields": 2243,
+    "triggerFunctions": 1045,
+    "natives": {
+      "scripts/blizzard.j": 1394,
+      "scripts/common.ai": 711,
+      "scripts/common.j": 1586
+    },
+    "functions": {
+      "scripts/blizzard.j": 923,
+      "scripts/common.ai": 120
+    },
+    "missing": []
+  },
+  {
     "build": "TFT-v1.28.0.7205-zhtw",
     "source": "folder TFT-v1.28.0.7205-zhtw",
     "sections": [
@@ -2664,14 +2763,38 @@
     ]
   },
   {
-    "build": "TFT-v1.29.2.9231",
-    "source": "folder TFT-v1.29.2.9231",
+    "build": "TFT-v1.29.1.9160",
+    "source": "Hive Files_1.29.1.zip (full enUS client)",
     "sections": [
+      "objects",
+      "triggers",
       "script"
     ],
-    "objectFiles": 0,
-    "fields": 0,
-    "triggerFunctions": 0,
+    "objectFiles": 9,
+    "fields": 2245,
+    "triggerFunctions": 1135,
+    "natives": {
+      "scripts/blizzard.j": 1398,
+      "scripts/common.ai": 711,
+      "scripts/common.j": 1703
+    },
+    "functions": {
+      "scripts/blizzard.j": 924,
+      "scripts/common.ai": 120
+    },
+    "missing": []
+  },
+  {
+    "build": "TFT-v1.29.2.9231",
+    "source": "Hive Files_1.29.2.zip (full enUS client)",
+    "sections": [
+      "objects",
+      "triggers",
+      "script"
+    ],
+    "objectFiles": 9,
+    "fields": 2245,
+    "triggerFunctions": 1136,
     "natives": {
       "scripts/blizzard.j": 1398,
       "scripts/common.ai": 711,
@@ -2681,20 +2804,7 @@
       "scripts/blizzard.j": 924,
       "scripts/common.ai": 120
     },
-    "missing": [
-      "doodads/doodadmetadata.slk",
-      "ui/skinmetadata.slk",
-      "ui/triggerdata.txt",
-      "ui/worldeditgamestrings.txt",
-      "ui/worldeditstrings.txt",
-      "units/abilitybuffmetadata.slk",
-      "units/abilitymetadata.slk",
-      "units/destructablemetadata.slk",
-      "units/miscmetadata.slk",
-      "units/unitmetadata.slk",
-      "units/upgradeeffectmetadata.slk",
-      "units/upgrademetadata.slk"
-    ]
+    "missing": []
   },
   {
     "build": "TFT-v1.30.0.9655-w3t",
@@ -3069,6 +3179,28 @@
       "units/upgradeeffectmetadata.slk",
       "units/upgrademetadata.slk"
     ]
+  },
+  {
+    "build": "TFT-v1.31.1.12164",
+    "source": "Hive Files_1.31.1.zip (CASC install, 1.31.1.12164 enUS)",
+    "sections": [
+      "objects",
+      "triggers",
+      "script"
+    ],
+    "objectFiles": 9,
+    "fields": 2263,
+    "triggerFunctions": 1248,
+    "natives": {
+      "scripts/blizzard.j": 1437,
+      "scripts/common.ai": 711,
+      "scripts/common.j": 3142
+    },
+    "functions": {
+      "scripts/blizzard.j": 959,
+      "scripts/common.ai": 120
+    },
+    "missing": []
   },
   {
     "build": "TFT-v1.31.1.12173",

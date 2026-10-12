@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "build": "TFT-v1.24.4",
-  "source": "folder from-1244",
+  "source": "w3x2lni zhCN-1.24.4 bundle plus frozen-era SkinMetaData.slk and common.ai the bundle lacked",
   "inputs": [
     {
       "name": "doodads/doodadmetadata.slk",
@@ -14,9 +14,19 @@
       "sha256": "d290865bd673f8394f4e6fb7b4d6720412fed3a447877523cec9e54e65b8e62c"
     },
     {
+      "name": "scripts/common.ai",
+      "bytes": 98429,
+      "sha256": "29f51929ff3c09988a77748dbefea319b72b32bf4bb1a5f6997760a621454818"
+    },
+    {
       "name": "scripts/common.j",
       "bytes": 166690,
       "sha256": "9cb04da1c75dd30025d96fec12b4302c2f6a1f1a8c864b66d6cf52c65ecde924"
+    },
+    {
+      "name": "ui/skinmetadata.slk",
+      "bytes": 168206,
+      "sha256": "f0bce42845a7ac1ca9d28eb83a5bc38f0cc21023e347bf8ae358c570938f5712"
     },
     {
       "name": "ui/triggerdata.txt",
@@ -65,8 +75,6 @@
     }
   ],
   "missing": [
-    "scripts/common.ai",
-    "ui/skinmetadata.slk",
     "units/upgradeeffectmetadata.slk"
   ]
 }
