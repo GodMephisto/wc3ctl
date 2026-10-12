@@ -26,13 +26,16 @@ public static class McpCommand
     /// <summary>
     /// Runs 'mcp ...' directly, before the command tree parses it, because the tree's global
     /// --game-dir would otherwise take the option meant for setup. Returns null for anything else,
-    /// and for a help request, which the tree answers.
+    /// for a help request, and for the introspection verbs the tree handles, which the tree answers.
     /// </summary>
     public static Task<int>? TryRun(string[] args)
     {
         if (args.Length == 0 || args[0] != "mcp") return null;
         var rest = args[1..];
         if (rest.Any(a => a is "-h" or "--help" or "-?" or "/?")) return null;
+        // The two read-only introspection verbs live in the command tree so they parse --json and
+        // show in help like any other command. SetupCli does not know them.
+        if (rest.Length > 0 && (rest[0] == "tools" || rest[0] == "audit-annotations")) return null;
         if (rest.Length > 0 && rest[0] == "serve")
         {
             if (rest.Length > 1)
@@ -52,12 +55,22 @@ public static class McpCommand
     }
 
     /// <summary>The 'mcp' branch of the command tree, for help output and the parity tests.</summary>
-    public static Command Build()
+    public static Command Build(Option<bool> jsonOption)
     {
         var mcp = new Command("mcp", "The MCP server for AI apps, and registering it with them.");
         var serve = new Command("serve", "Run the MCP server on stdio. AI apps start this, you normally do not.");
         serve.SetHandler(Serve);
         mcp.AddCommand(serve);
+
+        var audit = new Command("audit-annotations",
+            "Report MCP tools whose annotations disagree with their name or that declare no annotations.");
+        audit.SetHandler((bool json) =>
+        {
+            var result = Wc3.Mcp.McpToolAudit.InspectServer();
+            Console.WriteLine(json ? Render.AsJson(result) : Render.McpAudit(result));
+        }, jsonOption);
+        mcp.AddCommand(audit);
+
         foreach (var (verb, description) in Verbs)
         {
             var command = new Command(verb, description);

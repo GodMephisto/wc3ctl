@@ -4959,7 +4959,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         bench.AddCommand(benchPerfGate);
 
         root.AddCommand(bench);
-        root.AddCommand(McpCommand.Build());
+        root.AddCommand(McpCommand.Build(jsonOption));
 
         // ---- target: set and view the current target build ----
         var targetBuildArg = new Argument<string>("build",

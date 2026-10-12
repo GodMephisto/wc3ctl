@@ -451,6 +451,11 @@ public static class Render
         + "\nObjects by kind\n"
         + string.Join("\n", r.ObjectCounts.Select(c => $"  {c.Kind,-13} {c.Count}"));
 
+    public static string McpAudit(Wc3.Mcp.McpAnnotationAuditResult r) =>
+        r.Count == 0
+            ? "clean, no annotation problems"
+            : string.Join("\n", r.Problems.Select(p => $"{p.Tool,-30} {p.Problem}")) + $"\n{r.Count} problem(s)";
+
     public static string Roundtrip(RoundtripResult r)
     {
         var verdict = r.Faithful ? "OK - round-trip is byte-faithful for all files."

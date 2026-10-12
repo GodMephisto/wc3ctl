@@ -311,6 +311,20 @@ public class CliTests
     }
 
     [Fact]
+    public async Task Mcp_audit_annotations_json_is_clean_and_exits_zero()
+    {
+        var sw = new StringWriter();
+        var console = System.Console.Out;
+        System.Console.SetOut(sw);
+        int code = await Wc3Ctl.Program.Main(new[] { "mcp", "audit-annotations", "--json" });
+        System.Console.SetOut(console);
+        Assert.Equal(0, code);
+        var output = sw.ToString();
+        Assert.Contains("\"Count\": 0", output);
+        Assert.Contains("\"Problems\": []", output);
+    }
+
+    [Fact]
     public async Task Missing_file_exits_nonzero_with_clean_message_no_stack_trace()
     {
         var missing = Path.Combine(Path.GetTempPath(), $"wc3ctl_missing_{System.Guid.NewGuid():N}.w3x");

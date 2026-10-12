@@ -30,6 +30,7 @@ public class McpServerTests
         "imports_list", "leak_ab", "leak_benchmark", "leak_harness", "leak_join", "leak_list",
         "lint", "lint_baseline", "list_files", "map_compat", "map_info",
         "map_info_get", "map_info_set", "map_overview",
+        "mcp_audit_annotations",
         "mpq_bytes_diff", "mpq_listfile", "mpq_name_recover",
         "mpq_strip_bookkeeping", "mpq_verify", "new_map", "object_clone", "object_deprecated",
         "object_field_options", "object_form", "object_get", "object_list", "object_new",

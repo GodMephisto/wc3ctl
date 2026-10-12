@@ -43,6 +43,11 @@ public static class Wc3Tools
         [Description("Path to a .w3x/.w3m map file.")] string map)
         => Run(() => MapOverviewCommand.Execute(LoadMap(map)));
 
+    [McpServerTool(Name = "mcp_audit_annotations", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Audit the MCP tool surface itself. Reports every tool whose annotations disagree with its name (a mutating name marked read-only) and every tool that declares no annotations, as a list of problems plus a count. An empty list means the surface is clean. Read-only.")]
+    public static McpAnnotationAuditResult McpAuditAnnotations()
+        => Run(() => McpToolAudit.InspectServer());
+
     [McpServerTool(Name = "script_leaks", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Find handle leaks in a map's war3map.j (locations, groups, forces, effects, timers, "
         + "text tags, lightning and triggers created and never destroyed), each ranked by how often "
