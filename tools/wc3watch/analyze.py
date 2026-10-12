@@ -1,8 +1,14 @@
-"""wc3watch analyser. Reads one recorded session and explains every frame rate drop in it.
+"""wc3watch analyser. Reads recorded sessions and explains frame rate drops, memory and handles.
 
 Who runs it. wc3watch.ps1 calls it when a recording ends, or a person runs it by hand on an old
-session, as `python analyze.py <session folder>`. It reads frames.csv, samples.csv and events.csv
-and writes report.md into the same folder. Standard library only.
+session. It reads frames.csv, samples.csv and events.csv and writes report.md into the same folder.
+Standard library only.
+
+The commands.
+    python analyze.py <session folder>          write report.md and print the header
+    python analyze.py summary <session>         print a one screen summary
+    python analyze.py chart <session>           write chart.svg beside the data
+    python analyze.py diff <sessionA> <sessionB>  compare two sessions, A minus B is the change
 
 How a drop is found. Frames are grouped into seconds. A second counts as a drop when the game had
 focus and its frame rate fell below 75 percent of the median of the minute before it. A single frame
@@ -14,6 +20,12 @@ is first classed as CPU bound, GPU bound, or neither (waiting on present or the 
 one-second samples and the game's own log around the event then say why. Every rule below prints
 the numbers it used, so a verdict can be checked rather than trusted. The rules are heuristics and
 the report says so.
+
+Memory and handles. A least squares slope over the session, in units per minute, with its correlation,
+flags a steady rise as a leak. Lua maps free memory lazily, so a recorder marks a forced garbage
+collection as a gc_probe event and the slope is measured from that point. Warcraft III does not expose
+per-handle-type counters to an external sampler, so handle growth is timed and correlated with the
+events and log lines around it instead of being attributed to a handle kind. See README.md.
 """
 import csv
 import os
@@ -29,6 +41,20 @@ HEAT_BITS = 0x08 | 0x20 | 0x40      # hardware slowdown, software thermal, hardw
 POWER_BIT = 0x04                    # software power cap
 DROP_RATIO = 0.75
 HITCH_MS = 50.0
+
+# measure key, label, unit, and the units per minute a steady rise has to clear to read as a leak.
+TREND_MEASURES = (
+    ("wc3_priv_mb", "game memory", "MB", 5),
+    ("wc3_handles", "game handles", "", 20),
+    ("browser_ws_mb", "menu browser memory", "MB", 5),
+    ("gpu_temp", "GPU temperature", "C", 0.5),
+    ("memcomp_mb", "Windows memory compression", "MB", 5),
+)
+
+GC_KIND = "gc_probe"
+HANDLE_WINDOW_S = 60.0
+HANDLE_MIN_RISE = 20.0
+STEADY_R = 0.8
 
 
 def ptime(s):
@@ -109,7 +135,8 @@ def slope_per_min(pts):
 
 
 def parse_top(s):
-    """'Discord:23 chrome:11' into [('Discord', 23.0), ...]."""
+    """Parse a sample such as 'Discord 23 chrome 11' into [('Discord', 23.0), ...]. In the recorded
+    text each name and its value are joined by a colon."""
     out = []
     for tok in (s or "").split():
         if ":" in tok:
@@ -124,7 +151,31 @@ def norm_log(msg):
     return re.sub(r"\d+", "N", msg)[:110]
 
 
-def analyse(folder):
+def correct_clock(frames, samples):
+    """PresentMon's date_time output is not on the local clock. Measured on 2026-09-26 on a UTC+8
+    machine, it wrote local time plus a further 8 hours, so every frame landed on the wrong second
+    and every cause was read from the wrong sample. A first version rounded the gap to the start of
+    recording, which broke for any capture begun later. Now the candidates are whole multiples of
+    the machine's UTC offset, and the one that puts the most frames inside the sampled span wins."""
+    if not (frames and samples):
+        return None
+    off = datetime.now().astimezone().utcoffset().total_seconds()
+    lo, hi = samples[0]["_t"], samples[-1]["_t"]
+    best, best_n = 0, -1
+    for k in (0, 1, -1, 2, -2):
+        shift = k * off
+        n = sum(1 for f in frames[::50] if lo <= f["t"] - timedelta(seconds=shift) <= hi)
+        if n > best_n:
+            best, best_n = shift, n
+    if best:
+        for f in frames:
+            f["t"] -= timedelta(seconds=best)
+        return "PresentMon's clock was %+.2f h off the local clock and was corrected." % (best / 3600)
+    return None
+
+
+def load_session(folder):
+    """Read a session folder into frames, samples and events with parsed timestamps."""
     frames, mode = load_frames(os.path.join(folder, "frames.csv"))
     samples = load_csv(os.path.join(folder, "samples.csv"))
     events = load_csv(os.path.join(folder, "events.csv"))
@@ -132,28 +183,398 @@ def analyse(folder):
         s["_t"] = ptime(s["time"])
     for e in events:
         e["_t"] = ptime(e["time"])
+    note = correct_clock(frames, samples)
+    return {"frames": frames, "samples": samples, "events": events, "mode": mode, "clock_note": note}
 
-    # PresentMon's date_time output is not on the local clock. Measured on 2026-09-26 on a UTC+8
-    # machine, it wrote local time plus a further 8 hours, so every frame landed on the wrong second
-    # and every cause was read from the wrong sample. A first version rounded the gap to the start of
-    # recording, which broke for any capture begun later. Now the candidates are whole multiples of
-    # the machine's UTC offset, and the one that puts the most frames inside the sampled span wins.
-    clock_note = None
-    if frames and samples:
-        off = datetime.now().astimezone().utcoffset().total_seconds()
-        lo, hi = samples[0]["_t"], samples[-1]["_t"]
-        best, best_n = 0, -1
-        for k in (0, 1, -1, 2, -2):
-            shift = k * off
-            n = sum(1 for f in frames[::50] if lo <= f["t"] - timedelta(seconds=shift) <= hi)
-            if n > best_n:
-                best, best_n = shift, n
-        if best:
-            for f in frames:
-                f["t"] -= timedelta(seconds=best)
-            clock_note = "PresentMon's clock was %+.2f h off the local clock and was corrected." % (best / 3600)
+
+def last_gc_probe(events):
+    """The time of the last forced garbage collection, or None. Lua frees lazily, so the slope is
+    measured from here and a baseline recording forces a collection first."""
+    ts = [e["_t"] for e in events if e["kind"] == GC_KIND]
+    return max(ts) if ts else None
+
+
+def per_second(frames):
+    per = defaultdict(list)
+    for f in frames:
+        per[sec(f["t"])].append(f)
+    secs = sorted(per)
+    fps = {s: len(per[s]) for s in secs}
+    return per, secs, fps
+
+
+def detect_flagged(per, secs, fps):
+    """Drop and hitch seconds, and the groups seconds within two of each other form."""
+    flagged = {}
+    for i, s in enumerate(secs):
+        # The first and last second of a capture are partial, so their frame counts are not rates.
+        if i == 0 or i == len(secs) - 1:
+            continue
+        window = [fps[x] for x in secs[max(0, i - 60):i]]
+        base = median(window, None)
+        if base is None or len(window) < 10 or base < 20:
+            continue
+        fts = [f["ft"] for f in per[s]]
+        med_ft = median([f["ft"] for x in secs[max(0, i - 60):i] for f in per[x]], 16.7)
+        worst = max(fts)
+        if fps[s] < DROP_RATIO * base:
+            flagged[s] = ("drop", base)
+        elif worst >= max(HITCH_MS, 4 * med_ft):
+            flagged[s] = ("hitch", base)
+    groups = []
+    for s in sorted(flagged):
+        if groups and (s - groups[-1][-1]).total_seconds() <= 2:
+            groups[-1].append(s)
+        else:
+            groups.append([s])
+    return flagged, groups
+
+
+def frame_percentiles(frames):
+    ft = sorted(f["ft"] for f in frames)
+    pct = {"p50": None, "p95": None, "p99": None, "worst": None, "one_low": None}
+    n = len(ft)
+    if not n:
+        return pct
+    pct["p50"] = ft[int(0.50 * (n - 1))]
+    pct["p95"] = ft[int(0.95 * (n - 1))]
+    pct["p99"] = ft[int(0.99 * (n - 1))]
+    pct["worst"] = ft[-1]
+    if n > 100:
+        pct["one_low"] = 1000 / statistics.mean(ft[int(n * 0.99):])
+    return pct
+
+
+def trend_for(samples, key, after=None):
+    """(datetime, value) points for one sample key, optionally from a baseline time onward."""
+    pts = [(s["_t"], num(s.get(key))) for s in samples if after is None or s["_t"] >= after]
+    pts = [(t, v) for t, v in pts if v is not None]
+    sl, r = slope_per_min(pts)
+    return pts, sl, r
+
+
+def metrics_from_session(sess, folder):
+    """The numbers diff and summary are built from. One place computes them for both."""
+    frames, samples, events = sess["frames"], sess["samples"], sess["events"]
+    m = {"name": os.path.basename(os.path.normpath(folder)), "folder": folder,
+         "mode": sess["mode"], "clock_note": sess["clock_note"],
+         "frame_count": len(frames), "sample_count": len(samples), "event_count": len(events),
+         "dropped": 0, "hitches": 0, "groups": [], "flagged": {},
+         "duration_min": 0.0, "fps_mean": 0.0, "one_low": None,
+         "p50": None, "p95": None, "p99": None, "worst": None, "start": None, "end": None}
+    if frames:
+        per, secs, fps = per_second(frames)
+        flagged, groups = detect_flagged(per, secs, fps)
+        m["flagged"] = flagged
+        m["groups"] = groups
+        m["dropped"] = sum(1 for g in groups if any(flagged[s][0] == "drop" for s in g))
+        m["hitches"] = len(groups) - m["dropped"]
+        m["duration_min"] = (frames[-1]["t"] - frames[0]["t"]).total_seconds() / 60
+        m["fps_mean"] = statistics.mean(fps.values())
+        m.update(frame_percentiles(frames))
+        m["start"] = frames[0]["t"]
+        m["end"] = frames[-1]["t"]
+    m["gc_times"] = [e["_t"] for e in events if e["kind"] == GC_KIND]
+    m["baseline"] = last_gc_probe(events)
+    trends = []
+    for key, label, unit, leak in TREND_MEASURES:
+        pts, sl, r = trend_for(samples, key, m["baseline"])
+        vals = [v for _, v in pts]
+        trends.append({"key": key, "label": label, "unit": unit, "leak": leak,
+                       "slope": sl, "r": r, "first": vals[0] if vals else None,
+                       "last": vals[-1] if vals else None, "n": len(vals)})
+    m["trends"] = trends
+    return m
+
+
+def session_metrics(folder):
+    return metrics_from_session(load_session(folder), folder)
+
+
+def handle_suspects(samples, events, window_s=HANDLE_WINDOW_S, top=3, min_rise=HANDLE_MIN_RISE):
+    """Windows where handles rose fastest, with the events and log lines around each.
+
+    Warcraft III does not expose per-handle-type counters, so the best an external sampler can do is
+    time the growth and name what else was happening. A window is window_s seconds, the windows are
+    ranked by how many handles appeared in them, and the top non-overlapping ones come back with any
+    event or game log line within three seconds of the window."""
+    pts = [(s["_t"], num(s.get("wc3_handles"))) for s in samples]
+    pts = [(t, v) for t, v in pts if v is not None]
+    if len(pts) < 3:
+        return []
+    cands = []
+    i = 0
+    for j in range(len(pts)):
+        while (pts[j][0] - pts[i][0]).total_seconds() > window_s:
+            i += 1
+        if j > i:
+            cands.append((pts[j][1] - pts[i][1], pts[i][0], pts[j][0], pts[i][1], pts[j][1]))
+    cands.sort(key=lambda c: -c[0])
+    chosen = []
+    for c in cands:
+        rise, a, b, _, _ = c
+        if rise < min_rise:
+            break
+        if any(not (b < ca or a > cb) for _, ca, cb, _, _ in chosen):
+            continue
+        chosen.append(c)
+        if len(chosen) >= top:
+            break
+    chosen.sort(key=lambda c: c[1])
+    out = []
+    for rise, a, b, va, vb in chosen:
+        lo, hi = a - timedelta(seconds=3), b + timedelta(seconds=3)
+        near = [e for e in events if lo <= e["_t"] <= hi and e["kind"] != "gamelog"]
+        logs = [e for e in events if lo <= e["_t"] <= hi and e["kind"] == "gamelog"]
+        out.append({"start": a, "end": b, "rise": rise, "first": va, "last": vb,
+                    "events": near,
+                    "logs": Counter(norm_log(e["detail"]) for e in logs).most_common(3)})
+    return out
+
+
+def _esc(s):
+    return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _near_text(s):
+    parts = ["%s %s" % (e["kind"], e["_t"].strftime("%H:%M:%S")) for e in s["events"]]
+    parts += ["%d x %s" % (n, msg) for msg, n in s["logs"]]
+    return ", ".join(parts) if parts else "no event nearby"
+
+
+def _n(x, fmt="%.1f"):
+    return "n/a" if x is None else fmt % x
+
+
+def _signed(x, fmt="%.1f"):
+    return "" if x is None else ("+" if x >= 0 else "") + fmt % x
+
+
+def render_chart(folder):
+    """An SVG line chart of wc3_priv_mb and wc3_handles over time, with drop bands and GC marks."""
+    sess = load_session(folder)
+    samples, events, frames = sess["samples"], sess["events"], sess["frames"]
+    mem = [(s["_t"], num(s.get("wc3_priv_mb"))) for s in samples]
+    mem = [(t, v) for t, v in mem if v is not None]
+    hand = [(s["_t"], num(s.get("wc3_handles"))) for s in samples]
+    hand = [(t, v) for t, v in hand if v is not None]
+    W, H = 960, 540
+    L, R, T, B = 84, 96, 60, 64
+    pw, ph = W - L - R, H - T - B
+    name = _esc(os.path.basename(os.path.normpath(folder)))
+    out = []
+    w = out.append
+    w('<?xml version="1.0" encoding="UTF-8"?>')
+    w('<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" viewBox="0 0 %d %d">' % (W, H, W, H))
+    w('<rect x="0" y="0" width="%d" height="%d" fill="#ffffff"/>' % (W, H))
+    w('<text x="%d" y="32" font-family="sans-serif" font-size="18" fill="#111111">wc3watch, %s</text>' % (L, name))
+    allpts = mem + hand
+    if not allpts:
+        w('<text x="%d" y="%d" font-family="sans-serif" font-size="16" fill="#666666">No samples were recorded.</text>'
+          % (L, T + ph // 2))
+        w('</svg>')
+        return "\n".join(out) + "\n"
+    t0 = min(t for t, _ in allpts)
+    t1 = max(t for t, _ in allpts)
+    span = max(1.0, (t1 - t0).total_seconds())
+    mem_lo, mem_hi = (min(v for _, v in mem), max(v for _, v in mem)) if mem else (0.0, 1.0)
+    hand_lo, hand_hi = (min(v for _, v in hand), max(v for _, v in hand)) if hand else (0.0, 1.0)
+
+    def xmap(t):
+        return L + pw * ((t - t0).total_seconds() / span)
+
+    def ymap(v, lo, hi):
+        if hi <= lo:
+            hi = lo + 1.0
+        return T + ph * (1 - (v - lo) / (hi - lo))
+
+    # Drop and hitch bands, drawn first so the series sit on top.
+    if frames:
+        per, secs, fps = per_second(frames)
+        flagged, groups = detect_flagged(per, secs, fps)
+        for g in groups:
+            x0 = xmap(g[0])
+            x1 = xmap(g[-1] + timedelta(seconds=1))
+            w('<rect class="drop-band" x="%.1f" y="%d" width="%.1f" height="%d" fill="#d73a49" opacity="0.14"/>'
+              % (x0, T, max(1.0, x1 - x0), ph))
+
+    # Horizontal gridlines and the two value axes.
+    for k in range(5):
+        frac = k / 4
+        y = T + ph * frac
+        w('<line x1="%d" y1="%.1f" x2="%d" y2="%.1f" stroke="#e4e4e4" stroke-width="1"/>' % (L, y, L + pw, y))
+        mv = mem_hi - (mem_hi - mem_lo) * frac
+        w('<text x="%d" y="%.1f" font-family="sans-serif" font-size="11" fill="#1f6feb" text-anchor="end">%.0f</text>'
+          % (L - 8, y + 4, mv))
+        hv = hand_hi - (hand_hi - hand_lo) * frac
+        w('<text x="%d" y="%.1f" font-family="sans-serif" font-size="11" fill="#e36209" text-anchor="start">%.0f</text>'
+          % (L + pw + 8, y + 4, hv))
+    w('<line x1="%d" y1="%d" x2="%d" y2="%d" stroke="#333333" stroke-width="1.5"/>' % (L, T, L, T + ph))
+    w('<line x1="%d" y1="%d" x2="%d" y2="%d" stroke="#333333" stroke-width="1.5"/>' % (L, T + ph, L + pw, T + ph))
+
+    # Time labels.
+    for k in range(5):
+        frac = k / 4
+        x = L + pw * frac
+        t = t0 + timedelta(seconds=span * frac)
+        anchor = "start" if k == 0 else "end" if k == 4 else "middle"
+        w('<text x="%.1f" y="%d" font-family="sans-serif" font-size="11" fill="#333333" text-anchor="%s">%s</text>'
+          % (x, T + ph + 20, anchor, t.strftime("%H:%M:%S")))
+
+    if mem:
+        pts = " ".join("%.1f,%.1f" % (xmap(t), ymap(v, mem_lo, mem_hi)) for t, v in mem)
+        w('<polyline class="series-mem" fill="none" stroke="#1f6feb" stroke-width="1.8" points="%s"/>' % pts)
+    if hand:
+        pts = " ".join("%.1f,%.1f" % (xmap(t), ymap(v, hand_lo, hand_hi)) for t, v in hand)
+        w('<polyline class="series-hand" fill="none" stroke="#e36209" stroke-width="1.8" points="%s"/>' % pts)
+
+    for e in events:
+        if e["kind"] == GC_KIND:
+            x = xmap(e["_t"])
+            w('<line class="gc-probe" x1="%.1f" y1="%d" x2="%.1f" y2="%d" stroke="#22863a" '
+              'stroke-width="1.4" stroke-dasharray="5 4"/>' % (x, T, x, T + ph))
+            w('<text x="%.1f" y="%d" font-family="sans-serif" font-size="10" fill="#22863a">GC</text>'
+              % (x + 3, T + 12))
+
+    # Legend.
+    lx, ly = L + pw - 210, T + 4
+    w('<line x1="%d" y1="%d" x2="%d" y2="%d" stroke="#1f6feb" stroke-width="2"/>' % (lx, ly, lx + 22, ly))
+    w('<text x="%d" y="%d" font-family="sans-serif" font-size="12" fill="#111111">game memory MB</text>' % (lx + 28, ly + 4))
+    w('<line x1="%d" y1="%d" x2="%d" y2="%d" stroke="#e36209" stroke-width="2"/>' % (lx, ly + 18, lx + 22, ly + 18))
+    w('<text x="%d" y="%d" font-family="sans-serif" font-size="12" fill="#111111">game handles</text>' % (lx + 28, ly + 22))
+    w('<rect x="%d" y="%d" width="10" height="10" fill="#d73a49" opacity="0.4"/>' % (lx, ly + 34))
+    w('<text x="%d" y="%d" font-family="sans-serif" font-size="12" fill="#111111">drop or hitch</text>' % (lx + 16, ly + 43))
+    w('</svg>')
+    return "\n".join(out) + "\n"
+
+
+def render_summary(folder):
+    """One screen. Length, measures with their slope and steady flag, drops, and suspect windows."""
+    sess = load_session(folder)
+    m = metrics_from_session(sess, folder)
+    out = []
+    w = out.append
+    w("wc3watch summary  %s" % m["name"])
+    w("")
+    if not m["frame_count"]:
+        w("  No frames were recorded, so there is nothing to summarise.")
+        return "\n".join(out)
+    w("  length     %.1f min, %s to %s" % (m["duration_min"], m["start"].strftime("%Y-%m-%d %H:%M:%S"),
+                                           m["end"].strftime("%H:%M:%S")))
+    low = ", 1%% low %.0f fps" % m["one_low"] if m["one_low"] else ""
+    w("  frames     %d at %.0f fps average" % (m["frame_count"], m["fps_mean"]))
+    w("  frame time p50 %.1f ms, p95 %.1f ms, p99 %.1f ms, worst %.0f ms%s"
+      % (m["p50"], m["p95"], m["p99"], m["worst"], low))
+    w("  drops      %d drop, %d hitch" % (m["dropped"], m["hitches"]))
+    if m["gc_times"]:
+        w("  gc probe   %d recorded, last %s" % (len(m["gc_times"]), max(m["gc_times"]).strftime("%H:%M:%S")))
+    else:
+        w("  gc probe   none recorded")
+    if m["clock_note"]:
+        w("  clock      %s" % m["clock_note"])
+    w("")
+    w("  measure                    start       end   per minute  steady  reading")
+    for t in m["trends"]:
+        if t["n"] == 0:
+            continue
+        if t["slope"] is None:
+            w("  %-24s %9.0f %9.0f   too short to tell" % (t["label"], t["first"], t["last"]))
+            continue
+        steady = t["r"] is not None and t["r"] >= STEADY_R
+        reading = "looks like a leak" if (steady and t["slope"] >= t["leak"]) else ""
+        w("  %-24s %9.0f %9.0f   %+9.1f  %-6s  %s"
+          % (t["label"], t["first"], t["last"], t["slope"], "yes" if steady else "no", reading))
+    w("")
+    suspects = handle_suspects(sess["samples"], sess["events"])
+    if suspects:
+        w("  suspect windows for handle growth")
+        for s in suspects:
+            w("    %s to %s  %+.0f handles  %s"
+              % (s["start"].strftime("%H:%M:%S"), s["end"].strftime("%H:%M:%S"), s["rise"], _near_text(s)))
+    else:
+        w("  handle growth  no window showed a clear rise")
+    return "\n".join(out)
+
+
+def render_diff(folder_a, folder_b):
+    """Two sessions side by side, delta is B minus A."""
+    A = session_metrics(folder_a)
+    B = session_metrics(folder_b)
+    out = []
+    w = out.append
+    w("# wc3watch diff")
+    w("")
+    w("A is %s, B is %s. The delta is B minus A, so a negative number is B having less of it." % (A["name"], B["name"]))
+    w("")
+    w("| measure | A | B | delta |")
+    w("|---|---|---|---|")
+    rows = [
+        ("recorded, min", A["duration_min"], B["duration_min"], "%.1f"),
+        ("frames", A["frame_count"], B["frame_count"], "%.0f"),
+        ("average fps", A["fps_mean"], B["fps_mean"], "%.1f"),
+        ("frame p50, ms", A["p50"], B["p50"], "%.1f"),
+        ("frame p95, ms", A["p95"], B["p95"], "%.1f"),
+        ("frame p99, ms", A["p99"], B["p99"], "%.1f"),
+        ("worst frame, ms", A["worst"], B["worst"], "%.1f"),
+        ("1% low fps", A["one_low"], B["one_low"], "%.1f"),
+        ("drops", A["dropped"], B["dropped"], "%.0f"),
+        ("hitches", A["hitches"], B["hitches"], "%.0f"),
+    ]
+    for label, a, b, fmt in rows:
+        delta = (b - a) if (a is not None and b is not None) else None
+        w("| %s | %s | %s | %s |" % (label, _n(a, fmt), _n(b, fmt), _signed(delta, fmt)))
+    w("")
+    w("## Trends, change per minute")
+    w("")
+    w("| measure | A | B | delta | steady A | steady B | reading |")
+    w("|---|---|---|---|---|---|---|")
+    for ta, tb in zip(A["trends"], B["trends"]):
+        if ta["slope"] is None or tb["slope"] is None:
+            w("| %s | too short | too short | | | | |" % ta["label"])
+            continue
+        sa = ta["r"] is not None and ta["r"] >= STEADY_R
+        sb = tb["r"] is not None and tb["r"] >= STEADY_R
+        reading = ""
+        if sa and ta["slope"] >= ta["leak"] and (not sb or abs(tb["slope"]) < abs(ta["slope"]) * 0.5):
+            reading = "A rises, B is flatter, consistent with the change fixing it"
+        elif sb and tb["slope"] >= tb["leak"]:
+            reading = "B still rises, the change did not stop it"
+        w("| %s | %+.1f %s | %+.1f %s | %+.1f | %s | %s | %s |"
+          % (ta["label"], ta["slope"], ta["unit"], tb["slope"], tb["unit"], tb["slope"] - ta["slope"],
+             "yes" if sa else "no", "yes" if sb else "no", reading))
+    w("")
+    for m in (A, B):
+        if m["gc_times"]:
+            w("%s recorded a forced garbage collection at %s, so its memory and handle slopes are measured "
+              "from that point." % (m["name"], max(m["gc_times"]).strftime("%H:%M:%S")))
+    w("")
+    w("## Handle growth, top window per session")
+    w("")
+    w("Warcraft III does not expose per-handle-type counters, so this times the growth and names what "
+      "was around it.")
+    w("")
+    w("| session | window | rise | near |")
+    w("|---|---|---|---|")
+    for m in (A, B):
+        sess = load_session(m["folder"])
+        sus = handle_suspects(sess["samples"], sess["events"], top=1)
+        if sus:
+            s = sus[0]
+            w("| %s | %s to %s | %+.0f | %s |" % (m["name"], s["start"].strftime("%H:%M:%S"),
+                                                 s["end"].strftime("%H:%M:%S"), s["rise"], _near_text(s)))
+        else:
+            w("| %s | none | | |" % m["name"])
+    w("")
+    return "\n".join(out)
+
+
+def analyse(folder):
+    sess = load_session(folder)
+    frames, samples, events, mode, clock_note = (sess["frames"], sess["samples"], sess["events"],
+                                                 sess["mode"], sess["clock_note"])
     by_sec = {sec(s["_t"]): s for s in samples}
     logs = [e for e in events if e["kind"] == "gamelog"]
+    baseline = last_gc_probe(events)
 
     out = []
     w = out.append
@@ -165,11 +586,7 @@ def analyse(folder):
         return "\n".join(out)
 
     # Per second frame statistics.
-    per = defaultdict(list)
-    for f in frames:
-        per[sec(f["t"])].append(f)
-    secs = sorted(per)
-    fps = {s: len(per[s]) for s in secs}
+    per, secs, fps = per_second(frames)
 
     def focused(s):
         row = by_sec.get(s) or by_sec.get(s - timedelta(seconds=1))
@@ -197,29 +614,7 @@ def analyse(folder):
     one_low = 1000 / statistics.mean(srt[int(len(srt) * 0.99):]) if len(srt) > 100 else None
 
     # Drop and hitch seconds.
-    flagged = {}
-    for i, s in enumerate(secs):
-        # The first and last second of a capture are partial, so their frame counts are not rates.
-        if i == 0 or i == len(secs) - 1:
-            continue
-        window = [fps[x] for x in secs[max(0, i - 60):i]]
-        base = median(window, None)
-        if base is None or len(window) < 10 or base < 20:
-            continue
-        fts = [f["ft"] for f in per[s]]
-        med_ft = median([f["ft"] for x in secs[max(0, i - 60):i] for f in per[x]], 16.7)
-        worst = max(fts)
-        if fps[s] < DROP_RATIO * base:
-            flagged[s] = ("drop", base)
-        elif worst >= max(HITCH_MS, 4 * med_ft):
-            flagged[s] = ("hitch", base)
-
-    groups = []
-    for s in sorted(flagged):
-        if groups and (s - groups[-1][-1]).total_seconds() <= 2:
-            groups[-1].append(s)
-        else:
-            groups.append([s])
+    flagged, groups = detect_flagged(per, secs, fps)
 
     def rows_between(a, b):
         return [r for r in samples if a <= r["_t"] <= b]
@@ -324,7 +719,7 @@ def analyse(folder):
         near = [e for e in logs if a - timedelta(seconds=3) <= e["_t"] <= b + timedelta(seconds=1)]
         if near:
             top = Counter(norm_log(e["detail"]) for e in near).most_common(2)
-            causes.append(("game log errors", "; ".join("%d x %s" % (n, msg) for msg, n in top)))
+            causes.append(("game log errors", ", ".join("%d x %s" % (n, msg) for msg, n in top)))
         if bound == "neither" and not causes:
             causes.append(("present or driver wait", "neither CPU nor GPU was busy for most of the frame, "
                            "the frame waited on the display path"))
@@ -387,16 +782,18 @@ def analyse(folder):
     # Trends.
     w("## Trends across the session")
     w("")
+    if baseline:
+        w("A forced garbage collection was recorded at %s. Lua frees memory lazily, so a slope measured "
+          "from the start of a recording overstates a leak. The slopes below are measured from that "
+          "point instead." % baseline.strftime("%H:%M:%S"))
+        w("")
     w("| measure | start | end | change per minute | steady | reading |")
     w("|---|---|---|---|---|---|")
-    for k, label, unit, leak in (("wc3_priv_mb", "game memory", "MB", 5), ("wc3_handles", "game handles", "", 20),
-                                 ("browser_ws_mb", "menu browser memory", "MB", 5), ("gpu_temp", "GPU temperature", "C", 0.5),
-                                 ("memcomp_mb", "Windows memory compression", "MB", 5)):
-        pts = [(s["_t"], num(s.get(k))) for s in samples]
-        vals = [v for _, v in pts if v is not None]
+    for k, label, unit, leak in TREND_MEASURES:
+        pts, sl, r = trend_for(samples, k, baseline)
+        vals = [v for _, v in pts]
         if not vals:
             continue
-        sl, r = slope_per_min(pts)
         if sl is None:
             w("| %s | %s | %s | too short to tell | | |" % (label, vals[0], vals[-1]))
             continue
@@ -404,6 +801,28 @@ def analyse(folder):
         reading = "rising steadily, a leak if it never comes back down" if steady and sl >= leak else ""
         w("| %s | %.0f %s | %.0f %s | %+.1f %s | %s | %s |" % (label, vals[0], unit, vals[-1], unit, sl, unit,
                                                              "yes" if steady else "no", reading))
+    w("")
+
+    # Handle growth, timed and correlated, since Warcraft III gives no per-type counters.
+    w("## Handle growth")
+    w("")
+    w("Warcraft III does not expose per-handle-type counters to an external sampler, so this report "
+      "cannot say whether the handles that grew were files, threads, registry keys or GDI objects. It "
+      "can only time the growth and name what was happening around it, which is what the windows below "
+      "do. A window is %d seconds. The windows are ranked by how many handles appeared in them, and the "
+      "top non-overlapping ones are shown with any session event or game log line within three seconds "
+      "of the window." % int(HANDLE_WINDOW_S))
+    w("")
+    suspects = handle_suspects(samples, events)
+    if suspects:
+        w("| window | handles | rise | near |")
+        w("|---|---|---|---|")
+        for s in suspects:
+            w("| %s to %s | %.0f to %.0f | %+.0f | %s |"
+              % (s["start"].strftime("%H:%M:%S"), s["end"].strftime("%H:%M:%S"),
+                 s["first"], s["last"], s["rise"], _near_text(s)))
+    else:
+        w("No window showed a rise of more than %d handles, or the session was too short to tell." % int(HANDLE_MIN_RISE))
     w("")
 
     # Game log.
@@ -441,7 +860,7 @@ def analyse(folder):
         w("None used a noticeable share.")
     w("")
 
-    others = [e for e in events if e["kind"] in ("game_start", "game_exit", "match_end", "focus_lost", "focus_gained", "stop")]
+    others = [e for e in events if e["kind"] in ("game_start", "game_exit", "match_end", "focus_lost", "focus_gained", "stop", GC_KIND)]
     if others:
         w("## Session events")
         w("")
@@ -452,23 +871,54 @@ def analyse(folder):
     w("## Not measured")
     w("")
     w("CPU temperature needs a hardware monitoring driver, so CPU heat shows only indirectly as CPU speed "
-      "falling. Network lag is a different problem from low frame rate and is not recorded. Every cause "
-      "above is a rule applied to measurements, printed with its numbers so it can be checked.")
+      "falling. Network lag is a different problem from low frame rate and is not recorded. Per-handle-type "
+      "counts are not exposed by the game to an external sampler. Every cause above is a rule applied to "
+      "measurements, printed with its numbers so it can be checked.")
     return "\n".join(out)
 
 
-def main():
-    if len(sys.argv) != 2:
-        print("usage: python analyze.py <session folder>")
+def usage():
+    print("usage")
+    print("  python analyze.py <session folder>            write report.md and print the header")
+    print("  python analyze.py summary <session>           print a one screen summary")
+    print("  python analyze.py chart <session>             write chart.svg beside the data")
+    print("  python analyze.py diff <sessionA> <sessionB>  compare two sessions")
+
+
+def main(argv=None):
+    args = list(sys.argv[1:] if argv is None else argv)
+    if not args:
+        usage()
         sys.exit(2)
-    folder = sys.argv[1]
-    report = analyse(folder)
-    path = os.path.join(folder, "report.md")
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(report + "\n")
-    head = report.split("## Every drop")[0]
-    print(head)
-    print("full report, %s" % path)
+    cmd = args[0]
+    if cmd == "summary":
+        if len(args) != 2:
+            usage()
+            sys.exit(2)
+        print(render_summary(args[1]))
+    elif cmd == "chart":
+        if len(args) != 2:
+            usage()
+            sys.exit(2)
+        svg = render_chart(args[1])
+        path = os.path.join(args[1], "chart.svg")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(svg)
+        print("chart written, %s" % path)
+    elif cmd == "diff":
+        if len(args) != 3:
+            usage()
+            sys.exit(2)
+        print(render_diff(args[1], args[2]))
+    else:
+        folder = cmd
+        report = analyse(folder)
+        path = os.path.join(folder, "report.md")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(report + "\n")
+        head = report.split("## Every drop")[0]
+        print(head)
+        print("full report, %s" % path)
 
 
 if __name__ == "__main__":

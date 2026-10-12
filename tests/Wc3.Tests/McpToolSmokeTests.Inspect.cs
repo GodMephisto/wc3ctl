@@ -302,4 +302,84 @@ public sealed class McpSmokeInspectTests : McpSmokeBase
         var get2 = await Call("target_get", args);
         Assert.Equal("settings", Prop(get2, "source").GetString());
     }
+
+    [Fact, Covers("validate_strict")]
+    public async Task Validate_strict_answers_on_the_fixture()
+    {
+        var r = await Call("validate_strict", Args(("map", Fixture)));
+        Assert.True(Prop(r, "valid").GetBoolean());
+        Assert.Equal(0, Prop(r, "errors").GetInt32());
+    }
+
+    [Fact, Covers("lint_baseline")]
+    public async Task Lint_baseline_writes_a_file_the_gate_accepts()
+    {
+        var outPath = Path.Combine(_f.Dir, "baseline-" + Guid.NewGuid().ToString("N") + ".json");
+        var r = await Call("lint_baseline", Args(("map", Fixture), ("out_path", outPath)));
+        Assert.True(Prop(r, "findings").GetInt32() >= 0);
+        Assert.True(File.Exists(outPath));
+        Assert.True(LintBaselineCommand.Gate(Fixture, outPath).Ok);
+    }
+
+    [Fact, Covers("audit_trend")]
+    public async Task Audit_trend_of_a_map_against_itself_changes_nothing()
+    {
+        var r = await Call("audit_trend", Args(("map", Fixture), ("other", Fixture)));
+        Assert.Equal(0, Prop(r, "added").GetInt32());
+        Assert.Equal(0, Prop(r, "removed").GetInt32());
+    }
+
+    [Fact, Covers("compat_matrix", "compat_explain")]
+    public async Task Compat_matrix_and_explain_use_the_temp_schema()
+    {
+        var tempSchemas = Path.Combine(_f.Dir, "schemas-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempSchemas);
+        try
+        {
+            var jass = new JassApi(
+                Array.Empty<JassTypeDecl>(),
+                new[] { new JassNativeDecl("SmokeExplainNative", Array.Empty<JassParameter>(), "boolean", false) },
+                Array.Empty<JassGlobalDecl>(),
+                Array.Empty<JassFunctionDecl>());
+            var schema = new GameSchema(1, "SmokeBuild", "SmokeBuild",
+                Array.Empty<SchemaInput>(), new[] { "script" },
+                null, (SchemaTriggers?)null,
+                new Dictionary<string, JassApi>(StringComparer.Ordinal) { ["scripts/common.j"] = jass });
+            var dir = Path.Combine(tempSchemas, "SmokeBuild");
+            Directory.CreateDirectory(dir);
+            GameSchemaCommand.Save(schema, dir);
+
+            var scriptText = "function main takes nothing returns nothing\n"
+                + "    call SmokeExplainNative()\nendfunction\n";
+            var mapPath = Path.Combine(_f.Dir, "compat-matrix-" + Guid.NewGuid().ToString("N") + ".w3x");
+            await File.WriteAllBytesAsync(mapPath, SyntheticMap.Build(new Dictionary<string, byte[]>
+            {
+                ["war3map.j"] = Encoding.UTF8.GetBytes(scriptText),
+            }));
+            try
+            {
+                var matrix = await Call("compat_matrix", Args(
+                    ("maps", new[] { mapPath }),
+                    ("targets", new[] { "SmokeBuild" }),
+                    ("schemas_dir", tempSchemas)));
+                var cells = matrix.EnumerateObject().Single(p => p.Name == "cells").Value.EnumerateArray().ToList();
+                Assert.True(Prop(Assert.Single(cells), "pass").GetBoolean());
+
+                var explain = await Call("compat_explain", Args(
+                    ("name", "SmokeExplainNative"),
+                    ("target", "SmokeBuild"),
+                    ("schemas_dir", tempSchemas)));
+                Assert.True(Prop(explain, "isIdentifier").GetBoolean());
+                Assert.True(Prop(explain, "declaredInTarget").GetBoolean());
+            }
+            finally
+            {
+                if (File.Exists(mapPath)) File.Delete(mapPath);
+            }
+        }
+        finally
+        {
+            if (Directory.Exists(tempSchemas)) Directory.Delete(tempSchemas, true);
+        }
+    }
 }

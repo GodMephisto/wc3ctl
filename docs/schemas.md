@@ -1,0 +1,99 @@
+# The schema dataset
+
+The `data/schemas` directory holds one folder per Warcraft III build. Each folder describes what that
+build's World Editor shows and what its JASS compiler accepts, derived from the build's own files and
+never copying them. A schema is what lets `wc3ctl` tell whether a map made for one patch opens and
+compiles on another, which fields the editor for a target build does not know, and which natives and
+types a build lacks.
+
+The dataset is derived metadata (see the licence note below). It is not committed to git and it is not
+shipped inside the tool. It is built on demand and shipped as a release asset.
+
+## What a schema folder holds
+
+Every folder has `manifest.json`, which names the build, its source, and the input files it was derived
+from, each with a SHA-256. The manifest also lists the inputs that were missing at build time.
+
+A folder carries up to three sections, each in its own file.
+
+- `objects.json`. The object editor's fields, one entry per metadata SLK (units, abilities, buffs,
+  destructables, doodads, upgrades, upgrade effects, misc and skin).
+- `triggers.json`. The GUI trigger types, functions and categories from `TriggerData.txt`.
+- `script.json`. The types, natives, globals and functions from `common.j`, `blizzard.j` and
+  `common.ai`.
+
+## Which builds carry object data
+
+Not every build can be built the same way, so the dataset mixes two kinds of folder.
+
+- A build built from a full game data dump carries `objects.json` and often `triggers.json` and
+  `script.json`. These are the real-object builds, the ones that can answer what the object editor
+  shows.
+- A build built from scripts alone carries `script.json` and nothing else. These are the script-only
+  builds, common for old patches where only the extracted JASS survived. They can answer what the
+  compiler accepts but not what the editor shows.
+
+The `coverage` command lists one row per build with the sections it holds, so a script-only build is
+never mistaken for a real-object one. The `sources` command writes the same knowledge as a machine
+readable `sources.json` provenance index, with a hash of every section file and every manifest input.
+
+## Regenerating the dataset
+
+`scripts/build-schemas.ps1` walks a `jass-history` checkout and runs `wc3ctl gamedata schema` for each
+build it finds, writing or rebuilding that build's folder under `data/schemas`. It ends by writing
+`index.json`. Builds whose input hashes are unchanged are skipped unless `-Force` is passed, so a re-run
+is cheap.
+
+Because a build can be produced from more than one source, `scripts/merge-schemas.ps1 -From <dir> -Into
+data\schemas` folds a directory of fresh folders into the dataset. An incoming folder replaces the
+existing one only when it carries a section the existing one lacks, so a real-object build upgrades a
+script-only one and a script-only build never downgrades a real-object one. The script reports what it
+added, upgraded and left.
+
+## How it ships
+
+The dataset is a release asset, not a tracked file. `scripts/pack-schemas.ps1 -Source data\schemas -Out
+<zip>` packs it into a versioned zip, refreshes `sources.json` through the CLI when a published binary
+is present, writes a `schemas.version` entry inside the archive, and writes the zip's SHA-256 sidecar in
+the same shape the release workflow uses for the binaries.
+
+`wc3ctl gamedata export-schemas -o <dir>` copies the dataset to a directory, and
+`wc3ctl gamedata export-schemas -o <target>.zip` packs it into one archive, either way for attaching to
+a release. The same two steps are on the agent surface as the `gamedata_sources` and
+`gamedata_export_schemas` tools.
+
+## Schema commands and the coverage limit
+
+The dataset is reached through the `gamedata` group. These verbs read it.
+
+- `gamedata coverage` lists one row per build, with its era and the sections it holds, so a build
+  with real object data is told apart from a script-only one. This is the view
+  `GamedataCoverageCommand` builds.
+- `gamedata sources` writes `sources.json`, the provenance index with a hash of every section file
+  and every manifest input.
+- `gamedata field-lookup` and `gamedata bounds` answer where a field code comes from and what values
+  it accepts.
+- `gamedata schema`, `gamedata schema-index` and `gamedata schema-diff` build, index and compare a
+  schema folder.
+- `gamedata changelog` and `gamedata history` track what a patch changed.
+- `gamedata export-schemas` copies the dataset to a directory or packs it into one zip.
+- `gamedata snapshot` writes the base game data to a directory for diffing across patches.
+
+The coverage limit is the honest boundary of the dataset. Object data is real for a subset of builds,
+the ones derived from a full game data dump, and every one of those carries `objects.json`. For the
+rest the object data is era-derived or absent. A build that carries only `script.json` has no object
+data of its own, so its fields are taken from a sibling build in the same era when one carries them,
+and are unknown when none does. The `bench schema-coverage` command states the same three states as
+`real`, `era-derived` and `absent` with corpus totals, so a script-only build is never reported as
+though it held the object editor.
+
+A command that needs an object field therefore works only where the coverage says real or era-derived,
+and a map whose target build is absent cannot be checked for the fields the editor would show.
+
+## Licence note
+
+A schema is derived metadata. It records field codes, types and bounds, native signatures and trigger
+function names that the World Editor and the compiler themselves expose, and it never copies, bundles
+or redistributes a Blizzard file. The dataset is generated locally from files the user already owns and
+is provided under the same Apache License 2.0 as the rest of this project. It is not a Blizzard product
+and it is not endorsed by Blizzard.

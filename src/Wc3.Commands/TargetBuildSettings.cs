@@ -147,6 +147,34 @@ public static class TargetBuildSettings
         WriteTarget(build);
     }
 
+    /// <summary>
+    /// Resolve one target to its loaded <see cref="GameSchema"/>, the same way compat and the
+    /// target commands resolve it. The target is either a schema folder path (holding a
+    /// manifest.json) or a build name under the schemas directory. Throws
+    /// <see cref="FileNotFoundException"/> with close build names when the target is unknown.
+    /// </summary>
+    public static GameSchema LoadSchema(string target, string? schemasDir = null)
+    {
+        if (Directory.Exists(target) && File.Exists(Path.Combine(target, "manifest.json")))
+            return GameSchemaCommand.Load(target);
+
+        var resolvedSchemas = ResolveSchemasDir(schemasDir);
+        var names = new List<string>();
+        foreach (var subDir in Directory.EnumerateDirectories(resolvedSchemas))
+        {
+            if (!File.Exists(Path.Combine(subDir, "manifest.json"))) continue;
+            var schema = GameSchemaCommand.Load(subDir);
+            if (schema.Build == target) return schema;
+            names.Add(schema.Build);
+        }
+
+        var close = Suggest(target, names);
+        throw new FileNotFoundException(
+            "build '" + target + "' not found"
+            + (close.Count > 0 ? (". Close names: " + string.Join(", ", close)) : "")
+            + ". Pass --schemas <dir> to override the schemas location.");
+    }
+
     /// <summary>Every build name the schemas folder declares.</summary>
     private static List<string> BuildNames(string schemasDir)
     {
@@ -295,27 +323,10 @@ public static class TargetBuildSettings
 
     /// <summary>
     /// Resolve the schemas directory, matching the same logic as TargetCompatCommand.
+    /// Delegates to <see cref="GameSchemaCommand.ResolveSchemasDir"/> so every caller shares one rule.
     /// </summary>
-    private static string ResolveSchemasDir(string? schemasDir)
-    {
-        if (schemasDir is not null && Directory.Exists(schemasDir))
-            return Path.GetFullPath(schemasDir);
-
-        string baseDir = AppContext.BaseDirectory;
-        string candidate1 = Path.Combine(baseDir, "schemas");
-        if (Directory.Exists(candidate1))
-            return Path.GetFullPath(candidate1);
-
-        for (string? dir = baseDir; dir != null; dir = Directory.GetParent(dir)?.FullName)
-        {
-            string candidate = Path.Combine(dir, "data", "schemas");
-            if (Directory.Exists(candidate))
-                return Path.GetFullPath(candidate);
-        }
-
-        throw new DirectoryNotFoundException(
-            "could not find schemas directory. Pass --schemas <dir>.");
-    }
+    private static string ResolveSchemasDir(string? schemasDir) =>
+        GameSchemaCommand.ResolveSchemasDir(schemasDir);
 
     /// <summary>
     /// Derive the default build by checking if a schema exists matching the installed

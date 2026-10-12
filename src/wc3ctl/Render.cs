@@ -133,6 +133,98 @@ public static class Render
         return sb.ToString();
     }
 
+    private static string Num(double? v) =>
+        v is { } x ? x.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) : "n/a";
+
+    public static string LeakList(LeakListResult r)
+    {
+        var sb = new StringBuilder();
+        foreach (var g in r.Findings.GroupBy(l => l.Heat))
+        {
+            sb.AppendLine($"{g.Key} ({g.Count()})");
+            foreach (var l in g)
+            {
+                string code = l.Code.Length > 110 ? l.Code[..107] + "..." : l.Code;
+                sb.AppendLine($"  {l.Line,7}  {l.Rule,-15} {l.Handle,-9} {l.Function}");
+                sb.AppendLine($"           {code}");
+            }
+        }
+        sb.AppendLine($"periodic, {r.Periodic.Count} driver(s)");
+        foreach (var p in r.Periodic)
+        {
+            string period = p.Period is { } s
+                ? s.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) + " s"
+                : "variable";
+            sb.AppendLine($"  {period,-9} line {p.Line,7}  {p.Function}  "
+                + $"({p.HotLeaks} hot leak(s), reaches {p.Reached})");
+        }
+        sb.AppendLine($"targets (hot), {r.Targets.Count}");
+        foreach (var t in r.Targets)
+            sb.AppendLine($"  {t.Function}  {t.Handle}  x{t.Count}  line {t.Line}");
+        foreach (var d in r.Diagnostics) sb.AppendLine($"note  {d}");
+        sb.AppendLine(r.Message);
+        return sb.ToString();
+    }
+
+    public static string LeakHarness(LeakHarnessResult r) =>
+        r.Ok ? r.Message + "\n" + r.Source : r.Message;
+
+    public static string LeakJoin(LeakJoinResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine(r.Message);
+        if (!r.Ok) return sb.ToString();
+        sb.AppendLine($"span {r.Span}, {r.SampleCount} sample(s)");
+        sb.AppendLine($"handle slope  {Num(r.HandleSlopePerMin)} per minute (r {Num(r.HandleCorrelation)})");
+        sb.AppendLine($"memory slope  {Num(r.MemorySlopePerMin)} MB per minute (r {Num(r.MemoryCorrelation)})");
+        sb.AppendLine("drivers by predicted handle rate");
+        foreach (var d in r.Drivers)
+        {
+            string period = d.Period is { } p
+                ? p.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) + " s"
+                : "variable";
+            sb.AppendLine($"  {d.Rank,2}. {d.Function,-24} {period,-9} {d.HotLeaks} hot leak(s)  "
+                + $"about {d.PredictedPerMin:0.#} a minute");
+        }
+        sb.AppendLine("rising windows");
+        if (r.Windows.Count == 0) sb.AppendLine("  none");
+        foreach (var w in r.Windows)
+            sb.AppendLine($"  {w.Start} to {w.End}  {w.Samples} sample(s)  {w.HandlesPerMin:0.#} handles a minute"
+                + (w.Driver is null ? "" : $"  ({w.Driver})"));
+        foreach (var d in r.Diagnostics) sb.AppendLine($"note  {d}");
+        return sb.ToString();
+    }
+
+    public static string LeakAb(LeakAbResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine(r.Message);
+        foreach (var s in new[] { r.A, r.B })
+        {
+            if (s.Error is not null) { sb.AppendLine($"  {s.Session}, {s.Error}"); continue; }
+            sb.AppendLine($"  {s.Session}");
+            sb.AppendLine($"    {s.Samples} sample(s), {s.Span}");
+            sb.AppendLine($"    handles {Num(s.HandlesPerMin)} per minute (r {Num(s.HandleCorrelation)}), "
+                + $"memory {Num(s.MemoryPerMin)} MB per minute (r {Num(s.MemoryCorrelation)})");
+        }
+        if (r.LikelyDisabled is not null)
+            sb.AppendLine($"likely disabled candidate, {r.LikelyDisabled} (inferred from the static list)");
+        foreach (var d in r.Diagnostics) sb.AppendLine($"note  {d}");
+        return sb.ToString();
+    }
+
+    public static string LeakBenchmark(LeakBenchmarkResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine(r.Message);
+        sb.AppendLine("  kind        creator             expected  detected  false+  ok");
+        foreach (var c in r.Cases)
+            sb.AppendLine($"  {c.Kind,-10}  {c.Creator,-18} {c.Expected,8}  {c.Detected,8}  "
+                + $"{c.FalsePositives,6}  {(c.TruePositive ? "yes" : "no")}");
+        foreach (var d in r.Diagnostics) sb.AppendLine($"note  {d}");
+        return sb.ToString();
+    }
+
     public static string Replays(ReplayReport r)
     {
         var sb = new StringBuilder();
@@ -158,6 +250,90 @@ public static class Render
         foreach (var d in r.Diagnostics) sb.AppendLine($"note: {d}");
         return sb.ToString();
     }
+
+    public static string ReplayPlayers(ReplayPlayersReport r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{"slot",4}  {"name",-22}  {"team",4}  {"race",10}  {"result",-12}  "
+            + $"{"left",8}  reason");
+        foreach (var p in r.Players)
+            sb.AppendLine($"{p.Slot,4}  {Short(p.Name,22),-22}  {Num(p.Team),4}  {Short(p.Race,10),-10}  "
+                + $"{Short(p.LeaveMeaning,12),-12}  {Clock(p.LeftAt),8}  {Num(p.LeaveReason)}");
+        if (r.Problem is not null) sb.AppendLine("note " + r.Problem);
+        return sb.ToString();
+    }
+
+    public static string ReplayTimeline(ReplayTimelineReport r)
+    {
+        var sb = new StringBuilder();
+        foreach (var e in r.Events)
+        {
+            string who = e.PlayerId is { } id ? $"{id} {e.Name}" : string.Empty;
+            sb.AppendLine($"{e.At:mm\\:ss}  {e.Kind,-10}  {who,-24}  {e.Text}");
+        }
+        if (r.Problem is not null) sb.AppendLine("note " + r.Problem);
+        return sb.ToString();
+    }
+
+    public static string ReplayDiff(ReplayDiffReport r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"A  {Path.GetFileName(r.FileA)}  {Leaf(r.MapA)}");
+        sb.AppendLine($"B  {Path.GetFileName(r.FileB)}  {Leaf(r.MapB)}");
+        sb.AppendLine($"same map {(r.SameMap ? "yes" : "no")}   length A {r.LengthA:mm\\:ss}  "
+            + $"B {r.LengthB:mm\\:ss}  delta {r.LengthDelta:mm\\:ss}");
+        sb.AppendLine();
+        sb.AppendLine($"{"slot",4}  {"name",-22}  {"A left",8}  {"B left",8}  {"delta",8}");
+        foreach (var d in r.LeaveDeltas)
+            sb.AppendLine($"{d.PlayerId,4}  {Short(d.Name,22),-22}  {Clock(d.AtA),8}  "
+                + $"{Clock(d.AtB),8}  {Clock(d.Delta),8}");
+        if (r.ProblemA is not null) sb.AppendLine("note A " + r.ProblemA);
+        if (r.ProblemB is not null) sb.AppendLine("note B " + r.ProblemB);
+        return sb.ToString();
+    }
+
+    public static string ReplayFindMap(ReplayFindMapReport r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"recorded  {r.RecordedMap ?? "(none)"}");
+        sb.AppendLine($"cleaned   {r.CleanMapPath ?? "(none)"}");
+        sb.AppendLine($"folder    {r.MapsFolder}");
+        sb.AppendLine(r.Found ? $"found     {r.ResolvedPath}" : "found     no");
+        foreach (var c in r.Candidates) sb.AppendLine($"  candidate {c}");
+        if (r.Problem is not null) sb.AppendLine("note " + r.Problem);
+        return sb.ToString();
+    }
+
+    public static string ReplayStats(ReplayStatsReport r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"duration {r.Duration:mm\\:ss}   players {r.PlayerCount}   disconnects {r.Disconnects}");
+        if (r.ActionsAvailable)
+        {
+            sb.AppendLine($"{"slot",4}  {"name",-22}  {"actions",8}  {"apm",8}");
+            foreach (var p in r.Players)
+                sb.AppendLine($"{p.Slot,4}  {Short(p.Name,22),-22}  {Num(p.Actions),8}  "
+                    + $"{(p.ActionsPerMinute is { } a ? a.ToString("0.0") : "-"),8}");
+        }
+        else
+        {
+            sb.AppendLine("actions per minute not carried in this record");
+            foreach (var p in r.Players)
+                sb.AppendLine($"  slot {p.Slot}  {p.Name}  {p.LeaveMeaning ?? "in game"}");
+        }
+        if (r.Problem is not null) sb.AppendLine("note " + r.Problem);
+        return sb.ToString();
+    }
+
+    private static string Short(string? s, int max) =>
+        s is null ? string.Empty : s.Length <= max ? s : s[..Math.Max(0, max - 1)] + "~";
+
+    private static string Num(int? v) => v is { } n ? n.ToString() : "-";
+
+    private static string Clock(TimeSpan? t) => t is { } v ? v.ToString("mm\\:ss") : "-";
+
+    private static string Leaf(string? map) =>
+        map is null ? "(map unknown)" : Path.GetFileName(map.Replace('\\', '/'));
 
     public static string UabiProfiles(UabiProfileReport r)
     {
@@ -269,6 +445,24 @@ public static class Render
         $"Name:    {r.Name}\nAuthor:  {r.Author}\nPlayers: {r.Players}\nSize:    {r.Width}x{r.Height}"
         + (r.Diagnostics.Count == 0 ? "" : "\n\nDiagnostics:\n" + string.Join("\n", r.Diagnostics));
 
+    public static string MapOverview(MapOverviewResult r) =>
+        Info(r.Info)
+        + $"\n\nFiles {r.Files.Count}"
+        + "\nObjects by kind\n"
+        + string.Join("\n", r.ObjectCounts.Select(c => $"  {c.Kind,-13} {c.Count}"));
+
+    /// <summary>A null annotation prints as '?' since the server omitted it, a real bool prints as true or false.</summary>
+    private static string Hint(bool? value) => value is null ? "?" : value.Value ? "true" : "false";
+
+    public static string McpTools(IReadOnlyList<Wc3.Mcp.McpToolInfo> tools) =>
+        string.Join("\n", tools.Select(t =>
+            $"{t.Name,-30} ro={Hint(t.ReadOnly)} d={Hint(t.Destructive)} i={Hint(t.Idempotent)} ow={Hint(t.OpenWorld)}"));
+
+    public static string McpAudit(Wc3.Mcp.McpAnnotationAuditResult r) =>
+        r.Count == 0
+            ? "clean, no annotation problems"
+            : string.Join("\n", r.Problems.Select(p => $"{p.Tool,-30} {p.Problem}")) + $"\n{r.Count} problem(s)";
+
     public static string Roundtrip(RoundtripResult r)
     {
         var verdict = r.Faithful ? "OK - round-trip is byte-faithful for all files."
@@ -331,6 +525,100 @@ public static class Render
         return sb.ToString().TrimEnd();
     }
 
+    public static string AssetUnused(AssetUnusedResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.Unused.Count} of {r.ImportedEntries} imported file(s) are referenced nowhere");
+        foreach (var e in r.Unused)
+            sb.AppendLine($"  {e.Path}  {e.SizeBytes} bytes");
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string AssetDuplicates(AssetDuplicatesResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.Groups.Count} duplicate group(s) across {r.ImportedEntries} imported file(s), "
+            + $"{r.RecoverableBytes} recoverable byte(s)");
+        foreach (var g in r.Groups)
+        {
+            sb.AppendLine($"  {g.SizeBytes} bytes each, {g.Paths.Count} copies ({g.Sha256[..12]})");
+            foreach (var p in g.Paths) sb.AppendLine($"    {p}");
+        }
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string AssetAudit(AssetAuditResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.Findings.Count} finding(s) across {r.Scanned} imported file(s), "
+            + $"oversized threshold {r.MaxBytes} bytes");
+        foreach (var f in r.Findings)
+            sb.AppendLine($"  {f.Kind,-20} {f.Path}  ({f.Detail})");
+        foreach (var d in r.Diagnostics) sb.AppendLine($"note {d}");
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string AssetSizeReport(AssetSizeReportResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.TotalEntries} imported file(s), {r.TotalBytes} bytes total");
+        foreach (var f in r.Folders)
+            sb.AppendLine($"  {f.Bytes,12}  {f.Entries,5} file(s)  {f.Folder}");
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string AssetModelLint(AssetModelLintResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.Findings.Count} finding(s) across {r.ModelsScanned} imported model(s)");
+        foreach (var f in r.Findings)
+            sb.AppendLine($"  {f.Kind,-22} {f.Path}  ({f.Detail})");
+        foreach (var d in r.Diagnostics) sb.AppendLine($"note {d}");
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string AssetThumbnails(AssetThumbnailsResult r, string outDir)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.Rendered} thumbnail(s) written to {outDir}");
+        foreach (var t in r.Thumbnails)
+            sb.AppendLine($"  {t.Name}  <- {t.Source}  ({t.Width}x{t.Height})");
+        foreach (var d in r.Diagnostics) sb.AppendLine($"note {d}");
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string AssetConvertBatch(AssetConvertBatchResult r, string outDir)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.Converted} texture(s) converted to {r.ToExtension}, written under {outDir}");
+        foreach (var t in r.Textures)
+            sb.AppendLine($"  {t.RelativePath}");
+        foreach (var d in r.Diagnostics) sb.AppendLine($"note {d}");
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string AssetImportWire(AssetImportWireResult r, string? savedTo)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine(r.Message);
+        foreach (var p in r.Imported) sb.AppendLine($"  imported {p}");
+        foreach (var f in r.FieldsSet) sb.AppendLine($"  set {f}");
+        foreach (var d in r.Diagnostics) sb.AppendLine($"note {d}");
+        if (savedTo is not null) sb.AppendLine($"saved to {savedTo}");
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string ModelExportObj(ModelExport export, string objPath, string mtlPath, IReadOnlyList<string> textures)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"Wrote {objPath} + {mtlPath}");
+        if (textures.Count > 0)
+            sb.AppendLine($"{textures.Count} texture(s) converted, {string.Join(", ", textures)}");
+        else
+            sb.AppendLine("no map-resolvable textures, materials reference nothing or base-game files");
+        return sb.ToString().TrimEnd();
+    }
+
     public static string Imports(ImportsListResult r)
     {
         var sb = new StringBuilder();
@@ -366,6 +654,104 @@ public static class Render
                     + (tr.IsCustomText ? "  [custom text]" : $"  {tr.Functions.Count} function(s)"));
         }
         return sb.ToString().TrimEnd();
+    }
+
+    // ---- trigger analysis (to-script, export, lint, dead, diff) ----
+
+    public static string TriggerScript(TriggerScriptResult r) => r.Script.TrimEnd();
+
+    public static string TriggerExport(TriggerExportResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"script language {r.ScriptLanguage}");
+        sb.AppendLine($"{r.Categories.Count} category(s), {r.Triggers.Count} trigger(s), "
+            + $"{r.Variables.Count} variable(s)");
+        foreach (var t in r.Triggers)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"trigger #{t.Id} {t.Name}"
+                + (t.Enabled ? "" : "  [disabled]")
+                + (t.InitiallyOn ? "" : "  [initially off]")
+                + (t.RunOnMapInit ? "  [run on map init]" : "")
+                + (t.IsCustomText ? "  [custom text]" : ""));
+            if (t.IsCustomText)
+            {
+                var body = (t.CustomText ?? string.Empty).TrimEnd();
+                sb.AppendLine(body.Length == 0 ? "  (empty body)" : Indent(body, 2));
+                continue;
+            }
+            foreach (var node in t.Events) sb.AppendLine("  " + FunctionLine(node));
+            foreach (var node in t.Conditions) sb.AppendLine("  " + FunctionLine(node));
+            foreach (var node in t.Actions) sb.AppendLine("  " + FunctionLine(node));
+            foreach (var node in t.Other) sb.AppendLine("  " + FunctionLine(node));
+        }
+        foreach (var v in r.Variables)
+            sb.AppendLine($"variable {v.Name} {v.Type}{(v.IsArray ? "[]" : "")}"
+                + (v.InitialValue is null ? "" : $" = {v.InitialValue}"));
+        return sb.ToString().TrimEnd();
+    }
+
+    private static string FunctionLine(TriggerFunctionInfo f)
+    {
+        var sb = new StringBuilder();
+        sb.Append(f.Enabled ? "   " : "[x] ");
+        sb.Append($"{f.Kind,-9} {f.Name}");
+        if (f.Parameters.Count > 0) sb.Append($" ({string.Join(", ", f.Parameters)})");
+        foreach (var child in f.Children)
+            sb.Append($"\n      {FunctionLine(child)}");
+        return sb.ToString();
+    }
+
+    public static string TriggerLint(TriggerLintResult r)
+    {
+        if (r.Findings.Count == 0) return r.Summary;
+        var sb = new StringBuilder();
+        foreach (var f in r.Findings)
+            sb.AppendLine($"{f.Rule,-16} {f.TriggerName}  {f.Detail}");
+        sb.AppendLine();
+        sb.Append(r.Summary);
+        return sb.ToString();
+    }
+
+    public static string TriggerDead(TriggerDeadResult r)
+    {
+        if (r.Dead.Count == 0) return r.Summary;
+        var sb = new StringBuilder();
+        foreach (var t in r.Dead)
+        {
+            sb.AppendLine($"#{t.Id} {t.Name}");
+            foreach (var reason in t.Reasons)
+                sb.AppendLine($"  {reason.Kind,-30} {reason.Detail}");
+        }
+        sb.AppendLine();
+        sb.Append(r.Summary);
+        return sb.ToString();
+    }
+
+    public static string TriggerDiff(TriggerDiffResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.TriggersInA} trigger(s) in the first map, {r.TriggersInB} in the second.");
+        foreach (var name in r.Added) sb.AppendLine($"+ added    {name}");
+        foreach (var name in r.Removed) sb.AppendLine($"- removed  {name}");
+        foreach (var rename in r.Renamed)
+            sb.AppendLine($"~ renamed  #{rename.Id} '{rename.From}' to '{rename.To}'");
+        foreach (var change in r.Changed)
+        {
+            sb.AppendLine($"* changed  #{change.Id} {change.Name}");
+            foreach (var d in change.Changes)
+                sb.AppendLine($"{(d.Change == "added" ? '+' : '-')} {d.Kind,-9} {d.Description}");
+        }
+        if (r.Added.Count == 0 && r.Removed.Count == 0 && r.Renamed.Count == 0 && r.Changed.Count == 0)
+            sb.AppendLine("The two trigger trees are identical.");
+        return sb.ToString().TrimEnd();
+    }
+
+    /// <summary>Indents every line of <paramref name="text"/> by <paramref name="spaces"/>.</summary>
+    private static string Indent(string text, int spaces)
+    {
+        string pad = new(' ', spaces);
+        return string.Join("\n", text.Replace("\r\n", "\n").Split('\n').Select(l => pad + l));
     }
 
     public static string PlacedUnit(UnitInstanceInfo u) => string.Join("\n", new[]
@@ -429,6 +815,99 @@ public static class Render
     public static string ObjectList(ObjectListResult r) =>
         r.Items.Count == 0 ? "(no custom objects)"
         : string.Join("\n", r.Items.Select(i => Headline(i.Rawcode, i.Name, i.BaseRawcode)));
+
+    public static string ObjectSearch(ObjectSearchResult r)
+    {
+        var head = $"{r.Count} match(es) for \"{r.Query}\"";
+        var lines = r.Hits.Select(h =>
+        {
+            var name = h.Name is null ? "" : $" \"{h.Name}\"";
+            var baseVal = h.BaseValue is null ? "" : $" base={h.BaseValue}";
+            var mapVal = h.MapValue is null ? "" : $" map={h.MapValue}";
+            return $"{h.Kind} {h.Rawcode}{name} {h.FieldName} ({h.FieldCode}){baseVal}{mapVal}";
+        });
+        var notes = r.Diagnostics.Select(d => $"note: {d}");
+        return string.Join("\n", new[] { head }.Concat(lines).Concat(notes));
+    }
+
+    public static string ObjectNoopFields(ObjectNoopFieldsResult r)
+    {
+        var head = r.Count == 0
+            ? "no fields equal their base game value"
+            : $"{r.Count} field(s) equal their base game value";
+        var lines = r.Fields.Select(f =>
+            $"{f.Kind} {f.Rawcode}{(f.Name is null ? "" : $" \"{f.Name}\"")} "
+            + $"{f.FieldName} ({f.FieldCode}) = {f.Value}  [same as base]");
+        var notes = r.Diagnostics.Select(d => $"note: {d}");
+        return string.Join("\n", new[] { head }.Concat(lines).Concat(notes));
+    }
+
+    public static string ObjectDeprecated(ObjectDeprecatedResult r)
+    {
+        var head = $"{r.Fields.Count} field(s) not defined in {r.TargetBuild} "
+            + $"({r.FieldsChecked} map field(s) checked)";
+        var lines = r.Fields.Select(f =>
+            $"{f.Kind} {f.Rawcode}{(f.Name is null ? "" : $" \"{f.Name}\"")} field {f.FieldCode}");
+        var notes = r.Diagnostics.Select(d => $"note: {d}");
+        return string.Join("\n", new[] { head }.Concat(lines).Concat(notes));
+    }
+
+    public static string ObjectRawcodeSuggest(ObjectRawcodeSuggestResult r)
+    {
+        var head = r.Count == 0
+            ? $"no free {r.Kind} rawcodes proposed"
+            : $"{r.Count} free {r.Kind} rawcode(s)";
+        var lines = r.Rawcodes.Select(c => $"  {c}");
+        var notes = r.Diagnostics.Select(d => $"note: {d}");
+        return string.Join("\n", new[] { head }.Concat(lines).Concat(notes));
+    }
+
+    public static string ObjectMigrate(ObjectMigrateResult r, string? savedTo = null)
+    {
+        var head = r.Ok
+            ? $"migrated to {r.TargetBuild}: {r.FieldsKept} field(s) kept, {r.FieldsDropped} dropped"
+            : r.Message;
+        var lines = r.Drops.Select(d => $"  dropped {d.Kind} {d.Rawcode} field {d.FieldCode}");
+        var notes = r.UncheckedKinds.Count > 0
+            ? new[] { $"  kinds not checked (no object schema): {string.Join(", ", r.UncheckedKinds)}" }
+            : Array.Empty<string>();
+        var diags = r.Diagnostics.Select(d => $"note: {d}");
+        var tail = savedTo is null ? Array.Empty<string>() : new[] { $"saved: {savedTo}" };
+        return string.Join("\n", new[] { head }.Concat(lines).Concat(notes).Concat(diags).Concat(tail));
+    }
+
+    public static string ObjectBulkSet(ObjectBulkSetResult r, string? savedTo = null)
+    {
+        var head = $"{r.Message}, {r.Skipped} skipped";
+        var lines = r.Entries.Where(e => !e.Changed)
+            .Select(e => $"  {e.Rawcode}: {e.Detail}");
+        var notes = r.Diagnostics.Select(d => $"note: {d}");
+        var tail = savedTo is null ? Array.Empty<string>() : new[] { $"saved: {savedTo}" };
+        return string.Join("\n", new[] { head }.Concat(lines).Concat(notes).Concat(tail));
+    }
+
+    public static string ObjectExport(ObjectExportResult r, string? writtenTo = null)
+    {
+        var head = $"{r.Message} ({r.Columns.Count} column(s))";
+        var notes = r.Diagnostics.Select(d => $"note: {d}");
+        var tail = writtenTo is null ? Array.Empty<string>() : new[] { $"written: {writtenTo}" };
+        return string.Join("\n", new[] { head }.Concat(notes).Concat(tail));
+    }
+
+    public static string ObjectImport(ObjectImportResult r, string? savedTo = null)
+    {
+        var head = r.Ok ? $"{r.Message}" : $"refused: {r.Message}";
+        var notes = r.Diagnostics.Select(d => $"note: {d}");
+        var tail = savedTo is null || !r.Ok ? Array.Empty<string>() : new[] { $"saved: {savedTo}" };
+        return string.Join("\n", new[] { head }.Concat(notes).Concat(tail));
+    }
+
+    public static string ObjectRename(ObjectRenameResult r, string? savedTo = null)
+    {
+        var head = r.Ok ? r.Message : $"refused: {r.Message}";
+        var tail = savedTo is null || !r.Ok ? Array.Empty<string>() : new[] { $"saved: {savedTo}" };
+        return string.Join("\n", new[] { head }.Concat(tail));
+    }
 
     public static string DoodadPalette(DoodadPaletteResult r)
     {
@@ -611,6 +1090,103 @@ public static class Render
     private static void AppendPortFooter(StringBuilder sb, string? outPath) =>
         sb.AppendLine().AppendLine(outPath is null ? "DRY RUN - nothing written" : $"Saved: {outPath}");
 
+    /// <summary>The full dependency report for a rawcode, grouped, with asset sizes.</summary>
+    public static string PortDeps(PortDepsResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.RootRawcode}{(r.RootName is null ? "" : $"  \"{r.RootName}\"")}  ({r.RootKind})");
+        sb.AppendLine($"  {r.ObjectCount} object(s), {r.Assets.Count} asset(s) "
+            + $"({r.AssetsInMap} in map, {r.AssetsMissing} base-game), "
+            + $"{Size(r.BytesInMap)} of imported bytes, {r.Strings.Count} string(s), {r.Functions} function(s).");
+
+        sb.AppendLine().AppendLine($"Objects ({r.ObjectCount})");
+        foreach (var g in r.ObjectGroups)
+        {
+            sb.AppendLine($"  {g.Kind} ({g.Objects.Count})");
+            foreach (var o in g.Objects)
+                sb.AppendLine($"    {o.Rawcode}{(o.Name is null ? "" : $"  \"{o.Name}\"")}"
+                    + $"{(o.CustomToMap ? "  custom" : "  base")}"
+                    + $"{(o.CarriedByScriptClosure ? "  [carried by the script closure]" : "")}");
+        }
+
+        sb.AppendLine().AppendLine($"Assets ({r.Assets.Count})");
+        foreach (var a in r.Assets)
+            sb.AppendLine($"  {(a.PresentInMap ? "[in map] " : "[missing]")} {a.Path}  ({a.Category}"
+                + (a.SizeBytes is { } s ? $", {Size(s)}" : "") + ")");
+
+        if (r.Strings.Count > 0)
+        {
+            sb.AppendLine().AppendLine($"Strings ({r.Strings.Count})");
+            foreach (var s in r.Strings) sb.AppendLine($"  \"{s}\"");
+        }
+
+        foreach (var d in r.Diagnostics) sb.AppendLine($"note: {d}");
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
+    /// <summary>Human byte size, e.g. "1.2 KB".</summary>
+    private static string Size(long bytes) => bytes switch
+    {
+        >= 1024 * 1024 => $"{bytes / 1024.0 / 1024.0:0.0} MB",
+        >= 1024 => $"{bytes / 1024.0:0.0} KB",
+        _ => $"{bytes} B",
+    };
+
+    /// <summary>What one bundle has that another does not.</summary>
+    public static string BundleDiff(BundleDiffResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.RootA} vs {r.RootB}, {r.Shared} shared member(s).");
+        void Section(string title, IReadOnlyList<BundleMember> members)
+        {
+            sb.AppendLine().AppendLine($"{title} ({members.Count})");
+            if (members.Count == 0) sb.AppendLine("  (none)");
+            foreach (var m in members)
+                sb.AppendLine($"  {m.Kind} {m.Id}{(m.Name is null ? "" : $"  \"{m.Name}\"")}");
+        }
+        Section("Added (only in the second)", r.Added);
+        Section("Removed (only in the first)", r.Removed);
+        Section("Changed", r.Changed);
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
+    /// <summary>The merge outcome, or the refusal with every conflicting rawcode named.</summary>
+    public static string BundleMerge(BundleMergeResult r, string? outPath)
+    {
+        var sb = new StringBuilder();
+        if (!r.Ok)
+        {
+            sb.AppendLine(r.Message);
+            foreach (var c in r.Conflicts)
+                sb.AppendLine($"  {c.Rawcode}  ({c.Kind})  {c.Detail}");
+            sb.AppendLine().AppendLine("nothing written, resolve the conflict and rerun");
+            return sb.ToString().TrimEnd('\r', '\n');
+        }
+        sb.AppendLine(r.Message);
+        sb.AppendLine().AppendLine(outPath is null ? "DRY RUN - nothing written" : $"Saved: {outPath}");
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
+    /// <summary>The port report plus the downgrade: fields removed and identifiers flagged.</summary>
+    public static string PortIntoVersion(PortIntoVersionResult r, string? outPath)
+    {
+        var sb = new StringBuilder();
+        AppendPortBody(sb, r.Port);
+        sb.AppendLine().AppendLine($"Downgraded to {r.TargetBuild}");
+        sb.AppendLine($"  {r.FieldsRemoved.Count} object field(s) not declared by the build were removed, "
+            + $"{r.ScriptIdentifiersFlagged.Count} script identifier(s) are not declared and were flagged.");
+        foreach (var f in r.FieldsRemoved.Take(40))
+            sb.AppendLine($"  removed  {f.Kind} {f.Rawcode}{(f.Name is null ? "" : $"  \"{f.Name}\"")}.{f.FieldCode}");
+        if (r.FieldsRemoved.Count > 40) sb.AppendLine($"  ... and {r.FieldsRemoved.Count - 40} more");
+        foreach (var i in r.ScriptIdentifiersFlagged.Take(40))
+            sb.AppendLine($"  flagged  {i.Name}  (line {i.FirstLine}, used {i.Count} time(s))");
+        if (r.ScriptIdentifiersFlagged.Count > 40)
+            sb.AppendLine($"  ... and {r.ScriptIdentifiersFlagged.Count - 40} more");
+        foreach (var d in r.Diagnostics) sb.AppendLine($"note: {d}");
+        AppendPortFooter(sb, outPath);
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
     // One shared report body, PortReport in Wc3.Commands. It used to live here and again inline
     // in Studio's port dialog, and the copies drifted, so Studio kept listing the whole closure.
     private static void AppendPortBody(StringBuilder sb, PortResult r) => PortReport.Append(sb, r);
@@ -731,6 +1307,203 @@ public static class Render
         return sb.ToString().TrimEnd();
     }
 
+    public static string ScriptUnusedGlobals(ScriptUnusedGlobalsResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.ScriptFile}: {r.Declared} global(s), {r.Framework} framework, {r.Unused} unused");
+        foreach (var g in r.Globals)
+            sb.AppendLine($"  line {g.Line,-7} {g.Name,-28} {g.Type}");
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string ScriptUnusedFunctions(ScriptUnusedFunctionsResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.ScriptFile}: {r.Declared} function(s), {r.Unused} unreachable");
+        foreach (var f in r.Functions)
+            sb.AppendLine($"  line {f.Line,-7} {f.Name}");
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string ScriptNullLocals(ScriptNullLocalsResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.ScriptFile}: {r.Checked} handle local(s) checked, {r.Findings} destroyed without null");
+        foreach (var l in r.Locals)
+            sb.AppendLine($"  line {l.Line,-7} {l.Function}  {l.Type} {l.Name}  destroyed by {l.Destroyer} at line {l.DestroyedAtLine}");
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string ScriptComplexity(ScriptComplexityResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.ScriptFile}: {r.FunctionCount} function(s), {r.TotalDecisions} decision point(s) total");
+        foreach (var f in r.Functions)
+            sb.AppendLine($"  {f.Complexity,5}  line {f.Line,-7} {f.Function}");
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string ScriptCallGraph(ScriptCallGraphResult r, bool dot)
+    {
+        var sb = new StringBuilder();
+        if (dot)
+        {
+            sb.AppendLine("digraph callgraph {");
+            foreach (var f in r.Calls.Select(c => c.From).Distinct().OrderBy(x => x, StringComparer.Ordinal))
+                sb.AppendLine($"  \"{f}\";");
+            foreach (var c in r.Calls)
+                sb.AppendLine($"  \"{c.From}\" -> \"{c.To}\";");
+            if (r.Calls.Count == 0) sb.AppendLine("  // no edges");
+            sb.AppendLine("}");
+            return sb.ToString().TrimEnd();
+        }
+
+        sb.AppendLine($"{r.ScriptFile}: {r.Functions} function(s), {r.Edges} edge(s)");
+        foreach (var group in r.Calls.GroupBy(c => c.From))
+            sb.AppendLine($"  {group.Key} -> {string.Join(", ", group.Select(c => c.To))}");
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string ScriptReachable(ScriptReachableResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.ScriptFile} has {r.Reachable} reachable and {r.Dead} dead ({r.DeadPercent}%)");
+        sb.AppendLine("reachable");
+        foreach (var f in r.ReachableFunctions)
+            sb.AppendLine($"  line {f.Line,-7} {f.Name}");
+        if (r.DeadFunctions.Count > 0)
+        {
+            sb.AppendLine("dead");
+            foreach (var f in r.DeadFunctions)
+                sb.AppendLine($"  line {f.Line,-7} {f.Name}");
+        }
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string ScriptApiUsage(ScriptApiUsageResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.ScriptFile} against {r.TargetBuild}, "
+                      + $"{r.Missing} of {r.Used} native and function use(s) missing");
+        foreach (var u in r.Usages)
+            sb.AppendLine($"  line {u.Line,-7} {u.Kind,-9} {u.Name}  (used {u.Count}x)");
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string LuaScriptLeaks(LuaScriptLeaksResult r, bool all)
+    {
+        if (!r.Ok) return r.Message;
+        var sb = new StringBuilder();
+        var shown = all ? r.Leaks : r.Leaks.Where(l => l.Heat != "once").ToList();
+        foreach (var g in shown.GroupBy(l => l.Heat))
+        {
+            sb.AppendLine($"{g.Key} ({g.Count()})");
+            foreach (var l in g.Take(all ? int.MaxValue : 80))
+            {
+                string code = l.Code.Length > 110 ? l.Code[..107] + "..." : l.Code;
+                sb.AppendLine($"  {l.Line,7}  {l.Rule,-15} {l.Handle,-9} {l.Function}");
+                sb.AppendLine($"           {code}");
+            }
+            if (!all && g.Count() > 80) sb.AppendLine($"  and {g.Count() - 80} more, --all or --json lists every one");
+        }
+        sb.AppendLine($"periodic, {r.Periodic.Count} driver(s)");
+        foreach (var p in r.Periodic.Take(25))
+            sb.AppendLine($"  {(p.Period is { } s ? s.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) + " s" : "variable"),-9} line {p.Line,7}  {p.Function}  (reaches {p.Reached} function(s))");
+        foreach (var d in r.Diagnostics) sb.AppendLine($"note  {d}");
+        sb.AppendLine(r.Message);
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string LuaGlobals(LuaGlobalsResult r)
+    {
+        if (!r.Ok) return r.Message;
+        var sb = new StringBuilder();
+        sb.AppendLine(r.Message);
+        foreach (var g in r.Globals)
+        {
+            string reads = g.Reads == 0 ? "never read" : $"read x{g.Reads} at {string.Join(",", g.ReadLines)}";
+            sb.AppendLine($"  line {g.FirstWriteLine,-7} {g.Name}  (written x{g.Writes}, {reads}){(g.Framework ? "  [entry point]" : "")}");
+        }
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string LuaCheck(LuaCheckResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.Files} Lua file(s), {r.Errors} with a syntax error");
+        foreach (var c in r.Checks)
+            sb.AppendLine(c.Ok
+                ? $"  ok      {c.FileName}  ({c.Bytes} bytes, {c.Lines} lines)"
+                : $"  error   {c.FileName}:{c.Line}:{c.Column}  {c.Message}");
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string LuaApi(LuaApiResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.ScriptFile} against {r.TargetBuild}, {r.Missing} of {r.Used} native and function use(s) missing");
+        sb.AppendLine($"mapping  {r.Mapping}");
+        foreach (var u in r.Usages)
+            sb.AppendLine($"  line {u.Line,-7} {u.Kind,-9} {u.Name}  (used {u.Count}x"
+                          + (u.JassSpelling != u.Name ? $", jass {u.JassSpelling}" : "") + ")");
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string LuaToJass(LuaToJassResult r)
+    {
+        var sb = new StringBuilder();
+        if (!r.Ok)
+        {
+            sb.AppendLine(string.Join("\n", r.Diagnostics));
+            return sb.ToString().TrimEnd();
+        }
+        sb.AppendLine($"{r.ScriptFile} converted to JASS, {r.FunctionsConverted} function(s), "
+                      + $"{r.GlobalsConverted} global(s), {r.FunctionsSkipped} function(s) left");
+        foreach (var u in r.Unconverted)
+            sb.AppendLine($"  ! line {u.Line,7}  {u.Construct,-10} {u.Detail}");
+        foreach (var d in r.Diagnostics) sb.AppendLine($"note  {d}");
+        return sb.ToString().TrimEnd();
+    }
+
+
+    public static string ScriptSemanticDiff(ScriptSemanticDiffResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.ScriptA} vs {r.ScriptB} ({r.Language}), {r.Changes} real change(s)");
+        foreach (var l in r.Lines)
+        {
+            string where = l.LineA > 0 && l.LineB > 0 ? $"{l.LineA}/{l.LineB}"
+                : l.LineA > 0 ? l.LineA.ToString()
+                : l.LineB.ToString();
+            sb.AppendLine($"  {l.Kind,-16} line {where,-10} {l.Text}");
+        }
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string ScriptDuplicateBodies(ScriptDuplicateBodiesResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.ScriptFile}, {r.Functions} function(s), {r.DuplicateGroups} duplicate group(s), "
+                      + $"{r.DuplicateFunctions} function(s) duplicated");
+        foreach (var g in r.Groups)
+        {
+            sb.AppendLine($"  {g.Size} copies");
+            foreach (var f in g.Functions)
+                sb.AppendLine($"    line {f.Line,-7} {f.Name}");
+        }
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string ScriptModernize(ScriptModernizeResult r, string? dest)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.ScriptFile} against {r.TargetBuild}, {r.Rewrites} native rewrite(s)");
+        foreach (var c in r.Changes)
+            sb.AppendLine($"  line {c.Line,-7} {c.From} to {c.To}  ({c.Count}x)");
+        if (dest is not null) sb.Append($"saved: {dest}");
+        return sb.ToString().TrimEnd();
+    }
+
     public static string MpqHash(HashTableView v)
     {
         var sb = new StringBuilder();
@@ -781,6 +1554,188 @@ public static class Render
             ? "STRUCTURALLY IDENTICAL"
             : $"STRUCTURE DIFFERS - {d.HeaderDifferences.Count} header, "
               + $"{d.EncodingDifferences.Count} re-encoded, {d.OnlyInA.Count} lost, {d.OnlyInB.Count} added");
+        return sb.ToString();
+    }
+
+    public static string MpqVerify(MpqVerifyResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine(r.Path);
+        sb.AppendLine($"  entries     {r.TotalEntries}");
+        sb.AppendLine($"  readable    {r.ReadableEntries}");
+        sb.AppendLine($"  unreadable  {r.UnreadableEntries}");
+        if (r.Unreadable.Count > 0)
+        {
+            sb.AppendLine();
+            foreach (var u in r.Unreadable)
+                sb.AppendLine($"  block {u.BlockIndex,5}  {u.SizeBytes,10:N0} B  "
+                    + $"{u.Name ?? "(unnamed)"}  {u.Error}");
+        }
+        sb.AppendLine();
+        sb.Append(r.UnreadableEntries == 0
+            ? "ok. Every entry opened and read to its end."
+            : $"{r.UnreadableEntries} entry(s) could not be read.");
+        return sb.ToString();
+    }
+
+    public static string MpqListfile(MpqListfileResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine(r.Path);
+        sb.AppendLine($"  entries                      {r.TotalEntries}");
+        sb.AppendLine($"  named by the listfile        {r.NamedByListfile}");
+        sb.AppendLine($"  recovered by standard probe  {r.RecoveredByStandardProbe}");
+        sb.AppendLine($"  with no name at all          {r.WithoutName}");
+        if (r.WithoutNameSample.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("unnamed sample");
+            foreach (var s in r.WithoutNameSample) sb.AppendLine($"  {s}");
+        }
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string MpqNameRecover(MpqNameRecoverResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"dictionary {r.DictionaryPath}");
+        sb.AppendLine($"  candidates tried  {r.CandidatesTried}");
+        sb.AppendLine($"  unnamed before    {r.UnnamedBefore}");
+        sb.AppendLine($"  resolved          {r.Recovered}");
+        foreach (var n in r.Names)
+            sb.AppendLine($"  block {n.BlockIndex,5}  {n.SizeBytes,10:N0} B  {n.Name}");
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string MpqStrip(MpqStripResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"saved {r.SavedTo}");
+        sb.AppendLine($"  input entries   {r.InputEntries}");
+        sb.AppendLine($"  output entries  {r.OutputEntries}");
+        sb.AppendLine($"  output bytes    {r.OutputBytes:N0}");
+        sb.AppendLine(r.ListfilePresent ? "  (listfile) is still present" : "  (listfile) dropped");
+        sb.AppendLine(r.AttributesPresent ? "  (attributes) is still present" : "  (attributes) dropped");
+        sb.Append(r.Reopens
+            ? "ok. The output opens again."
+            : $"FAILED. The output does not open. {r.ReopenError}");
+        return sb.ToString();
+    }
+
+    public static string MpqBytesDiff(MpqBytesDiffResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"A  {r.PathA}");
+        sb.AppendLine($"B  {r.PathB}");
+        sb.AppendLine($"  in both    {r.InBoth}");
+        sb.AppendLine($"  identical  {r.IdenticalCount}");
+        sb.AppendLine($"  differ     {r.Differ}");
+
+        void Section(string title, IReadOnlyList<string> items)
+        {
+            sb.AppendLine().AppendLine($"{title} ({items.Count})");
+            foreach (var i in items.Take(40)) sb.AppendLine($"  {i}");
+            if (items.Count > 40) sb.AppendLine($"  ... and {items.Count - 40} more");
+        }
+        if (r.Differences.Count > 0)
+            Section("payloads that differ",
+                r.Differences.Select(d => $"{d.Name}  {d.SizeA:N0} -> {d.SizeB:N0} bytes").ToList());
+        if (r.OnlyInA.Count > 0) Section("only in A", r.OnlyInA);
+        if (r.OnlyInB.Count > 0) Section("only in B", r.OnlyInB);
+
+        sb.AppendLine();
+        sb.Append(r.Identical
+            ? "IDENTICAL. Every shared name has the same payload bytes"
+            : $"DIFFERS. {r.Differ} changed, {r.OnlyInA.Count} only in A, {r.OnlyInB.Count} only in B");
+        return sb.ToString();
+    }
+
+    public static string MpqRebuild(MpqRebuildResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"saved {r.SavedTo}");
+        sb.AppendLine($"  input entries   {r.InputEntries}");
+        sb.AppendLine($"  output entries  {r.OutputEntries}");
+        sb.AppendLine($"  dropped         {r.DroppedEntries}");
+        sb.AppendLine($"  hash slots      {r.InputHashSlots} -> {r.OutputHashSlots}");
+        sb.AppendLine($"  output bytes    {r.OutputBytes:N0}");
+        foreach (var d in r.Dropped.Take(40))
+            sb.AppendLine($"  dropped  {d.Name}  ({d.Reason})");
+        if (r.Dropped.Count > 40) sb.AppendLine($"  ... and {r.Dropped.Count - 40} more");
+        sb.Append(r.Reopens
+            ? "ok. The rebuilt copy opens again."
+            : $"FAILED. The rebuilt copy does not open. {r.ReopenError}");
+        return sb.ToString();
+    }
+
+    public static string MpqMerge(MpqMergeResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"saved {r.SavedTo}");
+        sb.AppendLine($"  A  {r.PathA}  ({r.EntriesA} entries)");
+        sb.AppendLine($"  B  {r.PathB}  ({r.EntriesB} entries)");
+        sb.AppendLine($"  preferred  {r.Preferred}");
+        sb.AppendLine($"  merged     {r.MergedEntries}  (from A {r.FromA}, from B {r.FromB})");
+        sb.AppendLine($"  conflicts  {r.Conflicts}");
+        foreach (var c in r.ConflictList.Take(40))
+            sb.AppendLine($"    {c.Name}  kept {c.KeptFrom} ({c.SizeKept:N0} B) over ({c.SizeOther:N0} B)"
+                + (c.Identical ? "  identical" : ""));
+        if (r.OnlyInA.Count > 0)
+            sb.AppendLine($"  only in A  {string.Join(", ", r.OnlyInA.Take(20))}");
+        if (r.OnlyInB.Count > 0)
+            sb.AppendLine($"  only in B  {string.Join(", ", r.OnlyInB.Take(20))}");
+        sb.Append(r.Reopens
+            ? "ok. The merged copy opens again."
+            : $"FAILED. The merged copy does not open. {r.ReopenError}");
+        return sb.ToString();
+    }
+
+    public static string MpqAdd(MpqAddResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"saved {r.SavedTo}");
+        sb.AppendLine($"  {r.Name}");
+        sb.AppendLine(r.Replaced ? "  replaced an existing entry" : "  added a new entry");
+        sb.AppendLine($"  payload         {r.SizeBytes:N0} bytes");
+        sb.AppendLine($"  input entries   {r.InputEntries}");
+        sb.AppendLine($"  output entries  {r.OutputEntries}");
+        sb.AppendLine($"  output bytes    {r.OutputBytes:N0}");
+        sb.Append(r.Reopens && r.ByteFaithful
+            ? "ok. The payload round-trips byte for byte."
+            : r.Reopens
+                ? "FAILED. The payload did not read back identical."
+                : $"FAILED. The copy does not open. {r.ReopenError}");
+        return sb.ToString();
+    }
+
+    public static string MpqRemove(MpqRemoveResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"saved {r.SavedTo}");
+        sb.AppendLine($"  {r.Name}");
+        sb.AppendLine(r.Found ? "  the name was present" : "  the name was not present");
+        sb.AppendLine($"  input entries   {r.InputEntries}");
+        sb.AppendLine($"  output entries  {r.OutputEntries}");
+        sb.AppendLine(r.DroppedOnRebuild
+            ? "  the rebuild dropped the name"
+            : "  the rebuild did NOT drop the name");
+        sb.AppendLine($"  output bytes    {r.OutputBytes:N0}");
+        sb.Append(r.Reopens
+            ? "ok. The copy opens again."
+            : $"FAILED. The copy does not open. {r.ReopenError}");
+        return sb.ToString();
+    }
+
+    public static string MpqExtractAll(MpqExtractAllReport r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine(r.Path);
+        sb.AppendLine($"  output dir     {r.OutputDir}");
+        sb.AppendLine($"  entries        {r.TotalEntries}  (named {r.NamedEntries}, unnamed {r.UnnamedEntries})");
+        sb.AppendLine($"  bytes          {r.TotalBytes:N0}");
+        sb.Append(r.TotalEntries == 0
+            ? "nothing to extract."
+            : $"ok. Wrote {r.Files.Count} file(s).");
         return sb.ToString();
     }
 
@@ -1201,6 +2156,421 @@ public static class Render
         sb.Append($"results  {errors} error(s), {warnings} warning(s)");
         sb.Append($"  identifiers checked  {r.IdentifiersChecked}  fields checked  {r.FieldsChecked}");
         if (r.NotChecked.Count > 0) sb.Append($"  not checked  {string.Join(", ", r.NotChecked)}");
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
+    /// <summary>Render the strict validate result, the merged issues plus the strict-only count.</summary>
+    public static string ValidateStrict(ValidateStrictResult r)
+    {
+        var sb = new StringBuilder();
+        foreach (var i in r.Issues)
+            sb.AppendLine($"{i.Severity} [{i.Category}] {i.FileName} {i.Message}");
+        if (r.Issues.Count > 0) sb.AppendLine();
+        sb.Append(r.Valid
+            ? $"OK, valid ({r.Errors} error(s), {r.Warnings} warning(s), {r.StrictIssues.Count} strict-only)"
+            : $"INVALID ({r.Errors} error(s), {r.Warnings} warning(s), {r.StrictIssues.Count} strict-only)");
+        foreach (var d in r.Diagnostics) sb.AppendLine($"note {d}");
+        return sb.ToString();
+    }
+
+    /// <summary>Render the outcome of writing a lint baseline.</summary>
+    public static string LintBaselineWrite(LintBaselineWriteResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"wrote baseline, {r.Findings} finding(s)");
+        sb.AppendLine($"  {r.OutPath}");
+        sb.Append($"map  {r.Map}");
+        return sb.ToString();
+    }
+
+    /// <summary>Render the lint baseline gate, the new findings first.</summary>
+    public static string LintGate(LintGateResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine(r.Ok
+            ? "baseline OK, no new findings"
+            : $"baseline FAILED, {r.Added.Count} finding(s) not in the baseline");
+        foreach (var f in r.Added)
+        {
+            sb.AppendLine($"NEW  {f.Check}  {f.Summary}");
+            foreach (var d in f.Detail) sb.AppendLine($"     {d}");
+        }
+        if (r.Resolved.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"{r.Resolved.Count} baseline finding(s) are no longer reported");
+            foreach (var f in r.Resolved) sb.AppendLine($"GONE {f.Check}");
+        }
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
+    /// <summary>
+    /// Render a CI run, one line per gate followed by the overall verdict and exit code. Shared by
+    /// every ci command so a passing gate prints its summary and detail, not just silence.
+    /// </summary>
+    public static string CiGates(string title, bool passed, int exitCode, IReadOnlyList<CiGateLine> gates)
+    {
+        var sb = new StringBuilder();
+        foreach (var g in gates)
+        {
+            sb.AppendLine($"{(g.Passed ? "PASS" : "FAIL")}  {g.Name,-16} {g.Summary}");
+            foreach (var d in g.Detail)
+                sb.AppendLine($"                              {d}");
+        }
+        sb.AppendLine();
+        sb.Append($"{title} {(passed ? "PASS" : "FAIL")}  exit {exitCode}");
+        return sb.ToString();
+    }
+
+    public static string CiLint(CiLintResult r) => CiGates("ci lint", r.Passed, r.ExitCode, r.Gates);
+
+    public static string CiValidate(CiValidateResult r) => CiGates("ci validate", r.Passed, r.ExitCode, r.Gates);
+
+    public static string CiCompat(CiCompatResult r) => CiGates("ci compat", r.Passed, r.ExitCode, r.Gates);
+
+    public static string CiSchema(CiSchemaResult r) => CiGates("ci schema", r.Passed, r.ExitCode, r.Gates);
+
+    public static string CiAll(CiAllResult r) => CiGates("ci all", r.Passed, r.ExitCode, r.Gates);
+
+    /// <summary>Render the compat matrix as a table, one row per map.</summary>
+    public static string CompatMatrix(CompatMatrixResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"compat matrix, {r.Maps.Count} map(s) by {r.Targets.Count} target build(s)");
+        int mapWidth = Math.Max(3, r.Maps.Count == 0 ? 3 : r.Maps.Max(m => m.Length));
+        sb.Append("map".PadRight(mapWidth));
+        foreach (var t in r.Targets) sb.Append($"  {t}");
+        sb.AppendLine();
+        foreach (var m in r.Maps)
+        {
+            sb.Append(m.PadRight(mapWidth));
+            foreach (var t in r.Targets)
+            {
+                var cell = r.Cells.First(c => c.Map == m && c.Target == t);
+                sb.Append($"  {(cell.Pass ? "pass" : "fail")}({cell.Findings})");
+            }
+            sb.AppendLine();
+        }
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
+    /// <summary>Render the explanation of one identifier against one target build.</summary>
+    public static string CompatExplain(CompatExplainResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"compat explain  {r.Name}");
+        sb.AppendLine($"target build  {r.TargetBuild}");
+        if (!r.IsIdentifier)
+        {
+            sb.Append("no schema declares this name in any kind");
+            return sb.ToString();
+        }
+        sb.AppendLine($"kind  {r.Kind}");
+        sb.AppendLine(r.DeclaredInTarget
+            ? "declared by the target build"
+            : "not declared by the target build");
+        if (!r.DeclaredInTarget)
+        {
+            if (r.AddedIn is not null) sb.AppendLine($"added in  {r.AddedIn}");
+            if (r.FirstSeen is not null) sb.AppendLine($"first seen in  {r.FirstSeen}");
+            if (r.AddedIn is null && r.FirstSeen is null)
+                sb.AppendLine("no newer build declares it either");
+        }
+        sb.AppendLine($"declared by {r.Builds.Count} build(s)");
+        foreach (var b in r.Builds) sb.AppendLine($"  {b}");
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
+    /// <summary>Render the audit trend between two maps, grouped by check.</summary>
+    public static string AuditTrend(AuditTrendResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"audit trend");
+        sb.AppendLine($"  from  {r.MapA}");
+        sb.AppendLine($"  to    {r.MapB}");
+        sb.AppendLine($"{r.Added} added, {r.Removed} removed");
+        foreach (var row in r.Rows)
+        {
+            sb.AppendLine($"  {row.Check}  +{row.Added} -{row.Removed}");
+            foreach (var d in row.AddedDetail) sb.AppendLine($"     + {d}");
+            foreach (var d in row.RemovedDetail) sb.AppendLine($"     - {d}");
+        }
+        foreach (var d in r.Diagnostics) sb.AppendLine($"note  {d}");
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
+    public static string GamedataHistory(GamedataHistoryResult r)
+    {
+        var sb = new StringBuilder();
+        if (!r.Found)
+        {
+            sb.AppendLine($"{r.Name}  not found in any of {r.BuildsSearched} build(s)");
+            return sb.ToString().TrimEnd('\r', '\n');
+        }
+        sb.AppendLine($"{r.Name}  found in {r.FirstBuild}..{r.LastBuild}, {r.BuildsSearched} build(s) searched");
+        foreach (var kind in r.Kinds)
+            sb.AppendLine($"  {kind.Kind,-9} {kind.Builds.Count,-3} {string.Join(", ", kind.Builds)}");
+        if (r.ObjectFiles.Count > 0)
+            sb.AppendLine($"  object files  {string.Join(", ", r.ObjectFiles)}");
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
+    public static string GamedataChangelog(GamedataChangelogResult r)
+    {
+        var sb = new StringBuilder();
+        int total = r.Added + r.Removed + r.Retyped + r.BoundsChanged;
+        sb.AppendLine($"{r.BuildA} against {r.BuildB}, {total} change(s)");
+        foreach (var group in r.Groups)
+        {
+            sb.AppendLine($"  {group.Slk}");
+            foreach (var c in group.Changes)
+                sb.AppendLine($"    {c.Code,-28} {c.Change,-8}"
+                    + (c.Detail is not null ? $"  ({c.Detail})" : ""));
+        }
+        if (r.NotCompared.Count > 0)
+        {
+            sb.AppendLine();
+            foreach (var nc in r.NotCompared)
+                sb.AppendLine($"  [not compared] {nc}");
+        }
+        sb.AppendLine();
+        sb.Append($"  added {r.Added}, removed {r.Removed}, retyped {r.Retyped}, bounds {r.BoundsChanged}");
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
+    public static string GamedataFieldLookup(GamedataFieldLookupResult r)
+    {
+        var sb = new StringBuilder();
+        var builds = r.Matches.Select(m => m.Build).Distinct(StringComparer.Ordinal).Count();
+        sb.AppendLine($"query '{r.Query}', {r.Matches.Count} match(es) in {builds} build(s)"
+            + (r.Target is not null ? $", target {r.Target}" : ""));
+        foreach (var m in r.Matches)
+            sb.AppendLine($"  {m.Build,-24} {m.Code,-24} {m.DisplayName,-28} {m.Type,-10} {m.Slk}");
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
+    public static string GamedataBounds(GamedataBoundsResult r)
+    {
+        var sb = new StringBuilder();
+        if (r.Entries.Count == 0)
+        {
+            sb.AppendLine($"code {r.Code}  not found in any build"
+                + (r.Target is not null ? $" (searched {r.Target})" : ""));
+            return sb.ToString().TrimEnd('\r', '\n');
+        }
+        sb.AppendLine($"code {r.Code}, {r.Entries.Count} entry(ies)");
+        foreach (var e in r.Entries)
+            sb.AppendLine($"  {e.Build,-24} {e.Slk,-32} {e.Type,-10}"
+                + $" min {Show(e.MinValue)}  max {Show(e.MaxValue)}  canBeEmpty {e.CanBeEmpty}");
+        return sb.ToString().TrimEnd('\r', '\n');
+        static string Show(string s) => string.IsNullOrEmpty(s) ? "(none)" : s;
+    }
+
+    public static string GamedataCoverage(GamedataCoverageResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.Rows.Count} schema build(s)");
+        foreach (var row in r.Rows)
+            sb.AppendLine($"  {row.Build,-24} {row.Era,-9} {string.Join(", ", row.Sections),-28}"
+                + $" fields {row.Fields}  natives {row.Natives}");
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
+    // ---- bench ----------------------------------------------------------
+
+    public static string BenchSchemaCoverage(SchemaCoverageResult r)
+    {
+        var t = r.Totals;
+        var sb = new StringBuilder();
+        sb.AppendLine($"{t.Schemas} schema folder(s), {t.Real} real, {t.EraDerived} era-derived, "
+            + $"{t.Absent} absent, {t.Fields} object field(s)");
+        sb.AppendLine();
+        sb.AppendLine($"  {"build",-34} {"era",-10} {"object data",-12} {"fields",6}");
+        foreach (var row in r.Rows)
+            sb.AppendLine($"  {Short(row.Build, 34),-34} {Short(row.Era, 10),-10} {row.ObjectData,-12} {row.Fields,6}");
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
+    public static string BenchCompat(BenchCompatResult r)
+    {
+        var a = r.Aggregate;
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.Maps.Count} map(s) x {r.Targets.Count} target(s), {a.Cells} cell(s), "
+            + $"{a.Passed} pass, {a.Failed} fail, {a.Errors} error(s), {a.Warnings} warning(s), {a.Findings} finding(s)");
+        sb.AppendLine();
+        sb.AppendLine($"  {"map",-28} {"target",-28} {"result",7} {"err",5} {"warn",5} {"find",5}");
+        foreach (var c in r.Cells)
+            sb.AppendLine($"  {Short(c.Map, 28),-28} {Short(c.Target, 28),-28} {(c.Pass ? "pass" : "FAIL"),7} "
+                + $"{c.Errors,5} {c.Warnings,5} {c.Findings,5}");
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
+    public static string BenchLeaks(BenchLeaksResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.Maps.Count} map(s), {r.TotalLeaks} leak(s), {r.Hot} in hot code, {r.Repeat} in repeated code");
+        sb.AppendLine();
+        sb.AppendLine($"  {"map",-36} {"leaks",6} {"hot",5} {"repeat",7}");
+        foreach (var m in r.Maps)
+            sb.AppendLine($"  {Short(m.Map, 36),-36} {m.Leaks,6} {m.Hot,5} {m.Repeat,7}"
+                + (m.Ok ? "" : "  unreadable"));
+        if (r.Kinds.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"  {"leak kind",-36} {"count",6}");
+            foreach (var k in r.Kinds)
+                sb.AppendLine($"  {k.Rule,-36} {k.Count,6}");
+        }
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
+    public static string BenchOpen(BenchOpenResult r)
+    {
+        var sb = new StringBuilder();
+        string slowest = r.Slowest is null ? "none" : $"{r.Slowest.Map} at {r.Slowest.Milliseconds} ms";
+        sb.AppendLine($"{r.Maps.Count} map(s), slowest {slowest}, median {r.MedianMs:0.##} ms, "
+            + $"{r.TotalBytes} byte(s) across entries");
+        sb.AppendLine();
+        sb.AppendLine($"  {"map",-36} {"ms",8} {"entries",8} {"bytes",14}");
+        foreach (var m in r.Maps)
+            sb.AppendLine($"  {Short(m.Map, 36),-36} {m.Milliseconds,8} {m.Entries,8} {m.Bytes,14}");
+        foreach (var f in r.Failures)
+            sb.AppendLine($"  unreadable {f}");
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
+    public static string LibraryScan(LibraryScanResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.Maps.Count} map(s), {r.Loaded} loaded, {r.Failed} failed, {r.TotalBytes} byte(s)");
+        sb.AppendLine();
+        sb.AppendLine($"  {"map",-36} {"bytes",12} {"build",-16} {"load",4} {"entries",8} {"diag",5}");
+        foreach (var m in r.Maps)
+            sb.AppendLine($"  {Short(m.Map, 36),-36} {m.Bytes,12} {Short(m.TargetBuild ?? "unknown", 16),-16} "
+                + $"{(m.Loads ? "yes" : "no"),4} {m.Entries,8} {m.Diagnostics,5}"
+                + (m.Error is null ? "" : "  " + m.Error));
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
+    public static string LibraryAudit(LibraryAuditResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.Maps.Count} map(s), {r.TotalFindings} finding(s), {r.MapsWithFindings} map(s) with findings");
+        sb.AppendLine();
+        sb.AppendLine($"  {"map",-36} {"errors",6} {"warnings",8} {"findings",8}");
+        foreach (var m in r.Maps)
+            sb.AppendLine($"  {Short(m.Map, 36),-36} {m.Errors,6} {m.Warnings,8} {m.Issues.Count,8}"
+                + (m.Error is null ? "" : "  " + m.Error));
+        if (r.Checks.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"  {"check",-28} {"count",6}");
+            foreach (var c in r.Checks)
+                sb.AppendLine($"  {c.Check,-28} {c.Count,6}");
+        }
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
+    public static string LibraryValidate(LibraryValidateResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.Maps.Count} map(s), {r.Valid} valid, {r.Invalid} invalid");
+        foreach (var m in r.Maps.Where(m => !m.Valid))
+        {
+            sb.AppendLine();
+            sb.AppendLine($"  {Short(m.Map, 36),-36} {m.Errors} error(s)"
+                + (m.Error is null ? "" : "  " + m.Error));
+            foreach (var i in m.Issues.Where(i => i.Severity == DiagnosticSeverity.Error))
+                sb.AppendLine($"     ({i.Category}) {i.Message}");
+        }
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
+    public static string LibraryCompare(LibraryCompareResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"only in A {r.OnlyInA.Count}, only in B {r.OnlyInB.Count}, "
+            + $"changed {r.Changed.Count}, same {r.Same}, ambiguous {r.AmbiguousNames.Count}");
+        AppendNames(sb, "only in A", r.OnlyInA);
+        AppendNames(sb, "only in B", r.OnlyInB);
+        AppendNames(sb, "changed", r.Changed);
+        AppendNames(sb, "ambiguous name", r.AmbiguousNames);
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
+    private static void AppendNames(StringBuilder sb, string label, IReadOnlyList<string> names)
+    {
+        if (names.Count == 0) return;
+        sb.AppendLine();
+        sb.AppendLine("  " + label);
+        foreach (var n in names) sb.AppendLine("    " + n);
+    }
+
+    public static string LibraryReport(LibraryReportResult r) =>
+        $"wrote {r.Path}\n{r.Maps} map(s), {r.Loaded} loaded, {r.Failed} failed, "
+        + $"{r.Findings} finding(s), {r.Invalid} invalid";
+
+    public static string BenchPerfGate(PerfGateResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"perf gate {(r.Pass ? "PASS" : "FAIL")} at {r.MaxRegressionPct:0.##} percent, "
+            + $"{r.MetricsCompared} metric(s) compared, {r.Regressed} regressed");
+        if (r.MetricsCompared > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"  {"metric",-28} {"baseline",-14} {"run",-14} {"change",14}");
+            foreach (var m in r.Metrics)
+            {
+                string change = m.ChangePct is null ? "n/a" : $"{m.ChangePct.Value:+0.00;-0.00} percent";
+                sb.AppendLine($"  {Short(m.Metric, 28),-28} {m.Baseline,-14:0.##} {m.Run,-14:0.##} {change,14}"
+                    + (m.Regressed ? "  REGRESSED" : ""));
+            }
+        }
+        foreach (var name in r.MissingInRun)
+            sb.AppendLine($"  missing in run {name}");
+        foreach (var name in r.AddedInRun)
+            sb.AppendLine($"  new in run {name}");
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
+    public static string GamedataSources(GamedataSourcesResult r, string outPath)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.Sources.Count} schema build(s)");
+        foreach (var s in r.Sources)
+            sb.AppendLine($"  {s.Build,-24} {s.Era,-9} {string.Join(", ", s.Sections),-28}"
+                + $" sectionFile(s) {s.SectionHashes.Count}  input(s) {s.Inputs.Count}");
+        sb.AppendLine();
+        sb.Append($"wrote {outPath}");
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
+    public static string GamedataExportSchemas(GamedataExportResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.Builds.Count} schema build(s), {r.Files} file(s), {r.Bytes} byte(s)");
+        sb.AppendLine($"  {(r.Zipped ? "zip" : "dir")} {r.Target}");
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
+    public static string ReleaseVersion(ReleaseVersion r) =>
+        $"wc3ctl {r.ProductVersion}\n"
+        + $"git {r.GitHash}, built {r.BuildTimeUtc}\n"
+        + $"mcp server {r.McpServerName} {r.McpVersion}";
+
+    public static string Changelog(ChangelogResult r, string outPath) =>
+        r.Ok
+            ? $"wrote {outPath}, {r.Groups.Count} group(s), {r.Groups.Sum(g => g.Entries.Count)} commit(s)"
+            : r.Message ?? "changelog failed";
+
+    public static string McpExportVerify(McpExportVerifyResult r)
+    {
+        if (r.Message is { Length: > 0 }) return r.Message;
+        if (r.InStep) return $"in step, {r.CheckedFiles} file(s) checked";
+        var sb = new StringBuilder();
+        sb.AppendLine($"out of step, {r.Differences.Count} difference(s), {r.CheckedFiles} file(s) checked");
+        foreach (var d in r.Differences)
+            sb.AppendLine($"  {d.Status,-8}{d.Path}");
         return sb.ToString().TrimEnd('\r', '\n');
     }
 }

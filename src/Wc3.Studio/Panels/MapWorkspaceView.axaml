@@ -39,6 +39,9 @@
                 </StackPanel>
                 <TextBlock Name="StatusText" FontSize="11" TextWrapping="Wrap"
                            Text="No map open."/>
+                <!-- Earliest build the open map runs on, from the compat identifier index. -->
+                <TextBlock Name="MinBuildText" FontSize="11" TextWrapping="Wrap"
+                           Foreground="#8FA3B8" IsVisible="False" Text=""/>
             </StackPanel>
         </Border>
 
@@ -110,6 +113,9 @@
             </TabItem>
             <TabItem Header="Hero Audit" Name="HeroWiringTab">
                 <panels:HeroWiringView Name="HeroWiringPanel"/>
+            </TabItem>
+            <TabItem Header="Changelog" Name="ChangelogTab">
+                <panels:SchemaChangelogView Name="ChangelogPanel"/>
             </TabItem>
         </TabControl>
 

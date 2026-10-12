@@ -348,6 +348,33 @@ public static class GameSchemaCommand
     }
 
     /// <summary>
+    /// Resolve the schemas directory. An explicit path that exists wins, then a <c>schemas</c>
+    /// folder beside the executable, then a walk up from the base directory to a <c>data/schemas</c>
+    /// folder. Throws <see cref="DirectoryNotFoundException"/> when none is found.
+    /// </summary>
+    public static string ResolveSchemasDir(string? schemasDir)
+    {
+        if (schemasDir is not null && Directory.Exists(schemasDir))
+            return Path.GetFullPath(schemasDir);
+
+        string baseDir = AppContext.BaseDirectory;
+        string candidate1 = Path.Combine(baseDir, "schemas");
+        if (Directory.Exists(candidate1))
+            return Path.GetFullPath(candidate1);
+
+        for (string? dir = baseDir; dir != null; dir = Directory.GetParent(dir)?.FullName)
+        {
+            string candidate = Path.Combine(dir, "data", "schemas");
+            if (Directory.Exists(candidate))
+                return Path.GetFullPath(candidate);
+        }
+
+        throw new DirectoryNotFoundException(
+            "could not find schemas directory. Pass --schemas <dir>, or place schemas under "
+            + "<AppContext.BaseDirectory>/schemas or walk up from the base directory to data/schemas.");
+    }
+
+    /// <summary>
     /// Loads every subfolder in <paramref name="schemasDir"/> holding a manifest.json, builds a
     /// <see cref="SchemaIndexEntry"/> for each one, and returns them sorted by Build with ordinal
     /// comparison. Throws <see cref="FileNotFoundException"/> when no schema folders exist.
