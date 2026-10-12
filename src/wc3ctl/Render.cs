@@ -929,6 +929,99 @@ public static class Render
         return sb.ToString();
     }
 
+    public static string MpqVerify(MpqVerifyResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine(r.Path);
+        sb.AppendLine($"  entries     {r.TotalEntries}");
+        sb.AppendLine($"  readable    {r.ReadableEntries}");
+        sb.AppendLine($"  unreadable  {r.UnreadableEntries}");
+        if (r.Unreadable.Count > 0)
+        {
+            sb.AppendLine();
+            foreach (var u in r.Unreadable)
+                sb.AppendLine($"  block {u.BlockIndex,5}  {u.SizeBytes,10:N0} B  "
+                    + $"{u.Name ?? "(unnamed)"}  {u.Error}");
+        }
+        sb.AppendLine();
+        sb.Append(r.UnreadableEntries == 0
+            ? "ok. Every entry opened and read to its end."
+            : $"{r.UnreadableEntries} entry(s) could not be read.");
+        return sb.ToString();
+    }
+
+    public static string MpqListfile(MpqListfileResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine(r.Path);
+        sb.AppendLine($"  entries                      {r.TotalEntries}");
+        sb.AppendLine($"  named by the listfile        {r.NamedByListfile}");
+        sb.AppendLine($"  recovered by standard probe  {r.RecoveredByStandardProbe}");
+        sb.AppendLine($"  with no name at all          {r.WithoutName}");
+        if (r.WithoutNameSample.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("unnamed sample");
+            foreach (var s in r.WithoutNameSample) sb.AppendLine($"  {s}");
+        }
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string MpqNameRecover(MpqNameRecoverResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"dictionary {r.DictionaryPath}");
+        sb.AppendLine($"  candidates tried  {r.CandidatesTried}");
+        sb.AppendLine($"  unnamed before    {r.UnnamedBefore}");
+        sb.AppendLine($"  resolved          {r.Recovered}");
+        foreach (var n in r.Names)
+            sb.AppendLine($"  block {n.BlockIndex,5}  {n.SizeBytes,10:N0} B  {n.Name}");
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string MpqStrip(MpqStripResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"saved {r.SavedTo}");
+        sb.AppendLine($"  input entries   {r.InputEntries}");
+        sb.AppendLine($"  output entries  {r.OutputEntries}");
+        sb.AppendLine($"  output bytes    {r.OutputBytes:N0}");
+        sb.AppendLine(r.ListfilePresent ? "  (listfile) is still present" : "  (listfile) dropped");
+        sb.AppendLine(r.AttributesPresent ? "  (attributes) is still present" : "  (attributes) dropped");
+        sb.Append(r.Reopens
+            ? "ok. The output opens again."
+            : $"FAILED. The output does not open. {r.ReopenError}");
+        return sb.ToString();
+    }
+
+    public static string MpqBytesDiff(MpqBytesDiffResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"A  {r.PathA}");
+        sb.AppendLine($"B  {r.PathB}");
+        sb.AppendLine($"  in both    {r.InBoth}");
+        sb.AppendLine($"  identical  {r.IdenticalCount}");
+        sb.AppendLine($"  differ     {r.Differ}");
+
+        void Section(string title, IReadOnlyList<string> items)
+        {
+            sb.AppendLine().AppendLine($"{title} ({items.Count})");
+            foreach (var i in items.Take(40)) sb.AppendLine($"  {i}");
+            if (items.Count > 40) sb.AppendLine($"  ... and {items.Count - 40} more");
+        }
+        if (r.Differences.Count > 0)
+            Section("payloads that differ",
+                r.Differences.Select(d => $"{d.Name}  {d.SizeA:N0} -> {d.SizeB:N0} bytes").ToList());
+        if (r.OnlyInA.Count > 0) Section("only in A", r.OnlyInA);
+        if (r.OnlyInB.Count > 0) Section("only in B", r.OnlyInB);
+
+        sb.AppendLine();
+        sb.Append(r.Identical
+            ? "IDENTICAL. Every shared name has the same payload bytes"
+            : $"DIFFERS. {r.Differ} changed, {r.OnlyInA.Count} only in A, {r.OnlyInB.Count} only in B");
+        return sb.ToString();
+    }
+
     public static string GeneratedHeroRepair(GeneratedHeroRepairResult r)
     {
         if (!r.Ok)

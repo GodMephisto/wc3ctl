@@ -146,6 +146,11 @@ public class CliMcpParityTests
         ["target_get"] = "target",
         ["target_set"] = "target set",
         ["target_list"] = "target list",
+        ["mpq_verify"] = "mpq verify",
+        ["mpq_listfile"] = "mpq listfile",
+        ["mpq_name_recover"] = "mpq name-recover",
+        ["mpq_strip_bookkeeping"] = "mpq strip-bookkeeping",
+        ["mpq_bytes_diff"] = "mpq bytes-diff",
     };
 
     // CLI commands that intentionally have no MCP tool (local dev / query utilities).

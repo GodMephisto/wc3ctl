@@ -3549,6 +3549,79 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         }));
         root.AddCommand(mpqHash);
 
+        // The mpq command group. Each verb reads or writes the archive at the container level,
+        // beside the existing mpq-diff and mpq-hash. A mutating verb copies, it never edits the
+        // input map in place.
+        var mpq = new Command("mpq",
+            "MPQ container operations. Verify readability, report listfile coverage, recover names "
+            + "from a dictionary, strip bookkeeping, and compare payload bytes.");
+
+        var mpqVerify = new Command("verify",
+            "Open every archive entry and read it to its end, reporting the ones that fail with "
+            + "their error and a summary count. Read-only.") { mapArg };
+        mpqVerify.SetHandler((string map, bool json) => RunSafely(() =>
+        {
+            var r = MpqVerifyCommand.Execute(map);
+            if (r.UnreadableEntries > 0) exitCode[0] = 1;
+            Emit(json, r, () => Render.MpqVerify(r));
+        }), mapArg, jsonOption);
+
+        var mpqListfile = new Command("listfile",
+            "Report listfile coverage, how many entries the listfile names, how many the standard "
+            + "name probe recovered, and how many carry no name at all. Read-only.") { mapArg };
+        mpqListfile.SetHandler((string map, bool json) => RunSafely(() =>
+        {
+            var r = MpqListfileCommand.Execute(map);
+            Emit(json, r, () => Render.MpqListfile(r));
+        }), mapArg, jsonOption);
+
+        var mpqDict = new Option<string?>("--dictionary",
+            "Path to a dictionary file, one candidate name per line. Needed by name-recover.");
+        var mpqNameRecover = new Command("name-recover",
+            "Resolve a dictionary of candidate names against the archive's hash table and report "
+            + "the names that hit unnamed blocks. Read-only.") { mapArg, mpqDict };
+        mpqNameRecover.SetHandler((string map, string? dict, bool json) => RunSafely(() =>
+        {
+            if (string.IsNullOrWhiteSpace(dict))
+            {
+                Console.Error.WriteLine("error. --dictionary is required");
+                exitCode[0] = 1;
+                return;
+            }
+            var r = MpqNameRecoverCommand.Execute(MapDocument.Load(map), dict);
+            Emit(json, r, () => Render.MpqNameRecover(r));
+        }), mapArg, mpqDict, jsonOption);
+
+        var mpqStripOut = new Option<string?>(new[] { "-o", "--out" },
+            "Output map path. Default is '<map>.edited.<ext>' next to the input, the original is never overwritten.");
+        var mpqStrip = new Command("strip-bookkeeping",
+            "Save a copy with (listfile) and (attributes) dropped, using the same switch the "
+            + "toolkit already reads, and confirm the copy opens again. The input is never overwritten.")
+        { mapArg, mpqStripOut };
+        mpqStrip.SetHandler((string map, string? outPath, bool json) => RunSafely(() =>
+        {
+            var r = MpqStripBookkeepingCommand.Execute(map, outPath);
+            if (!r.Reopens) exitCode[0] = 1;
+            Emit(json, r, () => Render.MpqStrip(r));
+        }), mapArg, mpqStripOut, jsonOption);
+
+        var mpqBytesDiff = new Command("bytes-diff",
+            "Compare two archives entry by entry by name. For each name present in both, report "
+            + "whether the payload SHA256 matches, and list names only one side carries. Read-only.")
+        { mapArg, mapArgB };
+        mpqBytesDiff.SetHandler((string map, string mapB, bool json) => RunSafely(() =>
+        {
+            var r = MpqBytesDiffCommand.Execute(map, mapB);
+            Emit(json, r, () => Render.MpqBytesDiff(r));
+        }), mapArg, mapArgB, jsonOption);
+
+        mpq.AddCommand(mpqVerify);
+        mpq.AddCommand(mpqListfile);
+        mpq.AddCommand(mpqNameRecover);
+        mpq.AddCommand(mpqStrip);
+        mpq.AddCommand(mpqBytesDiff);
+        root.AddCommand(mpq);
+
         // Observe the running game. Static comparison could not explain a map that sits forever on
         // the loading screen while being measurably equivalent to one that loads, so the behaviour
         // has to be sampled instead of inferred. Read-only: reads OS counters, attaches nothing.
