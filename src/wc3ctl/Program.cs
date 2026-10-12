@@ -3235,6 +3235,26 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         model.AddCommand(modelOptimize);
         root.AddCommand(model);
 
+        var textureOptimizePath = new Argument<string>("texture", "Path to a .blp, .dds or standard image file.");
+        var textureOptimizeOut = new Option<string>(new[] { "-o", "--out" },
+            "Output path. The input is never modified.") { IsRequired = true };
+        var textureOptimizeMax = new Option<int>("--max", () => 256,
+            "Maximum side length in pixels. A texture larger than this on either side is scaled down.");
+        var textureOptimize = new Command("optimize",
+            "Shrink a texture to fit a maximum side, preserving aspect ratio, and write it back in "
+            + "the same format. The other half of making a model compact.")
+            { textureOptimizePath, textureOptimizeOut, textureOptimizeMax, jsonOption };
+        textureOptimize.SetHandler(
+            (string texturePath, string outPath, int max, bool json) => RunSafely(() =>
+            {
+                var r = TextureOptimizeCommand.ExecutePath(texturePath, max, outPath);
+                Emit(json, r, () => Render.TextureOptimize(r));
+            }),
+            textureOptimizePath, textureOptimizeOut, textureOptimizeMax, jsonOption);
+        var texture = new Command("texture", "Texture asset operations.");
+        texture.AddCommand(textureOptimize);
+        root.AddCommand(texture);
+
         // ---- strings / imports / trigger read: reachable from the GUI, previously not here ----
         var stringsList = new Command("list",
             "List the map's string table (war3map.wts). Every TRIGSTR_ reference resolves here.")

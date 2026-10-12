@@ -2,7 +2,7 @@
 
 Generated from the live tool surface by `wc3ctl docs mcp`. Do not edit by hand. Regenerate with `wc3ctl docs mcp --force`, and the CI guard fails when this file is stale.
 
-The server exposes 235 tool(s).
+The server exposes 236 tool(s).
 
 ## asset_audit
 
@@ -1269,6 +1269,12 @@ Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 Set/raise/lower/remove water over a brush, saving the edited map to out_path. The input map is NEVER modified in place.
 
 Annotations. read-only no, destructive no, idempotent no, open-world no.
+
+## texture_optimize
+
+Shrink a .blp, .dds or standard image texture to fit a maximum side, preserving aspect ratio, and write it at out_path in the same format. The input is never modified. Returns the before and after dimensions and byte sizes.
+
+Annotations. read-only no, destructive no, idempotent yes, open-world no.
 
 ## trigger_add
 
