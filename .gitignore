@@ -25,6 +25,10 @@ uabi-disconnect/results/
 .DS_Store
 Thumbs.db
 
+# Python
+__pycache__/
+*.pyc
+
 # Claude Code and planning artifacts, keep the repo free of agent and dev ledgers
 .claude/
 .superpowers/
