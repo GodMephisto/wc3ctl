@@ -3527,9 +3527,64 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
                 p.GetValueForArgument(pfPlayerId), p.GetValueForArgument(pfForceIndex));
             FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message);
         }));
+        var pfPlayerOpt = new Option<int>("--player", "Player id, 0-based.") { IsRequired = true };
+        var pfNameOpt = new Option<string>("--name", "New name text.") { IsRequired = true };
+        var pfColorOpt = new Option<string>("--color",
+            "Team color name, for example red, lightblue or darkgreen.") { IsRequired = true };
+        var pfRaceOpt = new Option<string>("--race",
+            "human, orc, undead, nightelf or random.") { IsRequired = true };
+
+        var playerSetName = new Command("set-name",
+            "Set a player's display name in the map info and save the edited map.")
+        { mapArg, pfPlayerOpt, pfNameOpt, setOut };
+        playerSetName.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            string? outOpt = p.GetValueForOption(setOut);
+            if (RefusedInPlace(p.GetValueForOption(jsonOption), outOpt, map)) return;
+            var doc = MapDocument.Load(map);
+            var r = PlayerSetNameCommand.Execute(doc,
+                p.GetValueForOption(pfPlayerOpt), p.GetValueForOption(pfNameOpt)!);
+            FinishEdit(p.GetValueForOption(jsonOption), outOpt, map, doc, r.Ok, r.Message);
+        }));
+
+        var playerSetColor = new Command("set-color",
+            "Set a player's team color in the map script and save the edited map.")
+        { mapArg, pfPlayerOpt, pfColorOpt, setOut };
+        playerSetColor.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            string? outOpt = p.GetValueForOption(setOut);
+            if (RefusedInPlace(p.GetValueForOption(jsonOption), outOpt, map)) return;
+            var doc = MapDocument.Load(map);
+            var r = PlayerSetColorCommand.Execute(doc,
+                p.GetValueForOption(pfPlayerOpt), p.GetValueForOption(pfColorOpt)!);
+            FinishEdit(p.GetValueForOption(jsonOption), outOpt, map, doc, r.Ok, r.Message);
+        }));
+
+        var playerSetRace = new Command("set-race",
+            "Set a player's race in the map info and save the edited map.")
+        { mapArg, pfPlayerOpt, pfRaceOpt, setOut };
+        playerSetRace.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            string? outOpt = p.GetValueForOption(setOut);
+            if (RefusedInPlace(p.GetValueForOption(jsonOption), outOpt, map)) return;
+            var doc = MapDocument.Load(map);
+            var r = PlayerSetRaceCommand.Execute(doc,
+                p.GetValueForOption(pfPlayerOpt), p.GetValueForOption(pfRaceOpt)!);
+            FinishEdit(p.GetValueForOption(jsonOption), outOpt, map, doc, r.Ok, r.Message);
+        }));
+
         var player = new Command("player", "Player slots (war3map.w3i): list, set-force.");
         player.AddCommand(playerList);
         player.AddCommand(playerSetForce);
+        player.AddCommand(playerSetName);
+        player.AddCommand(playerSetColor);
+        player.AddCommand(playerSetRace);
 
         var forceList = new Command("list", "List the map's forces (teams).") { mapArg };
         forceList.SetHandler(ctx => RunSafely(() =>
@@ -3559,9 +3614,54 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
                 p.GetValueForArgument(ffAdvControl));
             FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message);
         }));
+        var pfForceOpt = new Option<int>("--force", "Force index, 0-based.") { IsRequired = true };
+        var pfAddOpt = new Option<int?>("--add", "Add this player id to the force.");
+        var pfRemoveOpt = new Option<int?>("--remove", "Remove this player id from the force.");
+
+        var forceRename = new Command("rename",
+            "Rename a force and save the edited map.")
+        { mapArg, pfForceOpt, pfNameOpt, setOut };
+        forceRename.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            string? outOpt = p.GetValueForOption(setOut);
+            if (RefusedInPlace(p.GetValueForOption(jsonOption), outOpt, map)) return;
+            var doc = MapDocument.Load(map);
+            var r = ForceRenameCommand.Execute(doc,
+                p.GetValueForOption(pfForceOpt), p.GetValueForOption(pfNameOpt)!);
+            FinishEdit(p.GetValueForOption(jsonOption), outOpt, map, doc, r.Ok, r.Message);
+        }));
+
+        var forceSetPlayers = new Command("set-players",
+            "Add or remove a player from a force and save the edited map.")
+        { mapArg, pfForceOpt, pfAddOpt, pfRemoveOpt, setOut };
+        forceSetPlayers.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            string? outOpt = p.GetValueForOption(setOut);
+            if (RefusedInPlace(p.GetValueForOption(jsonOption), outOpt, map)) return;
+            int? add = p.GetValueForOption(pfAddOpt);
+            int? remove = p.GetValueForOption(pfRemoveOpt);
+            var doc = MapDocument.Load(map);
+            if ((add is null) == (remove is null))
+            {
+                FinishEdit(p.GetValueForOption(jsonOption), outOpt, map, doc, false,
+                    "pass exactly one of --add or --remove");
+                return;
+            }
+            var r = add is not null
+                ? ForceSetPlayersCommand.Add(doc, p.GetValueForOption(pfForceOpt), add.Value)
+                : ForceSetPlayersCommand.Remove(doc, p.GetValueForOption(pfForceOpt), remove!.Value);
+            FinishEdit(p.GetValueForOption(jsonOption), outOpt, map, doc, r.Ok, r.Message);
+        }));
+
         var force = new Command("force", "Forces / teams (war3map.w3i): list, set-flags.");
         force.AddCommand(forceList);
         force.AddCommand(forceSetFlags);
+        force.AddCommand(forceRename);
+        force.AddCommand(forceSetPlayers);
 
         // ---- file: raw/text editing of an internal archive entry ----
         // Wc3.Commands.FileEditCommand already carried this and no front-end exposed it, so
