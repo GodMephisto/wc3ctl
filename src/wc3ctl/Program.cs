@@ -3401,11 +3401,86 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
             }),
             schemasDirArg);
 
+        var gdSchemas = new Option<string?>("--schemas",
+            "Path to schemas directory containing schema folders with manifest.json.");
+        var gdTarget = new Option<string?>("--target",
+            "Build name or schema folder path. Omit to search every build.");
+
+        var gdHistoryName = new Argument<string>("name", "Name to look for.");
+        var gamedataHistory = new Command("history",
+            "Report whether a name is an object field code, a native, a type, a global or a function "
+            + "in any recorded build, list every build it appears in, and name the first and last build.")
+            { gdHistoryName, gdSchemas, jsonOption };
+        gamedataHistory.SetHandler(
+            (string name, string? schemas, bool json) => RunSafely(() =>
+            {
+                var r = GamedataHistoryCommand.Execute(name, schemas);
+                Emit(json, r, () => Render.GamedataHistory(r));
+            }),
+            gdHistoryName, gdSchemas, jsonOption);
+
+        var gdChangelogA = new Argument<string>("buildA", "The older build name or schema folder.");
+        var gdChangelogB = new Argument<string>("buildB", "The newer build name or schema folder.");
+        var gamedataChangelog = new Command("changelog",
+            "Diff two builds' object fields and report fields added, removed, retyped, or whose "
+            + "minimum or maximum bound changed, grouped by metadata file.")
+            { gdChangelogA, gdChangelogB, gdSchemas, jsonOption };
+        gamedataChangelog.SetHandler(
+            (string buildA, string buildB, string? schemas, bool json) => RunSafely(() =>
+            {
+                var r = GamedataChangelogCommand.Execute(buildA, buildB, schemas);
+                Emit(json, r, () => Render.GamedataChangelog(r));
+            }),
+            gdChangelogA, gdChangelogB, gdSchemas, jsonOption);
+
+        var gdLookupQuery = new Argument<string>("query", "Text to find inside a field display name.");
+        var gamedataFieldLookup = new Command("field-lookup",
+            "Find object field codes whose display name contains the query, in one build or all builds.")
+            { gdLookupQuery, gdTarget, gdSchemas, jsonOption };
+        gamedataFieldLookup.SetHandler(
+            (string query, string? target, string? schemas, bool json) => RunSafely(() =>
+            {
+                var r = GamedataFieldLookupCommand.Execute(query, target, schemas);
+                Emit(json, r, () => Render.GamedataFieldLookup(r));
+            }),
+            gdLookupQuery, gdTarget, gdSchemas, jsonOption);
+
+        var gdBoundsCode = new Argument<string>("code", "The object field code to inspect.");
+        var gamedataBounds = new Command("bounds",
+            "Report a field code's type, minimum and maximum bounds, whether it can be empty, and the "
+            + "metadata file that defines it, in one build or all builds where it exists.")
+            { gdBoundsCode, gdTarget, gdSchemas, jsonOption };
+        gamedataBounds.SetHandler(
+            (string code, string? target, string? schemas, bool json) => RunSafely(() =>
+            {
+                var r = GamedataBoundsCommand.Execute(code, target, schemas);
+                Emit(json, r, () => Render.GamedataBounds(r));
+            }),
+            gdBoundsCode, gdTarget, gdSchemas, jsonOption);
+
+        var gamedataCoverage = new Command("coverage",
+            "List one row per schema folder with the build, its era, and which sections it holds "
+            + "(objects, triggers, script), so a reader can tell a build carrying real object data "
+            + "from one carrying only its script.")
+            { gdSchemas, jsonOption };
+        gamedataCoverage.SetHandler(
+            (string? schemas, bool json) => RunSafely(() =>
+            {
+                var r = GamedataCoverageCommand.Execute(schemas);
+                Emit(json, r, () => Render.GamedataCoverage(r));
+            }),
+            gdSchemas, jsonOption);
+
         var gamedata = new Command("gamedata", "Base game data, for tracking what a patch changes.");
         gamedata.AddCommand(gamedataSnapshot);
         gamedata.AddCommand(gamedataSchema);
         gamedata.AddCommand(gamedataSchemaDiff);
         gamedata.AddCommand(gamedataSchemaIndex);
+        gamedata.AddCommand(gamedataHistory);
+        gamedata.AddCommand(gamedataChangelog);
+        gamedata.AddCommand(gamedataFieldLookup);
+        gamedata.AddCommand(gamedataBounds);
+        gamedata.AddCommand(gamedataCoverage);
 
         root.AddCommand(file);
         root.AddCommand(info); root.AddCommand(ls); root.AddCommand(rt);

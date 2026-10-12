@@ -93,30 +93,10 @@ public static class TargetCompatCommand
 
     /// <summary>
     /// Resolve the schemas directory from the argument, or walk up from AppContext.BaseDirectory.
+    /// Delegates to <see cref="GameSchemaCommand.ResolveSchemasDir"/> so every caller shares one rule.
     /// </summary>
-    private static string ResolveSchemasDir(string? schemasDir)
-    {
-        if (schemasDir is not null && Directory.Exists(schemasDir))
-            return Path.GetFullPath(schemasDir);
-
-        // Try base directory /schemas.
-        string baseDir = AppContext.BaseDirectory;
-        string candidate1 = Path.Combine(baseDir, "schemas");
-        if (Directory.Exists(candidate1))
-            return Path.GetFullPath(candidate1);
-
-        // Walk up from base directory looking for a data/schemas folder.
-        for (string? dir = baseDir; dir != null; dir = Directory.GetParent(dir)?.FullName)
-        {
-            string candidate = Path.Combine(dir, "data", "schemas");
-            if (Directory.Exists(candidate))
-                return Path.GetFullPath(candidate);
-        }
-
-        throw new DirectoryNotFoundException(
-            "could not find schemas directory. Pass --schemas <dir>, or place schemas under "
-            + "<AppContext.BaseDirectory>/schemas or walk up from the base directory to data/schemas.");
-    }
+    private static string ResolveSchemasDir(string? schemasDir) =>
+        GameSchemaCommand.ResolveSchemasDir(schemasDir);
 
     /// <summary>
     /// Build a union index across all schema folders. One dictionary maps each

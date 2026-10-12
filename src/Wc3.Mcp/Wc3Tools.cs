@@ -1583,6 +1583,43 @@ public static class Wc3Tools
         [Description("Show changes for one section only: objects, triggers, or script. Omit for all.")] string? section = null)
         => Run(() => GameSchemaCommand.Filter(GameSchemaCommand.Diff(a, b), section));
 
+    [McpServerTool(Name = "gamedata_history", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Report whether a name is an object field code, a native, a type, a global or a function across every recorded build. Lists every build each kind appears in, plus the first and last build that carry the name, and the object metadata files that define it as a field.")]
+    public static GamedataHistoryResult GameDataHistory(
+        [Description("The name to look for, a field code or a JASS identifier.")] string name,
+        [Description("Optional path to schemas directory containing schema folders with manifest.json.")] string? schemas_dir = null)
+        => Run(() => GamedataHistoryCommand.Execute(name, schemas_dir));
+
+    [McpServerTool(Name = "gamedata_changelog", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Diff two builds' object data field by field. Reports fields added, removed, retyped, or whose minimum or maximum bound changed, grouped by object metadata file. A file only one build carries is listed as not compared rather than every field added or removed.")]
+    public static GamedataChangelogResult GameDataChangelog(
+        [Description("The older build name or schema folder path.")] string build_a,
+        [Description("The newer build name or schema folder path.")] string build_b,
+        [Description("Optional path to schemas directory containing schema folders with manifest.json.")] string? schemas_dir = null)
+        => Run(() => GamedataChangelogCommand.Execute(build_a, build_b, schemas_dir));
+
+    [McpServerTool(Name = "gamedata_field_lookup", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Find object field codes whose display name contains the query, in one build or all builds. Reports the code, display name, type and build for each match.")]
+    public static GamedataFieldLookupResult GameDataFieldLookup(
+        [Description("Text to find inside a field display name, case-insensitive.")] string query,
+        [Description("Build name or schema folder path to search. Omit to search every build.")] string? target = null,
+        [Description("Optional path to schemas directory containing schema folders with manifest.json.")] string? schemas_dir = null)
+        => Run(() => GamedataFieldLookupCommand.Execute(query, target, schemas_dir));
+
+    [McpServerTool(Name = "gamedata_bounds", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Report a field code's type, minimum and maximum bounds, whether it can be empty, and the object metadata file that defines it, in one build or every build where it exists.")]
+    public static GamedataBoundsResult GameDataBounds(
+        [Description("The object field code to inspect.")] string code,
+        [Description("Build name or schema folder path to search. Omit to search every build.")] string? target = null,
+        [Description("Optional path to schemas directory containing schema folders with manifest.json.")] string? schemas_dir = null)
+        => Run(() => GamedataBoundsCommand.Execute(code, target, schemas_dir));
+
+    [McpServerTool(Name = "gamedata_coverage", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("List one row per schema folder with the build, its era, and which sections it holds (objects, triggers, script), plus field and native counts, so a reader can tell a build carrying real object data from one carrying only its script.")]
+    public static GamedataCoverageResult GameDataCoverage(
+        [Description("Optional path to schemas directory containing schema folders with manifest.json.")] string? schemas_dir = null)
+        => Run(() => GamedataCoverageCommand.Execute(schemas_dir));
+
     /// <summary>
     /// A tool's game_dir argument, else WC3_GAME_DIR, else null (auto-detect). A value still holding
     /// an unfilled placeholder such as ${user_config.game_dir}, which an MCPB host may pass through

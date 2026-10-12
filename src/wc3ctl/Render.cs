@@ -1203,4 +1203,81 @@ public static class Render
         if (r.NotChecked.Count > 0) sb.Append($"  not checked  {string.Join(", ", r.NotChecked)}");
         return sb.ToString().TrimEnd('\r', '\n');
     }
+
+    public static string GamedataHistory(GamedataHistoryResult r)
+    {
+        var sb = new StringBuilder();
+        if (!r.Found)
+        {
+            sb.AppendLine($"{r.Name}  not found in any of {r.BuildsSearched} build(s)");
+            return sb.ToString().TrimEnd('\r', '\n');
+        }
+        sb.AppendLine($"{r.Name}  found in {r.FirstBuild}..{r.LastBuild}, {r.BuildsSearched} build(s) searched");
+        foreach (var kind in r.Kinds)
+            sb.AppendLine($"  {kind.Kind,-9} {kind.Builds.Count,-3} {string.Join(", ", kind.Builds)}");
+        if (r.ObjectFiles.Count > 0)
+            sb.AppendLine($"  object files  {string.Join(", ", r.ObjectFiles)}");
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
+    public static string GamedataChangelog(GamedataChangelogResult r)
+    {
+        var sb = new StringBuilder();
+        int total = r.Added + r.Removed + r.Retyped + r.BoundsChanged;
+        sb.AppendLine($"{r.BuildA} against {r.BuildB}, {total} change(s)");
+        foreach (var group in r.Groups)
+        {
+            sb.AppendLine($"  {group.Slk}");
+            foreach (var c in group.Changes)
+                sb.AppendLine($"    {c.Code,-28} {c.Change,-8}"
+                    + (c.Detail is not null ? $"  ({c.Detail})" : ""));
+        }
+        if (r.NotCompared.Count > 0)
+        {
+            sb.AppendLine();
+            foreach (var nc in r.NotCompared)
+                sb.AppendLine($"  [not compared] {nc}");
+        }
+        sb.AppendLine();
+        sb.Append($"  added {r.Added}, removed {r.Removed}, retyped {r.Retyped}, bounds {r.BoundsChanged}");
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
+    public static string GamedataFieldLookup(GamedataFieldLookupResult r)
+    {
+        var sb = new StringBuilder();
+        var builds = r.Matches.Select(m => m.Build).Distinct(StringComparer.Ordinal).Count();
+        sb.AppendLine($"query '{r.Query}', {r.Matches.Count} match(es) in {builds} build(s)"
+            + (r.Target is not null ? $", target {r.Target}" : ""));
+        foreach (var m in r.Matches)
+            sb.AppendLine($"  {m.Build,-24} {m.Code,-24} {m.DisplayName,-28} {m.Type,-10} {m.Slk}");
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
+    public static string GamedataBounds(GamedataBoundsResult r)
+    {
+        var sb = new StringBuilder();
+        if (r.Entries.Count == 0)
+        {
+            sb.AppendLine($"code {r.Code}  not found in any build"
+                + (r.Target is not null ? $" (searched {r.Target})" : ""));
+            return sb.ToString().TrimEnd('\r', '\n');
+        }
+        sb.AppendLine($"code {r.Code}, {r.Entries.Count} entry(ies)");
+        foreach (var e in r.Entries)
+            sb.AppendLine($"  {e.Build,-24} {e.Slk,-32} {e.Type,-10}"
+                + $" min {Show(e.MinValue)}  max {Show(e.MaxValue)}  canBeEmpty {e.CanBeEmpty}");
+        return sb.ToString().TrimEnd('\r', '\n');
+        static string Show(string s) => string.IsNullOrEmpty(s) ? "(none)" : s;
+    }
+
+    public static string GamedataCoverage(GamedataCoverageResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.Rows.Count} schema build(s)");
+        foreach (var row in r.Rows)
+            sb.AppendLine($"  {row.Build,-24} {row.Era,-9} {string.Join(", ", row.Sections),-28}"
+                + $" fields {row.Fields}  natives {row.Natives}");
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
 }

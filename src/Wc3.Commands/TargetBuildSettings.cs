@@ -295,27 +295,10 @@ public static class TargetBuildSettings
 
     /// <summary>
     /// Resolve the schemas directory, matching the same logic as TargetCompatCommand.
+    /// Delegates to <see cref="GameSchemaCommand.ResolveSchemasDir"/> so every caller shares one rule.
     /// </summary>
-    private static string ResolveSchemasDir(string? schemasDir)
-    {
-        if (schemasDir is not null && Directory.Exists(schemasDir))
-            return Path.GetFullPath(schemasDir);
-
-        string baseDir = AppContext.BaseDirectory;
-        string candidate1 = Path.Combine(baseDir, "schemas");
-        if (Directory.Exists(candidate1))
-            return Path.GetFullPath(candidate1);
-
-        for (string? dir = baseDir; dir != null; dir = Directory.GetParent(dir)?.FullName)
-        {
-            string candidate = Path.Combine(dir, "data", "schemas");
-            if (Directory.Exists(candidate))
-                return Path.GetFullPath(candidate);
-        }
-
-        throw new DirectoryNotFoundException(
-            "could not find schemas directory. Pass --schemas <dir>.");
-    }
+    private static string ResolveSchemasDir(string? schemasDir) =>
+        GameSchemaCommand.ResolveSchemasDir(schemasDir);
 
     /// <summary>
     /// Derive the default build by checking if a schema exists matching the installed
