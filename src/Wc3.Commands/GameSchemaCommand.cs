@@ -347,15 +347,31 @@ public static class GameSchemaCommand
         static string Show(string? s) => string.IsNullOrEmpty(s) ? "(none)" : s;
     }
 
+    /// <summary>The environment variable that points the toolkit at a schemas directory.</summary>
+    public const string SchemasDirEnvVar = "WC3_SCHEMAS_DIR";
+
     /// <summary>
-    /// Resolve the schemas directory. An explicit path that exists wins, then a <c>schemas</c>
-    /// folder beside the executable, then a walk up from the base directory to a <c>data/schemas</c>
-    /// folder. Throws <see cref="DirectoryNotFoundException"/> when none is found.
+    /// Resolve the schemas directory. An explicit path that exists wins, then the
+    /// <see cref="SchemasDirEnvVar"/> environment variable when it names an existing directory, then
+    /// a <c>schemas</c> folder beside the executable, then a walk up from the base directory to a
+    /// <c>data/schemas</c> folder. Throws <see cref="DirectoryNotFoundException"/> when none is
+    /// found.
     /// </summary>
-    public static string ResolveSchemasDir(string? schemasDir)
+    public static string ResolveSchemasDir(string? schemasDir) =>
+        ResolveSchemasDir(schemasDir, Environment.GetEnvironmentVariable(SchemasDirEnvVar));
+
+    /// <summary>
+    /// The resolution above with the environment value supplied by the caller, so the precedence is
+    /// testable without mutating process environment state. A value that does not name a directory
+    /// is ignored, exactly as an explicit path that does not exist is.
+    /// </summary>
+    internal static string ResolveSchemasDir(string? schemasDir, string? envSchemasDir)
     {
         if (schemasDir is not null && Directory.Exists(schemasDir))
             return Path.GetFullPath(schemasDir);
+
+        if (!string.IsNullOrWhiteSpace(envSchemasDir) && Directory.Exists(envSchemasDir))
+            return Path.GetFullPath(envSchemasDir!);
 
         string baseDir = AppContext.BaseDirectory;
         string candidate1 = Path.Combine(baseDir, "schemas");
@@ -370,8 +386,9 @@ public static class GameSchemaCommand
         }
 
         throw new DirectoryNotFoundException(
-            "could not find schemas directory. Pass --schemas <dir>, or place schemas under "
-            + "<AppContext.BaseDirectory>/schemas or walk up from the base directory to data/schemas.");
+            "could not find schemas directory. Pass --schemas <dir>, set " + SchemasDirEnvVar
+            + ", place schemas under <AppContext.BaseDirectory>/schemas, or walk up from the base "
+            + "directory to data/schemas.");
     }
 
     /// <summary>

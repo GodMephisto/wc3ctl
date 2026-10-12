@@ -6,8 +6,8 @@ never copying them. A schema is what lets `wc3ctl` tell whether a map made for o
 compiles on another, which fields the editor for a target build does not know, and which natives and
 types a build lacks.
 
-The dataset is derived metadata (see the licence note below). It is not committed to git and it is not
-shipped inside the tool. It is built on demand and shipped as a release asset.
+The dataset is derived metadata (see the licence note below). It is built on demand, committed to git,
+and also shipped as a release asset so an installed toolkit needs no checkout.
 
 ## What a schema folder holds
 
@@ -52,15 +52,31 @@ added, upgraded and left.
 
 ## How it ships
 
-The dataset is a release asset, not a tracked file. `scripts/pack-schemas.ps1 -Source data\schemas -Out
-<zip>` packs it into a versioned zip, refreshes `sources.json` through the CLI when a published binary
-is present, writes a `schemas.version` entry inside the archive, and writes the zip's SHA-256 sidecar in
-the same shape the release workflow uses for the binaries.
+The dataset is committed to git, so a checkout already has it. It is also a release asset, so an
+installed toolkit needs no checkout. The release workflow packs `data\schemas` into
+`wc3ctl-schemas-<tag>.zip` and attaches it with a SHA-256 sidecar, and `install.ps1` unpacks that asset
+into `<install>\schemas`. `scripts/pack-schemas.ps1 -Source data\schemas -Out <zip>` does the same pack
+by hand, refreshing `sources.json` through the CLI when a published binary is present and writing a
+`schemas.version` entry inside the archive.
 
 `wc3ctl gamedata export-schemas -o <dir>` copies the dataset to a directory, and
 `wc3ctl gamedata export-schemas -o <target>.zip` packs it into one archive, either way for attaching to
 a release. The same two steps are on the agent surface as the `gamedata_sources` and
 `gamedata_export_schemas` tools.
+
+## How a build finds the dataset
+
+Every command and MCP tool that needs a schema resolves the dataset directory, in this order.
+
+1. An explicit `--schemas <dir>` on the CLI, or the `schemas_dir` argument on a tool call.
+2. The `WC3_SCHEMAS_DIR` environment variable, when it names an existing directory.
+3. A `schemas` folder beside the executable.
+4. A `data/schemas` folder found by walking up from the executable.
+
+Installing places the dataset at `<install>\schemas`, so step 3 finds it with no configuration. Set
+`WC3_SCHEMAS_DIR` to point at a dataset elsewhere, for example one unpacked from the
+`wc3ctl-schemas-<version>.zip` release asset or kept on another drive. A value that names no directory
+is ignored, the same as an explicit path that does not exist.
 
 ## Schema commands and the coverage limit
 

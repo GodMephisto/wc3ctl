@@ -53,10 +53,10 @@ function Install-Asset($release, [string]$pattern, [string]$dest, [string]$exeNa
     Expand-Archive -Path $zipPath -DestinationPath $unpacked
     if (-not (Test-Path (Join-Path $unpacked $exeName))) { throw "$($zip.name) does not contain $exeName." }
 
-    # Replace the old copy, keeping the studio subfolder when this is the CLI folder.
+    # Replace the old copy, keeping the studio and schemas subfolders when this is the CLI folder.
     if (Test-Path $dest) {
         try {
-            Get-ChildItem -Path $dest -Force | Where-Object { $_.Name -ne 'studio' } | Remove-Item -Recurse -Force
+            Get-ChildItem -Path $dest -Force | Where-Object { $_.Name -notin @('studio', 'schemas') } | Remove-Item -Recurse -Force
         } catch {
             throw "Could not replace $dest. Close Studio and any AI app running wc3ctl, then run this again."
         }
@@ -76,6 +76,14 @@ $work = Join-Path ([IO.Path]::GetTempPath()) ("wc3ctl-" + [guid]::NewGuid().ToSt
 New-Item -ItemType Directory -Path $work | Out-Null
 try {
     Install-Asset $release 'wc3ctl-v*-win-x64.zip' $InstallDir 'wc3ctl.exe' $work
+    # The schema dataset drives target, compat and the MCP build tools. It ships as its own release
+    # asset and lands in $InstallDir\schemas, where the resolver finds it beside the exe with no setup.
+    if ($release.assets | Where-Object { $_.name -like 'wc3ctl-schemas-*.zip' }) {
+        Install-Asset $release 'wc3ctl-schemas-*.zip' (Join-Path $InstallDir 'schemas') 'index.json' $work
+        Write-Host 'installed the schema dataset'
+    } else {
+        Write-Host 'this release carries no schema dataset. Set WC3_SCHEMAS_DIR, or drop a schemas folder beside wc3ctl.exe.'
+    }
     if (-not $NoStudio) { Install-Asset $release 'wc3ctl-studio-v*-win-x64.zip' $studioDir 'Wc3.Studio.exe' $work }
 } finally {
     Remove-Item -Path $work -Recurse -Force -ErrorAction SilentlyContinue
