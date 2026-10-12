@@ -105,7 +105,11 @@ public class PlacedRefsCommandTests
     [Fact]
     public void Fix_refs_refuses_a_healthy_map()
     {
-        var doc = Populated();
+        var doc = BlankMap.Create();
+        // Resolve the placement from the map's own object data, so this needs no base game install.
+        var unit = ObjectNewCommand.Execute(doc, ObjectKind.Unit, "hfoo");
+        Assert.True(unit.Ok, unit.Message);
+        Assert.True(PlacementCommand.PlaceUnit(doc, unit.NewRawcode!, 0, 0f, 0f).Ok);
 
         var r = PlacedFixRefsCommand.Execute(doc);
 
