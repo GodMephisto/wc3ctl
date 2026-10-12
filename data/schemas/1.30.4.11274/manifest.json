@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "build": "1.30.4.11274",
-  "source": "folder 1_30_4",
+  "source": "Hive Files_1.30.4.zip (CASC install, war3.mpq layer)",
   "inputs": [
     {
       "name": "doodads/doodadmetadata.slk",
@@ -34,14 +34,19 @@
       "sha256": "86d7fa5933e61dcfe54d1c6c3b9e726d8b8175d980c48a643bad3b5365c83448"
     },
     {
+      "name": "ui/uniteditordata.txt",
+      "bytes": 13507,
+      "sha256": "36ee790970e1091927787b4178e022db1980112b1b156e7619f197428a596ce4"
+    },
+    {
       "name": "ui/worldeditgamestrings.txt",
       "bytes": 18249,
       "sha256": "d05cc0873d40f8e8b6a88f0754b38b17238e97145670c0b7d18a38df0d01030a"
     },
     {
       "name": "ui/worldeditstrings.txt",
-      "bytes": 382281,
-      "sha256": "5a52b1d82468c96879c847ee1079f0e5eba0803588050e35d6f943659536fba9"
+      "bytes": 382280,
+      "sha256": "a28e034754bfda72e261d0ff7f24f5c09c4652f31dd922778ce101d19deb46ab"
     },
     {
       "name": "units/abilitybuffmetadata.slk",

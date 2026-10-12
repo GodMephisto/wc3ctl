@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "build": "3.0.1.24323",
-  "source": "folder 3.0.1.24323",
+  "source": "Blizzard CDN (ngdp) build 3.0.1.24323",
   "inputs": [
     {
       "name": "doodads/doodadmetadata.slk",
@@ -32,6 +32,11 @@
       "name": "ui/triggerdata.txt",
       "bytes": 757979,
       "sha256": "7a1c30425ba321a27b6f5c8d08a98b2c2c79a4d8364dfde35148ef4956d21f08"
+    },
+    {
+      "name": "ui/uniteditordata.txt",
+      "bytes": 15528,
+      "sha256": "604d278747ed06358699c51884c46d56c3ba766cebb778d78b1dfef3e2a41297"
     },
     {
       "name": "ui/worldeditgamestrings.txt",

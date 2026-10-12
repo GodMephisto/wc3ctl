@@ -2,7 +2,7 @@
 
 Generated from the live tool surface by `wc3ctl docs mcp`. Do not edit by hand. Regenerate with `wc3ctl docs mcp --force`, and the CI guard fails when this file is stale.
 
-The server exposes 232 tool(s).
+The server exposes 233 tool(s).
 
 ## asset_audit
 
@@ -331,6 +331,12 @@ Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 ## gamedata_coverage
 
 List one row per schema folder with the build, its era, and which sections it holds (objects, triggers, script), plus field and native counts, so a reader can tell a build carrying real object data from one carrying only its script.
+
+Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
+## gamedata_enum
+
+Report the closed set of legal values for an enumerated object field type, from the build's UnitEditorData.txt, in one build or every build where it exists. The type is the metadata SLK type column, the one gamedata_bounds reports for a field code. This is the authority a picker should offer, not the values a stock object happens to use.
 
 Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 

@@ -34,6 +34,11 @@
       "sha256": "c431e96bff9d5afc738eae858c07dea17f9754e3ac81d71122ee28f75ec69ebc"
     },
     {
+      "name": "ui/uniteditordata.txt",
+      "bytes": 13121,
+      "sha256": "7297c5a4462c1aa419c0a23b02aa9daf4a54b5394b8e6510da1d7b6cf5004061"
+    },
+    {
       "name": "ui/worldeditgamestrings.txt",
       "bytes": 17494,
       "sha256": "c2d7e8964b12d0b7db48cd85536b7385a14d94a16c8a40eeb3c004ab26509ca9"

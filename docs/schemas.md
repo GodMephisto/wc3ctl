@@ -14,13 +14,17 @@ and also shipped as a release asset so an installed toolkit needs no checkout.
 Every folder has `manifest.json`, which names the build, its source, and the input files it was derived
 from, each with a SHA-256. The manifest also lists the inputs that were missing at build time.
 
-A folder carries up to three sections, each in its own file.
+A folder carries up to four sections, each in its own file.
 
 - `objects.json`. The object editor's fields, one entry per metadata SLK (units, abilities, buffs,
   destructables, doodads, upgrades, upgrade effects, misc and skin).
 - `triggers.json`. The GUI trigger types, functions and categories from `TriggerData.txt`.
 - `script.json`. The types, natives, globals and functions from `common.j`, `blizzard.j` and
   `common.ai`.
+- `enums.json`. The closed set of legal values for each enumerated field type, and the name the
+  editor shows, from `UnitEditorData.txt`. This is the authority a dropdown should offer, not the
+  values a stock object happens to use, so a picker can be built from the schema alone rather than
+  from a live install.
 
 ## Which builds carry object data
 

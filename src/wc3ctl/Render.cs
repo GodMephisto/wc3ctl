@@ -2366,8 +2366,34 @@ public static class Render
         static string Show(string s) => string.IsNullOrEmpty(s) ? "(none)" : s;
     }
 
-    public static string GamedataCoverage(GamedataCoverageResult r)
+    public static string GamedataEnum(GamedataEnumResult r)
     {
+        var sb = new StringBuilder();
+        if (r.Entries.Count == 0)
+        {
+            sb.AppendLine($"type {r.Type}  not found in any build"
+                + (r.Target is not null ? $" (searched {r.Target})" : ""));
+            return sb.ToString().TrimEnd('\r', '\n');
+        }
+        sb.AppendLine($"type {r.Type}, {r.Entries.Count} build(s)");
+        foreach (var e in r.Entries)
+        {
+            sb.AppendLine($"  {e.Build}  {e.Values.Count} value(s)");
+            foreach (var v in e.Values)
+                sb.AppendLine($"    {v.Value,-24} {v.DisplayName ?? v.Value}");
+        }
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
+    public static string GamedataEnumTypes(IReadOnlyList<string> types)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{types.Count} enumerated field type(s)");
+        foreach (var t in types) sb.AppendLine($"  {t}");
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
+    public static string GamedataCoverage(GamedataCoverageResult r)    {
         var sb = new StringBuilder();
         sb.AppendLine($"{r.Rows.Count} schema build(s)");
         foreach (var row in r.Rows)

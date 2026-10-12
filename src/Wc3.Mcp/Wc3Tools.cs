@@ -2789,6 +2789,14 @@ public static class Wc3Tools
         [Description("Optional path to schemas directory containing schema folders with manifest.json.")] string? schemas_dir = null)
         => Run(() => GamedataBoundsCommand.Execute(code, target, schemas_dir));
 
+    [McpServerTool(Name = "gamedata_enum", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Report the closed set of legal values for an enumerated object field type, from the build's UnitEditorData.txt, in one build or every build where it exists. The type is the metadata SLK type column, the one gamedata_bounds reports for a field code. This is the authority a picker should offer, not the values a stock object happens to use.")]
+    public static GamedataEnumResult GameDataEnum(
+        [Description("The enumerated field type to inspect, the metadata SLK type column.")] string type,
+        [Description("Build name or schema folder path to search. Omit to search every build.")] string? target = null,
+        [Description("Optional path to schemas directory containing schema folders with manifest.json.")] string? schemas_dir = null)
+        => Run(() => GamedataEnumCommand.Execute(type, target, schemas_dir));
+
     [McpServerTool(Name = "gamedata_coverage", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("List one row per schema folder with the build, its era, and which sections it holds (objects, triggers, script), plus field and native counts, so a reader can tell a build carrying real object data from one carrying only its script.")]
     public static GamedataCoverageResult GameDataCoverage(

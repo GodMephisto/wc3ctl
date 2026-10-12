@@ -189,6 +189,7 @@ public class CliMcpParityTests
         ["gamedata_changelog"] = "gamedata changelog",
         ["gamedata_field_lookup"] = "gamedata field-lookup",
         ["gamedata_bounds"] = "gamedata bounds",
+        ["gamedata_enum"] = "gamedata enum",
         ["gamedata_coverage"] = "gamedata coverage",
         ["bench_schema_coverage"] = "bench schema-coverage",
         ["bench_compat"] = "bench compat",

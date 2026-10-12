@@ -651,7 +651,8 @@
       "sections": [
         "objects",
         "triggers",
-        "script"
+        "script",
+        "enums"
       ],
       "sectionHashes": [
         {
@@ -693,6 +694,11 @@
           "name": "ui/triggerdata.txt",
           "bytes": 173453,
           "sha256": "9845f3a721c4069b4bc595ccffcd37d24ed220e55226327008dfc2ff9bda6484"
+        },
+        {
+          "name": "ui/uniteditordata.txt",
+          "bytes": 9726,
+          "sha256": "6414f24fd619372642d8b9fafc5869281c549be5b9a7dbab8efc0063eec90dae"
         },
         {
           "name": "ui/worldeditgamestrings.txt",
@@ -2107,7 +2113,8 @@
       "sections": [
         "objects",
         "triggers",
-        "script"
+        "script",
+        "enums"
       ],
       "sectionHashes": [
         {
@@ -2159,6 +2166,11 @@
           "name": "ui/triggerdata.txt",
           "bytes": 235759,
           "sha256": "a94407934ae0024916eee75c4e9e9727f92efe5f5235df26d0eed86de00bc651"
+        },
+        {
+          "name": "ui/uniteditordata.txt",
+          "bytes": 11553,
+          "sha256": "99b7888b6039f53f97721c512548cd8a4ee08f3192ba5f0719c28c3331ede709"
         },
         {
           "name": "ui/worldeditgamestrings.txt",
@@ -3131,7 +3143,8 @@
       "sections": [
         "objects",
         "triggers",
-        "script"
+        "script",
+        "enums"
       ],
       "sectionHashes": [
         {
@@ -3183,6 +3196,11 @@
           "name": "ui/triggerdata.txt",
           "bytes": 285354,
           "sha256": "d109ec06a513d77492cf1ab346fdcb080732b0e6b1aaa9010c585fb8df52df4d"
+        },
+        {
+          "name": "ui/uniteditordata.txt",
+          "bytes": 13121,
+          "sha256": "7297c5a4462c1aa419c0a23b02aa9daf4a54b5394b8e6510da1d7b6cf5004061"
         },
         {
           "name": "ui/worldeditgamestrings.txt",
@@ -3560,7 +3578,8 @@
       "sections": [
         "objects",
         "triggers",
-        "script"
+        "script",
+        "enums"
       ],
       "sectionHashes": [
         {
@@ -3612,6 +3631,11 @@
           "name": "ui/triggerdata.txt",
           "bytes": 303224,
           "sha256": "c431e96bff9d5afc738eae858c07dea17f9754e3ac81d71122ee28f75ec69ebc"
+        },
+        {
+          "name": "ui/uniteditordata.txt",
+          "bytes": 13121,
+          "sha256": "7297c5a4462c1aa419c0a23b02aa9daf4a54b5394b8e6510da1d7b6cf5004061"
         },
         {
           "name": "ui/worldeditgamestrings.txt",
@@ -3756,7 +3780,8 @@
       "sections": [
         "objects",
         "triggers",
-        "script"
+        "script",
+        "enums"
       ],
       "sectionHashes": [
         {
@@ -3808,6 +3833,11 @@
           "name": "ui/triggerdata.txt",
           "bytes": 303224,
           "sha256": "c431e96bff9d5afc738eae858c07dea17f9754e3ac81d71122ee28f75ec69ebc"
+        },
+        {
+          "name": "ui/uniteditordata.txt",
+          "bytes": 13121,
+          "sha256": "7297c5a4462c1aa419c0a23b02aa9daf4a54b5394b8e6510da1d7b6cf5004061"
         },
         {
           "name": "ui/worldeditgamestrings.txt",
@@ -3955,7 +3985,8 @@
       "sections": [
         "objects",
         "triggers",
-        "script"
+        "script",
+        "enums"
       ],
       "sectionHashes": [
         {
@@ -4007,6 +4038,11 @@
           "name": "ui/triggerdata.txt",
           "bytes": 303224,
           "sha256": "c431e96bff9d5afc738eae858c07dea17f9754e3ac81d71122ee28f75ec69ebc"
+        },
+        {
+          "name": "ui/uniteditordata.txt",
+          "bytes": 13121,
+          "sha256": "7297c5a4462c1aa419c0a23b02aa9daf4a54b5394b8e6510da1d7b6cf5004061"
         },
         {
           "name": "ui/worldeditgamestrings.txt",
@@ -4062,7 +4098,8 @@
       "sections": [
         "objects",
         "triggers",
-        "script"
+        "script",
+        "enums"
       ],
       "sectionHashes": [
         {
@@ -4114,6 +4151,11 @@
           "name": "ui/triggerdata.txt",
           "bytes": 303224,
           "sha256": "c431e96bff9d5afc738eae858c07dea17f9754e3ac81d71122ee28f75ec69ebc"
+        },
+        {
+          "name": "ui/uniteditordata.txt",
+          "bytes": 13121,
+          "sha256": "7297c5a4462c1aa419c0a23b02aa9daf4a54b5394b8e6510da1d7b6cf5004061"
         },
         {
           "name": "ui/worldeditgamestrings.txt",
@@ -4261,7 +4303,8 @@
       "sections": [
         "objects",
         "triggers",
-        "script"
+        "script",
+        "enums"
       ],
       "sectionHashes": [
         {
@@ -4313,6 +4356,11 @@
           "name": "ui/triggerdata.txt",
           "bytes": 303224,
           "sha256": "c431e96bff9d5afc738eae858c07dea17f9754e3ac81d71122ee28f75ec69ebc"
+        },
+        {
+          "name": "ui/uniteditordata.txt",
+          "bytes": 13121,
+          "sha256": "7297c5a4462c1aa419c0a23b02aa9daf4a54b5394b8e6510da1d7b6cf5004061"
         },
         {
           "name": "ui/worldeditgamestrings.txt",
@@ -4414,7 +4462,8 @@
       "sections": [
         "objects",
         "triggers",
-        "script"
+        "script",
+        "enums"
       ],
       "sectionHashes": [
         {
@@ -4466,6 +4515,11 @@
           "name": "ui/triggerdata.txt",
           "bytes": 320391,
           "sha256": "1cef921c585b64489053637b35e8b33c67f35082af717686c542efd4f616148f"
+        },
+        {
+          "name": "ui/uniteditordata.txt",
+          "bytes": 13507,
+          "sha256": "36ee790970e1091927787b4178e022db1980112b1b156e7619f197428a596ce4"
         },
         {
           "name": "ui/worldeditgamestrings.txt",
@@ -4521,7 +4575,8 @@
       "sections": [
         "objects",
         "triggers",
-        "script"
+        "script",
+        "enums"
       ],
       "sectionHashes": [
         {
@@ -4573,6 +4628,11 @@
           "name": "ui/triggerdata.txt",
           "bytes": 320608,
           "sha256": "39695995518fbb55a3a7dd29599dbf07578778358bf6793301ea31023ef74561"
+        },
+        {
+          "name": "ui/uniteditordata.txt",
+          "bytes": 13507,
+          "sha256": "36ee790970e1091927787b4178e022db1980112b1b156e7619f197428a596ce4"
         },
         {
           "name": "ui/worldeditgamestrings.txt",
@@ -4812,7 +4872,8 @@
       "sections": [
         "objects",
         "triggers",
-        "script"
+        "script",
+        "enums"
       ],
       "sectionHashes": [
         {
@@ -4864,6 +4925,11 @@
           "name": "ui/triggerdata.txt",
           "bytes": 326963,
           "sha256": "86d7fa5933e61dcfe54d1c6c3b9e726d8b8175d980c48a643bad3b5365c83448"
+        },
+        {
+          "name": "ui/uniteditordata.txt",
+          "bytes": 13507,
+          "sha256": "36ee790970e1091927787b4178e022db1980112b1b156e7619f197428a596ce4"
         },
         {
           "name": "ui/worldeditgamestrings.txt",
@@ -5149,7 +5215,8 @@
       "sections": [
         "objects",
         "triggers",
-        "script"
+        "script",
+        "enums"
       ],
       "sectionHashes": [
         {
@@ -5203,14 +5270,19 @@
           "sha256": "86d7fa5933e61dcfe54d1c6c3b9e726d8b8175d980c48a643bad3b5365c83448"
         },
         {
+          "name": "ui/uniteditordata.txt",
+          "bytes": 13507,
+          "sha256": "36ee790970e1091927787b4178e022db1980112b1b156e7619f197428a596ce4"
+        },
+        {
           "name": "ui/worldeditgamestrings.txt",
           "bytes": 18249,
           "sha256": "d05cc0873d40f8e8b6a88f0754b38b17238e97145670c0b7d18a38df0d01030a"
         },
         {
           "name": "ui/worldeditstrings.txt",
-          "bytes": 382281,
-          "sha256": "5a52b1d82468c96879c847ee1079f0e5eba0803588050e35d6f943659536fba9"
+          "bytes": 382280,
+          "sha256": "a28e034754bfda72e261d0ff7f24f5c09c4652f31dd922778ce101d19deb46ab"
         },
         {
           "name": "units/abilitybuffmetadata.slk",
@@ -5302,7 +5374,8 @@
       "sections": [
         "objects",
         "triggers",
-        "script"
+        "script",
+        "enums"
       ],
       "sectionHashes": [
         {
@@ -5354,6 +5427,11 @@
           "name": "ui/triggerdata.txt",
           "bytes": 463354,
           "sha256": "c1261dc322e6ee716f26b6471fe5c17eb2e692df0c938faace0356ef0267e523"
+        },
+        {
+          "name": "ui/uniteditordata.txt",
+          "bytes": 13559,
+          "sha256": "9b672b8c4e5831b29f32840609a3db1fff68d0af0128544e311fe4417aa70f1b"
         },
         {
           "name": "ui/worldeditgamestrings.txt",
@@ -5547,7 +5625,8 @@
       "sections": [
         "objects",
         "triggers",
-        "script"
+        "script",
+        "enums"
       ],
       "sectionHashes": [
         {
@@ -5599,6 +5678,11 @@
           "name": "ui/triggerdata.txt",
           "bytes": 683086,
           "sha256": "da390d1b701ef29dccb68b6fd73593f73cfcb5ad05e9fea4dff1df723f4367ef"
+        },
+        {
+          "name": "ui/uniteditordata.txt",
+          "bytes": 13559,
+          "sha256": "9b672b8c4e5831b29f32840609a3db1fff68d0af0128544e311fe4417aa70f1b"
         },
         {
           "name": "ui/worldeditgamestrings.txt",
@@ -7080,7 +7164,8 @@
       "sections": [
         "objects",
         "triggers",
-        "script"
+        "script",
+        "enums"
       ],
       "sectionHashes": [
         {
@@ -7132,6 +7217,11 @@
           "name": "ui/triggerdata.txt",
           "bytes": 689500,
           "sha256": "859486f59b0f1cdfe6814f5b81232d422247920d8bf17f595f5177baef9ed570"
+        },
+        {
+          "name": "ui/uniteditordata.txt",
+          "bytes": 13601,
+          "sha256": "004b60cf32ffc4f28ab6760412409e31625d78e6cd9467fa28b7be7e0c8cbd3d"
         },
         {
           "name": "ui/worldeditgamestrings.txt",
@@ -7187,7 +7277,8 @@
       "sections": [
         "objects",
         "triggers",
-        "script"
+        "script",
+        "enums"
       ],
       "sectionHashes": [
         {
@@ -7239,6 +7330,11 @@
           "name": "ui/triggerdata.txt",
           "bytes": 689500,
           "sha256": "859486f59b0f1cdfe6814f5b81232d422247920d8bf17f595f5177baef9ed570"
+        },
+        {
+          "name": "ui/uniteditordata.txt",
+          "bytes": 13601,
+          "sha256": "004b60cf32ffc4f28ab6760412409e31625d78e6cd9467fa28b7be7e0c8cbd3d"
         },
         {
           "name": "ui/worldeditgamestrings.txt",
@@ -7294,7 +7390,8 @@
       "sections": [
         "objects",
         "triggers",
-        "script"
+        "script",
+        "enums"
       ],
       "sectionHashes": [
         {
@@ -7346,6 +7443,11 @@
           "name": "ui/triggerdata.txt",
           "bytes": 689500,
           "sha256": "859486f59b0f1cdfe6814f5b81232d422247920d8bf17f595f5177baef9ed570"
+        },
+        {
+          "name": "ui/uniteditordata.txt",
+          "bytes": 13601,
+          "sha256": "004b60cf32ffc4f28ab6760412409e31625d78e6cd9467fa28b7be7e0c8cbd3d"
         },
         {
           "name": "ui/worldeditgamestrings.txt",
@@ -7447,7 +7549,8 @@
       "sections": [
         "objects",
         "triggers",
-        "script"
+        "script",
+        "enums"
       ],
       "sectionHashes": [
         {
@@ -7499,6 +7602,11 @@
           "name": "ui/triggerdata.txt",
           "bytes": 689500,
           "sha256": "859486f59b0f1cdfe6814f5b81232d422247920d8bf17f595f5177baef9ed570"
+        },
+        {
+          "name": "ui/uniteditordata.txt",
+          "bytes": 13601,
+          "sha256": "004b60cf32ffc4f28ab6760412409e31625d78e6cd9467fa28b7be7e0c8cbd3d"
         },
         {
           "name": "ui/worldeditgamestrings.txt",
@@ -7600,7 +7708,8 @@
       "sections": [
         "objects",
         "triggers",
-        "script"
+        "script",
+        "enums"
       ],
       "sectionHashes": [
         {
@@ -7652,6 +7761,11 @@
           "name": "ui/triggerdata.txt",
           "bytes": 751141,
           "sha256": "74d6cb4e58d0a712a9cfc943e8c20c9dd1975472971f773017080ab4410c817b"
+        },
+        {
+          "name": "ui/uniteditordata.txt",
+          "bytes": 15528,
+          "sha256": "604d278747ed06358699c51884c46d56c3ba766cebb778d78b1dfef3e2a41297"
         },
         {
           "name": "ui/worldeditgamestrings.txt",
@@ -7753,7 +7867,8 @@
       "sections": [
         "objects",
         "triggers",
-        "script"
+        "script",
+        "enums"
       ],
       "sectionHashes": [
         {
@@ -7805,6 +7920,11 @@
           "name": "ui/triggerdata.txt",
           "bytes": 751141,
           "sha256": "74d6cb4e58d0a712a9cfc943e8c20c9dd1975472971f773017080ab4410c817b"
+        },
+        {
+          "name": "ui/uniteditordata.txt",
+          "bytes": 15528,
+          "sha256": "604d278747ed06358699c51884c46d56c3ba766cebb778d78b1dfef3e2a41297"
         },
         {
           "name": "ui/worldeditgamestrings.txt",
@@ -7860,7 +7980,8 @@
       "sections": [
         "objects",
         "triggers",
-        "script"
+        "script",
+        "enums"
       ],
       "sectionHashes": [
         {
@@ -7912,6 +8033,11 @@
           "name": "ui/triggerdata.txt",
           "bytes": 751141,
           "sha256": "74d6cb4e58d0a712a9cfc943e8c20c9dd1975472971f773017080ab4410c817b"
+        },
+        {
+          "name": "ui/uniteditordata.txt",
+          "bytes": 15528,
+          "sha256": "604d278747ed06358699c51884c46d56c3ba766cebb778d78b1dfef3e2a41297"
         },
         {
           "name": "ui/worldeditgamestrings.txt",
@@ -8013,7 +8139,8 @@
       "sections": [
         "objects",
         "triggers",
-        "script"
+        "script",
+        "enums"
       ],
       "sectionHashes": [
         {
@@ -8065,6 +8192,11 @@
           "name": "ui/triggerdata.txt",
           "bytes": 751141,
           "sha256": "74d6cb4e58d0a712a9cfc943e8c20c9dd1975472971f773017080ab4410c817b"
+        },
+        {
+          "name": "ui/uniteditordata.txt",
+          "bytes": 15528,
+          "sha256": "604d278747ed06358699c51884c46d56c3ba766cebb778d78b1dfef3e2a41297"
         },
         {
           "name": "ui/worldeditgamestrings.txt",
@@ -8120,7 +8252,8 @@
       "sections": [
         "objects",
         "triggers",
-        "script"
+        "script",
+        "enums"
       ],
       "sectionHashes": [
         {
@@ -8172,6 +8305,11 @@
           "name": "ui/triggerdata.txt",
           "bytes": 0,
           "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "ui/uniteditordata.txt",
+          "bytes": 15528,
+          "sha256": "604d278747ed06358699c51884c46d56c3ba766cebb778d78b1dfef3e2a41297"
         },
         {
           "name": "ui/worldeditgamestrings.txt",
@@ -8227,7 +8365,8 @@
       "sections": [
         "objects",
         "triggers",
-        "script"
+        "script",
+        "enums"
       ],
       "sectionHashes": [
         {
@@ -8279,6 +8418,11 @@
           "name": "ui/triggerdata.txt",
           "bytes": 751862,
           "sha256": "da2de5799e4978e841a86662eca1c1ea53c8f58bf378da8745c1f04ecafb7fdb"
+        },
+        {
+          "name": "ui/uniteditordata.txt",
+          "bytes": 15528,
+          "sha256": "604d278747ed06358699c51884c46d56c3ba766cebb778d78b1dfef3e2a41297"
         },
         {
           "name": "ui/worldeditgamestrings.txt",
@@ -8334,7 +8478,8 @@
       "sections": [
         "objects",
         "triggers",
-        "script"
+        "script",
+        "enums"
       ],
       "sectionHashes": [
         {
@@ -8386,6 +8531,11 @@
           "name": "ui/triggerdata.txt",
           "bytes": 751862,
           "sha256": "da2de5799e4978e841a86662eca1c1ea53c8f58bf378da8745c1f04ecafb7fdb"
+        },
+        {
+          "name": "ui/uniteditordata.txt",
+          "bytes": 15528,
+          "sha256": "604d278747ed06358699c51884c46d56c3ba766cebb778d78b1dfef3e2a41297"
         },
         {
           "name": "ui/worldeditgamestrings.txt",
@@ -8441,7 +8591,8 @@
       "sections": [
         "objects",
         "triggers",
-        "script"
+        "script",
+        "enums"
       ],
       "sectionHashes": [
         {
@@ -8493,6 +8644,11 @@
           "name": "ui/triggerdata.txt",
           "bytes": 0,
           "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "ui/uniteditordata.txt",
+          "bytes": 15528,
+          "sha256": "604d278747ed06358699c51884c46d56c3ba766cebb778d78b1dfef3e2a41297"
         },
         {
           "name": "ui/worldeditgamestrings.txt",
@@ -8548,7 +8704,8 @@
       "sections": [
         "objects",
         "triggers",
-        "script"
+        "script",
+        "enums"
       ],
       "sectionHashes": [
         {
@@ -8600,6 +8757,11 @@
           "name": "ui/triggerdata.txt",
           "bytes": 757979,
           "sha256": "7a1c30425ba321a27b6f5c8d08a98b2c2c79a4d8364dfde35148ef4956d21f08"
+        },
+        {
+          "name": "ui/uniteditordata.txt",
+          "bytes": 15528,
+          "sha256": "604d278747ed06358699c51884c46d56c3ba766cebb778d78b1dfef3e2a41297"
         },
         {
           "name": "ui/worldeditgamestrings.txt",
@@ -8655,7 +8817,8 @@
       "sections": [
         "objects",
         "triggers",
-        "script"
+        "script",
+        "enums"
       ],
       "sectionHashes": [
         {
@@ -8707,6 +8870,11 @@
           "name": "ui/triggerdata.txt",
           "bytes": 757979,
           "sha256": "7a1c30425ba321a27b6f5c8d08a98b2c2c79a4d8364dfde35148ef4956d21f08"
+        },
+        {
+          "name": "ui/uniteditordata.txt",
+          "bytes": 15528,
+          "sha256": "604d278747ed06358699c51884c46d56c3ba766cebb778d78b1dfef3e2a41297"
         },
         {
           "name": "ui/worldeditgamestrings.txt",
@@ -8762,7 +8930,8 @@
       "sections": [
         "objects",
         "triggers",
-        "script"
+        "script",
+        "enums"
       ],
       "sectionHashes": [
         {
@@ -8814,6 +8983,11 @@
           "name": "ui/triggerdata.txt",
           "bytes": 757979,
           "sha256": "7a1c30425ba321a27b6f5c8d08a98b2c2c79a4d8364dfde35148ef4956d21f08"
+        },
+        {
+          "name": "ui/uniteditordata.txt",
+          "bytes": 15528,
+          "sha256": "604d278747ed06358699c51884c46d56c3ba766cebb778d78b1dfef3e2a41297"
         },
         {
           "name": "ui/worldeditgamestrings.txt",
@@ -8869,7 +9043,8 @@
       "sections": [
         "objects",
         "triggers",
-        "script"
+        "script",
+        "enums"
       ],
       "sectionHashes": [
         {
@@ -8921,6 +9096,11 @@
           "name": "ui/triggerdata.txt",
           "bytes": 757979,
           "sha256": "7a1c30425ba321a27b6f5c8d08a98b2c2c79a4d8364dfde35148ef4956d21f08"
+        },
+        {
+          "name": "ui/uniteditordata.txt",
+          "bytes": 15528,
+          "sha256": "604d278747ed06358699c51884c46d56c3ba766cebb778d78b1dfef3e2a41297"
         },
         {
           "name": "ui/worldeditgamestrings.txt",
@@ -8976,7 +9156,8 @@
       "sections": [
         "objects",
         "triggers",
-        "script"
+        "script",
+        "enums"
       ],
       "sectionHashes": [
         {
@@ -9028,6 +9209,11 @@
           "name": "ui/triggerdata.txt",
           "bytes": 758141,
           "sha256": "0450c691461fad585c2a07c9d4665993e8e93f83ff3d8a26e812693d15ad84d9"
+        },
+        {
+          "name": "ui/uniteditordata.txt",
+          "bytes": 15528,
+          "sha256": "604d278747ed06358699c51884c46d56c3ba766cebb778d78b1dfef3e2a41297"
         },
         {
           "name": "ui/worldeditgamestrings.txt",

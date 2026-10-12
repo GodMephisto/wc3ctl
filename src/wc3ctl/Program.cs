@@ -5274,6 +5274,28 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
             }),
             gdBoundsCode, gdTarget, gdSchemas, jsonOption);
 
+        var gdEnumType = new Argument<string?>("type", () => null,
+            "The enumerated field type to inspect, the metadata SLK type column. Omit to list types.");
+        var gamedataEnum = new Command("enum",
+            "Report the closed set of legal values for an enumerated object field type, from the "
+            + "build's UnitEditorData.txt, in one build or all builds. Omit the type to list the "
+            + "enumerated types a build defines. This is the authority a picker should offer, not "
+            + "the values a stock object happens to use.")
+            { gdEnumType, gdTarget, gdSchemas, jsonOption };
+        gamedataEnum.SetHandler(
+            (string? type, string? target, string? schemas, bool json) => RunSafely(() =>
+            {
+                if (string.IsNullOrWhiteSpace(type))
+                {
+                    var types = GamedataEnumCommand.Types(target, schemas);
+                    Emit(json, types, () => Render.GamedataEnumTypes(types));
+                    return;
+                }
+                var r = GamedataEnumCommand.Execute(type, target, schemas);
+                Emit(json, r, () => Render.GamedataEnum(r));
+            }),
+            gdEnumType, gdTarget, gdSchemas, jsonOption);
+
         var gamedataCoverage = new Command("coverage",
             "List one row per schema folder with the build, its era, and which sections it holds "
             + "(objects, triggers, script), so a reader can tell a build carrying real object data "
@@ -5326,6 +5348,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         gamedata.AddCommand(gamedataChangelog);
         gamedata.AddCommand(gamedataFieldLookup);
         gamedata.AddCommand(gamedataBounds);
+        gamedata.AddCommand(gamedataEnum);
         gamedata.AddCommand(gamedataCoverage);
         gamedata.AddCommand(gamedataSources);
         gamedata.AddCommand(gamedataExportSchemas);

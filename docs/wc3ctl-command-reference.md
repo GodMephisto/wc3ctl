@@ -2,7 +2,7 @@
 
 Generated from the live command tree by `wc3ctl docs cli`. Do not edit by hand. Regenerate with `wc3ctl docs cli --force`, and the CI guard fails when this file is stale.
 
-The tree holds 63 top level verb(s) and 308 command path(s) in total.
+The tree holds 63 top level verb(s) and 309 command path(s) in total.
 
 ## Global options
 
@@ -4662,6 +4662,7 @@ Subcommands
 - `changelog`. Diff two builds' object fields and report fields added, removed, retyped, or whose minimum or maximum bound changed, grouped by metadata file.
 - `field-lookup`. Find object field codes whose display name contains the query, in one build or all builds.
 - `bounds`. Report a field code's type, minimum and maximum bounds, whether it can be empty, and the metadata file that defines it, in one build or all builds where it exists.
+- `enum`. Report the closed set of legal values for an enumerated object field type, from the build's UnitEditorData.txt, in one build or all builds. Omit the type to list the enumerated types a build defines. This is the authority a picker should offer, not the values a stock object happens to use.
 - `coverage`. List one row per schema folder with the build, its era, and which sections it holds (objects, triggers, script), so a reader can tell a build carrying real object data from one carrying only its script.
 - `sources`. Write sources.json, a machine readable provenance index of the dataset. For every schema folder it records the build, era, sections, the SHA-256 of each section file and the input hashes from its manifest.
 - `export-schemas`. Copy the schema dataset to a target directory, or pack it into one zip when the target ends in .zip, for attaching to a release.
@@ -4807,6 +4808,25 @@ wc3ctl gamedata bounds <code> [options]
 Arguments
 
 - `<code>` (required). The object field code to inspect.
+
+Options
+
+- `--target <target>`. Build name or schema folder path. Omit to search every build.
+- `--schemas <schemas>`. Path to schemas directory containing schema folders with manifest.json.
+
+### gamedata enum
+
+Report the closed set of legal values for an enumerated object field type, from the build's UnitEditorData.txt, in one build or all builds. Omit the type to list the enumerated types a build defines. This is the authority a picker should offer, not the values a stock object happens to use.
+
+Usage
+
+```
+wc3ctl gamedata enum [<type>] [options]
+```
+
+Arguments
+
+- `[<type>]` (optional). The enumerated field type to inspect, the metadata SLK type column. Omit to list types.
 
 Options
 

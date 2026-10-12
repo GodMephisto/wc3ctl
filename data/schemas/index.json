@@ -17,6 +17,7 @@
       "scripts/blizzard.j": 245,
       "scripts/common.ai": 46
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -50,6 +51,7 @@
       "scripts/blizzard.j": 247,
       "scripts/common.ai": 47
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -83,6 +85,7 @@
       "scripts/blizzard.j": 309,
       "scripts/common.ai": 51
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -116,6 +119,7 @@
       "scripts/blizzard.j": 309,
       "scripts/common.ai": 51
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -149,6 +153,7 @@
       "scripts/blizzard.j": 309,
       "scripts/common.ai": 51
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -182,6 +187,7 @@
       "scripts/blizzard.j": 309,
       "scripts/common.ai": 51
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -215,6 +221,7 @@
       "scripts/blizzard.j": 522,
       "scripts/common.ai": 55
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -248,6 +255,7 @@
       "scripts/blizzard.j": 522,
       "scripts/common.ai": 55
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -281,6 +289,7 @@
       "scripts/blizzard.j": 574,
       "scripts/common.ai": 55
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -314,6 +323,7 @@
       "scripts/blizzard.j": 574,
       "scripts/common.ai": 55
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -347,6 +357,7 @@
       "scripts/blizzard.j": 574,
       "scripts/common.ai": 55
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -380,6 +391,7 @@
       "scripts/blizzard.j": 574,
       "scripts/common.ai": 55
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -413,6 +425,7 @@
       "scripts/blizzard.j": 574,
       "scripts/common.ai": 55
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -446,6 +459,7 @@
       "scripts/blizzard.j": 611,
       "scripts/common.ai": 92
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -467,7 +481,8 @@
     "sections": [
       "objects",
       "triggers",
-      "script"
+      "script",
+      "enums"
     ],
     "objectFiles": 1,
     "fields": 117,
@@ -481,6 +496,7 @@
       "scripts/blizzard.j": 611,
       "scripts/common.ai": 92
     },
+    "enumTypes": 12,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -510,6 +526,7 @@
       "scripts/blizzard.j": 611,
       "scripts/common.ai": 92
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -543,6 +560,7 @@
       "scripts/blizzard.j": 611,
       "scripts/common.ai": 92
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -576,6 +594,7 @@
       "scripts/blizzard.j": 611,
       "scripts/common.ai": 92
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -609,6 +628,7 @@
       "scripts/blizzard.j": 611,
       "scripts/common.ai": 92
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -642,6 +662,7 @@
       "scripts/blizzard.j": 611,
       "scripts/common.ai": 92
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -675,6 +696,7 @@
       "scripts/blizzard.j": 611,
       "scripts/common.ai": 92
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -708,6 +730,7 @@
       "scripts/blizzard.j": 611,
       "scripts/common.ai": 92
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -741,6 +764,7 @@
       "scripts/blizzard.j": 611,
       "scripts/common.ai": 92
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -774,6 +798,7 @@
       "scripts/blizzard.j": 611,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -807,6 +832,7 @@
       "scripts/blizzard.j": 760,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -840,6 +866,7 @@
       "scripts/blizzard.j": 611,
       "scripts/common.ai": 92
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -873,6 +900,7 @@
       "scripts/blizzard.j": 611,
       "scripts/common.ai": 92
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -906,6 +934,7 @@
       "scripts/blizzard.j": 700,
       "scripts/common.ai": 99
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -939,6 +968,7 @@
       "scripts/blizzard.j": 700,
       "scripts/common.ai": 99
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -972,6 +1002,7 @@
       "scripts/blizzard.j": 709,
       "scripts/common.ai": 99
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -1005,6 +1036,7 @@
       "scripts/blizzard.j": 709,
       "scripts/common.ai": 99
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -1038,6 +1070,7 @@
       "scripts/blizzard.j": 715,
       "scripts/common.ai": 103
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -1071,6 +1104,7 @@
       "scripts/blizzard.j": 715,
       "scripts/common.ai": 103
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -1104,6 +1138,7 @@
       "scripts/blizzard.j": 739,
       "scripts/common.ai": 105
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -1137,6 +1172,7 @@
       "scripts/blizzard.j": 739,
       "scripts/common.ai": 105
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -1170,6 +1206,7 @@
       "scripts/blizzard.j": 751,
       "scripts/common.ai": 114
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -1203,6 +1240,7 @@
       "scripts/blizzard.j": 751,
       "scripts/common.ai": 114
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -1236,6 +1274,7 @@
       "scripts/blizzard.j": 751,
       "scripts/common.ai": 114
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -1269,6 +1308,7 @@
       "scripts/blizzard.j": 751,
       "scripts/common.ai": 114
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -1302,6 +1342,7 @@
       "scripts/blizzard.j": 751,
       "scripts/common.ai": 114
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -1335,6 +1376,7 @@
       "scripts/blizzard.j": 751,
       "scripts/common.ai": 114
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -1368,6 +1410,7 @@
       "scripts/blizzard.j": 751,
       "scripts/common.ai": 114
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -1401,6 +1444,7 @@
       "scripts/blizzard.j": 751,
       "scripts/common.ai": 114
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -1434,6 +1478,7 @@
       "scripts/blizzard.j": 751,
       "scripts/common.ai": 114
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -1467,6 +1512,7 @@
       "scripts/blizzard.j": 760,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -1488,7 +1534,8 @@
     "sections": [
       "objects",
       "triggers",
-      "script"
+      "script",
+      "enums"
     ],
     "objectFiles": 8,
     "fields": 1659,
@@ -1502,6 +1549,7 @@
       "scripts/blizzard.j": 760,
       "scripts/common.ai": 120
     },
+    "enumTypes": 31,
     "missing": [
       "units/abilitybuffmetadata.slk"
     ]
@@ -1524,6 +1572,7 @@
       "scripts/blizzard.j": 760,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -1557,6 +1606,7 @@
       "scripts/blizzard.j": 760,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -1590,6 +1640,7 @@
       "scripts/blizzard.j": 760,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -1623,6 +1674,7 @@
       "scripts/blizzard.j": 782,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -1656,6 +1708,7 @@
       "scripts/blizzard.j": 782,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -1689,6 +1742,7 @@
       "scripts/blizzard.j": 782,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -1722,6 +1776,7 @@
       "scripts/blizzard.j": 782,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -1755,6 +1810,7 @@
       "scripts/blizzard.j": 788,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -1788,6 +1844,7 @@
       "scripts/blizzard.j": 788,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -1821,6 +1878,7 @@
       "scripts/blizzard.j": 809,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -1854,6 +1912,7 @@
       "scripts/blizzard.j": 830,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -1887,6 +1946,7 @@
       "scripts/blizzard.j": 830,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -1920,6 +1980,7 @@
       "scripts/blizzard.j": 830,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -1953,6 +2014,7 @@
       "scripts/blizzard.j": 830,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -1986,6 +2048,7 @@
       "scripts/blizzard.j": 830,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -2019,6 +2082,7 @@
       "scripts/blizzard.j": 830,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -2052,6 +2116,7 @@
       "scripts/blizzard.j": 830,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -2085,6 +2150,7 @@
       "scripts/blizzard.j": 830,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -2118,6 +2184,7 @@
       "scripts/blizzard.j": 830,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -2151,6 +2218,7 @@
       "scripts/blizzard.j": 830,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -2172,7 +2240,8 @@
     "sections": [
       "objects",
       "triggers",
-      "script"
+      "script",
+      "enums"
     ],
     "objectFiles": 9,
     "fields": 2243,
@@ -2186,6 +2255,7 @@
       "scripts/blizzard.j": 830,
       "scripts/common.ai": 120
     },
+    "enumTypes": 36,
     "missing": []
   },
   {
@@ -2206,6 +2276,7 @@
       "scripts/blizzard.j": 830,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -2239,6 +2310,7 @@
       "scripts/blizzard.j": 830,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -2272,6 +2344,7 @@
       "scripts/blizzard.j": 923,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -2305,6 +2378,7 @@
       "scripts/blizzard.j": 923,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -2338,6 +2412,7 @@
       "scripts/blizzard.j": 923,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -2371,6 +2446,7 @@
       "scripts/blizzard.j": 923,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -2404,6 +2480,7 @@
       "scripts/blizzard.j": 923,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -2425,7 +2502,8 @@
     "sections": [
       "objects",
       "triggers",
-      "script"
+      "script",
+      "enums"
     ],
     "objectFiles": 8,
     "fields": 2243,
@@ -2439,6 +2517,7 @@
       "scripts/blizzard.j": 923,
       "scripts/common.ai": 120
     },
+    "enumTypes": 36,
     "missing": [
       "units/upgradeeffectmetadata.slk"
     ]
@@ -2461,6 +2540,7 @@
       "scripts/blizzard.j": 923,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -2494,6 +2574,7 @@
       "scripts/blizzard.j": 923,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -2515,7 +2596,8 @@
     "sections": [
       "objects",
       "triggers",
-      "script"
+      "script",
+      "enums"
     ],
     "objectFiles": 9,
     "fields": 2243,
@@ -2529,6 +2611,7 @@
       "scripts/blizzard.j": 923,
       "scripts/common.ai": 120
     },
+    "enumTypes": 36,
     "missing": []
   },
   {
@@ -2549,6 +2632,7 @@
       "scripts/blizzard.j": 923,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -2582,6 +2666,7 @@
       "scripts/blizzard.j": 923,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -2603,7 +2688,8 @@
     "sections": [
       "objects",
       "triggers",
-      "script"
+      "script",
+      "enums"
     ],
     "objectFiles": 9,
     "fields": 2243,
@@ -2617,6 +2703,7 @@
       "scripts/blizzard.j": 923,
       "scripts/common.ai": 120
     },
+    "enumTypes": 36,
     "missing": []
   },
   {
@@ -2625,7 +2712,8 @@
     "sections": [
       "objects",
       "triggers",
-      "script"
+      "script",
+      "enums"
     ],
     "objectFiles": 9,
     "fields": 2243,
@@ -2639,6 +2727,7 @@
       "scripts/blizzard.j": 923,
       "scripts/common.ai": 120
     },
+    "enumTypes": 36,
     "missing": []
   },
   {
@@ -2659,6 +2748,7 @@
       "scripts/blizzard.j": 923,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -2692,6 +2782,7 @@
       "scripts/blizzard.j": 923,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -2713,7 +2804,8 @@
     "sections": [
       "objects",
       "triggers",
-      "script"
+      "script",
+      "enums"
     ],
     "objectFiles": 9,
     "fields": 2243,
@@ -2727,6 +2819,7 @@
       "scripts/blizzard.j": 923,
       "scripts/common.ai": 120
     },
+    "enumTypes": 36,
     "missing": []
   },
   {
@@ -2747,6 +2840,7 @@
       "scripts/blizzard.j": 924,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -2768,7 +2862,8 @@
     "sections": [
       "objects",
       "triggers",
-      "script"
+      "script",
+      "enums"
     ],
     "objectFiles": 9,
     "fields": 2245,
@@ -2782,6 +2877,7 @@
       "scripts/blizzard.j": 924,
       "scripts/common.ai": 120
     },
+    "enumTypes": 36,
     "missing": []
   },
   {
@@ -2790,7 +2886,8 @@
     "sections": [
       "objects",
       "triggers",
-      "script"
+      "script",
+      "enums"
     ],
     "objectFiles": 9,
     "fields": 2245,
@@ -2804,6 +2901,7 @@
       "scripts/blizzard.j": 924,
       "scripts/common.ai": 120
     },
+    "enumTypes": 36,
     "missing": []
   },
   {
@@ -2824,6 +2922,7 @@
       "scripts/blizzard.j": 924,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -2857,6 +2956,7 @@
       "scripts/blizzard.j": 924,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -2890,6 +2990,7 @@
       "scripts/blizzard.j": 924,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -2923,6 +3024,7 @@
       "scripts/blizzard.j": 924,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -2940,11 +3042,12 @@
   },
   {
     "build": "1.30.1.10211",
-    "source": "folder 1.30.1.10211",
+    "source": "Hive Files_1.30.1.zip (CASC install, war3.mpq layer)",
     "sections": [
       "objects",
       "triggers",
-      "script"
+      "script",
+      "enums"
     ],
     "objectFiles": 9,
     "fields": 2248,
@@ -2958,6 +3061,7 @@
       "scripts/blizzard.j": 924,
       "scripts/common.ai": 120
     },
+    "enumTypes": 36,
     "missing": []
   },
   {
@@ -2978,6 +3082,7 @@
       "scripts/blizzard.j": 924,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -3011,6 +3116,7 @@
       "scripts/blizzard.j": 924,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -3044,6 +3150,7 @@
       "scripts/blizzard.j": 924,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -3077,6 +3184,7 @@
       "scripts/blizzard.j": 924,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -3110,6 +3218,7 @@
       "scripts/blizzard.j": 924,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -3127,11 +3236,12 @@
   },
   {
     "build": "1.30.4.11274",
-    "source": "folder 1_30_4",
+    "source": "Hive Files_1.30.4.zip (CASC install, war3.mpq layer)",
     "sections": [
       "objects",
       "triggers",
-      "script"
+      "script",
+      "enums"
     ],
     "objectFiles": 9,
     "fields": 2248,
@@ -3145,6 +3255,7 @@
       "scripts/blizzard.j": 924,
       "scripts/common.ai": 120
     },
+    "enumTypes": 36,
     "missing": []
   },
   {
@@ -3165,6 +3276,7 @@
       "scripts/blizzard.j": 959,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -3186,7 +3298,8 @@
     "sections": [
       "objects",
       "triggers",
-      "script"
+      "script",
+      "enums"
     ],
     "objectFiles": 9,
     "fields": 2263,
@@ -3200,6 +3313,7 @@
       "scripts/blizzard.j": 959,
       "scripts/common.ai": 120
     },
+    "enumTypes": 36,
     "missing": []
   },
   {
@@ -3220,6 +3334,7 @@
       "scripts/blizzard.j": 959,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -3253,6 +3368,7 @@
       "scripts/blizzard.j": 984,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -3286,6 +3402,7 @@
       "scripts/blizzard.j": 984,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -3303,11 +3420,12 @@
   },
   {
     "build": "1.32.0.14411",
-    "source": "folder 1.32.0.14411",
+    "source": "Blizzard CDN (ngdp) build 1.32.0.14411",
     "sections": [
       "objects",
       "triggers",
-      "script"
+      "script",
+      "enums"
     ],
     "objectFiles": 9,
     "fields": 2271,
@@ -3321,6 +3439,7 @@
       "scripts/blizzard.j": 984,
       "scripts/common.ai": 120
     },
+    "enumTypes": 36,
     "missing": []
   },
   {
@@ -3341,6 +3460,7 @@
       "scripts/blizzard.j": 984,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -3374,6 +3494,7 @@
       "scripts/blizzard.j": 985,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -3407,6 +3528,7 @@
       "scripts/blizzard.j": 985,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -3440,6 +3562,7 @@
       "scripts/blizzard.j": 985,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -3473,6 +3596,7 @@
       "scripts/blizzard.j": 985,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -3506,6 +3630,7 @@
       "scripts/blizzard.j": 985,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -3539,6 +3664,7 @@
       "scripts/blizzard.j": 985,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -3572,6 +3698,7 @@
       "scripts/blizzard.j": 985,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -3605,6 +3732,7 @@
       "scripts/blizzard.j": 985,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -3638,6 +3766,7 @@
       "scripts/blizzard.j": 985,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -3671,6 +3800,7 @@
       "scripts/blizzard.j": 985,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -3704,6 +3834,7 @@
       "scripts/blizzard.j": 985,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -3737,6 +3868,7 @@
       "scripts/blizzard.j": 985,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -3770,6 +3902,7 @@
       "scripts/blizzard.j": 985,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -3803,6 +3936,7 @@
       "scripts/blizzard.j": 985,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -3836,6 +3970,7 @@
       "scripts/blizzard.j": 985,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -3869,6 +4004,7 @@
       "scripts/blizzard.j": 985,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -3902,6 +4038,7 @@
       "scripts/blizzard.j": 985,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -3935,6 +4072,7 @@
       "scripts/blizzard.j": 985,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -3968,6 +4106,7 @@
       "scripts/blizzard.j": 985,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -4001,6 +4140,7 @@
       "scripts/blizzard.j": 985,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -4034,6 +4174,7 @@
       "scripts/blizzard.j": 985,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -4067,6 +4208,7 @@
       "scripts/blizzard.j": 985,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -4100,6 +4242,7 @@
       "scripts/blizzard.j": 985,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -4133,6 +4276,7 @@
       "scripts/blizzard.j": 985,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -4166,6 +4310,7 @@
       "scripts/blizzard.j": 985,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -4199,6 +4344,7 @@
       "scripts/blizzard.j": 985,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -4232,6 +4378,7 @@
       "scripts/blizzard.j": 985,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -4265,6 +4412,7 @@
       "scripts/blizzard.j": 985,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -4298,6 +4446,7 @@
       "scripts/blizzard.j": 985,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -4331,6 +4480,7 @@
       "scripts/blizzard.j": 985,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -4348,11 +4498,12 @@
   },
   {
     "build": "2.0.4.23452",
-    "source": "folder 2.0.4.23452",
+    "source": "Blizzard CDN (ngdp) build 2.0.4.23452",
     "sections": [
       "objects",
       "triggers",
-      "script"
+      "script",
+      "enums"
     ],
     "objectFiles": 9,
     "fields": 2286,
@@ -4366,15 +4517,17 @@
       "scripts/blizzard.j": 985,
       "scripts/common.ai": 120
     },
+    "enumTypes": 36,
     "missing": []
   },
   {
     "build": "2.0.4.23556",
-    "source": "folder 2.0.4.23556",
+    "source": "Blizzard CDN (ngdp) build 2.0.4.23556",
     "sections": [
       "objects",
       "triggers",
-      "script"
+      "script",
+      "enums"
     ],
     "objectFiles": 9,
     "fields": 2286,
@@ -4388,15 +4541,17 @@
       "scripts/blizzard.j": 985,
       "scripts/common.ai": 120
     },
+    "enumTypes": 36,
     "missing": []
   },
   {
     "build": "2.0.4.23727",
-    "source": "folder 2.0.4.23727",
+    "source": "Blizzard CDN (ngdp) build 2.0.4.23727",
     "sections": [
       "objects",
       "triggers",
-      "script"
+      "script",
+      "enums"
     ],
     "objectFiles": 9,
     "fields": 2286,
@@ -4410,6 +4565,7 @@
       "scripts/blizzard.j": 985,
       "scripts/common.ai": 120
     },
+    "enumTypes": 36,
     "missing": []
   },
   {
@@ -4430,6 +4586,7 @@
       "scripts/blizzard.j": 985,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -4447,11 +4604,12 @@
   },
   {
     "build": "2.0.4.23745",
-    "source": "folder 2.0.4.23745",
+    "source": "Blizzard CDN (ngdp) build 2.0.4.23745",
     "sections": [
       "objects",
       "triggers",
-      "script"
+      "script",
+      "enums"
     ],
     "objectFiles": 9,
     "fields": 2286,
@@ -4465,6 +4623,7 @@
       "scripts/blizzard.j": 985,
       "scripts/common.ai": 120
     },
+    "enumTypes": 36,
     "missing": []
   },
   {
@@ -4485,6 +4644,7 @@
       "scripts/blizzard.j": 985,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -4502,11 +4662,12 @@
   },
   {
     "build": "3.0.0.24268",
-    "source": "install",
+    "source": "Blizzard CDN (ngdp) build 3.0.0.24268",
     "sections": [
       "objects",
       "triggers",
-      "script"
+      "script",
+      "enums"
     ],
     "objectFiles": 9,
     "fields": 2513,
@@ -4520,6 +4681,7 @@
       "scripts/blizzard.j": 1056,
       "scripts/common.ai": 120
     },
+    "enumTypes": 43,
     "missing": []
   },
   {
@@ -4540,6 +4702,7 @@
       "scripts/blizzard.j": 1056,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -4557,11 +4720,12 @@
   },
   {
     "build": "3.0.0.24273",
-    "source": "folder 3.0.0.24273",
+    "source": "Blizzard CDN (ngdp) build 3.0.0.24273",
     "sections": [
       "objects",
       "triggers",
-      "script"
+      "script",
+      "enums"
     ],
     "objectFiles": 9,
     "fields": 2513,
@@ -4575,15 +4739,17 @@
       "scripts/blizzard.j": 1056,
       "scripts/common.ai": 120
     },
+    "enumTypes": 43,
     "missing": []
   },
   {
     "build": "3.0.0.24277",
-    "source": "folder 3.0.0.24277",
+    "source": "Blizzard CDN (ngdp) build 3.0.0.24277",
     "sections": [
       "objects",
       "triggers",
-      "script"
+      "script",
+      "enums"
     ],
     "objectFiles": 9,
     "fields": 2513,
@@ -4596,6 +4762,7 @@
       "scripts/blizzard.j": 1056,
       "scripts/common.ai": 120
     },
+    "enumTypes": 43,
     "missing": []
   },
   {
@@ -4616,6 +4783,7 @@
       "scripts/blizzard.j": 1056,
       "scripts/common.ai": 120
     },
+    "enumTypes": 0,
     "missing": [
       "doodads/doodadmetadata.slk",
       "ui/skinmetadata.slk",
@@ -4633,11 +4801,12 @@
   },
   {
     "build": "3.0.0.24281",
-    "source": "folder 3.0.0.24281",
+    "source": "Blizzard CDN (ngdp) build 3.0.0.24281",
     "sections": [
       "objects",
       "triggers",
-      "script"
+      "script",
+      "enums"
     ],
     "objectFiles": 9,
     "fields": 2513,
@@ -4650,15 +4819,17 @@
       "scripts/blizzard.j": 1056,
       "scripts/common.ai": 120
     },
+    "enumTypes": 43,
     "missing": []
   },
   {
     "build": "3.0.0.24288",
-    "source": "folder 3.0.0.24288",
+    "source": "Blizzard CDN (ngdp) build 3.0.0.24288",
     "sections": [
       "objects",
       "triggers",
-      "script"
+      "script",
+      "enums"
     ],
     "objectFiles": 9,
     "fields": 2513,
@@ -4669,15 +4840,17 @@
     "functions": {
       "scripts/common.ai": 120
     },
+    "enumTypes": 43,
     "missing": []
   },
   {
     "build": "3.0.0.24295",
-    "source": "folder 3.0.0.24295",
+    "source": "Blizzard CDN (ngdp) build 3.0.0.24295",
     "sections": [
       "objects",
       "triggers",
-      "script"
+      "script",
+      "enums"
     ],
     "objectFiles": 9,
     "fields": 2513,
@@ -4691,15 +4864,17 @@
       "scripts/blizzard.j": 1056,
       "scripts/common.ai": 120
     },
+    "enumTypes": 43,
     "missing": []
   },
   {
     "build": "3.0.0.24297",
-    "source": "folder 3.0.0.24297",
+    "source": "Blizzard CDN (ngdp) build 3.0.0.24297",
     "sections": [
       "objects",
       "triggers",
-      "script"
+      "script",
+      "enums"
     ],
     "objectFiles": 9,
     "fields": 2513,
@@ -4713,15 +4888,17 @@
       "scripts/blizzard.j": 1056,
       "scripts/common.ai": 120
     },
+    "enumTypes": 43,
     "missing": []
   },
   {
     "build": "3.0.0.24306",
-    "source": "folder 3.0.0.24306",
+    "source": "Blizzard CDN (ngdp) build 3.0.0.24306",
     "sections": [
       "objects",
       "triggers",
-      "script"
+      "script",
+      "enums"
     ],
     "objectFiles": 9,
     "fields": 2514,
@@ -4732,15 +4909,17 @@
     "functions": {
       "scripts/common.ai": 120
     },
+    "enumTypes": 43,
     "missing": []
   },
   {
     "build": "3.0.1.24309",
-    "source": "folder 3.0.1.24309",
+    "source": "Blizzard CDN (ngdp) build 3.0.1.24309",
     "sections": [
       "objects",
       "triggers",
-      "script"
+      "script",
+      "enums"
     ],
     "objectFiles": 9,
     "fields": 2516,
@@ -4754,15 +4933,17 @@
       "scripts/blizzard.j": 1062,
       "scripts/common.ai": 120
     },
+    "enumTypes": 43,
     "missing": []
   },
   {
     "build": "3.0.1.24318",
-    "source": "folder 3.0.1.24318",
+    "source": "Blizzard CDN (ngdp) build 3.0.1.24318",
     "sections": [
       "objects",
       "triggers",
-      "script"
+      "script",
+      "enums"
     ],
     "objectFiles": 9,
     "fields": 2516,
@@ -4776,15 +4957,17 @@
       "scripts/blizzard.j": 1062,
       "scripts/common.ai": 120
     },
+    "enumTypes": 43,
     "missing": []
   },
   {
     "build": "3.0.1.24323",
-    "source": "folder 3.0.1.24323",
+    "source": "Blizzard CDN (ngdp) build 3.0.1.24323",
     "sections": [
       "objects",
       "triggers",
-      "script"
+      "script",
+      "enums"
     ],
     "objectFiles": 9,
     "fields": 2516,
@@ -4798,15 +4981,17 @@
       "scripts/blizzard.j": 1062,
       "scripts/common.ai": 120
     },
+    "enumTypes": 43,
     "missing": []
   },
   {
     "build": "3.0.1.24332",
-    "source": "folder 3.0.1.24332",
+    "source": "Blizzard CDN (ngdp) build 3.0.1.24332",
     "sections": [
       "objects",
       "triggers",
-      "script"
+      "script",
+      "enums"
     ],
     "objectFiles": 9,
     "fields": 2516,
@@ -4820,15 +5005,17 @@
       "scripts/blizzard.j": 1062,
       "scripts/common.ai": 120
     },
+    "enumTypes": 43,
     "missing": []
   },
   {
     "build": "3.0.1.24342",
-    "source": "folder 3.0.1.24342",
+    "source": "Blizzard CDN (ngdp) build 3.0.1.24342",
     "sections": [
       "objects",
       "triggers",
-      "script"
+      "script",
+      "enums"
     ],
     "objectFiles": 9,
     "fields": 2518,
@@ -4842,6 +5029,7 @@
       "scripts/blizzard.j": 1062,
       "scripts/common.ai": 120
     },
+    "enumTypes": 43,
     "missing": []
   }
 ]
