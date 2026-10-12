@@ -31,6 +31,7 @@
          archives (here, a map with nameless entries for the Files panel). -->
     <Compile Include="..\Wc3.Tests\SyntheticMap.cs" Link="SyntheticMap.cs" />
     <Compile Include="..\Wc3.Tests\TestCorpus.cs" Link="TestCorpus.cs" />
+    <Compile Include="..\Wc3.Tests\GamedataFixtures.cs" Link="GamedataFixtures.cs" />
   </ItemGroup>
 
 </Project>

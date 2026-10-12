@@ -54,6 +54,9 @@
                     <Button Name="CheckButton" DockPanel.Dock="Right" Content="Check"
                             Margin="6,0,0,0" IsEnabled="False" Click="OnCheckClick"
                             ToolTip.Tip="Check whether the script in the editor would still compile"/>
+                    <Button Name="LeaksButton" DockPanel.Dock="Right" Content="Leaks"
+                            Margin="6,0,0,0" IsEnabled="False" Click="OnLeaksClick"
+                            ToolTip.Tip="Mark the lines that leak a handle, ranked by how often they run"/>
                     <TextBlock Name="StatusText" TextWrapping="Wrap"
                                VerticalAlignment="Center" Margin="0,0,8,0" Text=""/>
                 </DockPanel>

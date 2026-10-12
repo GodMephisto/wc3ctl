@@ -55,6 +55,15 @@ public partial class ScriptView : UserControl, IMapPanel
     /// the same surface do not read as the same thing.</summary>
     private static readonly Color ReferenceTint = Color.FromArgb(0x38, 0x30, 0x50, 0xA0);
 
+    // Leak line tints, one per heat, so a line that runs every tick is visibly hotter than one
+    // that runs at init. Three MarkLines calls layer them, with distinct brushes and no shared line.
+    private static readonly Color HotLeakTint = Color.FromArgb(0x55, 0xD0, 0x38, 0x38);
+    private static readonly Color RepeatLeakTint = Color.FromArgb(0x44, 0xD0, 0x90, 0x30);
+    private static readonly Color OnceLeakTint = Color.FromArgb(0x2A, 0x80, 0x90, 0xA0);
+    private static readonly IBrush HotLeakAccent = new SolidColorBrush(Color.FromRgb(0xF1, 0x70, 0x70));
+    private static readonly IBrush RepeatLeakAccent = new SolidColorBrush(Color.FromRgb(0xE0, 0xB0, 0x60));
+    private static readonly IBrush OnceLeakAccent = new SolidColorBrush(Color.FromRgb(0x9C, 0xC4, 0xE4));
+
     private MapSession? _session;
     private string? _scriptFile;                      // write-back target
     private int _unsavedEdits;                        // applied but not yet written to disk
@@ -104,6 +113,7 @@ public partial class ScriptView : UserControl, IMapPanel
         ApplyButton.IsEnabled = false;
         RevertButton.IsEnabled = false;
         CheckButton.IsEnabled = false;
+        LeaksButton.IsEnabled = false;
         SaveButton.IsEnabled = false;
 
         if (session.Current is not { } doc)
@@ -147,6 +157,7 @@ public partial class ScriptView : UserControl, IMapPanel
         HeaderText.Text = $"{Editor.LineCount:N0} lines in {file}, indexing…";
         ListCountText.Text = "…";
         CheckButton.IsEnabled = true;
+        LeaksButton.IsEnabled = true;
 
         // A generation counter, because the user can open another map while this runs. Without it
         // a slow index would land on top of the map that replaced it.
@@ -365,6 +376,69 @@ public partial class ScriptView : UserControl, IMapPanel
     }
 
     private void OnCheckClick(object? sender, RoutedEventArgs e) => RunCheck(announceClean: true);
+
+    /// <summary>
+    /// Marks the lines that leak a handle, ranked by how often they run, from
+    /// <see cref="ScriptLeaksCommand"/>. The findings reuse the problems strip (each row jumps to
+    /// its line) and the editor's line tint (hot red, repeat amber, once grey), so a leak that
+    /// runs every tick reads differently from one that runs at init.
+    /// </summary>
+    private void OnLeaksClick(object? sender, RoutedEventArgs e)
+    {
+        ScriptLeaksResult result;
+        try
+        {
+            // Analyze the editor's text, not the map's stored script, so an unapplied edit is
+            // scanned exactly as written.
+            result = ScriptLeaksCommand.Analyze(Editor.Text);
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"The leak scan failed: {ex.Message}";
+            return;
+        }
+
+        if (!result.Ok)
+        {
+            Editor.ClearProblems();
+            StatusText.Text = result.Message;
+            return;
+        }
+
+        if (result.Leaks.Count == 0)
+        {
+            Editor.ClearProblems();
+            StatusText.Text = "No handle leaks found.";
+            return;
+        }
+
+        var rows = result.Leaks
+            .Select(l => new JassEditorView.Problem
+            {
+                Badge = l.Heat,
+                Where = $"line {l.Line:N0}",
+                Message = $"{l.Rule}  {l.Handle} in {l.Function}. {l.Why}",
+                Accent = LeakAccent(l.Heat),
+                Jump = new JumpCommand(() => Editor.GoToLine(l.Line)),
+            })
+            .ToList();
+
+        Editor.ShowProblems(rows);
+        // Layered coldest first, so a later heat never repaints over a hotter line's colour.
+        Editor.MarkLines(result.Leaks.Where(l => l.Heat == "once").Select(l => l.Line), OnceLeakTint);
+        Editor.MarkLines(result.Leaks.Where(l => l.Heat == "repeat").Select(l => l.Line), RepeatLeakTint);
+        Editor.MarkLines(result.Leaks.Where(l => l.Heat == "hot").Select(l => l.Line), HotLeakTint);
+
+        int hot = result.Leaks.Count(l => l.Heat == "hot");
+        StatusText.Text = $"{result.Leaks.Count} leak(s), {hot} in hot code. {result.Message}";
+    }
+
+    private static IBrush LeakAccent(string heat) => heat switch
+    {
+        "hot" => HotLeakAccent,
+        "repeat" => RepeatLeakAccent,
+        _ => OnceLeakAccent,
+    };
 
     /// <summary>
     /// Runs the compile check over the editor's text and lists what it finds.

@@ -31,6 +31,12 @@
                 <controls:SearchableComboBox Name="KindCombo" MinWidth="150"/>
                 <Button Name="NewObjectButton" Content="New…" Click="OnNewObjectClick"
                         ToolTip.Tip="Create a new custom object of this kind based on the selected one"/>
+                <!-- Target build. Which build's schema the form's bounds are shown against.
+                     Selecting a build reloads the form for it; a build with no object data
+                     says so instead of showing the installed build's fields. -->
+                <TextBlock Text="Target" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                <controls:SearchableComboBox Name="TargetCombo" MinWidth="190"
+                        ToolTip.Tip="Show the object form's field bounds against this build's schema"/>
                 <TextBlock Name="ListCountText" VerticalAlignment="Center"
                            Foreground="#8FA3B8" Text=""/>
             </StackPanel>
@@ -133,6 +139,12 @@
                             <TextBlock Name="FieldOriginalText" FontSize="11"
                                        Foreground="#E8C56A" TextWrapping="Wrap"
                                        IsVisible="False"/>
+                            <!-- Type, min, max and whether blank is allowed, for the field under
+                                 edit, from the target build's schema. -->
+                            <TextBlock Name="FieldBoundsText" FontSize="11"
+                                       FontFamily="Cascadia Mono,Consolas,monospace"
+                                       Foreground="#8FA3B8" TextWrapping="Wrap"
+                                       IsVisible="False" Text=""/>
                             <DockPanel>
                                 <Button Name="ApplyButton" DockPanel.Dock="Right"
                                         Content="Apply" Margin="6,0,0,0" VerticalAlignment="Top"
