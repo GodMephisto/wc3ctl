@@ -4602,6 +4602,36 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
             }),
             gdSchemas, jsonOption);
 
+        var gdSourcesOut = new Option<string>(new[] { "-o", "--out" },
+            "Path to write sources.json into.") { IsRequired = true };
+        var gamedataSources = new Command("sources",
+            "Write sources.json, a machine readable provenance index of the dataset. For every "
+            + "schema folder it records the build, era, sections, the SHA-256 of each section file "
+            + "and the input hashes from its manifest.")
+            { gdSchemas, gdSourcesOut, jsonOption };
+        gamedataSources.SetHandler(
+            (string? schemas, string outFile, bool json) => RunSafely(() =>
+            {
+                var r = GamedataSourcesCommand.Execute(outFile, schemas);
+                Emit(json, r, () => Render.GamedataSources(r, Path.GetFullPath(outFile)));
+            }),
+            gdSchemas, gdSourcesOut, jsonOption);
+
+        var gdExportOut = new Option<string>(new[] { "-o", "--out" },
+            "Target directory for the dataset, or a path ending in .zip to pack it into one archive.")
+            { IsRequired = true };
+        var gamedataExportSchemas = new Command("export-schemas",
+            "Copy the schema dataset to a target directory, or pack it into one zip when the target "
+            + "ends in .zip, for attaching to a release.")
+            { gdSchemas, gdExportOut, jsonOption };
+        gamedataExportSchemas.SetHandler(
+            (string? schemas, string outPath, bool json) => RunSafely(() =>
+            {
+                var r = GamedataExportSchemasCommand.Execute(outPath, schemas);
+                Emit(json, r, () => Render.GamedataExportSchemas(r));
+            }),
+            gdSchemas, gdExportOut, jsonOption);
+
         var gamedata = new Command("gamedata", "Base game data, for tracking what a patch changes.");
         gamedata.AddCommand(gamedataSnapshot);
         gamedata.AddCommand(gamedataSchema);
@@ -4612,6 +4642,8 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         gamedata.AddCommand(gamedataFieldLookup);
         gamedata.AddCommand(gamedataBounds);
         gamedata.AddCommand(gamedataCoverage);
+        gamedata.AddCommand(gamedataSources);
+        gamedata.AddCommand(gamedataExportSchemas);
 
         // ---- leak investigation, the static ranked list joined to a wc3watch runtime session ----
         var leak = new Command("leak",

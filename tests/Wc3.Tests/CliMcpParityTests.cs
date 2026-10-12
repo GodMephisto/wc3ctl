@@ -151,6 +151,8 @@ public class CliMcpParityTests
         ["force_list"] = "force list",
         ["force_set_flags"] = "force set-flags",
         ["gamedata_schema_diff"] = "gamedata schema-diff",
+        ["gamedata_sources"] = "gamedata sources",
+        ["gamedata_export_schemas"] = "gamedata export-schemas",
         ["gamedata_history"] = "gamedata history",
         ["gamedata_changelog"] = "gamedata changelog",
         ["gamedata_field_lookup"] = "gamedata field-lookup",

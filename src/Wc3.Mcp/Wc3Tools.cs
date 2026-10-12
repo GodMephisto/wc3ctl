@@ -2351,7 +2351,18 @@ public static class Wc3Tools
         [Description("Fail when any metric regressed by more than this percent. Default 10.")] double max_regression_pct = 10)
         => Run(() => BenchPerfGateCommand.Execute(baseline, run, max_regression_pct));
 
+    [McpServerTool(Name = "gamedata_sources", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Return the dataset's provenance index. For every schema folder it reports the build, its era, the sections present, the SHA-256 of each section file, and the input hashes from the folder's manifest, so the whole dataset can be traced back to the game files it was derived from.")]
+    public static GamedataSourcesResult GameDataSources(
+        [Description("Optional path to schemas directory containing schema folders with manifest.json.")] string? schemas_dir = null)
+        => Run(() => GamedataSourcesCommand.Build(schemas_dir));
 
+    [McpServerTool(Name = "gamedata_export_schemas", ReadOnly = false, Idempotent = true, OpenWorld = false)]
+    [Description("Export the schema dataset. Copies every schema folder into a target directory, or packs the whole dataset into a single zip when out_path ends in .zip, for attaching to a release. Writes only under out_path. Returns the build folder names, file count and byte total.")]
+    public static GamedataExportResult GameDataExportSchemas(
+        [Description("Target directory for the dataset, or a path ending in .zip to pack it into one archive.")] string out_path,
+        [Description("Optional path to schemas directory containing schema folders with manifest.json.")] string? schemas_dir = null)
+        => Run(() => GamedataExportSchemasCommand.Execute(out_path, schemas_dir));
     /// <summary>
     /// A tool's game_dir argument, else WC3_GAME_DIR, else null (auto-detect). A value still holding
     /// an unfilled placeholder such as ${user_config.game_dir}, which an MCPB host may pass through

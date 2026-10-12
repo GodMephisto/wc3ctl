@@ -2087,4 +2087,24 @@ public static class Render
             sb.AppendLine($"  new in run {name}");
         return sb.ToString().TrimEnd('\r', '\n');
     }
+
+    public static string GamedataSources(GamedataSourcesResult r, string outPath)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.Sources.Count} schema build(s)");
+        foreach (var s in r.Sources)
+            sb.AppendLine($"  {s.Build,-24} {s.Era,-9} {string.Join(", ", s.Sections),-28}"
+                + $" sectionFile(s) {s.SectionHashes.Count}  input(s) {s.Inputs.Count}");
+        sb.AppendLine();
+        sb.Append($"wrote {outPath}");
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
+    public static string GamedataExportSchemas(GamedataExportResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.Builds.Count} schema build(s), {r.Files} file(s), {r.Bytes} byte(s)");
+        sb.AppendLine($"  {(r.Zipped ? "zip" : "dir")} {r.Target}");
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
 }
