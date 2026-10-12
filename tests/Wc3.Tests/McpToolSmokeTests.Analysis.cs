@@ -194,4 +194,32 @@ public sealed class McpSmokeAnalysisTests : McpSmokeBase
         Assert.Equal(signature, inline![..4]);
         Assert.Equal(File.ReadAllBytes(png), inline);
     }
+
+    [Fact, Covers("gamedata_schema_diff")]
+    public async Task Gamedata_schema_diff_returns_zero_changes_for_identical_schema_folders()
+    {
+        var schemaA = NewOut("schema-a");
+        var schemaB = NewOut("schema-b");
+        Directory.CreateDirectory(schemaA);
+        Directory.CreateDirectory(schemaB);
+        // Both folders get the same minimal manifest so the tool has something to load.
+        File.WriteAllText(Path.Combine(schemaA, "manifest.json"), @"{""schemaVersion"":1,""build"":""3.0.0.24268"",""source"":""test""}");
+        File.WriteAllText(Path.Combine(schemaB, "manifest.json"), @"{""schemaVersion"":1,""build"":""3.0.0.24268"",""source"":""test""}");
+        var r = await Call("gamedata_schema_diff", Args(("a", schemaA), ("b", schemaB)));
+        Assert.Equal(0, Prop(r, "changes").GetArrayLength());
+    }
+
+    [Fact, Covers("gamedata_schema_diff")]
+    public async Task Gamedata_schema_diff_filters_by_section()
+    {
+        var schemaA = NewOut("schema-section");
+        var schemaB = NewOut("schema-section");
+        Directory.CreateDirectory(schemaA);
+        Directory.CreateDirectory(schemaB);
+        File.WriteAllText(Path.Combine(schemaA, "manifest.json"), @"{""schemaVersion"":1,""build"":""3.0.0.24268"",""source"":""test""}");
+        File.WriteAllText(Path.Combine(schemaB, "manifest.json"), @"{""schemaVersion"":1,""build"":""3.0.0.24269"",""source"":""test""}");
+        // With a section filter, objects changes should be excluded when both have no objects.
+        var r = await Call("gamedata_schema_diff", Args(("a", schemaA), ("b", schemaB), ("section", "objects")));
+        Assert.Equal(0, Prop(r, "changes").GetArrayLength());
+    }
 }

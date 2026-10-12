@@ -20,20 +20,22 @@ public class McpServerTests
         "audit_readiness", "bundle_unit", "camera_add", "camera_list", "camera_remove",
         "camera_set", "deprotect_map", "diff", "doctor_check", "doctor_compare", "doctor_fix",
         "doctor_inspect", "editor_catalog_get", "editor_catalog_list",
-        "file_get_text", "file_list", "file_set", "force_list", "force_set_flags", "hero_install",
-        "hero_lint", "hero_roster", "imports_list", "lint", "list_files", "map_info",
+        "file_get_text", "file_list", "file_set", "force_list", "force_set_flags",
+        "gamedata_schema_diff", "hero_install", "hero_lint", "hero_roster", "imports_list",
+        "lint", "list_files", "map_compat", "map_info",
         "map_info_get", "map_info_set", "new_map", "object_field_options", "object_form",
         "object_get", "object_list", "object_new", "object_set", "palette_doodad", "pathing_paint",
         "place_doodad", "place_item", "place_region", "place_start_location", "place_unit",
         "placed_doodad_get", "placed_doodad_remove", "placed_doodad_set", "placed_doodads_list",
         "placed_unit_get", "placed_unit_remove", "placed_unit_set", "placed_units_list",
         "player_list", "player_set_force", "port_unit", "region_list", "region_remove",
-        "render_model", "repair_generated", "replay_summary", "roundtrip", "script_check", "script_decompile",
-        "script_format", "script_functions",
-        "script_leaks", "script_references", "script_to_lua", "search", "sound_add", "sound_list", "sound_remove",
-        "sound_set", "strings_list", "terrain_blight", "terrain_cliff", "terrain_corner_get",
-        "terrain_corner_set", "terrain_deform", "terrain_fill", "terrain_info", "terrain_paint",
-        "terrain_ramp", "terrain_stats", "terrain_water", "trigger_add", "trigger_add_category",
+        "render_model", "repair_generated", "replay_summary", "roundtrip", "script_check",
+        "script_decompile", "script_format", "script_functions", "script_leaks",
+        "script_references", "script_to_lua", "search", "sound_add", "sound_list",
+        "sound_remove", "sound_set", "strings_list", "target_get", "target_list", "target_set",
+        "terrain_blight", "terrain_cliff", "terrain_corner_get", "terrain_corner_set",
+        "terrain_deform", "terrain_fill", "terrain_info", "terrain_paint", "terrain_ramp",
+        "terrain_stats", "terrain_water", "trigger_add", "trigger_add_category",
         "trigger_add_eca", "trigger_catalog_describe", "trigger_catalog_list",
         "trigger_recover_from_script", "trigger_remove", "trigger_remove_eca", "trigger_rename",
         "trigger_set_eca_enabled", "trigger_set_enabled", "trigger_set_initially_on",
@@ -52,6 +54,20 @@ public class McpServerTests
             Assert.Equal(ServerIdentity.Version, client.ServerInfo.Version);
             var tools = await client.ListToolsAsync(cancellationToken: ct);
             Assert.Equal(ExpectedTools, tools.Select(t => t.Name).OrderBy(n => n, StringComparer.Ordinal).ToArray());
+        });
+    }
+
+    [Fact]
+    public async Task Initialize_carries_the_server_instructions_with_the_target_line()
+    {
+        // The initialize reply must carry BuildInstructions (the "target ..." line), which only
+        // reaches a client when Program copies ServerInstructions onto the host options. Before
+        // that copy the field was empty.
+        await WithClient(async (client, ct) =>
+        {
+            Assert.False(string.IsNullOrWhiteSpace(client.ServerInstructions));
+            Assert.Contains("target", client.ServerInstructions);
+            await Task.CompletedTask;
         });
     }
 

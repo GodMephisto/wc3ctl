@@ -2,6 +2,7 @@
 // Read-only analysis (validate, lint, diff, search, script and string listings, the audits) and
 // the hero definition tools. Each read is checked against content put there through MCP first,
 // so an empty answer cannot pass for a correct one.
+using System.Text;
 using System.Text.Json;
 using Wc3.Commands;
 using Wc3.Model;
@@ -30,6 +31,87 @@ public sealed class McpSmokeInspectTests : McpSmokeBase
             $"script-compiles was {severity}: {Prop(compiles, "summary").GetString()}");
 
         Assert.True(Prop(await Call("roundtrip", Args(("map", Fixture))), "faithful").GetBoolean());
+    }
+
+    [Fact, Covers("map_compat")]
+    public async Task Map_compat_reports_missing_targets_and_checks_counts()
+    {
+        // Create a temp schema that declares MapCompatTestNative, plus copy the real target.
+        // MapCompatTestNative is not in data/schemas, so it will be a finding when targeting
+        // any build that does not declare it.
+        var tempSchemas = Path.Combine(Path.GetTempPath(), "wc3ctl-mcp-compat-test");
+        Directory.CreateDirectory(tempSchemas);
+        try
+        {
+            var jass = new JassApi(
+                Array.Empty<JassTypeDecl>(),
+                new[]
+                {
+                    new JassNativeDecl("MapCompatTestNative", Array.Empty<JassParameter>(), "boolean", false),
+                },
+                Array.Empty<JassGlobalDecl>(),
+                Array.Empty<JassFunctionDecl>());
+
+            var schema = new GameSchema(1, "MyCompatBuild", "MyCompatBuild",
+                Array.Empty<SchemaInput>(), new[] { "script" },
+                null, (SchemaTriggers?)null,
+                new Dictionary<string, JassApi>(StringComparer.Ordinal)
+                {
+                    ["scripts/common.j"] = jass,
+                });
+
+            var schemaDir = Path.Combine(tempSchemas, "MyCompatBuild");
+            Directory.CreateDirectory(schemaDir);
+            GameSchemaCommand.Save(schema, schemaDir);
+
+            // Also add a target schema that does NOT declare MapCompatTestNative.
+            var targetJass = new JassApi(
+                Array.Empty<JassTypeDecl>(),
+                Array.Empty<JassNativeDecl>(),
+                Array.Empty<JassGlobalDecl>(),
+                Array.Empty<JassFunctionDecl>());
+
+            var targetSchema = new GameSchema(1, "TFT-v1.30.1.10211", "TFT-v1.30.1.10211",
+                Array.Empty<SchemaInput>(), new[] { "script" },
+                null, (SchemaTriggers?)null,
+                new Dictionary<string, JassApi>(StringComparer.Ordinal)
+                {
+                    ["scripts/common.j"] = targetJass,
+                });
+
+            var targetSchemaDir = Path.Combine(tempSchemas, "TFT-v1.30.1.10211");
+            Directory.CreateDirectory(targetSchemaDir);
+            GameSchemaCommand.Save(targetSchema, targetSchemaDir);
+
+            // Write a script that calls MapCompatTestNative.
+            var scriptText = "function InitTriggers takes nothing returns nothing\n"
+                + "    call MapCompatTestNative()\n"
+                + "endfunction\n";
+            var mapPath = Fixture + ".test.w3x";
+            var bytes = SyntheticMap.Build(new Dictionary<string, byte[]>
+            {
+                ["war3map.j"] = Encoding.UTF8.GetBytes(scriptText),
+            });
+            await File.WriteAllBytesAsync(mapPath, bytes);
+            try
+            {
+                var compat = await Call("map_compat", Args(("map", mapPath), ("target", "TFT-v1.30.1.10211"), ("schemas_dir", tempSchemas)));
+                var findings = compat.EnumerateObject().Single(p => p.Name == "findings").Value.EnumerateArray().ToList();
+                Assert.Single(findings);
+                var el = findings[0];
+                Assert.Equal("error", Prop(el, "severity").GetString());
+                Assert.Equal("MapCompatTestNative", Prop(el, "name").GetString());
+                Assert.True(Prop(compat, "identifiersChecked").GetInt32() > 0);
+            }
+            finally
+            {
+                if (File.Exists(mapPath)) File.Delete(mapPath);
+            }
+        }
+        finally
+        {
+            if (Directory.Exists(tempSchemas)) Directory.Delete(tempSchemas, true);
+        }
     }
 
     [Fact, Covers("diff")]
@@ -171,5 +253,53 @@ public sealed class McpSmokeInspectTests : McpSmokeBase
         var tilesets = Rows(Prop(await Call("editor_catalog_get", Args(("name", "TileSets"))), "entries"));
         Assert.Contains(tilesets, t => Prop(t, "displayName").GetString() == "Ashenvale");
         await CallError("editor_catalog_get", Args(("name", "NoSuchCatalog")));
+    }
+
+    [Fact, Trait("Category", "GameData"), Covers("target_get", "target_set", "target_list")]
+    public async Task Target_tools_view_and_set_the_current_target()
+    {
+        // Determine schemas directory: env override > test output > default location.
+        string? schemasDir = Environment.GetEnvironmentVariable("WC3_SCHEMAS_DIR");
+        if (string.IsNullOrWhiteSpace(schemasDir))
+        {
+            var schemasPath = Path.Combine(AppContext.BaseDirectory, "data", "schemas");
+            if (Directory.Exists(schemasPath))
+                schemasDir = schemasPath;
+        }
+
+        // If no schemas, this test cannot validate the feature.
+        if (schemasDir is null)
+        {
+            throw new Xunit.Sdk.XunitException("no schemas directory available");
+        }
+
+        var args = new Dictionary<string, object?> { ["schemas_dir"] = schemasDir };
+
+        // target_get returns the build and source.
+        var get = await Call("target_get", args);
+        var build = Prop(get, "build").GetString();
+        Assert.False(string.IsNullOrEmpty(build));
+        var source = Prop(get, "source").GetString();
+        Assert.True(source == "default" || source == "settings" || source == "environment",
+            "source was " + source);
+
+        // target_list returns an array of builds.
+        var list = await Call("target_list", args);
+        var builds = list.EnumerateArray().ToList();
+        Assert.True(builds.Any());
+
+        // target_set with an invalid build fails.
+        var badSet = await Call("target_set", Args(("build", "NoSuchBuild12345"), ("schemas_dir", schemasDir)));
+        Assert.False(Prop(badSet, "ok").GetBoolean());
+
+        // target_set with a valid build succeeds.
+        // Use the first build from target_list.
+        string firstBuild = builds.First().GetProperty("build").GetString()!;
+        var goodSet = await Call("target_set", Args(("build", firstBuild), ("schemas_dir", schemasDir)));
+        Assert.True(Prop(goodSet, "ok").GetBoolean());
+
+        // Verify target_get now shows settings as source.
+        var get2 = await Call("target_get", args);
+        Assert.Equal("settings", Prop(get2, "source").GetString());
     }
 }

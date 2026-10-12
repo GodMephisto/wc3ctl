@@ -103,6 +103,8 @@ public class CliMcpParityTests
         ["player_set_force"] = "player set-force",
         ["force_list"] = "force list",
         ["force_set_flags"] = "force set-flags",
+        ["gamedata_schema_diff"] = "gamedata schema-diff",
+        ["map_compat"] = "compat",
         ["region_list"] = "region list",
         ["region_remove"] = "region remove",
         ["new_map"] = "new",
@@ -121,11 +123,16 @@ public class CliMcpParityTests
         ["editor_catalog_list"] = "editor catalog list",
         ["editor_catalog_get"] = "editor catalog get",
         ["trigger_catalog_describe"] = "trigger catalog describe",
+        ["target_get"] = "target",
+        ["target_set"] = "target set",
+        ["target_list"] = "target list",
     };
 
     // CLI commands that intentionally have no MCP tool (local dev / query utilities).
     private static readonly HashSet<string> CliOnly = new(StringComparer.Ordinal)
     {
+        "gamedata schema",
+        "gamedata schema-index",
         "roundtrip", "search", "diff", "render", "bundle object",
         "script functions", "extract", "convert", "validate",
         "repair generated-heroes", "repair reforged-3",
@@ -156,6 +163,7 @@ public class CliMcpParityTests
         // surface is reached, not map operations, so there is nothing for a tool to mirror.
         "mcp serve", "mcp install", "mcp uninstall", "mcp config", "mcp clients", "mcp doctor",
         "mcp version", "mcp help",
+        "target clear",
         // Writes an image to a path on this machine, so the output is a local file rather
         // than an answer. Same reason as extract.
         "render",

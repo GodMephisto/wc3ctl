@@ -1115,4 +1115,92 @@ public static class Render
             : $"LINT FAILED - {r.Errors} error(s), {r.Warnings} warning(s)");
         return sb.ToString();
     }
+
+    public static string GameSchemaWrite(SchemaWriteResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"build {r.Build}  from {r.Source}");
+        sb.AppendLine($"  {r.Sections.Count} section(s), {string.Join(", ", r.Sections)}");
+        sb.AppendLine($"  {r.ObjectFiles} object file(s), {r.Fields} field(s), "
+                      + $"{r.TriggerFunctions} trigger function(s), "
+                      + $"{r.ScriptFiles} script file(s), {r.Natives} native(s)");
+        if (r.Missing.Count > 0)
+            sb.AppendLine($"  {string.Join(", ", r.Missing)} missing");
+        sb.AppendLine($"  {r.OutDir}");
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
+    public static string GameSchemaDiff(SchemaDiffResult r, string? section = null, int? limit = null)
+    {
+        var sb = new StringBuilder();
+        var filtered = section is null ? r.Changes : r.Changes.Where(c => c.Section == section);
+        var filteredNotCompared = section is null ? r.NotCompared
+            : r.NotCompared.Where(n => n.Split(' ')[0] == section);
+
+        sb.AppendLine($"{r.BuildA} against {r.BuildB}, {filtered.Count()} change(s)");
+        if (filtered.Count() > 0)
+        {
+            var printed = 0;
+            foreach (var c in filtered)
+            {
+                sb.AppendLine($"  [{c.Section}] {c.Group}  {c.Name} {c.Change}"
+                    + (c.Detail is not null ? $"  ({c.Detail})" : ""));
+                if (limit is not null)
+                {
+                    printed++;
+                    if (printed >= limit)
+                    {
+                        var hidden = filtered.Count() - printed;
+                        if (hidden > 0)
+                            sb.AppendLine($"  ... {hidden} more change(s) hidden by --limit");
+                        break;
+                    }
+                }
+            }
+        }
+        if (filteredNotCompared.Count() > 0)
+        {
+            sb.AppendLine();
+            foreach (var nc in filteredNotCompared)
+                sb.AppendLine($"  [not compared] {nc}");
+        }
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
+    public static string GameSchemaIndex(IReadOnlyList<SchemaIndexEntry> entries, string indexPath)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{entries.Count} schema build(s) from {indexPath}");
+        if (entries.Count == 0) return sb.ToString().TrimEnd('\r', '\n');
+        sb.AppendLine($"  index: {indexPath}");
+        foreach (var e in entries)
+        {
+            sb.Append($"  {e.Build}  from {e.Source}  ");
+            sb.Append($"[{string.Join(", ", e.Sections)}]  ");
+            var natives = e.Natives.Count == 0 ? "(none)" : string.Join("; ", e.Natives.Select(kv => $"{kv.Key}:{kv.Value}"));
+            var functions = e.Functions.Count == 0 ? "(none)" : string.Join("; ", e.Functions.Select(kv => $"{kv.Key}:{kv.Value}"));
+            sb.Append($"objects={e.ObjectFiles}  fields={e.Fields}  triggers={e.TriggerFunctions}  natives={natives}  functions={functions}");
+            if (e.Missing.Count > 0) sb.Append($"  missing={string.Join(", ", e.Missing)}");
+            sb.AppendLine();
+        }
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
+    /// <summary>Render a TargetCompatCommand result, shared by lint --target and the compat command.</summary>
+    public static string CompatResult(CompatResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"compat  {r.TargetBuild}  {r.Map}");
+        int errors = 0, warnings = 0;
+        foreach (var f in r.Findings)
+        {
+            if (f.Severity == "error") errors++; else warnings++;
+            sb.AppendLine($"  {f.Severity} [{f.Kind}] {f.Name}  {f.Where}  {f.Detail}");
+        }
+        sb.AppendLine();
+        sb.Append($"results  {errors} error(s), {warnings} warning(s)");
+        sb.Append($"  identifiers checked  {r.IdentifiersChecked}  fields checked  {r.FieldsChecked}");
+        if (r.NotChecked.Count > 0) sb.Append($"  not checked  {string.Join(", ", r.NotChecked)}");
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
 }

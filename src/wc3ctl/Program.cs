@@ -7,9 +7,51 @@ namespace Wc3Ctl;
 
 public static class Program
 {
+    /// <summary>Convert TargetSource enum to plain English for display.</summary>
+    private static string TargetSourceLabel(TargetSource src) => src switch
+    {
+        TargetSource.Option => "option",
+        TargetSource.Environment => "environment variable",
+        TargetSource.Settings => "settings",
+        TargetSource.Default => "default",
+        _ => "unknown",
+    };
+
+    /// <summary>Game install build version, or "not found".</summary>
+    private static string GameInstallLine(string? schemasDir)
+    {
+        try
+        {
+            string? installDir = Wc3.GameData.GameInstall.Locate();
+            if (installDir is not null)
+            {
+                string? ib = Wc3.GameData.GameInstall.ReadBuildVersion(installDir);
+                if (ib is not null) return ib;
+            }
+        }
+        catch { /* no game install */ }
+        return "not found";
+    }
+
     public static async Task<int> Main(string[] args)
     {
         if (McpCommand.TryRun(args) is { } mcp) return await mcp;
+
+        // Handle --version before any command processing.
+        // System.CommandLine auto-adds a --version handler, but we override it here.
+        if (Array.IndexOf(args, "--version") >= 0)
+        {
+            var asm = typeof(Program).Assembly;
+            var v = asm.GetName().Version;
+            Console.WriteLine(v?.ToString(3) ?? "0.0.0");
+            try
+            {
+                var settings = TargetBuildSettings.Get();
+                Console.WriteLine("target  " + settings.Build + "  (" + TargetSourceLabel(settings.Source) + "), game install " + GameInstallLine(null));
+            }
+            catch { /* schemas unavailable */ }
+            return 0;
+        }
 
         var root = BuildRoot(out var exitCode);
         int parseResult = await root.InvokeAsync(args);
@@ -2960,11 +3002,15 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         var lintAgainst = new Option<string?>("--against",
             "Original map to compare against, enabling the checks that need a before/after: no file "
             + "lost, and none of the target's own assets overwritten by a port.");
+        var lintTarget = new Option<string?>("--target",
+            "Target build name or schema folder path to check compatibility against.");
+        var lintSchemas = new Option<string?>("--schemas",
+            "Path to schemas directory containing schema folders with manifest.json.");
         var lint = new Command("lint",
             "Run pre-flight checks on a map: does the script compile, is war3map.imp consistent, do "
             + "referenced assets resolve, are all file types loadable, and (with --against) did a "
             + "rebuild lose or clobber anything.")
-        { mapArg, lintAgainst, jsonOption };
+        { mapArg, lintAgainst, lintTarget, lintSchemas, jsonOption };
         lint.SetHandler(ctx => RunSafely(() =>
         {
             var p = ctx.ParseResult;
@@ -2972,7 +3018,44 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
             var against = p.GetValueForOption(lintAgainst) is { } a ? MapDocument.Load(a) : null;
             var r = LintCommand.Run(doc, against);
             if (!r.Ok) exitCode[0] = 1;
+            string target = p.GetValueForOption(lintTarget);
+            string? schemas = p.GetValueForOption(lintSchemas);
             Emit(p.GetValueForOption(jsonOption), r, () => Render.Lint(r));
+            // Run compat check if --target was given or resolved from settings.
+            string? actualTarget = p.GetValueForOption(lintTarget);
+
+            if (actualTarget is not null)
+            {
+                try
+                {
+                    var compat = TargetCompatCommand.Execute(p.GetValueForArgument(mapArg), actualTarget, schemas);
+                    Emit(p.GetValueForOption(jsonOption), compat, () => Render.CompatResult(compat));
+                    int hasErrors = compat.Findings.Any(f => f.Severity == "error") ? 1 : 0;
+                    if (hasErrors != 0) exitCode[0] = hasErrors;
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine("error: " + ex.Message);
+                    exitCode[0] = 1;
+                }
+            }
+            else
+            {
+                // Resolve default from settings.
+                var settings = TargetBuildSettings.Get(option: null, schemasDir: schemas);
+                Console.WriteLine("target  " + settings.Build + "  (" + TargetSourceLabel(settings.Source) + "), game install " + GameInstallLine(schemas));
+
+                try
+                {
+                    var compat = TargetCompatCommand.Execute(
+                        p.GetValueForArgument(mapArg), settings.Build, schemas);
+                    Emit(p.GetValueForOption(jsonOption), compat, () => Render.CompatResult(compat));
+                    int hasErrors = compat.Findings.Any(f => f.Severity == "error") ? 1 : 0;
+                    if (hasErrors != 0) exitCode[0] = hasErrors;
+                }
+                catch (DirectoryNotFoundException) { /* no schemas, skip compat */ }
+                catch (FileNotFoundException) { /* bad build name, skip compat */ }
+            }
         }));
         // Unattended load test. Closes the feedback loop that previously required a human to
         // launch a 250 MB map and describe what they saw, which is where this toolchain's
@@ -3257,8 +3340,72 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
             }),
             snapOut, snapLocales, snapNoStrings, gameDirOption, jsonOption);
 
+        var schemaFrom = new Option<string?>("--from",
+            "Build a schema from a folder of loose files instead of a game install.");
+        var schemaBuild = new Option<string?>("--build",
+            "Override the build version string. Default: read from the install.");
+        var gamedataSchema = new Command("schema",
+            "Build and save a per-build schema (object fields, trigger functions, script APIs) "
+            + "from a game install or a folder of loose files. The schema describes what the "
+            + "editor for a specific build shows and what the compiler accepts.")
+            { snapOut, schemaFrom, schemaBuild, gameDirOption };
+        gamedataSchema.SetHandler(
+            (string outDir, string? from, string? build, string? gameDir, bool json) => RunSafely(() =>
+            {
+                var r = GameSchemaCommand.Execute(outDir, from, build, gameDir);
+                Emit(json, r, () => Render.GameSchemaWrite(r));
+            }),
+            snapOut, schemaFrom, schemaBuild, gameDirOption, jsonOption);
+
+        var schemaDiffSection = new Option<string?>("--section",
+            "Show changes for one section only: objects, triggers, or script. Omit for all.");
+        var schemaDiffLimit = new Option<int>("--limit", () => 0,
+            "Maximum lines of human output to print. Zero means no limit.");
+        var schemaDiffA = new Argument<string>("a", "Path to the first schema folder.");
+        var schemaDiffB = new Argument<string>("b", "Path to the second schema folder.");
+        var gamedataSchemaDiff = new Command("schema-diff",
+            "Compare two schema folders and report added, removed and changed fields, trigger "
+            + "functions, script types and natives. Groups output by section then by file or "
+            + "category. Exits 0 when no changes, 1 when there are changes.")
+            { schemaDiffA, schemaDiffB, schemaDiffSection, schemaDiffLimit, jsonOption };
+        gamedataSchemaDiff.SetHandler(
+            (string a, string b, string? section, int limit, bool json) => RunSafely(() =>
+            {
+                var r = GameSchemaCommand.Diff(a, b);
+                var filtered = GameSchemaCommand.Filter(r, section);
+                int? sectionLimit = limit > 0 ? limit : null;
+                if (json)
+                {
+                    Emit(json, filtered, () => Render.GameSchemaDiff(filtered, section, sectionLimit));
+                }
+                else
+                {
+                    Console.WriteLine(Render.GameSchemaDiff(filtered, section, sectionLimit));
+                }
+                exitCode[0] = filtered.Changes.Count > 0 ? 1 : 0;
+            }),
+            schemaDiffA, schemaDiffB, schemaDiffSection, schemaDiffLimit, jsonOption);
+
+        var schemasDirArg = new Argument<string>("schemas-dir", "Path to the schemas directory.");
+        var gamedataSchemaIndex = new Command("schema-index",
+            "Read all schema folders in a directory, build an index of entries, and write "
+            + "index.json. Prints the entry count and the path.")
+            { schemasDirArg };
+        gamedataSchemaIndex.SetHandler(
+            (string schemasDir) => RunSafely(() =>
+            {
+                var indexPath = GameSchemaCommand.WriteIndex(schemasDir);
+                var entries = GameSchemaCommand.BuildIndex(schemasDir);
+                var jsonResult = new { Count = entries.Count, Path = indexPath, Entries = entries };
+                Emit(true, jsonResult, () => Render.GameSchemaIndex(entries, indexPath));
+            }),
+            schemasDirArg);
+
         var gamedata = new Command("gamedata", "Base game data, for tracking what a patch changes.");
         gamedata.AddCommand(gamedataSnapshot);
+        gamedata.AddCommand(gamedataSchema);
+        gamedata.AddCommand(gamedataSchemaDiff);
+        gamedata.AddCommand(gamedataSchemaIndex);
 
         root.AddCommand(file);
         root.AddCommand(info); root.AddCommand(ls); root.AddCommand(rt);
@@ -3281,8 +3428,131 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         root.AddCommand(repairHeroes); root.AddCommand(repair);
         root.AddCommand(trigger);
         root.AddCommand(editor); root.AddCommand(gamedata);
+        // Standalone compat: check a map against a target build.
+        var compatMapArg = new Argument<string>("map", "Path to a .w3x/.w3m map.");
+        var compatTarget = new Option<string?>("--target",
+            () => null, "Target build name or schema folder path. Omit to use the configured default.");
+        var compatSchemas = new Option<string?>("--schemas",
+            "Path to schemas directory containing schema folders with manifest.json.");
+        var compat = new Command("compat",
+            "Check a map against a target game build (a schema folder or build name). "
+            + "Reports compile-time incompatibilities (missing natives, globals, types, functions) "
+            + "and display-time incompatibilities (modified object fields the target build no longer defines). "
+            + "Exits 2 if any error findings. Omit --target to use the configured default.");
+        compat.AddArgument(compatMapArg);
+        compat.AddOption(compatTarget);
+        compat.AddOption(compatSchemas);
+        compat.AddOption(jsonOption);
+        compat.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(compatMapArg);
+            string? targetArg = p.GetValueForOption(compatTarget);
+            string? schemas = p.GetValueForOption(compatSchemas);
+            bool json = p.GetValueForOption(jsonOption);
+
+            // Resolve target: option > default from settings.
+            string actualTarget;
+            TargetSource source;
+            if (targetArg is not null)
+            {
+                actualTarget = targetArg;
+                source = TargetSource.Option;
+            }
+            else
+            {
+                var settings = TargetBuildSettings.Get(option: null, schemasDir: schemas);
+                actualTarget = settings.Build;
+                source = settings.Source;
+            }
+
+            if (!json)
+            {
+                Console.WriteLine("target  " + actualTarget + "  (" + TargetSourceLabel(source) + "), game install " + GameInstallLine(schemas));
+            }
+
+            var result = TargetCompatCommand.Execute(map, actualTarget, schemas);
+            Emit(json, result, () => Render.CompatResult(result));
+            if (result.Findings.Any(f => f.Severity == "error")) exitCode[0] = 2;
+        }));
+
+        root.AddCommand(compat);
         root.AddCommand(McpCommand.Build());
 
+        // ---- target: set and view the current target build ----
+        var targetBuildArg = new Argument<string>("build",
+            "Target build name or schema folder path.");
+        var targetListFull = new Option<bool>("--full-only",
+            "Skip scripts-only builds.");
+        var targetSchemas = new Option<string?>("--schemas",
+            "Path to schemas directory containing schema folders with manifest.json.");
+        // The root target command shows the current target (no args needed).
+        var target = new Command("target",
+            "View or set the target game build used by compat and lint when --target is omitted.");
+        target.AddOption(targetSchemas);
+        target.SetHandler(ctx => RunSafely(() =>
+        {
+            var schemas = ctx.ParseResult.GetValueForOption(targetSchemas);
+            var result = TargetBuildSettings.Get(schemasDir: schemas);
+            Console.WriteLine("target  " + result.Build + "  (" + TargetSourceLabel(result.Source) + "), game install " + GameInstallLine(schemas));
+        }));
+        // target set -> set the target.
+        var targetSet = new Command("set", "Set the target build.");
+        targetSet.AddArgument(targetBuildArg);
+        targetSet.AddOption(targetSchemas);
+        targetSet.SetHandler(ctx => RunSafely(() =>
+        {
+            var schemas = ctx.ParseResult.GetValueForOption(targetSchemas);
+            string build = ctx.ParseResult.GetValueForArgument(targetBuildArg);
+            try
+            {
+                TargetBuildSettings.Set(build, schemasDir: schemas);
+                Console.WriteLine("set target " + build);
+            }
+            catch (FileNotFoundException ex)
+            {
+                Console.Error.WriteLine("error: " + ex.Message);
+                exitCode[0] = 1;
+            }
+        }));
+        target.AddCommand(targetSet);
+        // target list -> list builds.
+        var targetList = new Command("list", "List all available builds.");
+        targetList.AddOption(targetSchemas);
+        targetList.AddOption(targetListFull);
+        targetList.SetHandler(ctx =>
+        {
+            try
+            {
+                var schemas = ctx.ParseResult.GetValueForOption(targetSchemas);
+                var builds = TargetBuildSettings.List(
+                    schemasDir: schemas, fullOnly: ctx.ParseResult.GetValueForOption(targetListFull));
+                foreach (var b in builds)
+                {
+                    Console.Write(b.Build);
+                    if (b.Sections.Count > 0)
+                    {
+                        Console.Write("  sections " + string.Join(", ", b.Sections));
+                    }
+                    Console.WriteLine();
+                }
+            }
+            catch (DirectoryNotFoundException)
+            {
+                Console.Error.WriteLine("error: could not find schemas directory");
+                exitCode[0] = 1;
+            }
+        });
+        target.AddCommand(targetList);
+        // target clear -> clear the setting.
+        var targetClear = new Command("clear", "Clear the target setting.");
+        targetClear.SetHandler(() =>
+        {
+            TargetBuildSettings.Clear();
+            Console.WriteLine("cleared target setting");
+        });
+        target.AddCommand(targetClear);
+        root.AddCommand(target);
         return root;
     }
 }
