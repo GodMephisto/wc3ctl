@@ -4828,115 +4828,98 @@ Options
 
 - `--max-regression-pct <max-regression-pct>`. Fail when any metric regressed by more than this percent. Default `10`.
 
-## ci
+## library
 
-CI gates. Each runs a check on a map or the schema dataset, prints what it checked, and exits non-zero when it fails. Read-only.
+Sweep a folder of maps instead of one map, the way a maintainer checks a whole library. Every subcommand is read-only and opens one map at a time.
 
 Usage
 
 ```
-wc3ctl ci
+wc3ctl library
 ```
 
 Subcommands
 
-- `lint`. Run the lint as a gate. Fails on an error-level finding, or, with --baseline, only on a finding the baseline does not already hold. With --target it also runs the compat check and fails on an error-level finding.
-- `validate`. Run the validation as a gate. Exits non-zero when the map cannot load or reports an error-level issue. With --strict the extra strict checks are included.
-- `compat`. Run the compat check as a gate. Exits non-zero on an error-level finding.
-- `schema`. Check the schema dataset for regressions. Fails when any build stops parsing or fewer than --min-real builds carry real object data.
-- `all`. Run lint, validate and, when --target is given, compat in one pass. Prints a summary line per gate and the overall pass or fail with the exit code.
+- `scan`. Open every map in a folder and report per map its size, the build it targets if known, whether it loads, its entry count and its diagnostic count. Read-only.
+- `audit`. Run the behavioural audit over every map in a folder and report the findings per map and the totals per check, so a whole library is ranked by how much it needs fixing. Read-only.
+- `validate`. Run the load validation over every map in a folder and list the ones that fail, with the reason. Read-only.
+- `compare`. Compare two folders by map file name and content hash, listing the maps only in the first, only in the second, and changed between them. Read-only.
+- `report`. Write one Markdown report over a folder, a summary line, a per-map table and the aggregated findings, an artifact a maintainer can attach to a review.
 
-### ci lint
+### library scan
 
-Run the lint as a gate. Fails on an error-level finding, or, with --baseline, only on a finding the baseline does not already hold. With --target it also runs the compat check and fails on an error-level finding.
+Open every map in a folder and report per map its size, the build it targets if known, whether it loads, its entry count and its diagnostic count. Read-only.
 
 Usage
 
 ```
-wc3ctl ci lint <map> [options]
+wc3ctl library scan <folder>
 ```
 
 Arguments
 
-- `<map>` (required). Path to a .w3x/.w3m map.
+- `<folder>` (required). Folder of .w3x/.w3m maps, searched recursively.
 
-Options
+### library audit
 
-- `--baseline <baseline>`. Baseline file written by 'lint baseline'. When given, the gate fails only on a finding the baseline does not already hold.
-- `--target <target>`. Target build name or schema folder path. When given, a compat check runs and fails on an error-level finding.
-- `--schemas <schemas>`. Path to schemas directory containing schema folders with manifest.json.
-- `--against <against>`. Optional path to the ORIGINAL map this one was built from, so the lint also reports what a rebuild lost or clobbered.
-
-### ci validate
-
-Run the validation as a gate. Exits non-zero when the map cannot load or reports an error-level issue. With --strict the extra strict checks are included.
+Run the behavioural audit over every map in a folder and report the findings per map and the totals per check, so a whole library is ranked by how much it needs fixing. Read-only.
 
 Usage
 
 ```
-wc3ctl ci validate <map> [options]
+wc3ctl library audit <folder>
 ```
 
 Arguments
 
-- `<map>` (required). Path to a .w3x/.w3m map.
+- `<folder>` (required). Folder of .w3x/.w3m maps, searched recursively.
 
-Options
+### library validate
 
-- `--strict`. Run the stricter validation, whose extra checks are too strict to be a default.
-
-### ci compat
-
-Run the compat check as a gate. Exits non-zero on an error-level finding.
+Run the load validation over every map in a folder and list the ones that fail, with the reason. Read-only.
 
 Usage
 
 ```
-wc3ctl ci compat <map> [options]
+wc3ctl library validate <folder>
 ```
 
 Arguments
 
-- `<map>` (required). Path to a .w3x/.w3m map.
+- `<folder>` (required). Folder of .w3x/.w3m maps, searched recursively.
 
-Options
+### library compare
 
-- `--target <target>` (required). Target build name or schema folder path.
-- `--schemas <schemas>`. Path to schemas directory containing schema folders with manifest.json.
-
-### ci schema
-
-Check the schema dataset for regressions. Fails when any build stops parsing or fewer than --min-real builds carry real object data.
+Compare two folders by map file name and content hash, listing the maps only in the first, only in the second, and changed between them. Read-only.
 
 Usage
 
 ```
-wc3ctl ci schema [options]
-```
-
-Options
-
-- `--schemas <schemas>`. Path to schemas directory containing schema folders with manifest.json.
-- `--min-real <min-real>`. Fail when fewer than this many builds carry real object data. Default `0`.
-
-### ci all
-
-Run lint, validate and, when --target is given, compat in one pass. Prints a summary line per gate and the overall pass or fail with the exit code.
-
-Usage
-
-```
-wc3ctl ci all <map> [options]
+wc3ctl library compare <folderA> <folderB>
 ```
 
 Arguments
 
-- `<map>` (required). Path to a .w3x/.w3m map.
+- `<folderA>` (required). The first folder of maps.
+- `<folderB>` (required). The second folder of maps.
+
+### library report
+
+Write one Markdown report over a folder, a summary line, a per-map table and the aggregated findings, an artifact a maintainer can attach to a review.
+
+Usage
+
+```
+wc3ctl library report <folder> [options]
+```
+
+Arguments
+
+- `<folder>` (required). Folder of .w3x/.w3m maps, searched recursively.
 
 Options
 
-- `--target <target>`. Target build name or schema folder path. When given, a compat check runs and fails on an error-level finding.
-- `--schemas <schemas>`. Path to schemas directory containing schema folders with manifest.json.
+- `-o, --out <out>` (required). Path to write the Markdown report to.
 
 ## mcp
 

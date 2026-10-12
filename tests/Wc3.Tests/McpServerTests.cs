@@ -32,6 +32,7 @@ public class McpServerTests
         "gamedata_field_lookup", "gamedata_history", "gamedata_schema_diff", "gamedata_sources",
         "hero_install", "hero_lint", "hero_roster",
         "imports_list", "leak_ab", "leak_benchmark", "leak_harness", "leak_join", "leak_list",
+        "library_audit", "library_compare", "library_report", "library_scan", "library_validate",
         "lint", "lint_baseline", "list_files", "map_compat", "map_info",
         "map_info_get", "map_info_set", "map_overview",
         "mcp_audit_annotations",

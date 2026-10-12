@@ -5763,7 +5763,109 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         ci.AddCommand(ciAll);
 
         root.AddCommand(ci);
-        root.AddCommand(McpCommand.Build(jsonOption));
+
+        // ---- library: sweep a folder of maps the way a maintainer checks a whole set ----
+        var library = new Command("library",
+            "Sweep a folder of maps instead of one map, the way a maintainer checks a whole library. "
+            + "Every subcommand is read-only and opens one map at a time.");
+
+        // library scan <folder>
+        var libraryScanFolder = new Argument<string>("folder",
+            "Folder of .w3x/.w3m maps, searched recursively.");
+        var libraryScan = new Command("scan",
+            "Open every map in a folder and report per map its size, the build it targets if known, "
+            + "whether it loads, its entry count and its diagnostic count. Read-only.")
+            { libraryScanFolder };
+        libraryScan.SetHandler(ctx =>
+        {
+            var p = ctx.ParseResult;
+            RunSafely(() =>
+            {
+                var r = LibraryScanCommand.Execute(p.GetValueForArgument(libraryScanFolder));
+                Emit(p.GetValueForOption(jsonOption), r, () => Render.LibraryScan(r));
+            });
+        });
+        library.AddCommand(libraryScan);
+
+        // library audit <folder>
+        var libraryAuditFolder = new Argument<string>("folder",
+            "Folder of .w3x/.w3m maps, searched recursively.");
+        var libraryAudit = new Command("audit",
+            "Run the behavioural audit over every map in a folder and report the findings per map and "
+            + "the totals per check, so a whole library is ranked by how much it needs fixing. Read-only.")
+            { libraryAuditFolder };
+        libraryAudit.SetHandler(ctx =>
+        {
+            var p = ctx.ParseResult;
+            RunSafely(() =>
+            {
+                var r = LibraryAuditCommand.Execute(
+                    p.GetValueForArgument(libraryAuditFolder), p.GetValueForOption(gameDirOption));
+                Emit(p.GetValueForOption(jsonOption), r, () => Render.LibraryAudit(r));
+            });
+        });
+        library.AddCommand(libraryAudit);
+
+        // library validate <folder>
+        var libraryValidateFolder = new Argument<string>("folder",
+            "Folder of .w3x/.w3m maps, searched recursively.");
+        var libraryValidate = new Command("validate",
+            "Run the load validation over every map in a folder and list the ones that fail, with the "
+            + "reason. Read-only.") { libraryValidateFolder };
+        libraryValidate.SetHandler(ctx =>
+        {
+            var p = ctx.ParseResult;
+            RunSafely(() =>
+            {
+                var r = LibraryValidateCommand.Execute(p.GetValueForArgument(libraryValidateFolder));
+                Emit(p.GetValueForOption(jsonOption), r, () => Render.LibraryValidate(r));
+            });
+        });
+        library.AddCommand(libraryValidate);
+
+        // library compare <folderA> <folderB>
+        var libraryCompareA = new Argument<string>("folderA", "The first folder of maps.");
+        var libraryCompareB = new Argument<string>("folderB", "The second folder of maps.");
+        var libraryCompare = new Command("compare",
+            "Compare two folders by map file name and content hash, listing the maps only in the first, "
+            + "only in the second, and changed between them. Read-only.")
+            { libraryCompareA, libraryCompareB };
+        libraryCompare.SetHandler(ctx =>
+        {
+            var p = ctx.ParseResult;
+            RunSafely(() =>
+            {
+                var r = LibraryCompareCommand.Execute(
+                    p.GetValueForArgument(libraryCompareA), p.GetValueForArgument(libraryCompareB));
+                Emit(p.GetValueForOption(jsonOption), r, () => Render.LibraryCompare(r));
+            });
+        });
+        library.AddCommand(libraryCompare);
+
+        // library report <folder> -o <file.md>
+        var libraryReportFolder = new Argument<string>("folder",
+            "Folder of .w3x/.w3m maps, searched recursively.");
+        var libraryReportOut = new Option<string>(new[] { "-o", "--out" },
+            "Path to write the Markdown report to.") { IsRequired = true };
+        var libraryReport = new Command("report",
+            "Write one Markdown report over a folder, a summary line, a per-map table and the "
+            + "aggregated findings, an artifact a maintainer can attach to a review.")
+            { libraryReportFolder, libraryReportOut };
+        libraryReport.SetHandler(ctx =>
+        {
+            var p = ctx.ParseResult;
+            RunSafely(() =>
+            {
+                var r = LibraryReportCommand.Execute(
+                    p.GetValueForArgument(libraryReportFolder),
+                    p.GetValueForOption(libraryReportOut)!,
+                    p.GetValueForOption(gameDirOption));
+                Emit(p.GetValueForOption(jsonOption), r, () => Render.LibraryReport(r));
+            });
+        });
+        library.AddCommand(libraryReport);
+
+        root.AddCommand(library);        root.AddCommand(McpCommand.Build(jsonOption));
 
         // ---- target: set and view the current target build ----
         var targetBuildArg = new Argument<string>("build",

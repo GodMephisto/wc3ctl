@@ -2851,6 +2851,41 @@ public static class Wc3Tools
         [Description("Optional path to schemas directory containing schema folders with manifest.json.")] string? schemas_dir = null)
         => Run(() => CiAllCommand.Execute(map, target, schemas_dir));
 
+    // ---- library tools ---------------------------------------------------
+
+    [McpServerTool(Name = "library_scan", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Open every map in a folder through the loader and report per map its size in bytes, the build it targets if known, whether it loads, its archive entry count and its diagnostic count, plus the loaded, failed and byte totals. Opens one map at a time. Read-only.")]
+    public static LibraryScanResult LibraryScan(
+        [Description("Folder of .w3x/.w3m maps, searched recursively.")] string folder)
+        => Run(() => LibraryScanCommand.Execute(folder));
+
+    [McpServerTool(Name = "library_audit", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Run the behavioural audit over every map in a folder and report the findings per map and the totals per check, so a whole library is ranked by how much it needs fixing. Opens one map at a time. Read-only.")]
+    public static LibraryAuditResult LibraryAudit(
+        [Description("Folder of .w3x/.w3m maps, searched recursively.")] string folder,
+        [Description("Warcraft III install directory for the checks that need game data. Omit to auto-detect.")] string? game_dir = null)
+        => Run(() => LibraryAuditCommand.Execute(folder, ResolveGameDir(game_dir)));
+
+    [McpServerTool(Name = "library_validate", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Run the load validation over every map in a folder and list the ones that fail, with the reason. A map that cannot be opened counts as invalid. Opens one map at a time. Read-only.")]
+    public static LibraryValidateResult LibraryValidate(
+        [Description("Folder of .w3x/.w3m maps, searched recursively.")] string folder)
+        => Run(() => LibraryValidateCommand.Execute(folder));
+
+    [McpServerTool(Name = "library_compare", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Compare two folders of maps by file name and content hash, listing the maps only in the first folder, only in the second, and changed between them, plus the identical count and any file name that is not unique inside a folder. Read-only.")]
+    public static LibraryCompareResult LibraryCompare(
+        [Description("The first folder of maps.")] string folder_a,
+        [Description("The second folder of maps.")] string folder_b)
+        => Run(() => LibraryCompareCommand.Execute(folder_a, folder_b));
+
+    [McpServerTool(Name = "library_report", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Write one Markdown report over a folder of maps, a summary line, a per-map table and the aggregated findings, to out_path. The report is built from the same probes the scan, audit and validate sweeps use. Writes only out_path and never a map.")]
+    public static LibraryReportResult LibraryReport(
+        [Description("Folder of .w3x/.w3m maps, searched recursively.")] string folder,
+        [Description("Path to write the Markdown report to.")] string out_path,
+        [Description("Warcraft III install directory for the checks that need game data. Omit to auto-detect.")] string? game_dir = null)
+        => Run(() => LibraryReportCommand.Execute(folder, out_path, ResolveGameDir(game_dir)));
     [McpServerTool(Name = "gamedata_sources", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Return the dataset's provenance index. For every schema folder it reports the build, its era, the sections present, the SHA-256 of each section file, and the input hashes from the folder's manifest, so the whole dataset can be traced back to the game files it was derived from.")]
     public static GamedataSourcesResult GameDataSources(
