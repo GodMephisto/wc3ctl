@@ -439,6 +439,80 @@ public static class Wc3Tools
             return SaveEdit(doc, map, out_path, r.Ok, r.Message);
         });
 
+    [McpServerTool(Name = "place_grid", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Place a regular rows x cols grid of copies of one unit or doodad type and save the edited copy to out_path. The grid is centred on the map origin. The input map is NEVER modified in place.")]
+    public static BulkPlacementToolResult PlaceGrid(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Four-character unit or doodad type rawcode.")] string type_rawcode,
+        [Description("Number of grid rows (>= 1).")] int rows,
+        [Description("Number of grid columns (>= 1).")] int cols,
+        [Description("Spacing between adjacent cells in world units. Default 128 (one tile).")] float spacing = PlaceGridCommand.DefaultSpacing,
+        [Description("Owning player id for a unit grid (0-based). Ignored for doodads.")] int owner_id = 0,
+        [Description("Placement kind, unit or doodad.")] string kind = "unit",
+        [Description("Where to write the edited map. Defaults to a sibling '.edited' copy.")] string? out_path = null)
+        => Run(() =>
+        {
+            var doc = LoadMap(map);
+            var r = PlaceGridCommand.Execute(doc, type_rawcode, rows, cols, spacing, owner_id, kind);
+            if (!r.Ok) throw new McpException(r.Message);
+            string full = ResolveOutPath(map, out_path);
+            if (Path.GetDirectoryName(full) is { Length: > 0 } dir) Directory.CreateDirectory(dir);
+            doc.Save(full);
+            return new BulkPlacementToolResult(full, r.Message, r.Placed, r.CreationNumbers);
+        });
+
+    [McpServerTool(Name = "place_scatter", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Place N copies of a unit type at deterministic random positions and save the edited copy to out_path. Positions are uniform inside a named region or across the whole playable area, and the same seed reproduces the same layout. The input map is NEVER modified in place.")]
+    public static BulkPlacementToolResult PlaceScatter(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Four-character unit type rawcode.")] string type_rawcode,
+        [Description("Number of copies to place (>= 1).")] int count,
+        [Description("Region name to scatter inside. Omit to scatter across the whole playable map.")] string? region = null,
+        [Description("Deterministic random seed. Default 0.")] int seed = PlaceScatterCommand.DefaultSeed,
+        [Description("Where to write the edited map. Defaults to a sibling '.edited' copy.")] string? out_path = null)
+        => Run(() =>
+        {
+            var doc = LoadMap(map);
+            var r = PlaceScatterCommand.Execute(doc, type_rawcode, count, region, seed);
+            if (!r.Ok) throw new McpException(r.Message);
+            string full = ResolveOutPath(map, out_path);
+            if (Path.GetDirectoryName(full) is { Length: > 0 } dir) Directory.CreateDirectory(dir);
+            doc.Save(full);
+            return new BulkPlacementToolResult(full, r.Message, r.Placed, r.CreationNumbers);
+        });
+
+    [McpServerTool(Name = "placed_stats", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Count the units and doodads already placed on the map, grouped by rawcode and by kind, with each type's resolved name where one is available. Read-only.")]
+    public static PlacedStatsResult PlacedStats(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Without it only the map's own object-data names resolve.")] string? game_dir = null)
+        => Run(() => PlacedStatsCommand.Execute(LoadMap(map), ResolveGameDir(game_dir)));
+
+    [McpServerTool(Name = "placed_missing_refs", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("List placements whose rawcode is defined neither in the map's object data nor in the base game data. Without a game_dir only the map's object data can be consulted, so stock base-game types read as unresolved too and the message says so. Read-only.")]
+    public static PlacedMissingRefsResult PlacedMissingRefs(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Without it the base-game check is skipped.")] string? game_dir = null)
+        => Run(() => PlacedMissingRefsCommand.Execute(LoadMap(map), ResolveGameDir(game_dir)));
+
+    [McpServerTool(Name = "placed_fix_refs", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = false)]
+    [Description("Drop (or, with to_rawcode, rewrite) placements that reference a missing rawcode and save the edited copy to out_path, reporting each change. Refuses when nothing is wrong. The input map is NEVER modified in place.")]
+    public static PlacedFixRefsResult PlacedFixRefs(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Where to write the edited map. Defaults to a sibling '.edited' copy.")] string? out_path = null,
+        [Description("Rewrite each missing placement's rawcode to this four-character code instead of dropping it.")] string? to_rawcode = null,
+        [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Without it the base-game check is skipped.")] string? game_dir = null)
+        => Run(() =>
+        {
+            var doc = LoadMap(map);
+            var r = PlacedFixRefsCommand.Execute(doc, ResolveGameDir(game_dir), to_rawcode);
+            if (!r.Ok) throw new McpException(r.Message);
+            string full = ResolveOutPath(map, out_path);
+            if (Path.GetDirectoryName(full) is { Length: > 0 } dir) Directory.CreateDirectory(dir);
+            doc.Save(full);
+            return r;
+        });
+
     [McpServerTool(Name = "triggers_read", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Read the map's GUI trigger tree (war3map.wtg) plus the custom-text bodies (war3map.wct) and the script language: every category, every trigger with its event/condition/action tree, and every GUI variable. Read-only, because this format cannot yet be written back. A map with no GUI triggers returns empty lists rather than failing.")]
     public static TriggerModel TriggersRead(
@@ -1974,6 +2048,11 @@ public sealed record PortUnitToolResult(string SavedTo, PortResult Report);
 /// <summary>place_doodad / place_region outcome: where the edited map was written, a
 /// human-readable message, and the creation number assigned to the new instance.</summary>
 public sealed record PlacementToolResult(string SavedTo, string Message, int CreationNumber);
+
+/// <summary>place_grid / place_scatter outcome, where the edited map was written, how many
+/// copies were placed, and each copy's creation number in placement order.</summary>
+public sealed record BulkPlacementToolResult(
+    string SavedTo, string Message, int Placed, IReadOnlyList<int> CreationNumbers);
 
 /// <summary>terrain_* edit outcome: where the edited map was written, a message, and tiles changed.</summary>
 public sealed record TerrainToolResult(string SavedTo, string Message, int TilesChanged);
