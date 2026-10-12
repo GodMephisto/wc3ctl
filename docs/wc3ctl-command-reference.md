@@ -2,7 +2,7 @@
 
 Generated from the live command tree by `wc3ctl docs cli`. Do not edit by hand. Regenerate with `wc3ctl docs cli --force`, and the CI guard fails when this file is stale.
 
-The tree holds 58 top level verb(s) and 282 command path(s) in total.
+The tree holds 59 top level verb(s) and 288 command path(s) in total.
 
 ## Global options
 
@@ -4827,6 +4827,116 @@ Arguments
 Options
 
 - `--max-regression-pct <max-regression-pct>`. Fail when any metric regressed by more than this percent. Default `10`.
+
+## ci
+
+CI gates. Each runs a check on a map or the schema dataset, prints what it checked, and exits non-zero when it fails. Read-only.
+
+Usage
+
+```
+wc3ctl ci
+```
+
+Subcommands
+
+- `lint`. Run the lint as a gate. Fails on an error-level finding, or, with --baseline, only on a finding the baseline does not already hold. With --target it also runs the compat check and fails on an error-level finding.
+- `validate`. Run the validation as a gate. Exits non-zero when the map cannot load or reports an error-level issue. With --strict the extra strict checks are included.
+- `compat`. Run the compat check as a gate. Exits non-zero on an error-level finding.
+- `schema`. Check the schema dataset for regressions. Fails when any build stops parsing or fewer than --min-real builds carry real object data.
+- `all`. Run lint, validate and, when --target is given, compat in one pass. Prints a summary line per gate and the overall pass or fail with the exit code.
+
+### ci lint
+
+Run the lint as a gate. Fails on an error-level finding, or, with --baseline, only on a finding the baseline does not already hold. With --target it also runs the compat check and fails on an error-level finding.
+
+Usage
+
+```
+wc3ctl ci lint <map> [options]
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+
+Options
+
+- `--baseline <baseline>`. Baseline file written by 'lint baseline'. When given, the gate fails only on a finding the baseline does not already hold.
+- `--target <target>`. Target build name or schema folder path. When given, a compat check runs and fails on an error-level finding.
+- `--schemas <schemas>`. Path to schemas directory containing schema folders with manifest.json.
+- `--against <against>`. Optional path to the ORIGINAL map this one was built from, so the lint also reports what a rebuild lost or clobbered.
+
+### ci validate
+
+Run the validation as a gate. Exits non-zero when the map cannot load or reports an error-level issue. With --strict the extra strict checks are included.
+
+Usage
+
+```
+wc3ctl ci validate <map> [options]
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+
+Options
+
+- `--strict`. Run the stricter validation, whose extra checks are too strict to be a default.
+
+### ci compat
+
+Run the compat check as a gate. Exits non-zero on an error-level finding.
+
+Usage
+
+```
+wc3ctl ci compat <map> [options]
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+
+Options
+
+- `--target <target>` (required). Target build name or schema folder path.
+- `--schemas <schemas>`. Path to schemas directory containing schema folders with manifest.json.
+
+### ci schema
+
+Check the schema dataset for regressions. Fails when any build stops parsing or fewer than --min-real builds carry real object data.
+
+Usage
+
+```
+wc3ctl ci schema [options]
+```
+
+Options
+
+- `--schemas <schemas>`. Path to schemas directory containing schema folders with manifest.json.
+- `--min-real <min-real>`. Fail when fewer than this many builds carry real object data. Default `0`.
+
+### ci all
+
+Run lint, validate and, when --target is given, compat in one pass. Prints a summary line per gate and the overall pass or fail with the exit code.
+
+Usage
+
+```
+wc3ctl ci all <map> [options]
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+
+Options
+
+- `--target <target>`. Target build name or schema folder path. When given, a compat check runs and fails on an error-level finding.
+- `--schemas <schemas>`. Path to schemas directory containing schema folders with manifest.json.
 
 ## mcp
 

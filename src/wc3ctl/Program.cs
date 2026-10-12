@@ -5481,6 +5481,119 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         bench.AddCommand(benchPerfGate);
 
         root.AddCommand(bench);
+
+        // ---- ci, pass or fail gates for a pipeline ----
+        // Every ci command is read-only, prints what it checked, and exits non-zero on failure, so
+        // a CI step can simply run it and read the exit code. They reuse the lint, validate, compat
+        // and schema-coverage commands rather than re-implementing any check.
+        var ci = new Command("ci",
+            "CI gates. Each runs a check on a map or the schema dataset, prints what it checked, and "
+            + "exits non-zero when it fails. Read-only.");
+        var ciSchemas = new Option<string?>("--schemas",
+            "Path to schemas directory containing schema folders with manifest.json.");
+
+        // ci lint <map> [--baseline <file>] [--target <build>] [--schemas <dir>] [--against <map>]
+        var ciBaseline = new Option<string?>("--baseline",
+            "Baseline file written by 'lint baseline'. When given, the gate fails only on a finding "
+            + "the baseline does not already hold.");
+        var ciTarget = new Option<string?>("--target",
+            "Target build name or schema folder path. When given, a compat check runs and fails on an "
+            + "error-level finding.");
+        var ciAgainst = new Option<string?>("--against",
+            "Optional path to the ORIGINAL map this one was built from, so the lint also reports what "
+            + "a rebuild lost or clobbered.");
+        var ciLint = new Command("lint",
+            "Run the lint as a gate. Fails on an error-level finding, or, with --baseline, only on a "
+            + "finding the baseline does not already hold. With --target it also runs the compat check "
+            + "and fails on an error-level finding.")
+            { mapArg, ciBaseline, ciTarget, ciSchemas, ciAgainst, jsonOption };
+        ciLint.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = CiLintCommand.Execute(
+                p.GetValueForArgument(mapArg),
+                p.GetValueForOption(ciBaseline),
+                p.GetValueForOption(ciTarget),
+                p.GetValueForOption(ciSchemas),
+                p.GetValueForOption(ciAgainst));
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.CiLint(r));
+            if (!r.Passed) exitCode[0] = r.ExitCode;
+        }));
+        ci.AddCommand(ciLint);
+
+        // ci validate <map> [--strict]
+        var ciStrict = new Option<bool>("--strict",
+            "Run the stricter validation, whose extra checks are too strict to be a default.");
+        var ciValidate = new Command("validate",
+            "Run the validation as a gate. Exits non-zero when the map cannot load or reports an "
+            + "error-level issue. With --strict the extra strict checks are included.")
+            { mapArg, ciStrict, jsonOption };
+        ciValidate.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = CiValidateCommand.Execute(
+                p.GetValueForArgument(mapArg),
+                p.GetValueForOption(ciStrict),
+                p.GetValueForOption(gameDirOption));
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.CiValidate(r));
+            if (!r.Passed) exitCode[0] = r.ExitCode;
+        }));
+        ci.AddCommand(ciValidate);
+
+        // ci compat <map> --target <build> [--schemas <dir>]
+        var ciCompatTarget = new Option<string>("--target",
+            "Target build name or schema folder path.") { IsRequired = true };
+        var ciCompat = new Command("compat",
+            "Run the compat check as a gate. Exits non-zero on an error-level finding.")
+            { mapArg, ciCompatTarget, ciSchemas, jsonOption };
+        ciCompat.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = CiCompatCommand.Execute(
+                p.GetValueForArgument(mapArg),
+                p.GetValueForOption(ciCompatTarget)!,
+                p.GetValueForOption(ciSchemas));
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.CiCompat(r));
+            if (!r.Passed) exitCode[0] = r.ExitCode;
+        }));
+        ci.AddCommand(ciCompat);
+
+        // ci schema [--schemas <dir>] [--min-real N]
+        var ciMinReal = new Option<int>("--min-real",
+            () => 0, "Fail when fewer than this many builds carry real object data.");
+        var ciSchema = new Command("schema",
+            "Check the schema dataset for regressions. Fails when any build stops parsing or fewer "
+            + "than --min-real builds carry real object data.")
+            { ciSchemas, ciMinReal, jsonOption };
+        ciSchema.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = CiSchemaCommand.Execute(
+                p.GetValueForOption(ciSchemas),
+                p.GetValueForOption(ciMinReal));
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.CiSchema(r));
+            if (!r.Passed) exitCode[0] = r.ExitCode;
+        }));
+        ci.AddCommand(ciSchema);
+
+        // ci all <map> [--target <build>] [--schemas <dir>]
+        var ciAll = new Command("all",
+            "Run lint, validate and, when --target is given, compat in one pass. Prints a summary line "
+            + "per gate and the overall pass or fail with the exit code.")
+            { mapArg, ciTarget, ciSchemas, jsonOption };
+        ciAll.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = CiAllCommand.Execute(
+                p.GetValueForArgument(mapArg),
+                p.GetValueForOption(ciTarget),
+                p.GetValueForOption(ciSchemas));
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.CiAll(r));
+            if (!r.Passed) exitCode[0] = r.ExitCode;
+        }));
+        ci.AddCommand(ciAll);
+
+        root.AddCommand(ci);
         root.AddCommand(McpCommand.Build(jsonOption));
 
         // ---- target: set and view the current target build ----
