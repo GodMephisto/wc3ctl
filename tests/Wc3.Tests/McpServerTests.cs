@@ -21,7 +21,7 @@ public class McpServerTests
         "audit_ability", "audit_fidelity", "audit_hero", "audit_map",
         "audit_readiness", "audit_trend", "bench_compat", "bench_leaks", "bench_open",
         "bench_perf_gate", "bench_schema_coverage", "bundle_diff", "bundle_merge", "bundle_unit",
-        "camera_add", "camera_list", "camera_remove", "camera_set", "camera_tour",
+        "camera_add", "camera_list", "camera_remove", "camera_set", "camera_tour", "changelog",
         "ci_all", "ci_compat", "ci_lint", "ci_schema", "ci_validate",
         "compat_explain",
         "compat_matrix", "deprotect_map", "diff", "doctor_check", "doctor_compare", "doctor_fix",
@@ -36,6 +36,7 @@ public class McpServerTests
         "lint", "lint_baseline", "list_files", "map_compat", "map_info",
         "map_info_get", "map_info_set", "map_overview",
         "mcp_audit_annotations",
+        "mcp_export_verify",
         "model_export_obj",
         "mpq_add", "mpq_bytes_diff", "mpq_extract_all", "mpq_listfile", "mpq_merge",
         "mpq_name_recover", "mpq_rebuild", "mpq_remove",
@@ -76,7 +77,7 @@ public class McpServerTests
         "trigger_set_eca_enabled", "trigger_set_enabled", "trigger_set_initially_on",
         "trigger_set_run_on_map_init", "trigger_to_script", "triggers_read", "uabi_profile",
         "unit_abilities",
-        "validate", "validate_strict",
+        "validate", "validate_strict", "version_info",
     };
 
     private static Task WithClient(Func<McpClient, CancellationToken, Task> body) => McpTestClient.WithClient(body);

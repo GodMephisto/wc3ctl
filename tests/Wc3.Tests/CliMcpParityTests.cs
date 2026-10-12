@@ -245,7 +245,9 @@ public class CliMcpParityTests
         ["mpq_add"] = "mpq add",
         ["mpq_remove"] = "mpq remove",
         ["mpq_extract_all"] = "mpq extract-all",
-    };
+        ["changelog"] = "changelog",
+        ["mcp_export_verify"] = "export verify",
+        ["version_info"] = "version",    };
 
     // CLI commands that intentionally have no MCP tool (local dev / query utilities).
     private static readonly HashSet<string> CliOnly = new(StringComparer.Ordinal)

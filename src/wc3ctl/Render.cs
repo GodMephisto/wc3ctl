@@ -2552,4 +2552,25 @@ public static class Render
         sb.AppendLine($"  {(r.Zipped ? "zip" : "dir")} {r.Target}");
         return sb.ToString().TrimEnd('\r', '\n');
     }
+
+    public static string ReleaseVersion(ReleaseVersion r) =>
+        $"wc3ctl {r.ProductVersion}\n"
+        + $"git {r.GitHash}, built {r.BuildTimeUtc}\n"
+        + $"mcp server {r.McpServerName} {r.McpVersion}";
+
+    public static string Changelog(ChangelogResult r, string outPath) =>
+        r.Ok
+            ? $"wrote {outPath}, {r.Groups.Count} group(s), {r.Groups.Sum(g => g.Entries.Count)} commit(s)"
+            : r.Message ?? "changelog failed";
+
+    public static string McpExportVerify(McpExportVerifyResult r)
+    {
+        if (r.Message is { Length: > 0 }) return r.Message;
+        if (r.InStep) return $"in step, {r.CheckedFiles} file(s) checked";
+        var sb = new StringBuilder();
+        sb.AppendLine($"out of step, {r.Differences.Count} difference(s), {r.CheckedFiles} file(s) checked");
+        foreach (var d in r.Differences)
+            sb.AppendLine($"  {d.Status,-8}{d.Path}");
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
 }
