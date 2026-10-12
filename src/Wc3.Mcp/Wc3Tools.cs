@@ -46,6 +46,50 @@ public static class Wc3Tools
         [Description("Path to a .w3x/.w3m map file.")] string map)
         => Run(() => ScriptLeaksCommand.Execute(LoadMap(map)));
 
+    [McpServerTool(Name = "script_unused_globals", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Find the globals a map's war3map.j declares and never reads, the variable half of "
+        + "dead code. A global that is only ever assigned and never appears on the right of anything "
+        + "is reported too, since its value is never used. The World Editor's generated globals are "
+        + "excluded (every gg_ handle, every bj_ name, and the literal worldedit). Read-only.")]
+    public static ScriptUnusedGlobalsResult ScriptUnusedGlobals(
+        [Description("Path to a .w3x/.w3m map file.")] string map)
+        => Run(() => ScriptUnusedGlobalsCommand.Execute(LoadMap(map)));
+
+    [McpServerTool(Name = "script_unused_functions", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Find the functions a map's war3map.j declares that no other function calls and "
+        + "nothing else reaches, excluding the engine's entry points (main, config, "
+        + "InitCustomTriggers and the map initialization functions) and anything an InitTrig_* "
+        + "function or an ExecuteFunc(\"...\") string names. Read-only.")]
+    public static ScriptUnusedFunctionsResult ScriptUnusedFunctions(
+        [Description("Path to a .w3x/.w3m map file.")] string map)
+        => Run(() => ScriptUnusedFunctionsCommand.Execute(LoadMap(map)));
+
+    [McpServerTool(Name = "script_null_locals", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Find the classic JASS handle leak: a local of a handle type (location, group, "
+        + "force, effect, timer, trigger, text tag, lightning) that the function destroys with the "
+        + "matching Remove or Destroy but never sets to null, which keeps the handle id reserved for "
+        + "the rest of the function. A local that is never destroyed is a different leak and is not "
+        + "reported here. Read-only.")]
+    public static ScriptNullLocalsResult ScriptNullLocals(
+        [Description("Path to a .w3x/.w3m map file.")] string map)
+        => Run(() => ScriptNullLocalsCommand.Execute(LoadMap(map)));
+
+    [McpServerTool(Name = "script_complexity", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Measure each function's cyclomatic complexity as the number of if, loop, and and "
+        + "or branch keywords in its body, ranked worst first with the line. Answers where the "
+        + "complexity is on a large script. Read-only.")]
+    public static ScriptComplexityResult ScriptComplexity(
+        [Description("Path to a .w3x/.w3m map file.")] string map)
+        => Run(() => ScriptComplexityCommand.Execute(LoadMap(map)));
+
+    [McpServerTool(Name = "script_callgraph", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("The call edges between the functions a map's war3map.j declares, caller to "
+        + "callee. Only edges between functions this script declares are included, so a native call "
+        + "or a call through a local code value is not an edge. Read-only.")]
+    public static ScriptCallGraphResult ScriptCallGraph(
+        [Description("Path to a .w3x/.w3m map file.")] string map)
+        => Run(() => ScriptCallGraphCommand.Execute(LoadMap(map)));
+
     [McpServerTool(Name = "uabi_profile", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Measure unit ability lists (uabi) across many maps at once, one row per map: unit "
         + "types, references, distinct ids, hero and item abilities in normal lists, ids neither the "
