@@ -1,5 +1,7 @@
 // src/Wc3.Mcp/McpToolCatalog.cs
+using System.Text.Json;
 using ModelContextProtocol.Protocol;
+using ModelContextProtocol.Server;
 
 namespace Wc3.Mcp;
 
@@ -52,6 +54,21 @@ public static class McpToolCatalog
             tool.Name, tool.Description,
             a?.ReadOnlyHint, a?.DestructiveHint, a?.IdempotentHint, a?.OpenWorldHint);
     }
+
+    /// <summary>
+    /// The catalog as one read-only MCP resource, so a client can pull the whole surface in a
+    /// single read instead of listing tools. Same reflection as the tools, so it cannot drift.
+    /// </summary>
+    public static McpServerResource CreateCatalogResource() =>
+        McpServerResource.Create(
+            () => JsonSerializer.Serialize(Describe(), Wc3McpServer.JsonOptions),
+            new McpServerResourceCreateOptions
+            {
+                UriTemplate = "wc3://tools",
+                Name = "tool_catalog",
+                Description = "The MCP tool surface as JSON, every tool with its description and the four annotations.",
+                MimeType = "application/json",
+            });
 }
 
 /// <summary>

@@ -34,10 +34,14 @@ public static class Wc3McpServer
         foreach (var tool in CreateTools())
             tools.Add(tool);
 
+        var resources = new McpServerResourceCollection();
+        resources.Add(McpToolCatalog.CreateCatalogResource());
+
         return new McpServerOptions
         {
             ServerInfo = new Implementation { Name = ServerIdentity.ProductId, Version = ServerIdentity.Version },
             ToolCollection = tools,
+            ResourceCollection = resources,
             ServerInstructions = Instructions.Value,
         };
     }
@@ -103,5 +107,6 @@ public static class Wc3McpServer
         options.Capabilities = configured.Capabilities;
         options.ServerInstructions = configured.ServerInstructions;
         options.ToolCollection = configured.ToolCollection;
+        options.ResourceCollection = configured.ResourceCollection;
     }
 }

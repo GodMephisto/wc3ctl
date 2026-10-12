@@ -136,6 +136,23 @@ public class McpServerTests
     }
 
     [Fact]
+    public async Task Tool_catalog_resource_is_served_as_json()
+    {
+        // The resource exposes the same catalog the audit and the dump use, so a client can pull
+        // the whole surface in one read instead of listing tools.
+        await WithClient(async (client, ct) =>
+        {
+            var resources = await client.ListResourcesAsync(cancellationToken: ct);
+            Assert.Contains(resources, r => r.Uri == "wc3://tools");
+
+            var contents = await client.ReadResourceAsync("wc3://tools", cancellationToken: ct);
+            var text = Assert.IsType<TextResourceContents>(Assert.Single(contents.Contents)).Text;
+            Assert.Contains("\"name\":\"map_overview\"", text);
+            Assert.Contains("\"name\":\"mcp_audit_annotations\"", text);
+        });
+    }
+
+    [Fact]
     public async Task Missing_map_surfaces_as_clean_tool_error_not_a_stack_trace()
     {
         await WithClient(async (client, ct) =>
