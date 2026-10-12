@@ -330,7 +330,7 @@ Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 
 ## gamedata_coverage
 
-List one row per schema folder with the build, its era, and which sections it holds (objects, triggers, script), plus field and native counts, so a reader can tell a build carrying real object data from one carrying only its script.
+List one row per schema folder with the build, its era, and which sections it holds (objects, triggers, script, enums), plus field and native counts, so a reader can tell a build carrying real object data from one carrying only its script.
 
 Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 
@@ -360,7 +360,7 @@ Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 
 ## gamedata_schema_diff
 
-Compare two schema folders (produced by gamedata schema) and report added, removed and changed object fields, trigger functions, script types and natives. Groups output by section (objects, triggers, script) then by file or category. A section only one build has is listed as not compared rather than everything added or removed. Use this to track what a patch changes across builds, or to check whether two maps targeting different patches are compatible.
+Compare two schema folders (produced by gamedata schema) and report added, removed and changed object fields, trigger functions, script types and natives, and enumerated field option sets. Groups output by section (objects, triggers, script, enums) then by file or category. A section only one build has is listed as not compared rather than everything added or removed. Use this to track what a patch changes across builds, or to check whether two maps targeting different patches are compatible.
 
 Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 

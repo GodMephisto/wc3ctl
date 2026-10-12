@@ -4655,15 +4655,15 @@ wc3ctl gamedata
 Subcommands
 
 - `snapshot`. Dump the base game's text/data files (plus client and editor strings) for diffing across patches.
-- `schema`. Build and save a per-build schema (object fields, trigger functions, script APIs) from a game install or a folder of loose files. The schema describes what the editor for a specific build shows and what the compiler accepts.
-- `schema-diff`. Compare two schema folders and report added, removed and changed fields, trigger functions, script types and natives. Groups output by section then by file or category. Exits 0 when no changes, 1 when there are changes.
+- `schema`. Build and save a per-build schema (object fields, trigger functions, script APIs, enum option sets) from a game install or a folder of loose files. The schema describes what the editor for a specific build shows and what the compiler accepts.
+- `schema-diff`. Compare two schema folders and report added, removed and changed fields, trigger functions, script types and natives, and enumerated option sets. Groups output by section then by file or category. Exits 0 when no changes, 1 when there are changes.
 - `schema-index`. Read all schema folders in a directory, build an index of entries, and write index.json. Prints the entry count and the path.
 - `history`. Report whether a name is an object field code, a native, a type, a global or a function in any recorded build, list every build it appears in, and name the first and last build.
 - `changelog`. Diff two builds' object fields and report fields added, removed, retyped, or whose minimum or maximum bound changed, grouped by metadata file.
 - `field-lookup`. Find object field codes whose display name contains the query, in one build or all builds.
 - `bounds`. Report a field code's type, minimum and maximum bounds, whether it can be empty, and the metadata file that defines it, in one build or all builds where it exists.
 - `enum`. Report the closed set of legal values for an enumerated object field type, from the build's UnitEditorData.txt, in one build or all builds. Omit the type to list the enumerated types a build defines. This is the authority a picker should offer, not the values a stock object happens to use.
-- `coverage`. List one row per schema folder with the build, its era, and which sections it holds (objects, triggers, script), so a reader can tell a build carrying real object data from one carrying only its script.
+- `coverage`. List one row per schema folder with the build, its era, and which sections it holds (objects, triggers, script, enums), so a reader can tell a build carrying real object data from one carrying only its script.
 - `sources`. Write sources.json, a machine readable provenance index of the dataset. For every schema folder it records the build, era, sections, the SHA-256 of each section file and the input hashes from its manifest.
 - `export-schemas`. Copy the schema dataset to a target directory, or pack it into one zip when the target ends in .zip, for attaching to a release.
 
@@ -4688,7 +4688,7 @@ Options
 
 ### gamedata schema
 
-Build and save a per-build schema (object fields, trigger functions, script APIs) from a game install or a folder of loose files. The schema describes what the editor for a specific build shows and what the compiler accepts.
+Build and save a per-build schema (object fields, trigger functions, script APIs, enum option sets) from a game install or a folder of loose files. The schema describes what the editor for a specific build shows and what the compiler accepts.
 
 Usage
 
@@ -4707,7 +4707,7 @@ Options
 
 ### gamedata schema-diff
 
-Compare two schema folders and report added, removed and changed fields, trigger functions, script types and natives. Groups output by section then by file or category. Exits 0 when no changes, 1 when there are changes.
+Compare two schema folders and report added, removed and changed fields, trigger functions, script types and natives, and enumerated option sets. Groups output by section then by file or category. Exits 0 when no changes, 1 when there are changes.
 
 Usage
 
@@ -4722,7 +4722,7 @@ Arguments
 
 Options
 
-- `--section <section>`. Show changes for one section only: objects, triggers, or script. Omit for all.
+- `--section <section>`. Show changes for one section only: objects, triggers, script or enums. Omit for all.
 - `--limit <limit>`. Maximum lines of human output to print. Zero means no limit. Default `0`.
 
 ### gamedata schema-index
@@ -4835,7 +4835,7 @@ Options
 
 ### gamedata coverage
 
-List one row per schema folder with the build, its era, and which sections it holds (objects, triggers, script), so a reader can tell a build carrying real object data from one carrying only its script.
+List one row per schema folder with the build, its era, and which sections it holds (objects, triggers, script, enums), so a reader can tell a build carrying real object data from one carrying only its script.
 
 Usage
 

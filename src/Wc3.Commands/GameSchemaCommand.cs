@@ -276,8 +276,9 @@ public static class GameSchemaCommand
             case "objects": break;
             case "triggers": break;
             case "script": break;
+            case "enums": break;
             default: throw new ArgumentException(
-                $"invalid section '{section}' for schema-diff, expected objects, triggers or script");
+                $"invalid section '{section}' for schema-diff, expected objects, triggers, script or enums");
         }
         var filtered = new SchemaDiffResult(
             r.BuildA, r.BuildB,

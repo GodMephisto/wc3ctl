@@ -240,13 +240,14 @@ The command groups, by job.
 | Checks | `audit`, `lint`, `validate`, `test-load`, `contract`, `hero` |
 | Repairs | `repair`, `repair-generated`, `deprotect`, `debug` |
 | Replays and patches | `replay`, `uabi-profile`, `gamedata` |
+| Versions and compatibility | `gamedata`, `compat`, `target`, `bench`, `ci` |
 | AI apps | `mcp` |
 
 ## Use it from an AI app
 
 The installer has already set this up for every supported app it found. Quit the
 app fully (for Claude Desktop, right-click its icon by the clock and choose
-**Quit**) and start it again. The app now lists the wc3ctl tools, 97 of them.
+**Quit**) and start it again. The app now lists the wc3ctl tools, 233 of them.
 
 Then just ask, and give the map's full path. For example
 
@@ -345,6 +346,12 @@ the map (if you can share it), what you did and what it printed.
 - **Copying between maps.** Finds everything an object needs (objects, buffs,
   summoned units, files and the script behind its spells) and copies it into
   another map, renaming any ids that clash.
+- **Version awareness.** A dataset of what each of 157 Warcraft III builds shows
+  in its editor and accepts in its compiler. It tells you whether a map made for
+  one patch opens and compiles on another, which fields the target build's editor
+  does not know, which natives and types it lacks, and the legal values of each
+  enumerated field. No game install is needed for this part, so it works on a PC
+  with no Warcraft III.
 
 ## Build from source
 
@@ -415,6 +422,11 @@ Built on
 It also uses Luashine/jass-history (inventory change study), pjass (JASS syntax
 checking), the SLK repair guide by devoltz and Arakunido, and the Hive Workshop
 community's notes on the game's command line arguments.
+
+The per-build schema dataset is derived from your own game files, from the Hive
+Workshop "WC3 Download Archive" clients, from archive.org community mirrors and
+from the w3x2lni bundle. No game file is shipped, only metadata read out of files
+you own.
 
 Learned from, among many others, HiveWE (stijnherfst), Warsmash and Retera's
 Model Studio (Retera), WC3MapTranslator (ChiefOfGxBxL), Wurst, TheHelper and the

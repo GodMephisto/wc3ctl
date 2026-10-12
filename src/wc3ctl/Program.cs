@@ -5161,7 +5161,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         var schemaBuild = new Option<string?>("--build",
             "Override the build version string. Default: read from the install.");
         var gamedataSchema = new Command("schema",
-            "Build and save a per-build schema (object fields, trigger functions, script APIs) "
+            "Build and save a per-build schema (object fields, trigger functions, script APIs, enum option sets) "
             + "from a game install or a folder of loose files. The schema describes what the "
             + "editor for a specific build shows and what the compiler accepts.")
             { snapOut, schemaFrom, schemaBuild, gameDirOption };
@@ -5174,15 +5174,15 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
             snapOut, schemaFrom, schemaBuild, gameDirOption, jsonOption);
 
         var schemaDiffSection = new Option<string?>("--section",
-            "Show changes for one section only: objects, triggers, or script. Omit for all.");
+            "Show changes for one section only: objects, triggers, script or enums. Omit for all.");
         var schemaDiffLimit = new Option<int>("--limit", () => 0,
             "Maximum lines of human output to print. Zero means no limit.");
         var schemaDiffA = new Argument<string>("a", "Path to the first schema folder.");
         var schemaDiffB = new Argument<string>("b", "Path to the second schema folder.");
         var gamedataSchemaDiff = new Command("schema-diff",
             "Compare two schema folders and report added, removed and changed fields, trigger "
-            + "functions, script types and natives. Groups output by section then by file or "
-            + "category. Exits 0 when no changes, 1 when there are changes.")
+            + "functions, script types and natives, and enumerated option sets. Groups output by "
+            + "section then by file or category. Exits 0 when no changes, 1 when there are changes.")
             { schemaDiffA, schemaDiffB, schemaDiffSection, schemaDiffLimit, jsonOption };
         gamedataSchemaDiff.SetHandler(
             (string a, string b, string? section, int limit, bool json) => RunSafely(() =>
@@ -5298,7 +5298,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
 
         var gamedataCoverage = new Command("coverage",
             "List one row per schema folder with the build, its era, and which sections it holds "
-            + "(objects, triggers, script), so a reader can tell a build carrying real object data "
+            + "(objects, triggers, script, enums), so a reader can tell a build carrying real object data "
             + "from one carrying only its script.")
             { gdSchemas, jsonOption };
         gamedataCoverage.SetHandler(

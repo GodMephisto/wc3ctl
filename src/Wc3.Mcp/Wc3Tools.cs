@@ -2751,7 +2751,7 @@ public static class Wc3Tools
         => Run(() => TargetBuildSettings.List(schemasDir: schemas_dir, fullOnly: full_only));
 
     [McpServerTool(Name = "gamedata_schema_diff", ReadOnly = true, Idempotent = true, OpenWorld = false)]
-    [Description("Compare two schema folders (produced by gamedata schema) and report added, removed and changed object fields, trigger functions, script types and natives. Groups output by section (objects, triggers, script) then by file or category. A section only one build has is listed as not compared rather than everything added or removed. Use this to track what a patch changes across builds, or to check whether two maps targeting different patches are compatible.")]
+    [Description("Compare two schema folders (produced by gamedata schema) and report added, removed and changed object fields, trigger functions, script types and natives, and enumerated field option sets. Groups output by section (objects, triggers, script, enums) then by file or category. A section only one build has is listed as not compared rather than everything added or removed. Use this to track what a patch changes across builds, or to check whether two maps targeting different patches are compatible.")]
     public static SchemaDiffResult GameDataSchemaDiff(
         [Description("Path to the first schema folder (from gamedata schema).")] string a,
         [Description("Path to the second schema folder (from gamedata schema).")] string b,
@@ -2798,7 +2798,7 @@ public static class Wc3Tools
         => Run(() => GamedataEnumCommand.Execute(type, target, schemas_dir));
 
     [McpServerTool(Name = "gamedata_coverage", ReadOnly = true, Idempotent = true, OpenWorld = false)]
-    [Description("List one row per schema folder with the build, its era, and which sections it holds (objects, triggers, script), plus field and native counts, so a reader can tell a build carrying real object data from one carrying only its script.")]
+    [Description("List one row per schema folder with the build, its era, and which sections it holds (objects, triggers, script, enums), plus field and native counts, so a reader can tell a build carrying real object data from one carrying only its script.")]
     public static GamedataCoverageResult GameDataCoverage(
         [Description("Optional path to schemas directory containing schema folders with manifest.json.")] string? schemas_dir = null)
         => Run(() => GamedataCoverageCommand.Execute(schemas_dir));

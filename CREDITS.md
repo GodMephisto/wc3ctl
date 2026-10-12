@@ -26,6 +26,17 @@ Used directly
 | devoltz | devoltz, Arakunido | Public-domain guide to repairing SLK maps for 3.0.0 (src/Wc3.Commands/Reforged3RepairCommand.cs) |
 | Complete Command Line Arguments Guide | Hive Workshop community | Test runner launch flags (https://www.hiveworkshop.com/threads/complete-command-line-arguments-guide.288224/) |
 
+The per-build schema dataset is derived from the user's own game files and from community archives that
+keep the older clients alive. No game file is redistributed, only the metadata read out of them.
+
+| Source | Author | What it provided |
+|---|---|---|
+| WC3 Download Archive (1.00 to 1.31.1 + BETA and DEMO) | Hive Workshop community | Full classic clients and installers for 1.00 ROC, 1.07 TFT, 1.21a, 1.27a, 1.28.5, 1.29.1, 1.29.2, 1.30.1, 1.30.4 and 1.31.1 (https://www.hiveworkshop.com/threads/wc3-download-archive-1-00-1-31-1-beta-demo.326836/) |
+| War3_VS_1.20e-1.31.1_ES and Warcraft.III.multi.versions | Internet Archive contributors | Classic clients for 1.26a, 1.27b and 1.28f, used to build and cross-check the dataset |
+| mdX7/ngdp_data | mdX7 | NGDP build configs used to fetch the Reforged-era builds from Blizzard's own CDN |
+| War3MapTD (w3x2lni) | j8383888 and the w3x2lni authors | Classic 1.24.4 game data bundle |
+| Luashine/jass-history | Luashine | Per-build JASS scripts for the script half of every schema |
+
 References
 
 Archive and CASC tools
