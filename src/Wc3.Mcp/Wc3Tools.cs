@@ -358,6 +358,39 @@ public static class Wc3Tools
         [Description("Path to a .w3x/.w3m map file.")] string map)
         => Run(() => TriggerReadCommand.GetTriggers(LoadMap(map)));
 
+    [McpServerTool(Name = "trigger_to_script", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Render the map's GUI trigger tree (war3map.wtg) to JASS-style text, the way the World Editor's 'convert to custom text' presents one trigger. Read-only, it never edits the map. Preset parameter values are resolved to their script form through the World-Editor catalog when the installed game provides one, and otherwise keep their raw names. This is a rendering for reading rather than a replacement for the compiled script (war3map.j), so it is not guaranteed to compile.")]
+    public static TriggerScriptResult TriggerToScript(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Used only to resolve preset values, and its absence is not an error.")] string? game_dir = null)
+        => Run(() => TriggerToScriptCommand.Render(
+            LoadMap(map), TriggerCatalogCommand.TryLoad(null, ResolveGameDir(game_dir), out _)));
+
+    [McpServerTool(Name = "trigger_diff", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Compare two maps' GUI trigger trees and report triggers added, removed and renamed, plus event, condition or action changes within a trigger shared by both maps. Triggers are matched first by a unique id (so a rename reads as a rename) and then by name. Read-only.")]
+    public static TriggerDiffResult TriggerDiff(
+        [Description("Path to the first .w3x/.w3m map file.")] string map_a,
+        [Description("Path to the second .w3x/.w3m map file.")] string map_b)
+        => Run(() => TriggerDiffCommand.Compare(LoadMap(map_a), LoadMap(map_b)));
+
+    [McpServerTool(Name = "trigger_lint", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Check a map's GUI trigger tree for three structural faults, a trigger that can never fire (no event and not run on map initialization), a trigger that registers the same event twice, and a trigger with no action. Disabled and custom-text triggers are skipped and the counts say so. Read-only.")]
+    public static TriggerLintResult TriggerLint(
+        [Description("Path to a .w3x/.w3m map file.")] string map)
+        => Run(() => TriggerLintCommand.Lint(LoadMap(map)));
+
+    [McpServerTool(Name = "trigger_export", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Export a map's full GUI trigger tree as structured output. Each trigger carries its name, its enabled, initially-on and run-on-map-init flags, and its event, condition and action lists with the catalog function name, enabled flag, arguments and nested blocks for every node. Read-only. A map with no trigger tree returns empty lists.")]
+    public static TriggerExportResult TriggerExport(
+        [Description("Path to a .w3x/.w3m map file.")] string map)
+        => Run(() => TriggerExportCommand.Export(LoadMap(map)));
+
+    [McpServerTool(Name = "trigger_dead", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Find triggers that cannot do anything, listing each reason. Triggers with no action, and triggers whose events never fire, which is an event depending on a variable nothing sets (a unit event holding an unassigned unit variable, or a variable event watching a variable that never changes). A variable counts as set when the tree initialises it or, when the compiled script is present, when the script assigns it. Read-only.")]
+    public static TriggerDeadResult TriggerDead(
+        [Description("Path to a .w3x/.w3m map file.")] string map)
+        => Run(() => TriggerDeadCommand.Dead(LoadMap(map)));
+
     [McpServerTool(Name = "hero_roster", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("List the playable heroes a map registers, with each hero's rawcode, display name, the string tags from its registration call (typically a role and a portrait path), and which trigger's custom-text body holds its code. A HERO IS NOT A TRIGGER and counting one does not count the other: measured on a real map, 170 registered heroes are spread across 39 Character triggers, because a few grouped triggers each bundle many heroes while a minority get a trigger of their own. Use this rather than counting triggers when asked how many heroes a map has. Returns Ok=false for maps that create heroes inline instead of registering them, since those have no roster to read.")]
     public static HeroRosterCommand.RosterResult HeroRoster(
