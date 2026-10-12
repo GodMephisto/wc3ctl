@@ -594,6 +594,85 @@ public static class Program
         }));
         place.AddCommand(placeItem);
 
+        var placeGridRawcode = new Argument<string>("rawcode", "Four-character unit or doodad type rawcode.");
+        var placeGridRows = new Option<int>("--rows", "Number of grid rows.") { IsRequired = true };
+        var placeGridCols = new Option<int>("--cols", "Number of grid columns.") { IsRequired = true };
+        var placeGridSpacing = new Option<float>("--spacing", () => PlaceGridCommand.DefaultSpacing,
+            "Spacing between adjacent cells in world units. Defaults to 128, one tile.");
+        var placeGridOwner = new Option<int>("--owner", () => 0,
+            "Owning player id for a unit grid (0-based, 0 = red). Defaults to 0.");
+        var placeGridKind = new Option<string>("--kind", () => "unit",
+            "Placement kind, unit or doodad. Defaults to unit.");
+        var placeGrid = new Command("grid",
+            "Place a regular rows x cols grid of copies of one type and save the edited map. "
+            + "The grid is centred on the map origin. Writes war3mapUnits.doo for units or "
+            + "war3map.doo for doodads.")
+        { mapArg, placeGridRawcode, placeGridRows, placeGridCols, placeGridSpacing, placeGridOwner, placeGridKind, setOut };
+        placeGrid.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = PlaceGridCommand.Execute(doc,
+                p.GetValueForArgument(placeGridRawcode),
+                p.GetValueForOption(placeGridRows),
+                p.GetValueForOption(placeGridCols),
+                p.GetValueForOption(placeGridSpacing),
+                p.GetValueForOption(placeGridOwner),
+                p.GetValueForOption(placeGridKind));
+            if (!r.Ok)
+            {
+                Emit(p.GetValueForOption(jsonOption), r, () => r.Message);
+                exitCode[0] = 1;
+                return;
+            }
+            var dest = p.GetValueForOption(setOut) ?? Path.Combine(
+                Path.GetDirectoryName(map) ?? "",
+                Path.GetFileNameWithoutExtension(map) + ".edited" + Path.GetExtension(map));
+            doc.Save(dest);
+            Emit(p.GetValueForOption(jsonOption),
+                new { r.Ok, r.Message, r.Placed, r.CreationNumbers, SavedTo = dest },
+                () => $"{r.Message}\nsaved: {dest}");
+        }));
+        place.AddCommand(placeGrid);
+
+        var placeScatterRawcode = new Argument<string>("rawcode", "Four-character unit type rawcode.");
+        var placeScatterCount = new Option<int>("--count", "Number of copies to place.") { IsRequired = true };
+        var placeScatterRegion = new Option<string?>("--region",
+            "Region name to scatter inside. Omit to scatter across the whole playable map.");
+        var placeScatterSeed = new Option<int>("--seed", () => PlaceScatterCommand.DefaultSeed,
+            "Deterministic random seed. Defaults to 0.");
+        var placeScatter = new Command("scatter",
+            "Place N copies of a unit type at deterministic random positions and save the edited map. "
+            + "Positions are uniform inside a named region or the whole playable area, and the same "
+            + "seed reproduces the same layout. Writes war3mapUnits.doo.")
+        { mapArg, placeScatterRawcode, placeScatterCount, placeScatterRegion, placeScatterSeed, setOut };
+        placeScatter.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = PlaceScatterCommand.Execute(doc,
+                p.GetValueForArgument(placeScatterRawcode),
+                p.GetValueForOption(placeScatterCount),
+                p.GetValueForOption(placeScatterRegion),
+                p.GetValueForOption(placeScatterSeed));
+            if (!r.Ok)
+            {
+                Emit(p.GetValueForOption(jsonOption), r, () => r.Message);
+                exitCode[0] = 1;
+                return;
+            }
+            var dest = p.GetValueForOption(setOut) ?? Path.Combine(
+                Path.GetDirectoryName(map) ?? "",
+                Path.GetFileNameWithoutExtension(map) + ".edited" + Path.GetExtension(map));
+            doc.Save(dest);
+            Emit(p.GetValueForOption(jsonOption),
+                new { r.Ok, r.Message, r.Placed, r.CreationNumbers, SavedTo = dest },
+                () => $"{r.Message}\nsaved: {dest}");
+        }));
+        place.AddCommand(placeScatter);
+
         var placeSync = new Command("sync",
             "Regenerate the runtime creation script (CreateAllUnits/CreateAllItems in war3map.j) "
             + "from war3mapUnits.doo so preplaced widgets actually spawn in game. Repairs maps whose "
@@ -621,6 +700,80 @@ public static class Program
                 () => $"{r.Message}\nsaved: {dest}");
         }));
         place.AddCommand(placeSync);
+
+        // ---- placed, census and reference hygiene over what is already on the map ----
+        var placed = new Command("placed",
+            "Placed-object census and reference checks, stats, missing-refs and fix-refs.");
+
+        var placedStats = new Command("stats",
+            "Count placed units and doodads by rawcode and kind, resolving each type's name from the "
+            + "map's object data and, when --game-dir is given, the base game data. Read-only.")
+        { mapArg };
+        placedStats.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = PlacedStatsCommand.Execute(
+                MapDocument.Load(p.GetValueForArgument(mapArg)),
+                p.GetValueForOption(gameDirOption));
+            Emit(p.GetValueForOption(jsonOption), r,
+                () => r.Types.Count == 0
+                    ? r.Message
+                    : r.Message + "\n" + string.Join("\n", r.Types.Select(t =>
+                        $"{t.Count,6}  {t.Kind,-7}  {t.Rawcode}  {t.Name ?? "(no name)"}")));
+        }));
+        placed.AddCommand(placedStats);
+
+        var placedMissing = new Command("missing-refs",
+            "List placements whose rawcode is defined neither in the map's object data nor, when "
+            + "--game-dir is given, in the base game data. Read-only.")
+        { mapArg };
+        placedMissing.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = PlacedMissingRefsCommand.Execute(
+                MapDocument.Load(p.GetValueForArgument(mapArg)),
+                p.GetValueForOption(gameDirOption));
+            Emit(p.GetValueForOption(jsonOption), r,
+                () => r.Missing.Count == 0
+                    ? r.Message
+                    : r.Message + "\n" + string.Join("\n", r.Missing.Select(m =>
+                        $"{m.File} #{m.CreationNumber}  {m.Kind,-7}  {m.Rawcode}  at ({m.X:0.#}, {m.Y:0.#})")));
+        }));
+        placed.AddCommand(placedMissing);
+
+        var placedFixTo = new Option<string?>("--to",
+            "Rewrite each missing placement's rawcode to this four-character code instead of dropping it.");
+        var placedFix = new Command("fix-refs",
+            "Drop (or, with --to, rewrite) placements that reference a missing rawcode and save the "
+            + "edited map, reporting each change. Refuses when nothing is wrong. Writes "
+            + "war3mapUnits.doo and war3map.doo.")
+        { mapArg, placedFixTo, setOut };
+        placedFix.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = PlacedFixRefsCommand.Execute(doc,
+                p.GetValueForOption(gameDirOption), p.GetValueForOption(placedFixTo));
+            if (!r.Ok)
+            {
+                Emit(p.GetValueForOption(jsonOption), r, () => r.Message);
+                exitCode[0] = 1;
+                return;
+            }
+            var dest = p.GetValueForOption(setOut) ?? Path.Combine(
+                Path.GetDirectoryName(map) ?? "",
+                Path.GetFileNameWithoutExtension(map) + ".edited" + Path.GetExtension(map));
+            doc.Save(dest);
+            Emit(p.GetValueForOption(jsonOption),
+                new { r.Ok, r.Message, r.Changed, r.Changes, SavedTo = dest },
+                () => r.Changes.Count == 0
+                    ? $"{r.Message}\nsaved: {dest}"
+                    : r.Message + "\n" + string.Join("\n", r.Changes.Select(c =>
+                        $"{c.File} #{c.CreationNumber}  {c.Action}  {c.Rawcode}"
+                        + (c.ToRawcode is null ? "" : $" -> {c.ToRawcode}"))) + $"\nsaved: {dest}");
+        }));
+        placed.AddCommand(placedFix);
 
         // ---- palette: the doodad types placeable on a map (base catalog ⊕ map object-data) ----
         var palette = new Command("palette",
@@ -3902,7 +4055,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         root.AddCommand(convert); root.AddCommand(validate);
         root.AddCommand(audit); root.AddCommand(deprotect);
         root.AddCommand(debug);
-        root.AddCommand(place); root.AddCommand(palette); root.AddCommand(terrain);
+        root.AddCommand(place); root.AddCommand(placed); root.AddCommand(palette); root.AddCommand(terrain);
         root.AddCommand(sound); root.AddCommand(camera); root.AddCommand(pathing);
         root.AddCommand(mapInfo); root.AddCommand(player); root.AddCommand(force);
         root.AddCommand(region); root.AddCommand(newMap); trigger.AddCommand(triggerRead);
