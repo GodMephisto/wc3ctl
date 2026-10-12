@@ -222,4 +222,85 @@ public sealed class McpSmokeAnalysisTests : McpSmokeBase
         var r = await Call("gamedata_schema_diff", Args(("a", schemaA), ("b", schemaB), ("section", "objects")));
         Assert.Equal(0, Prop(r, "changes").GetArrayLength());
     }
+
+    /// <summary>A map whose war3map.j carries the shapes the script toolkit commands look for.</summary>
+    private async Task<string> ScriptedMap()
+    {
+        var script = Prop(await Call("file_get_text", Args(("map", Fixture), ("internal_path", "war3map.j"))), "text").GetString()!;
+        int g = script.IndexOf("endglobals", StringComparison.Ordinal);
+        string globalsBlock = "    integer udg_NeverRead = 0\n    integer udg_ReadOnce = 0\n";
+        script = script[..g] + globalsBlock + script[g..];
+        int main = script.IndexOf("function main takes nothing", StringComparison.Ordinal);
+        string extra = string.Join("\n",
+            "function SmokeNullLocal takes nothing returns nothing",
+            "    local group g = CreateGroup()",
+            "    call DestroyGroup(g)",
+            "endfunction",
+            "function SmokeComplex takes integer n returns integer",
+            "    if n > 0 and n < 10 then",
+            "        return 1",
+            "    endif",
+            "    return 0",
+            "endfunction",
+            "function SmokeUnused takes nothing returns nothing",
+            "endfunction",
+            "function SmokeReadsGlobal takes nothing returns nothing",
+            "    set udg_ReadOnce = GetRandomInt(1, 2)",
+            "    call BJDebugMsg(I2S(udg_ReadOnce))",
+            "endfunction",
+            "");
+        script = script[..main] + extra + script[main..];
+        var file = NewOut("scripted", ".j");
+        File.WriteAllText(file, script);
+        var outMap = NewOut("scripted");
+        await Call("file_set", Args(("map", Fixture), ("out_path", outMap), ("internal_path", "war3map.j"), ("from", file)));
+        return outMap;
+    }
+
+    [Fact, Covers("script_unused_globals")]
+    public async Task Script_unused_globals_reports_the_global_never_read()
+    {
+        var map = await ScriptedMap();
+        var r = await Call("script_unused_globals", Args(("map", map)));
+        var names = Rows(Prop(r, "globals")).Select(g => Prop(g, "name").GetString()).ToList();
+        Assert.Contains("udg_NeverRead", names);
+        Assert.DoesNotContain("udg_ReadOnce", names);
+    }
+
+    [Fact, Covers("script_unused_functions")]
+    public async Task Script_unused_functions_reports_the_uncalled_function()
+    {
+        var map = await ScriptedMap();
+        var r = await Call("script_unused_functions", Args(("map", map)));
+        var names = Rows(Prop(r, "functions")).Select(f => Prop(f, "name").GetString()).ToList();
+        Assert.Contains("SmokeUnused", names);
+        Assert.DoesNotContain("main", names);
+    }
+
+    [Fact, Covers("script_null_locals")]
+    public async Task Script_null_locals_reports_the_destroyed_but_unset_local()
+    {
+        var map = await ScriptedMap();
+        var r = await Call("script_null_locals", Args(("map", map)));
+        var rows = Rows(Prop(r, "locals"));
+        Assert.Contains(rows, l => Prop(l, "function").GetString() == "SmokeNullLocal");
+    }
+
+    [Fact, Covers("script_complexity")]
+    public async Task Script_complexity_ranks_the_branching_function()
+    {
+        var map = await ScriptedMap();
+        var r = await Call("script_complexity", Args(("map", map)));
+        var rows = Rows(Prop(r, "functions"));
+        Assert.Contains(rows, f => Prop(f, "function").GetString() == "SmokeComplex"
+            && Prop(f, "complexity").GetInt32() >= 2);
+    }
+
+    [Fact, Covers("script_callgraph")]
+    public async Task Script_callgraph_lists_edges_between_declared_functions()
+    {
+        var map = await ScriptedMap();
+        var r = await Call("script_callgraph", Args(("map", map)));
+        Assert.True(Prop(r, "edges").GetInt32() >= 1);
+    }
 }

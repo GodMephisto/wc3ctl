@@ -783,6 +783,67 @@ public static class Program
         }));
         script.AddCommand(scriptLeaks);
 
+        var scriptUnusedGlobals = new Command("unused-globals",
+            "Find globals declared in war3map.j and never read after their declaration, including "
+            + "ones that are only ever assigned. The World Editor's generated gg_ and bj_ globals are "
+            + "excluded. Read-only.") { mapArg, jsonOption };
+        scriptUnusedGlobals.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = ScriptUnusedGlobalsCommand.Execute(MapDocument.Load(p.GetValueForArgument(mapArg)));
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.ScriptUnusedGlobals(r));
+        }));
+        script.AddCommand(scriptUnusedGlobals);
+
+        var scriptUnusedFunctions = new Command("unused-functions",
+            "Find functions no other function calls and nothing else reaches, excluding the engine's "
+            + "entry points and anything an InitTrig_* function or ExecuteFunc(\"...\") names. Read-only.")
+        { mapArg, jsonOption };
+        scriptUnusedFunctions.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = ScriptUnusedFunctionsCommand.Execute(MapDocument.Load(p.GetValueForArgument(mapArg)));
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.ScriptUnusedFunctions(r));
+        }));
+        script.AddCommand(scriptUnusedFunctions);
+
+        var scriptNullLocals = new Command("null-locals",
+            "Find handle locals (location, group, force, effect, timer, trigger, text tag, lightning) "
+            + "destroyed with Remove/Destroy but never set to null, the classic JASS handle leak. Read-only.")
+        { mapArg, jsonOption };
+        scriptNullLocals.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = ScriptNullLocalsCommand.Execute(MapDocument.Load(p.GetValueForArgument(mapArg)));
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.ScriptNullLocals(r));
+        }));
+        script.AddCommand(scriptNullLocals);
+
+        var scriptComplexity = new Command("complexity",
+            "Per-function cyclomatic complexity (if, loop, and, or), ranked worst first, with the line. Read-only.")
+        { mapArg, jsonOption };
+        scriptComplexity.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = ScriptComplexityCommand.Execute(MapDocument.Load(p.GetValueForArgument(mapArg)));
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.ScriptComplexity(r));
+        }));
+        script.AddCommand(scriptComplexity);
+
+        var callgraphDot = new Option<bool>("--dot",
+            "Emit Graphviz DOT instead of a text adjacency list.");
+        var scriptCallGraph = new Command("callgraph",
+            "The call edges between functions the script declares, as a text adjacency list or, "
+            + "with --dot, Graphviz DOT. Read-only.") { mapArg, callgraphDot, jsonOption };
+        scriptCallGraph.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = ScriptCallGraphCommand.Execute(MapDocument.Load(p.GetValueForArgument(mapArg)));
+            bool dot = p.GetValueForOption(callgraphDot);
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.ScriptCallGraph(r, dot));
+        }));
+        script.AddCommand(scriptCallGraph);
+
         var refsName = new Argument<string>("name", "Function or global name to find uses of.");
         var scriptRefs = new Command("refs",
             "Find every use of a name in the map script: direct calls, and the places it is passed "

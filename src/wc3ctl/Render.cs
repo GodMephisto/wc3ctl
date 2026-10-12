@@ -777,6 +777,63 @@ public static class Render
         return sb.ToString().TrimEnd();
     }
 
+    public static string ScriptUnusedGlobals(ScriptUnusedGlobalsResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.ScriptFile}: {r.Declared} global(s), {r.Framework} framework, {r.Unused} unused");
+        foreach (var g in r.Globals)
+            sb.AppendLine($"  line {g.Line,-7} {g.Name,-28} {g.Type}");
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string ScriptUnusedFunctions(ScriptUnusedFunctionsResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.ScriptFile}: {r.Declared} function(s), {r.Unused} unreachable");
+        foreach (var f in r.Functions)
+            sb.AppendLine($"  line {f.Line,-7} {f.Name}");
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string ScriptNullLocals(ScriptNullLocalsResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.ScriptFile}: {r.Checked} handle local(s) checked, {r.Findings} destroyed without null");
+        foreach (var l in r.Locals)
+            sb.AppendLine($"  line {l.Line,-7} {l.Function}  {l.Type} {l.Name}  destroyed by {l.Destroyer} at line {l.DestroyedAtLine}");
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string ScriptComplexity(ScriptComplexityResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.ScriptFile}: {r.FunctionCount} function(s), {r.TotalDecisions} decision point(s) total");
+        foreach (var f in r.Functions)
+            sb.AppendLine($"  {f.Complexity,5}  line {f.Line,-7} {f.Function}");
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string ScriptCallGraph(ScriptCallGraphResult r, bool dot)
+    {
+        var sb = new StringBuilder();
+        if (dot)
+        {
+            sb.AppendLine("digraph callgraph {");
+            foreach (var f in r.Calls.Select(c => c.From).Distinct().OrderBy(x => x, StringComparer.Ordinal))
+                sb.AppendLine($"  \"{f}\";");
+            foreach (var c in r.Calls)
+                sb.AppendLine($"  \"{c.From}\" -> \"{c.To}\";");
+            if (r.Calls.Count == 0) sb.AppendLine("  // no edges");
+            sb.AppendLine("}");
+            return sb.ToString().TrimEnd();
+        }
+
+        sb.AppendLine($"{r.ScriptFile}: {r.Functions} function(s), {r.Edges} edge(s)");
+        foreach (var group in r.Calls.GroupBy(c => c.From))
+            sb.AppendLine($"  {group.Key} -> {string.Join(", ", group.Select(c => c.To))}");
+        return sb.ToString().TrimEnd();
+    }
+
     public static string MpqHash(HashTableView v)
     {
         var sb = new StringBuilder();
