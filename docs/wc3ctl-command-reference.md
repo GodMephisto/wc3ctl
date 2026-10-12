@@ -2,7 +2,7 @@
 
 Generated from the live command tree by `wc3ctl docs cli`. Do not edit by hand. Regenerate with `wc3ctl docs cli --force`, and the CI guard fails when this file is stale.
 
-The tree holds 57 top level verb(s) and 261 command path(s) in total.
+The tree holds 58 top level verb(s) and 282 command path(s) in total.
 
 ## Global options
 
@@ -233,6 +233,10 @@ Subcommands
 - `audit`. Flag suspicious imported assets. It reports entries over a size threshold, BLP textures whose dimensions are not powers of two, a .mdx with no sibling .mdl, and zero-byte entries. Read-only.
 - `size-report`. Per-folder total size of the archive's imported entries, largest first. Read-only.
 - `replace`. Replace an asset path everywhere it is referenced (object-data field values, script string literals and the import table) and save a copy. Refuses if the old path is referenced nowhere. The archive entry is not renamed.
+- `model-lint`. Scan every imported model (.mdx/.mdl) and report the structural problems a map cannot render or animate, a geoset with no material, a material naming a texture the map does not hold, a sequence with a zero duration, and an out of range bounding box. Read-only.
+- `thumbnails`. Render a thumbnail PNG for every model in a folder, or for every imported model inside every map in the folder. Read-only over the source.
+- `convert-batch`. Convert every texture in a folder to one target format, reusing the shared converter. Read-only over the source, the caller writes the copies.
+- `import-wire`. Add disk files to a map as imports and, when a file is a model or an icon and --object names an object, point its matching field at the new import. Saves a copy, refuses to overwrite the input map.
 
 ### asset list
 
@@ -332,6 +336,112 @@ Arguments
 Options
 
 - `-o, --out <out>`. Output map path. Default: '<map>.edited.<ext>' next to the input - the original is never overwritten.
+
+### asset model-lint
+
+Scan every imported model (.mdx/.mdl) and report the structural problems a map cannot render or animate, a geoset with no material, a material naming a texture the map does not hold, a sequence with a zero duration, and an out of range bounding box. Read-only.
+
+Usage
+
+```
+wc3ctl asset model-lint <map>
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+
+### asset thumbnails
+
+Render a thumbnail PNG for every model in a folder, or for every imported model inside every map in the folder. Read-only over the source.
+
+Usage
+
+```
+wc3ctl asset thumbnails <folder> [options]
+```
+
+Arguments
+
+- `<folder>` (required). Folder holding model (.mdx/.mdl) files, or map (.w3x/.w3m) files whose imported models are rendered.
+
+Options
+
+- `-o, --out <out>`. Output directory for the PNG thumbnails. Defaults to ./thumbnails
+- `--size <size>`. Thumbnail edge length in pixels. Default `256`.
+
+### asset convert-batch
+
+Convert every texture in a folder to one target format, reusing the shared converter. Read-only over the source, the caller writes the copies.
+
+Usage
+
+```
+wc3ctl asset convert-batch <folder> [options]
+```
+
+Arguments
+
+- `<folder>` (required). Folder holding texture files.
+
+Options
+
+- `--to <to>` (required). Target format extension, e.g. .png or .blp.
+- `-o, --out <out>`. Output directory for the converted textures. Defaults to ./converted
+
+### asset import-wire
+
+Add disk files to a map as imports and, when a file is a model or an icon and --object names an object, point its matching field at the new import. Saves a copy, refuses to overwrite the input map.
+
+Usage
+
+```
+wc3ctl asset import-wire <map> <files...> [options]
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+- `<files...>` (required). One or more disk files to add as imports.
+
+Options
+
+- `--object <object>`. Rawcode of the object whose model or icon field is pointed at each imported file.
+- `--kind <kind>`. Object type, one of unit|item|destructable|doodad. Defaults to auto-detect from the object.
+- `-o, --out <out>`. Output map path. Default: '<map>.edited.<ext>' next to the input - the original is never overwritten.
+
+## model
+
+Model asset operations.
+
+Usage
+
+```
+wc3ctl model
+```
+
+Subcommands
+
+- `export-obj`. Export a map-imported model to Wavefront OBJ, with an MTL and any map-resolvable textures converted to PNG beside it.
+
+### model export-obj
+
+Export a map-imported model to Wavefront OBJ, with an MTL and any map-resolvable textures converted to PNG beside it.
+
+Usage
+
+```
+wc3ctl model export-obj <map> <model> [options]
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+- `<model>` (required). Internal model path (.mdx/.mdl) inside the map.
+
+Options
+
+- `-o, --out <out>`. Output .obj path. A .mtl and any map-resolvable textures are written beside it.
 
 ## strings
 
@@ -1236,6 +1346,11 @@ Subcommands
 - `deprecated`. List object fields the target build's schema does not define but the map still sets. Read-only.
 - `rawcode-suggest`. Propose free four-character rawcodes that collide with neither the map nor the base game data for the kind. Read-only.
 - `clone`. Deep-clone a map object (its field deltas, and level data for an ability) under a new rawcode and save the edited map. Refuses a rawcode already taken.
+- `migrate`. Rewrite the map's object data to the target build's field set, dropping fields the target does not define and reporting each drop. Saves an edited copy.
+- `bulk-set`. Set one field on every object of a kind matching every --where clause, and save the edited copy. Reports how many changed.
+- `export`. Export the objects of a kind (base game data overlaid by the map) to CSV, one row per object, one column per field code. Read-only.
+- `import`. Import a CSV of one kind back into the map, adding or updating its objects. Refuses an unknown column. Saves an edited copy.
+- `rename`. Rename an object rawcode and optionally rewrite every field and script literal that references it. Saves an edited copy.
 - `options`. The legal values for an object field, taken from what the base game data uses for it. Ask before 'object set' on an enumerated field.
 
 ### object form
@@ -1434,6 +1549,108 @@ Options
 
 - `-o, --out <out>`. Output map path. Default: '<map>.edited.<ext>' next to the input - the original is never overwritten.
 
+### object migrate
+
+Rewrite the map's object data to the target build's field set, dropping fields the target does not define and reporting each drop. Saves an edited copy.
+
+Usage
+
+```
+wc3ctl object migrate <map> [options]
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+
+Options
+
+- `--to <to>` (required). Target build name or path to a schema folder (read like compat).
+- `--schemas <schemas>`. Directory of schema folders. Default: search <base>/schemas then walk up to data/schemas.
+- `-o, --out <out>`. Output map path. Default: '<map>.edited.<ext>' next to the input - the original is never overwritten.
+
+### object bulk-set
+
+Set one field on every object of a kind matching every --where clause, and save the edited copy. Reports how many changed.
+
+Usage
+
+```
+wc3ctl object bulk-set <map> [options]
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+
+Options
+
+- `--kind <kind>`. Object type: unit|item|ability|destructable|doodad|buff|upgrade. Default `unit`.
+- `--set <set>` (required). The field and value to write, as code=value (e.g. uhpm=1000).
+- `--where <where>`. A match clause code=value; repeat for several. An object must match every clause.
+- `-o, --out <out>`. Output map path. Default: '<map>.edited.<ext>' next to the input - the original is never overwritten.
+
+### object export
+
+Export the objects of a kind (base game data overlaid by the map) to CSV, one row per object, one column per field code. Read-only.
+
+Usage
+
+```
+wc3ctl object export <map> [options]
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+
+Options
+
+- `--kind <kind>`. Object type: unit|item|ability|destructable|doodad|buff|upgrade. Default `unit`.
+- `-o, --out <out>` (required). CSV output path.
+
+### object import
+
+Import a CSV of one kind back into the map, adding or updating its objects. Refuses an unknown column. Saves an edited copy.
+
+Usage
+
+```
+wc3ctl object import <map> [options]
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+
+Options
+
+- `--kind <kind>`. Object type: unit|item|ability|destructable|doodad|buff|upgrade. Default `unit`.
+- `--csv <csv>` (required). Path to the CSV file to import.
+- `-o, --out <out>`. Output map path. Default: '<map>.edited.<ext>' next to the input - the original is never overwritten.
+
+### object rename
+
+Rename an object rawcode and optionally rewrite every field and script literal that references it. Saves an edited copy.
+
+Usage
+
+```
+wc3ctl object rename <map> <old> <new> [options]
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+- `<old>` (required). The rawcode to rename.
+- `<new>` (required). The new rawcode.
+
+Options
+
+- `--kind <kind>`. Object type: unit|item|ability|destructable|doodad|buff|upgrade. Default `unit`.
+- `--rewrite-refs`. Also rewrite every object-data field value and script string literal that names the old rawcode.
+- `-o, --out <out>`. Output map path. Default: '<map>.edited.<ext>' next to the input - the original is never overwritten.
+
 ### object options
 
 The legal values for an object field, taken from what the base game data uses for it. Ask before 'object set' on an enumerated field.
@@ -1534,6 +1751,11 @@ Subcommands
 - `complexity`. Per-function cyclomatic complexity (if, loop, and, or), ranked worst first, with the line. Read-only.
 - `callgraph`. The call edges between functions the script declares, as a text adjacency list or, with --dot, Graphviz DOT. Read-only.
 - `refs`. Find every use of a name in the map script: direct calls, and the places it is passed as a code value (Condition, Filter, TriggerAddAction), which a text search for 'name(' cannot see.
+- `reachable`. List the functions reachable from main and the InitTrig entry points, and the dead functions nothing reaches, each with its line. Read-only.
+- `api-usage`. List the natives and functions the script uses that the target build does not declare. Read-only.
+- `semantic-diff`. Compare two scripts line by line after normalizing whitespace and ignoring pure renames of local variables, reporting the real changes. Read-only.
+- `duplicate-bodies`. Find functions whose normalized bodies are identical, up to comments, whitespace and local variable names. Read-only.
+- `modernize`. Rewrite deprecated or renamed natives in the script to the target build's spelling where a mapping is known, leaving everything else untouched.
 - `loops`. Find JASS loops that may never terminate: no exitwhen at all, or an exit condition naming only values the loop body never assigns.
 - `roots`. List functions reachable only via a string literal, e.g. ExecuteFunc("Name"). A dead-code pass must pin these or it will delete live code.
 - `strip`. Remove unreachable functions from war3map.j by call-graph closure from the engine's entry points plus every function named in a string literal. Globals are untouched.
@@ -1663,6 +1885,88 @@ Arguments
 
 - `<map>` (required). Path to a .w3x/.w3m map.
 - `<name>` (required). Function or global name to find uses of.
+
+### script reachable
+
+List the functions reachable from main and the InitTrig entry points, and the dead functions nothing reaches, each with its line. Read-only.
+
+Usage
+
+```
+wc3ctl script reachable <map>
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+
+### script api-usage
+
+List the natives and functions the script uses that the target build does not declare. Read-only.
+
+Usage
+
+```
+wc3ctl script api-usage <map> [options]
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+
+Options
+
+- `--target <target>` (required). Target build name or schema folder path.
+- `--schemas <schemas>`. Directory of schema folders. Default: search <base>/schemas then walk up to data/schemas.
+
+### script semantic-diff
+
+Compare two scripts line by line after normalizing whitespace and ignoring pure renames of local variables, reporting the real changes. Read-only.
+
+Usage
+
+```
+wc3ctl script semantic-diff <map> <mapB>
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+- `<mapB>` (required). Path to the second map.
+
+### script duplicate-bodies
+
+Find functions whose normalized bodies are identical, up to comments, whitespace and local variable names. Read-only.
+
+Usage
+
+```
+wc3ctl script duplicate-bodies <map>
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+
+### script modernize
+
+Rewrite deprecated or renamed natives in the script to the target build's spelling where a mapping is known, leaving everything else untouched.
+
+Usage
+
+```
+wc3ctl script modernize <map> [options]
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+
+Options
+
+- `--target <target>` (required). Target build name or schema folder path.
+- `--schemas <schemas>`. Directory of schema folders. Default: search <base>/schemas then walk up to data/schemas.
+- `-o, --out <out>`. Output map path. Default: '<map>.modernized.<ext>' next to the input - the original is never overwritten.
 
 ### script loops
 
@@ -3194,6 +3498,9 @@ Subcommands
 
 - `list`. List the map's player slots.
 - `set-force`. Move a player into a force and save the edited map.
+- `set-name`. Set a player's display name in the map info and save the edited map.
+- `set-color`. Set a player's team color in the map script and save the edited map.
+- `set-race`. Set a player's race in the map info and save the edited map.
 
 ### player list
 
@@ -3229,6 +3536,66 @@ Options
 
 - `-o, --out <out>`. Output map path. Default: '<map>.edited.<ext>' next to the input - the original is never overwritten.
 
+### player set-name
+
+Set a player's display name in the map info and save the edited map.
+
+Usage
+
+```
+wc3ctl player set-name <map> [options]
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+
+Options
+
+- `--player <player>` (required). Player id, 0-based.
+- `--name <name>` (required). New name text.
+- `-o, --out <out>`. Output map path. Default: '<map>.edited.<ext>' next to the input - the original is never overwritten.
+
+### player set-color
+
+Set a player's team color in the map script and save the edited map.
+
+Usage
+
+```
+wc3ctl player set-color <map> [options]
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+
+Options
+
+- `--player <player>` (required). Player id, 0-based.
+- `--color <color>` (required). Team color name, for example red, lightblue or darkgreen.
+- `-o, --out <out>`. Output map path. Default: '<map>.edited.<ext>' next to the input - the original is never overwritten.
+
+### player set-race
+
+Set a player's race in the map info and save the edited map.
+
+Usage
+
+```
+wc3ctl player set-race <map> [options]
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+
+Options
+
+- `--player <player>` (required). Player id, 0-based.
+- `--race <race>` (required). human, orc, undead, nightelf or random.
+- `-o, --out <out>`. Output map path. Default: '<map>.edited.<ext>' next to the input - the original is never overwritten.
+
 ## force
 
 Forces / teams (war3map.w3i): list, set-flags.
@@ -3243,6 +3610,8 @@ Subcommands
 
 - `list`. List the map's forces (teams).
 - `set-flags`. Set a force's alliance/sharing flags and save the edited map.
+- `rename`. Rename a force and save the edited map.
+- `set-players`. Add or remove a player from a force and save the edited map.
 
 ### force list
 
@@ -3280,6 +3649,47 @@ Arguments
 
 Options
 
+- `-o, --out <out>`. Output map path. Default: '<map>.edited.<ext>' next to the input - the original is never overwritten.
+
+### force rename
+
+Rename a force and save the edited map.
+
+Usage
+
+```
+wc3ctl force rename <map> [options]
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+
+Options
+
+- `--force <force>` (required). Force index, 0-based.
+- `--name <name>` (required). New name text.
+- `-o, --out <out>`. Output map path. Default: '<map>.edited.<ext>' next to the input - the original is never overwritten.
+
+### force set-players
+
+Add or remove a player from a force and save the edited map.
+
+Usage
+
+```
+wc3ctl force set-players <map> [options]
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+
+Options
+
+- `--force <force>` (required). Force index, 0-based.
+- `--add <add>`. Add this player id to the force.
+- `--remove <remove>`. Remove this player id from the force.
 - `-o, --out <out>`. Output map path. Default: '<map>.edited.<ext>' next to the input - the original is never overwritten.
 
 ## region

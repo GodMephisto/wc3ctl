@@ -2,7 +2,7 @@
 
 Generated from the live tool surface by `wc3ctl docs mcp`. Do not edit by hand. Regenerate with `wc3ctl docs mcp --force`, and the CI guard fails when this file is stale.
 
-The server exposes 189 tool(s).
+The server exposes 209 tool(s).
 
 ## asset_audit
 
@@ -10,15 +10,33 @@ Flag suspicious imported assets. It reports entries larger than max_bytes, BLP t
 
 Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 
+## asset_convert_batch
+
+Convert every texture in a folder to one target format, reusing the shared converter, and write the copies under out_dir with their relative paths preserved. Read-only over the source folder. Returns the output directory, the count and the file names.
+
+Annotations. read-only no, destructive no, idempotent no, open-world no.
+
 ## asset_duplicates
 
 Group the map's imported files whose bytes are identical (by sha256) and report the space each duplicate group wastes. Zero-byte entries are excluded. Read-only.
 
 Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 
+## asset_import_wire
+
+Add disk files to a map as imports and, when a file is a model or an icon and object names an object, point its matching model or icon field at the new import. Saves the edited copy to out_path. The input map is NEVER modified. Returns the imported paths and the fields set.
+
+Annotations. read-only no, destructive no, idempotent no, open-world no.
+
 ## asset_list
 
 List the asset paths an icon or model object field can actually be set to, from the map's own imported files and from the base game. Ask this BEFORE setting a model or icon field, because a field naming a path that does not resolve renders as nothing and reports no error anywhere.
+
+Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
+## asset_model_lint
+
+Scan every imported model (.mdx/.mdl) in the map and report the structural problems a static check can find, a geoset with no material, a material naming a texture the map does not hold, a sequence with a zero duration, and an out of range bounding box. Read-only, it parses bytes in memory and changes nothing.
 
 Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 
@@ -33,6 +51,12 @@ Annotations. read-only no, destructive no, idempotent no, open-world no.
 Break the map's imported bytes down by parent folder, largest total first, so the folders that dominate the map's weight are obvious. Read-only.
 
 Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
+## asset_thumbnails
+
+Render a thumbnail PNG for every model in a folder, or for every imported model inside every map in the folder, and write them under out_dir. Reuses the model renderer. Read-only over the source folder and every map it holds. Returns the output directory and the file names.
+
+Annotations. read-only no, destructive no, idempotent no, open-world no.
 
 ## asset_unused
 
@@ -238,9 +262,21 @@ List the map's forces/teams (war3map.w3i): each force's index, name, member play
 
 Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 
+## force_rename
+
+Rename a force (team) in war3map.w3i and save the edited map to out_path. The input map is NEVER modified in place.
+
+Annotations. read-only no, destructive no, idempotent no, open-world no.
+
 ## force_set_flags
 
 Set a force's alliance/sharing flags and save the edited map to out_path. The input map is NEVER modified in place.
+
+Annotations. read-only no, destructive no, idempotent no, open-world no.
+
+## force_set_players
+
+Add or remove a player from a force (team) in war3map.w3i and save the edited map to out_path. Pass exactly one of add or remove. Adding clears the player from every other force so the masks stay consistent. The input map is NEVER modified in place.
 
 Annotations. read-only no, destructive no, idempotent no, open-world no.
 
@@ -400,6 +436,12 @@ Audit the MCP tool surface itself. Reports every tool whose annotations disagree
 
 Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 
+## model_export_obj
+
+Export a map-imported model to Wavefront OBJ at out_path, writing an MTL and any map-resolvable textures converted to PNG beside it. The map itself is never modified. Returns the .obj path, the .mtl path and the texture file names.
+
+Annotations. read-only no, destructive no, idempotent yes, open-world no.
+
 ## mpq_bytes_diff
 
 Compare two archives entry by entry by name. For each name present in both, report whether the payload SHA256 matches, and list names only one side carries. The byte-level counterpart of the structural mpq-diff. Read-only.
@@ -436,6 +478,12 @@ Create a blank, World-Editor-openable map (.w3x) at out_path. No input map. Retu
 
 Annotations. read-only no, destructive no, idempotent no, open-world no.
 
+## object_bulk_set
+
+Set one field on every object of a kind that matches every where clause, and save the edited copy to out_path. The input map is NEVER modified in place. A where clause is code=value and tests the object's merged value (base game data overlaid by the map). Reports how many objects changed.
+
+Annotations. read-only no, destructive no, idempotent no, open-world no.
+
 ## object_clone
 
 Deep-clone a map object under a new rawcode and save the edited map to out_path. The input map is NEVER modified in place. The clone copies the source's field deltas and, for a leveled kind, its per-level data too, keeping the source's base. Refuses a rawcode already taken by the map.
@@ -445,6 +493,12 @@ Annotations. read-only no, destructive no, idempotent no, open-world no.
 ## object_deprecated
 
 List object fields the target build's schema does not define but the map still sets, meaning the edit is ignored on that build. Read-only. The target is a schema folder path or a build name under the schemas directory. A target with no object data section is reported as such rather than as a clean result.
+
+Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
+## object_export
+
+Export the objects of one kind (base game data overlaid by the map's deltas) to a CSV file at out_path, one row per object, one column per field code, with a header. Read-only on the map. Feed the CSV back with object_import.
 
 Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 
@@ -466,11 +520,23 @@ Get an object's merged fields (base game data overlaid by the map's deltas), eac
 
 Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 
+## object_import
+
+Import a CSV of one kind back into the map, adding objects the map does not define and updating those it does, then save the edited copy to out_path. The input map is NEVER modified in place. An unknown column refuses the whole import. A blank cell leaves that field untouched.
+
+Annotations. read-only no, destructive no, idempotent no, open-world no.
+
 ## object_list
 
 List the map's custom/modified objects of one Object Editor kind: rawcode, base rawcode (null = created from scratch) and resolved name. Pass brief true to get the total and only the first 50 objects when the full list would be too large for the context.
 
 Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
+## object_migrate
+
+Rewrite a map's object data to a target build's field set, dropping every field the target does not define, and save the edited copy to out_path. The input map is NEVER modified in place. Every drop is reported, and a target with no object data section refuses rather than stripping everything.
+
+Annotations. read-only no, destructive no, idempotent no, open-world no.
 
 ## object_new
 
@@ -489,6 +555,12 @@ Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 Propose free four-character rawcodes for one Object Editor kind that collide with neither the map's objects nor the base game data. Read-only. Without a game_dir the suggestions are checked against the map only.
 
 Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
+## object_rename
+
+Rename an object rawcode and save the edited copy to out_path. The input map is NEVER modified in place. With rewrite_refs true, every object-data field value and script string literal that names the old rawcode is rewritten too, so references do not dangle. Refuses a new rawcode already taken by the map.
+
+Annotations. read-only no, destructive no, idempotent no, open-world no.
 
 ## object_search
 
@@ -646,9 +718,27 @@ List the map's player slots (war3map.w3i): each player's id, name, color, race, 
 
 Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 
+## player_set_color
+
+Set a player's team color and save the edited map to out_path. war3map.w3i has no per-player color field, so this rewrites the SetPlayerColor call the map script already carries. The input map is NEVER modified in place.
+
+Annotations. read-only no, destructive no, idempotent no, open-world no.
+
 ## player_set_force
 
 Move a player into a force (team) and save the edited map to out_path. The input map is NEVER modified in place.
+
+Annotations. read-only no, destructive no, idempotent no, open-world no.
+
+## player_set_name
+
+Set a player's display name (war3map.w3i) and save the edited map to out_path. The input map is NEVER modified in place.
+
+Annotations. read-only no, destructive no, idempotent no, open-world no.
+
+## player_set_race
+
+Set a player's race (war3map.w3i) and save the edited map to out_path. Accepted values are human, orc, undead, nightelf and random. The input map is NEVER modified in place.
 
 Annotations. read-only no, destructive no, idempotent no, open-world no.
 
@@ -760,6 +850,12 @@ Verify the map survives a load and save byte for byte. Any file that differs is 
 
 Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 
+## script_api_usage
+
+List the natives and functions the map script uses that a target game build does not declare, the compile-time side of a port. Uses the same schema membership test as the compat check. Read-only.
+
+Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
 ## script_callgraph
 
 The call edges between the functions a map's war3map.j declares, caller to callee. Only edges between functions this script declares are included, so a native call or a call through a local code value is not an edge. Read-only.
@@ -784,6 +880,12 @@ Turn every Lua entry of a map that ships as precompiled Lua 5.3 bytecode (war3ma
 
 Annotations. read-only no, destructive no, idempotent yes, open-world no.
 
+## script_duplicate_bodies
+
+Find functions whose normalized bodies are identical, up to comments, whitespace and local variable names. A copied function is a maintenance trap, a fix in one copy silently misses the others. Read-only.
+
+Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
 ## script_format
 
 Reprint a Lua map script and save the map to out_path. pretty is indented with comments kept, canonical is one fixed form for diffing two builds. The result compiles to the same Lua instructions as the original. JASS maps are refused. The input map is NEVER modified, and nothing is written when the script is already in that form.
@@ -802,15 +904,33 @@ Find handle leaks in a map's war3map.j (locations, groups, forces, effects, time
 
 Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 
+## script_modernize
+
+Rewrite deprecated or renamed natives in the map script to the target build's spelling where a known mapping exists, and save the map to out_path. A rewrite is only applied when the target build declares the new name, and names inside strings or comments are never touched. Nothing is written when there is nothing to rewrite. The input map is NEVER modified.
+
+Annotations. read-only no, destructive no, idempotent yes, open-world no.
+
 ## script_null_locals
 
 Find the classic JASS handle leak: a local of a handle type (location, group, force, effect, timer, trigger, text tag, lightning) that the function destroys with the matching Remove or Destroy but never sets to null, which keeps the handle id reserved for the rest of the function. A local that is never destroyed is a different leak and is not reported here. Read-only.
 
 Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 
+## script_reachable
+
+List the functions reachable from the map script's entry points, main and the InitTrig functions, and the dead functions nothing reaches, each with its declaration line. A function reached only through a string (ExecuteFunc) is reported dead here, which is the honest answer to what main reaches. Read-only.
+
+Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
 ## script_references
 
 Find every use of a name in the map's compiled script: direct calls, and the places it is passed as a code value (Condition, Filter, TriggerAddAction). The second kind is how most trigger handlers are actually reached and a text search for 'name(' cannot see it, so use this rather than search when asking what reaches a function. Each result carries its line, the function containing it, and the line text.
+
+Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
+## script_semantic_diff
+
+Compare two map scripts line by line after normalizing whitespace, dropping comments and ignoring pure renames of local variables, and report the real changes. Use this rather than diff for a before/after of a port or an edit where a variable rename or a reindent should not drown the intended change. Read-only.
 
 Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 
