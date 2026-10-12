@@ -410,6 +410,104 @@ public static class Render
         return sb.ToString().TrimEnd();
     }
 
+    // ---- trigger analysis (to-script, export, lint, dead, diff) ----
+
+    public static string TriggerScript(TriggerScriptResult r) => r.Script.TrimEnd();
+
+    public static string TriggerExport(TriggerExportResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"script language {r.ScriptLanguage}");
+        sb.AppendLine($"{r.Categories.Count} category(s), {r.Triggers.Count} trigger(s), "
+            + $"{r.Variables.Count} variable(s)");
+        foreach (var t in r.Triggers)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"trigger #{t.Id} {t.Name}"
+                + (t.Enabled ? "" : "  [disabled]")
+                + (t.InitiallyOn ? "" : "  [initially off]")
+                + (t.RunOnMapInit ? "  [run on map init]" : "")
+                + (t.IsCustomText ? "  [custom text]" : ""));
+            if (t.IsCustomText)
+            {
+                var body = (t.CustomText ?? string.Empty).TrimEnd();
+                sb.AppendLine(body.Length == 0 ? "  (empty body)" : Indent(body, 2));
+                continue;
+            }
+            foreach (var node in t.Events) sb.AppendLine("  " + FunctionLine(node));
+            foreach (var node in t.Conditions) sb.AppendLine("  " + FunctionLine(node));
+            foreach (var node in t.Actions) sb.AppendLine("  " + FunctionLine(node));
+            foreach (var node in t.Other) sb.AppendLine("  " + FunctionLine(node));
+        }
+        foreach (var v in r.Variables)
+            sb.AppendLine($"variable {v.Name} {v.Type}{(v.IsArray ? "[]" : "")}"
+                + (v.InitialValue is null ? "" : $" = {v.InitialValue}"));
+        return sb.ToString().TrimEnd();
+    }
+
+    private static string FunctionLine(TriggerFunctionInfo f)
+    {
+        var sb = new StringBuilder();
+        sb.Append(f.Enabled ? "   " : "[x] ");
+        sb.Append($"{f.Kind,-9} {f.Name}");
+        if (f.Parameters.Count > 0) sb.Append($" ({string.Join(", ", f.Parameters)})");
+        foreach (var child in f.Children)
+            sb.Append($"\n      {FunctionLine(child)}");
+        return sb.ToString();
+    }
+
+    public static string TriggerLint(TriggerLintResult r)
+    {
+        if (r.Findings.Count == 0) return r.Summary;
+        var sb = new StringBuilder();
+        foreach (var f in r.Findings)
+            sb.AppendLine($"{f.Rule,-16} {f.TriggerName}  {f.Detail}");
+        sb.AppendLine();
+        sb.Append(r.Summary);
+        return sb.ToString();
+    }
+
+    public static string TriggerDead(TriggerDeadResult r)
+    {
+        if (r.Dead.Count == 0) return r.Summary;
+        var sb = new StringBuilder();
+        foreach (var t in r.Dead)
+        {
+            sb.AppendLine($"#{t.Id} {t.Name}");
+            foreach (var reason in t.Reasons)
+                sb.AppendLine($"  {reason.Kind,-30} {reason.Detail}");
+        }
+        sb.AppendLine();
+        sb.Append(r.Summary);
+        return sb.ToString();
+    }
+
+    public static string TriggerDiff(TriggerDiffResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.TriggersInA} trigger(s) in the first map, {r.TriggersInB} in the second.");
+        foreach (var name in r.Added) sb.AppendLine($"+ added    {name}");
+        foreach (var name in r.Removed) sb.AppendLine($"- removed  {name}");
+        foreach (var rename in r.Renamed)
+            sb.AppendLine($"~ renamed  #{rename.Id} '{rename.From}' to '{rename.To}'");
+        foreach (var change in r.Changed)
+        {
+            sb.AppendLine($"* changed  #{change.Id} {change.Name}");
+            foreach (var d in change.Changes)
+                sb.AppendLine($"{(d.Change == "added" ? '+' : '-')} {d.Kind,-9} {d.Description}");
+        }
+        if (r.Added.Count == 0 && r.Removed.Count == 0 && r.Renamed.Count == 0 && r.Changed.Count == 0)
+            sb.AppendLine("The two trigger trees are identical.");
+        return sb.ToString().TrimEnd();
+    }
+
+    /// <summary>Indents every line of <paramref name="text"/> by <paramref name="spaces"/>.</summary>
+    private static string Indent(string text, int spaces)
+    {
+        string pad = new(' ', spaces);
+        return string.Join("\n", text.Replace("\r\n", "\n").Split('\n').Select(l => pad + l));
+    }
+
     public static string PlacedUnit(UnitInstanceInfo u) => string.Join("\n", new[]
     {
         $"creation number {u.CreationNumber}   type {u.TypeRawcode}"

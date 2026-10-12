@@ -118,6 +118,12 @@ public static class Program
             }
         }
 
+        // Best-effort World-Editor catalog for the to-script renderer. A machine without the game
+        // installed has none, and that is not an error: the renderer keeps raw preset names and
+        // says in its output that it could not resolve them.
+        static Wc3.GameData.TriggerDataCatalog? TryCatalog(string? gameDir) =>
+            TriggerCatalogCommand.TryLoad(null, gameDir, out _);
+
         var info = new Command("info", "Show map metadata.") { mapArg };
         info.SetHandler((string map, bool json) => RunSafely(() =>
         {
@@ -3185,10 +3191,85 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
             FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message);
         }));
 
-        var trigger = new Command("trigger", "GUI triggers: read the tree, edit a trigger's name "
-            + "and flags, browse the World-Editor catalog, and recover a tree from the script.");
+        var trigger = new Command("trigger", "GUI triggers, read the tree, edit a trigger's name "
+            + "and flags, browse the World-Editor catalog, recover a tree from the script, and "
+            + "analyse the tree read-only (to-script, diff, lint, export, dead).");
         trigger.AddCommand(trigCatalog);
         trigger.AddCommand(trigRecover);
+
+        // --- trigger read-only analysis (to-script, diff, lint, export, dead) ---
+        // Every one of these reads the tree and never edits the map. to-script resolves preset
+        // parameter values through the World-Editor catalog when the installed game provides one,
+        // and falls back to the raw names otherwise rather than refusing.
+        var trigToScript = new Command("to-script",
+            "Render the GUI trigger tree to JASS-style text, the way the World Editor's 'convert "
+            + "to custom text' presents one trigger. Read-only. It is a rendering for reading, not "
+            + "a replacement for the compiled script, and it says so in its own header.")
+        { mapArg };
+        trigToScript.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = TriggerToScriptCommand.Render(
+                MapDocument.Load(p.GetValueForArgument(mapArg)),
+                TryCatalog(p.GetValueForOption(gameDirOption)));
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.TriggerScript(r));
+        }));
+
+        var trigMapAArg = new Argument<string>("mapA", "Path to the first .w3x/.w3m map.");
+        var trigMapBArg = new Argument<string>("mapB", "Path to the second .w3x/.w3m map.");
+        var trigDiff = new Command("diff",
+            "Compare two maps' GUI trigger trees, reporting triggers added, removed and renamed, "
+            + "and event, condition or action changes within a trigger shared by both maps.")
+        { trigMapAArg, trigMapBArg };
+        trigDiff.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = TriggerDiffCommand.Compare(
+                MapDocument.Load(p.GetValueForArgument(trigMapAArg)),
+                MapDocument.Load(p.GetValueForArgument(trigMapBArg)));
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.TriggerDiff(r));
+        }));
+
+        var trigLint = new Command("lint",
+            "Check a map's GUI trigger tree for triggers that can never fire (no event and not run "
+            + "on map initialization), triggers with a duplicate event, and triggers with no action.")
+        { mapArg };
+        trigLint.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = TriggerLintCommand.Lint(MapDocument.Load(p.GetValueForArgument(mapArg)));
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.TriggerLint(r));
+        }));
+
+        var trigExport = new Command("export",
+            "Export the full GUI trigger tree as structured output. Each trigger carries its name "
+            + "and enabled flags, and its event, condition and action lists with the catalog "
+            + "function name and arguments for every node.")
+        { mapArg };
+        trigExport.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = TriggerExportCommand.Export(MapDocument.Load(p.GetValueForArgument(mapArg)));
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.TriggerExport(r));
+        }));
+
+        var trigDead = new Command("dead",
+            "Find triggers that cannot do anything. Those with no action, and those whose events "
+            + "never fire, for example a unit event holding a unit variable nothing assigns or a "
+            + "variable event watching a variable nothing sets.")
+        { mapArg };
+        trigDead.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = TriggerDeadCommand.Dead(MapDocument.Load(p.GetValueForArgument(mapArg)));
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.TriggerDead(r));
+        }));
+
+        trigger.AddCommand(trigToScript);
+        trigger.AddCommand(trigDiff);
+        trigger.AddCommand(trigLint);
+        trigger.AddCommand(trigExport);
+        trigger.AddCommand(trigDead);
 
         // ---- editor, the World Editor's catalogs (UI\WorldEditData.txt, read-only) ----
         var editorCatalogList = new Command("list",
