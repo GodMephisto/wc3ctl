@@ -4808,6 +4808,116 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         compat.AddCommand(compatExplain);
 
         root.AddCommand(compat);
+
+        // ---- bench, measured benchmarks over a folder of maps or a schemas corpus ----
+        var bench = new Command("bench",
+            "Measured benchmarks. Each command prints a number rather than a claim, over a folder "
+            + "of maps or a schemas corpus. Read-only unless noted.");
+
+        // bench schema-coverage [--schemas <dir>]
+        var benchSchemas = new Option<string?>("--schemas",
+            "Schemas directory containing schema folders with manifest.json.");
+        var benchSchemaCoverage = new Command("schema-coverage",
+            "Measure object-data coverage of every schema folder. One row per build with its era and "
+            + "whether object data is real, era-derived or absent, and the real field count, plus totals. "
+            + "Read-only.") { benchSchemas };
+        benchSchemaCoverage.SetHandler(ctx =>
+        {
+            var p = ctx.ParseResult;
+            RunSafely(() =>
+            {
+                var r = BenchSchemaCoverageCommand.Execute(p.GetValueForOption(benchSchemas));
+                Emit(p.GetValueForOption(jsonOption), r, () => Render.BenchSchemaCoverage(r));
+            });
+        });
+        bench.AddCommand(benchSchemaCoverage);
+
+        // bench compat <maps...> --targets <builds...> [--schemas <dir>]
+        var benchCompatMaps = new Argument<string[]>("maps",
+            "One or more .w3x/.w3m maps.") { Arity = ArgumentArity.OneOrMore };
+        var benchCompatTargets = new Option<string[]>("--targets",
+            "One or more target build names or schema folder paths.") { IsRequired = true };
+        var benchCompatSchemas = new Option<string?>("--schemas",
+            "Schemas directory containing schema folders with manifest.json.");
+        var benchCompat = new Command("compat",
+            "Check every map against every target build and report a pass or fail matrix with finding "
+            + "counts, plus the aggregate. Exits 2 if any cell fails. Read-only.")
+            { benchCompatMaps, benchCompatTargets, benchCompatSchemas };
+        benchCompat.SetHandler(ctx =>
+        {
+            var p = ctx.ParseResult;
+            RunSafely(() =>
+            {
+                var r = BenchCompatCommand.Execute(
+                    p.GetValueForArgument(benchCompatMaps),
+                    p.GetValueForOption(benchCompatTargets)!,
+                    p.GetValueForOption(benchCompatSchemas));
+                Emit(p.GetValueForOption(jsonOption), r, () => Render.BenchCompat(r));
+                if (r.Aggregate.Failed > 0) exitCode[0] = 2;
+            });
+        });
+        bench.AddCommand(benchCompat);
+
+        // bench leaks <folder>
+        var benchLeaksFolder = new Argument<string>("folder",
+            "Folder of .w3x/.w3m maps, searched recursively.");
+        var benchLeaks = new Command("leaks",
+            "Run the static leak detector over every map in a folder and report the counts per map and "
+            + "per leak kind, a sweep rather than one map. Read-only.") { benchLeaksFolder };
+        benchLeaks.SetHandler(ctx =>
+        {
+            var p = ctx.ParseResult;
+            RunSafely(() =>
+            {
+                var r = BenchLeaksCommand.Execute(p.GetValueForArgument(benchLeaksFolder));
+                Emit(p.GetValueForOption(jsonOption), r, () => Render.BenchLeaks(r));
+            });
+        });
+        bench.AddCommand(benchLeaks);
+
+        // bench open <folder>
+        var benchOpenFolder = new Argument<string>("folder",
+            "Folder of .w3x/.w3m maps, searched recursively.");
+        var benchOpen = new Command("open",
+            "Open every map in a folder through the loader and record the per-map open time, entry "
+            + "count and total bytes, reporting the slowest map and the median. Read-only.")
+            { benchOpenFolder };
+        benchOpen.SetHandler(ctx =>
+        {
+            var p = ctx.ParseResult;
+            RunSafely(() =>
+            {
+                var r = BenchOpenCommand.Execute(p.GetValueForArgument(benchOpenFolder));
+                Emit(p.GetValueForOption(jsonOption), r, () => Render.BenchOpen(r));
+            });
+        });
+        bench.AddCommand(benchOpen);
+
+        // bench perf-gate <baseline.json> <run.json> [--max-regression-pct N]
+        var benchBaseline = new Argument<string>("baseline", "Path to the baseline benchmark JSON.");
+        var benchRunArg = new Argument<string>("run", "Path to the benchmark JSON to compare against the baseline.");
+        var benchMaxRegression = new Option<double>("--max-regression-pct",
+            () => 10, "Fail when any metric regressed by more than this percent.");
+        var benchPerfGate = new Command("perf-gate",
+            "Compare two recorded benchmark results and exit non-zero when any metric regressed beyond "
+            + "the threshold, for use as a CI gate. Read-only.")
+            { benchBaseline, benchRunArg, benchMaxRegression };
+        benchPerfGate.SetHandler(ctx =>
+        {
+            var p = ctx.ParseResult;
+            RunSafely(() =>
+            {
+                var r = BenchPerfGateCommand.Execute(
+                    p.GetValueForArgument(benchBaseline),
+                    p.GetValueForArgument(benchRunArg),
+                    p.GetValueForOption(benchMaxRegression));
+                Emit(p.GetValueForOption(jsonOption), r, () => Render.BenchPerfGate(r));
+                if (!r.Pass) exitCode[0] = 2;
+            });
+        });
+        bench.AddCommand(benchPerfGate);
+
+        root.AddCommand(bench);
         root.AddCommand(McpCommand.Build());
 
         // ---- target: set and view the current target build ----

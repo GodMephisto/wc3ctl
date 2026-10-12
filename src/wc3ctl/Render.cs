@@ -2001,4 +2001,90 @@ public static class Render
                 + $" fields {row.Fields}  natives {row.Natives}");
         return sb.ToString().TrimEnd('\r', '\n');
     }
+
+    // ---- bench ----------------------------------------------------------
+
+    public static string BenchSchemaCoverage(SchemaCoverageResult r)
+    {
+        var t = r.Totals;
+        var sb = new StringBuilder();
+        sb.AppendLine($"{t.Schemas} schema folder(s), {t.Real} real, {t.EraDerived} era-derived, "
+            + $"{t.Absent} absent, {t.Fields} object field(s)");
+        sb.AppendLine();
+        sb.AppendLine($"  {"build",-34} {"era",-10} {"object data",-12} {"fields",6}");
+        foreach (var row in r.Rows)
+            sb.AppendLine($"  {Short(row.Build, 34),-34} {Short(row.Era, 10),-10} {row.ObjectData,-12} {row.Fields,6}");
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
+    public static string BenchCompat(BenchCompatResult r)
+    {
+        var a = r.Aggregate;
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.Maps.Count} map(s) x {r.Targets.Count} target(s), {a.Cells} cell(s), "
+            + $"{a.Passed} pass, {a.Failed} fail, {a.Errors} error(s), {a.Warnings} warning(s), {a.Findings} finding(s)");
+        sb.AppendLine();
+        sb.AppendLine($"  {"map",-28} {"target",-28} {"result",7} {"err",5} {"warn",5} {"find",5}");
+        foreach (var c in r.Cells)
+            sb.AppendLine($"  {Short(c.Map, 28),-28} {Short(c.Target, 28),-28} {(c.Pass ? "pass" : "FAIL"),7} "
+                + $"{c.Errors,5} {c.Warnings,5} {c.Findings,5}");
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
+    public static string BenchLeaks(BenchLeaksResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.Maps.Count} map(s), {r.TotalLeaks} leak(s), {r.Hot} in hot code, {r.Repeat} in repeated code");
+        sb.AppendLine();
+        sb.AppendLine($"  {"map",-36} {"leaks",6} {"hot",5} {"repeat",7}");
+        foreach (var m in r.Maps)
+            sb.AppendLine($"  {Short(m.Map, 36),-36} {m.Leaks,6} {m.Hot,5} {m.Repeat,7}"
+                + (m.Ok ? "" : "  unreadable"));
+        if (r.Kinds.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"  {"leak kind",-36} {"count",6}");
+            foreach (var k in r.Kinds)
+                sb.AppendLine($"  {k.Rule,-36} {k.Count,6}");
+        }
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
+    public static string BenchOpen(BenchOpenResult r)
+    {
+        var sb = new StringBuilder();
+        string slowest = r.Slowest is null ? "none" : $"{r.Slowest.Map} at {r.Slowest.Milliseconds} ms";
+        sb.AppendLine($"{r.Maps.Count} map(s), slowest {slowest}, median {r.MedianMs:0.##} ms, "
+            + $"{r.TotalBytes} byte(s) across entries");
+        sb.AppendLine();
+        sb.AppendLine($"  {"map",-36} {"ms",8} {"entries",8} {"bytes",14}");
+        foreach (var m in r.Maps)
+            sb.AppendLine($"  {Short(m.Map, 36),-36} {m.Milliseconds,8} {m.Entries,8} {m.Bytes,14}");
+        foreach (var f in r.Failures)
+            sb.AppendLine($"  unreadable {f}");
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
+    public static string BenchPerfGate(PerfGateResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"perf gate {(r.Pass ? "PASS" : "FAIL")} at {r.MaxRegressionPct:0.##} percent, "
+            + $"{r.MetricsCompared} metric(s) compared, {r.Regressed} regressed");
+        if (r.MetricsCompared > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"  {"metric",-28} {"baseline",-14} {"run",-14} {"change",14}");
+            foreach (var m in r.Metrics)
+            {
+                string change = m.ChangePct is null ? "n/a" : $"{m.ChangePct.Value:+0.00;-0.00} percent";
+                sb.AppendLine($"  {Short(m.Metric, 28),-28} {m.Baseline,-14:0.##} {m.Run,-14:0.##} {change,14}"
+                    + (m.Regressed ? "  REGRESSED" : ""));
+            }
+        }
+        foreach (var name in r.MissingInRun)
+            sb.AppendLine($"  missing in run {name}");
+        foreach (var name in r.AddedInRun)
+            sb.AppendLine($"  new in run {name}");
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
 }
