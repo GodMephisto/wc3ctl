@@ -6,10 +6,8 @@ artifacts/
 *.user
 .vs/
 
-# Publish output
-dist/
-dist-studio/
-dist-mcp/
+# Publish output (dist*/ also covers the dist*.old copies left by republishing)
+dist*/
 
 # Maps, replays and archives are other people's work or large binaries, never source
 *.w3x
