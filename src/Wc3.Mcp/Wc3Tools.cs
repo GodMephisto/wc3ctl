@@ -544,6 +544,47 @@ public static class Wc3Tools
             return new { r.Files, r.Failed, SavedTo = r.Files.Count > 0 ? full : null };
         });
 
+    [McpServerTool(Name = "script_lua_leaks", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Find handle leaks in a Lua map script. Lua collects the wrapper but the engine still owns the handle, so a creator dropped as a statement, a creator on a period that is never released, and a handle kept in a table the script never clears are the shapes that grow memory. Each finding is ranked hot, repeat or once. Read-only.")]
+    public static LuaScriptLeaksResult ScriptLuaLeaks(
+        [Description("Path to a .w3x/.w3m map file.")] string map)
+        => Run(() => LuaScriptLeaksCommand.Execute(LoadMap(map)));
+
+    [McpServerTool(Name = "script_lua_globals", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("List the globals a Lua map defines, where each is read and written, and any global that is written but never read. The Lua twin of script_unused_globals, parser based rather than a line scan. Read-only.")]
+    public static LuaGlobalsResult ScriptLuaGlobals(
+        [Description("Path to a .w3x/.w3m map file.")] string map)
+        => Run(() => LuaGlobalsCommand.Execute(LoadMap(map)));
+
+    [McpServerTool(Name = "script_lua_check", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Parse every Lua file in a map and report the syntax errors with their line and column, the way luac 5.3 refuses them. Wider than script_check, which parses only the entry the map runs. Read-only.")]
+    public static LuaCheckResult ScriptLuaCheck(
+        [Description("Path to a .w3x/.w3m map file or map folder.")] string map)
+        => Run(() => LuaCheckCommand.Execute(LoadMap(map)));
+
+    [McpServerTool(Name = "script_lua_api", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("List the natives and functions a Lua script calls that a target game build does not declare. Uses the same schema membership test as the compat check, and reads the calls from the parsed tree. Read-only.")]
+    public static LuaApiResult ScriptLuaApi(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Target build name or schema folder path.")] string target,
+        [Description("Directory of schema folders with manifest.json. Optional, the default search is used when omitted.")] string? schemas_dir = null)
+        => Run(() => LuaApiCommand.Execute(LoadMap(map), target, schemas_dir));
+
+    [McpServerTool(Name = "script_lua_to_jass", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Best effort conversion of a Lua map back to JASS, saved to out_path. The JASS to Lua conversion is not reversible in general, so only the constructs that map back without guessing are converted and every construct left is reported. Nothing is written when the script does not convert. The input map is NEVER modified.")]
+    public static object ScriptLuaToJass(
+        [Description("Path to a .w3x/.w3m map file or map folder.")] string map,
+        [Description("Where to save the converted map.")] string out_path)
+        => Run(() =>
+        {
+            var full = ResolveOutPath(map, out_path);
+            var doc = LoadMap(map);
+            var r = LuaToJassCommand.Execute(doc);
+            if (!r.Ok) throw new McpException(string.Join(" ", r.Diagnostics));
+            doc.Save(full);
+            return new { r.ScriptFile, r.FunctionsConverted, r.FunctionsSkipped, r.GlobalsConverted, r.Unconverted, r.Diagnostics, SavedTo = full };
+        });
+
     [McpServerTool(Name = "script_reachable", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("List the functions reachable from the map script's entry points, main and the InitTrig functions, and the dead functions nothing reaches, each with its declaration line. A function reached only through a string (ExecuteFunc) is reported dead here, which is the honest answer to what main reaches. Read-only.")]
     public static ScriptReachableResult ScriptReachable(

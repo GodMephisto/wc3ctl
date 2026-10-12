@@ -49,7 +49,9 @@ public sealed record ScriptLeaksResult(
 /// </summary>
 public static class ScriptLeaksCommand
 {
-    private static readonly Dictionary<string, string> Creators = new(StringComparer.Ordinal)
+    /// <summary>The creator call to the handle type it returns. Shared with the Lua leak pass so
+    /// both languages agree on what a handle-creating call is.</summary>
+    internal static readonly Dictionary<string, string> Creators = new(StringComparer.Ordinal)
     {
         ["Location"] = "location", ["GetUnitLoc"] = "location", ["GetRectCenter"] = "location",
         ["GetSpellTargetLoc"] = "location", ["PolarProjectionBJ"] = "location", ["OffsetLocation"] = "location",
@@ -73,7 +75,9 @@ public static class ScriptLeaksCommand
         ["AddLightningEx"] = "lightning", ["CreateTrigger"] = "trigger",
     };
 
-    private static readonly Dictionary<string, string[]> Destroyers = new(StringComparer.Ordinal)
+    /// <summary>The destroyer calls for each handle type. Shared with the Lua leak pass, where a
+    /// handle released through one of these is not counted, the same rule as JASS.</summary>
+    internal static readonly Dictionary<string, string[]> Destroyers = new(StringComparer.Ordinal)
     {
         ["location"] = new[] { "RemoveLocation" },
         ["group"] = new[] { "DestroyGroup" },
@@ -99,6 +103,11 @@ public static class ScriptLeaksCommand
         @"\bTriggerAdd(?:Action|Condition)\s*\(\s*(\w+)\s*,\s*(?:Condition\s*\(\s*|Filter\s*\(\s*)?function\s+(\w+)", RegexOptions.Compiled);
     private static readonly Regex RealGlobal = new(@"^\s*(?:constant\s+)?real\s+(\w+)\s*=\s*([0-9]*\.?[0-9]+)\s*$", RegexOptions.Compiled);
     private static readonly Regex WantDestroy = new(@"\bset\s+bj_wantDestroyGroup\s*=\s*true", RegexOptions.Compiled);
+
+    /// <summary>How hot a finding is, ranked so every leak list groups hot code first, then code
+    /// that repeats, then code that runs once. Shared with the Lua leak pass so the two rank
+    /// identically.</summary>
+    internal static int HeatRank(string heat) => heat == "hot" ? 0 : heat == "repeat" ? 1 : 2;
 
     public static ScriptLeaksResult Execute(MapDocument doc)
     {
@@ -181,7 +190,7 @@ public static class ScriptLeaksCommand
         var leaks = new List<ScriptLeak>();
         foreach (var f in functions) Scan(f, lines, byName, Heat(f.Name), leaks);
 
-        int Rank(string h) => h == "hot" ? 0 : h == "repeat" ? 1 : 2;
+        int Rank(string h) => HeatRank(h);
         var ordered = leaks.OrderBy(l => Rank(l.Heat)).ThenBy(l => l.Rule).ThenBy(l => l.Line).ToList();
         var periodicOut = periodic
             .Select(p =>
