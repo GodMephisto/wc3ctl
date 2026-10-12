@@ -1,5 +1,6 @@
 // src/Wc3.Commands/ModelOptimizeCommand.cs
 using System.Buffers.Binary;
+using System.Numerics;
 using Wc3.Modeling;
 
 namespace Wc3.Commands;
@@ -58,6 +59,9 @@ public static class ModelOptimizeCommand
         }
 
         uint version = ReadVersion(doc);
+
+        int texturesRemoved = PruneTextures(doc);
+        if (texturesRemoved > 0) diagnostics.Add($"pruned {texturesRemoved} duplicate texture(s)");
 
         int geosets = 0, vBefore = 0, vAfter = 0, fBefore = 0, fAfter = 0;
         foreach (int chunkIndex in doc.GeosetIndices())
@@ -119,6 +123,15 @@ public static class ModelOptimizeCommand
         geosets++;
         vBefore += vertices.Length / 3;
         fBefore += indices.Length / 3;
+
+        // Compact first, dropping the zero-area triangles the game draws as nothing.
+        var compacted = CompactFaces(vertices, indices);
+        if (compacted.Length != indices.Length)
+        {
+            geoset.Set("PVTX", PackU16(compacted));
+            SetPrimitiveCount(geoset, compacted.Length / 3);
+            indices = compacted;
+        }
 
         var dec = QemDecimator.Decimate(vertices, indices, ratio);
         if (dec.OutputFaces >= indices.Length / 3)
@@ -191,6 +204,102 @@ public static class ModelOptimizeCommand
         }
         geoset.Set("UVAS", outBytes.ToArray());
     }
+
+    /// <summary>Drops triangles whose three corners are collinear, so they draw nothing.</summary>
+    private static int[] CompactFaces(float[] vertices, int[] indices)
+    {
+        var kept = new List<int>(indices.Length);
+        for (int i = 0; i + 2 < indices.Length; i += 3)
+        {
+            int a = indices[i] * 3, b = indices[i + 1] * 3, c = indices[i + 2] * 3;
+            if (a + 2 >= vertices.Length || b + 2 >= vertices.Length || c + 2 >= vertices.Length) continue;
+            var pa = new Vector3(vertices[a], vertices[a + 1], vertices[a + 2]);
+            var pb = new Vector3(vertices[b], vertices[b + 1], vertices[b + 2]);
+            var pc = new Vector3(vertices[c], vertices[c + 1], vertices[c + 2]);
+            if (Vector3.Cross(pb - pa, pc - pa).LengthSquared() > 1e-12f)
+            { kept.Add(indices[i]); kept.Add(indices[i + 1]); kept.Add(indices[i + 2]); }
+        }
+        return kept.ToArray();
+    }
+
+    /// <summary>Updates the PCNT primitive count to the new triangle count.</summary>
+    private static void SetPrimitiveCount(MdxGeoset geoset, int triangleCount)
+    {
+        var seg = geoset.Segments.FirstOrDefault(s => s.Tag == "PCNT");
+        if (seg is null || seg.Payload.Length < 8) return;
+        var payload = (byte[])seg.Payload.Clone();
+        BinaryPrimitives.WriteUInt32LittleEndian(payload.AsSpan(4, 4), (uint)triangleCount);
+        geoset.Set("PCNT", payload);
+    }
+
+    /// <summary>Removes duplicate texture paths from TEXS and remaps the material texture ids.</summary>
+    private static int PruneTextures(MdxDocument doc)
+    {
+        int texsIndex = IndexOf(doc, "TEXS");
+        if (texsIndex < 0) return 0;
+        var payload = doc.Chunks[texsIndex].Payload;
+        int count = payload.Length / 268;
+        if (count < 2) return 0;
+
+        var seen = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var remap = new int[count];
+        var unique = new List<int>();
+        for (int i = 0; i < count; i++)
+        {
+            var path = System.Text.Encoding.ASCII.GetString(payload, i * 268 + 4, 260).TrimEnd('\0');
+            if (seen.TryGetValue(path, out int nid)) remap[i] = nid;
+            else { nid = unique.Count; seen[path] = nid; remap[i] = nid; unique.Add(i); }
+        }
+        if (unique.Count == count) return 0;
+
+        var newPayload = new byte[unique.Count * 268];
+        for (int i = 0; i < unique.Count; i++)
+            Buffer.BlockCopy(payload, unique[i] * 268, newPayload, i * 268, 268);
+        doc.Replace(texsIndex, newPayload);
+        RemapMaterialTextures(doc, remap);
+        return count - unique.Count;
+    }
+
+    private static void RemapMaterialTextures(MdxDocument doc, int[] remap)
+    {
+        int mtlsIndex = IndexOf(doc, "MTLS");
+        if (mtlsIndex < 0) return;
+        var payload = (byte[])doc.Chunks[mtlsIndex].Payload.Clone();
+        int p = 0;
+        while (p + 12 <= payload.Length)
+        {
+            int matSize = BinaryPrimitives.ReadInt32LittleEndian(payload.AsSpan(p, 4));
+            int matEnd = p + matSize;
+            if (matSize < 12 || matEnd > payload.Length) break;
+            int q = p + 12;
+            if (ReadTag(payload, q) != "LAYS" && q + 84 <= matEnd && ReadTag(payload, q + 80) == "LAYS") q += 80;
+            if (ReadTag(payload, q) == "LAYS")
+            {
+                int layerCount = BinaryPrimitives.ReadInt32LittleEndian(payload.AsSpan(q + 4, 4));
+                int lp = q + 8;
+                for (int l = 0; l < layerCount && lp + 28 <= matEnd; l++)
+                {
+                    int layerSize = BinaryPrimitives.ReadInt32LittleEndian(payload.AsSpan(lp, 4));
+                    if (layerSize < 28) break;
+                    int texId = BinaryPrimitives.ReadInt32LittleEndian(payload.AsSpan(lp + 12, 4));
+                    if (texId >= 0 && texId < remap.Length && remap[texId] != texId)
+                        BinaryPrimitives.WriteInt32LittleEndian(payload.AsSpan(lp + 12, 4), remap[texId]);
+                    lp += layerSize;
+                }
+            }
+            p = matEnd;
+        }
+        doc.Replace(mtlsIndex, payload);
+    }
+
+    private static int IndexOf(MdxDocument doc, string tag)
+    {
+        for (int i = 0; i < doc.Chunks.Count; i++) if (doc.Chunks[i].Tag == tag) return i;
+        return -1;
+    }
+
+    private static string ReadTag(byte[] b, int pos) =>
+        pos + 4 <= b.Length ? System.Text.Encoding.ASCII.GetString(b, pos, 4) : "";
 
     private static uint ReadVersion(MdxDocument doc)
     {
