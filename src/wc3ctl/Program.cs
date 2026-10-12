@@ -1571,16 +1571,19 @@ public static class Program
 
         var deepOption = new Option<bool>("--deep",
             "Also run pjass, the game's own JASS parser, over the map script (needs a Warcraft III install).");
+        var strictOption = new Option<bool>("--strict",
+            "Add the stricter checks on top of the default, a map with no (listfile), a script that "
+            + "declares no entry point function, and a placement whose type neither the map nor the "
+            + "installed game defines. The default validate is unchanged without it.");
         var validate = new Command("validate",
             "Check a map for problems (missing/empty files, loader errors, a script that cannot compile). Exits 2 if invalid.")
-            { mapArg, deepOption };
+            { mapArg, deepOption, strictOption };
         validate.SetHandler(ctx => RunSafely(() =>
         {
             var p = ctx.ParseResult;
             string map = p.GetValueForArgument(mapArg);
             bool json = p.GetValueForOption(jsonOption);
             var doc = MapDocument.Load(map);
-            var r = ValidateCommand.Execute(doc);
 
             PjassResult? deep = null;
             if (p.GetValueForOption(deepOption))
@@ -1591,6 +1594,20 @@ public static class Program
                     deep = PjassGate.Check(System.Text.Encoding.Latin1.GetString(bytes),
                         p.GetValueForOption(gameDirOption));
             }
+
+            // The strict mode runs the default validate itself and layers its extra checks on
+            // top, so the plain path below stays exactly as it was.
+            if (p.GetValueForOption(strictOption))
+            {
+                var strict = ValidateStrictCommand.Execute(doc, p.GetValueForOption(gameDirOption));
+                Emit(json, new { Strict = strict, Pjass = deep }, () =>
+                    Render.ValidateStrict(strict)
+                    + (deep is null ? "" : $"\npjass: {deep.Note}"));
+                if (!strict.Valid || deep is { Ran: true, Passed: false }) exitCode[0] = 2;
+                return;
+            }
+
+            var r = ValidateCommand.Execute(doc);
 
             // pjass is the game's own parser, so its findings become real issues and change the
             // verdict. Printing "OK, valid" above a list of undefined functions is worse than
@@ -1628,6 +1645,26 @@ public static class Program
             Emit(p.GetValueForOption(jsonOption), r, () => Render.Audit(r));
             if (!r.Ok) exitCode[0] = 2;
         }));
+
+        // Audit trend: the regression view over two maps. audit answers what is wrong now, trend
+        // answers what an edit or a port changed, grouped by check.
+        var auditTrendOther = new Argument<string>("other",
+            "The second map, the one treated as the newer state.");
+        var auditTrend = new Command("trend",
+            "Run the behavioural audit against two maps and report the findings the second added "
+            + "and removed, grouped by check. Read-only.")
+            { mapArg, auditTrendOther, auditCheck };
+        auditTrend.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = AuditTrendCommand.Execute(
+                p.GetValueForArgument(mapArg),
+                p.GetValueForArgument(auditTrendOther),
+                p.GetValueForOption(gameDirOption),
+                p.GetValueForOption(auditCheck));
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.AuditTrend(r));
+        }));
+        audit.AddCommand(auditTrend);
 
         // ---- deprotect: recover the file names a protected map stripped ----
         // A protected map ships no (listfile), so most entries have no name and GetFile can
@@ -3620,11 +3657,14 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
             "Target build name or schema folder path to check compatibility against.");
         var lintSchemas = new Option<string?>("--schemas",
             "Path to schemas directory containing schema folders with manifest.json.");
+        var lintBaseline = new Option<string?>("--baseline",
+            "CI gate. Compare against a baseline file written by 'lint baseline' and fail only on a "
+            + "finding the baseline does not already hold.");
         var lint = new Command("lint",
             "Run pre-flight checks on a map: does the script compile, is war3map.imp consistent, do "
             + "referenced assets resolve, are all file types loadable, and (with --against) did a "
             + "rebuild lose or clobber anything.")
-        { mapArg, lintAgainst, lintTarget, lintSchemas, jsonOption };
+        { mapArg, lintAgainst, lintTarget, lintSchemas, lintBaseline, jsonOption };
         lint.SetHandler(ctx => RunSafely(() =>
         {
             var p = ctx.ParseResult;
@@ -3635,6 +3675,18 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
             string target = p.GetValueForOption(lintTarget);
             string? schemas = p.GetValueForOption(lintSchemas);
             Emit(p.GetValueForOption(jsonOption), r, () => Render.Lint(r));
+
+            // The baseline gate is a self-contained CI mode. When asked for, it is the verdict,
+            // and the compat pass below does not run.
+            if (p.GetValueForOption(lintBaseline) is { } baselinePath)
+            {
+                var gate = LintBaselineCommand.Gate(
+                    p.GetValueForArgument(mapArg), baselinePath,
+                    p.GetValueForOption(lintAgainst));
+                Emit(p.GetValueForOption(jsonOption), gate, () => Render.LintGate(gate));
+                if (!gate.Ok) exitCode[0] = 1;
+                return;
+            }
             // Run compat check if --target was given or resolved from settings.
             string? actualTarget = p.GetValueForOption(lintTarget);
 
@@ -3671,6 +3723,25 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
                 catch (FileNotFoundException) { /* bad build name, skip compat */ }
             }
         }));
+        // lint baseline: record the current findings so a later gate fails only on a new one.
+        var lintBaselineOut = new Option<string>(new[] { "-o", "--out" },
+            "File to write the baseline to.") { IsRequired = true };
+        var lintBaselineAgainst = new Option<string?>("--against",
+            "Original map to compare against, so the baseline records the before/after checks too.");
+        var lintBaselineCmd = new Command("baseline",
+            "Write the map's current lint findings to a baseline file. A later 'lint <map> "
+            + "--baseline <file>' then fails only on a finding this file does not already hold.")
+            { mapArg, lintBaselineOut, lintBaselineAgainst, jsonOption };
+        lintBaselineCmd.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = LintBaselineCommand.Write(
+                p.GetValueForArgument(mapArg),
+                p.GetValueForOption(lintBaselineOut)!,
+                p.GetValueForOption(lintBaselineAgainst));
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.LintBaselineWrite(r));
+        }));
+        lint.AddCommand(lintBaselineCmd);
         // Unattended load test. Closes the feedback loop that previously required a human to
         // launch a 250 MB map and describe what they saw, which is where this toolchain's
         // diagnoses went wrong most often.
@@ -4237,6 +4308,51 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
             Emit(json, result, () => Render.CompatResult(result));
             if (result.Findings.Any(f => f.Severity == "error")) exitCode[0] = 2;
         }));
+
+        // compat matrix: a grid of maps against target builds, one pass or fail per cell.
+        var matrixMaps = new Argument<string[]>("maps",
+            "One or more .w3x/.w3m maps.") { Arity = ArgumentArity.OneOrMore };
+        var matrixTargets = new Option<string[]>("--targets",
+            "One or more target build names or schema folder paths.") { IsRequired = true };
+        var matrixSchemas = new Option<string?>("--schemas",
+            "Path to schemas directory containing schema folders with manifest.json.");
+        var compatMatrix = new Command("matrix",
+            "Check several maps against several target builds and print a table of pass or fail per "
+            + "cell, with the finding count. Exits 2 if any cell fails.")
+            { matrixMaps, matrixTargets, matrixSchemas };
+        compatMatrix.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = CompatMatrixCommand.Execute(
+                p.GetValueForArgument(matrixMaps),
+                p.GetValueForOption(matrixTargets)!,
+                p.GetValueForOption(matrixSchemas));
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.CompatMatrix(r));
+            if (r.Cells.Any(c => !c.Pass)) exitCode[0] = 2;
+        }));
+        compat.AddCommand(compatMatrix);
+
+        // compat explain: one identifier against one target build.
+        var explainName = new Argument<string>("name",
+            "Identifier to explain, a native, global, type or function name.");
+        var explainTarget = new Option<string?>("--target",
+            () => null, "Target build name or schema folder path. Omit to use the configured default.");
+        var explainSchemas = new Option<string?>("--schemas",
+            "Path to schemas directory containing schema folders with manifest.json.");
+        var compatExplain = new Command("explain",
+            "Explain one identifier against a target build. Reports whether the target declares it, and if "
+            + "not, the earliest build that added it and the builds that declare it.")
+            { explainName, explainTarget, explainSchemas };
+        compatExplain.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string? targetArg = p.GetValueForOption(explainTarget);
+            string? schemas = p.GetValueForOption(explainSchemas);
+            string target = targetArg ?? TargetBuildSettings.Get(option: null, schemasDir: schemas).Build;
+            var r = CompatExplainCommand.Execute(p.GetValueForArgument(explainName), target, schemas);
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.CompatExplain(r));
+        }));
+        compat.AddCommand(compatExplain);
 
         root.AddCommand(compat);
         root.AddCommand(McpCommand.Build());

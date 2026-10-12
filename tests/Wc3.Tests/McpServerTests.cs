@@ -18,14 +18,15 @@ public class McpServerTests
     {
         "asset_audit", "asset_duplicates", "asset_list", "asset_replace", "asset_size_report",
         "asset_unused", "audit_ability", "audit_fidelity", "audit_hero", "audit_map",
-        "audit_readiness", "bundle_unit", "camera_add", "camera_list", "camera_remove",
-        "camera_set", "deprotect_map", "diff", "doctor_check", "doctor_compare", "doctor_fix",
+        "audit_readiness", "audit_trend", "bundle_unit", "camera_add", "camera_list",
+        "camera_remove", "camera_set", "compat_explain", "compat_matrix", "deprotect_map",
+        "diff", "doctor_check", "doctor_compare", "doctor_fix",
         "doctor_inspect", "editor_catalog_get", "editor_catalog_list",
         "file_get_text", "file_list", "file_set", "force_list", "force_set_flags",
         "gamedata_bounds", "gamedata_changelog", "gamedata_coverage", "gamedata_field_lookup",
         "gamedata_history", "gamedata_schema_diff", "hero_install", "hero_lint", "hero_roster",
         "imports_list",
-        "lint", "list_files", "map_compat", "map_info",
+        "lint", "lint_baseline", "list_files", "map_compat", "map_info",
         "map_info_get", "map_info_set", "mpq_bytes_diff", "mpq_listfile", "mpq_name_recover",
         "mpq_strip_bookkeeping", "mpq_verify", "new_map", "object_clone", "object_deprecated",
         "object_field_options", "object_form", "object_get", "object_list", "object_new",
@@ -52,7 +53,7 @@ public class McpServerTests
         "trigger_set_eca_enabled", "trigger_set_enabled", "trigger_set_initially_on",
         "trigger_set_run_on_map_init", "trigger_to_script", "triggers_read", "uabi_profile",
         "unit_abilities",
-        "validate",
+        "validate", "validate_strict",
     };
 
     private static Task WithClient(Func<McpClient, CancellationToken, Task> body) => McpTestClient.WithClient(body);

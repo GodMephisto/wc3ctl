@@ -241,6 +241,21 @@ public static class Wc3Tools
         [Description("Path to a .w3x/.w3m map file.")] string map)
         => Run(() => ValidateCommand.Execute(LoadMap(map)));
 
+    [McpServerTool(Name = "validate_strict", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("A stricter validate. Runs the default checks and adds three that are too strict to be a default, a map with no (listfile), a script that declares no entry point function, and a placement whose type neither the map nor the installed game defines. The undefined-type check needs the installed game and reports a diagnostic rather than a clean result when it cannot run. The default validate is unchanged.")]
+    public static ValidateStrictResult ValidateStrict(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Without it the undefined-type check is skipped, with a diagnostic.")] string? game_dir = null)
+        => Run(() => ValidateStrictCommand.Execute(LoadMap(map), ResolveGameDir(game_dir)));
+
+    [McpServerTool(Name = "lint_baseline", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Write the map's current lint findings to a baseline JSON file. A later gate, the CLI 'lint <map> --baseline <file>', then fails only on a finding this file does not already hold, so known and accepted warnings do not block CI. Writes a local file, never the map.")]
+    public static LintBaselineWriteResult LintBaseline(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("File to write the baseline JSON to.")] string out_path,
+        [Description("Optional path to the ORIGINAL map this one was built from, so the baseline records the before/after checks too.")] string? against = null)
+        => Run(() => LintBaselineCommand.Write(map, out_path, against));
+
     [McpServerTool(Name = "roundtrip", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Verify the map survives a load and save byte for byte. Any file that differs is one this toolkit does not reproduce faithfully, which is worth knowing BEFORE editing that map, since a save would then rewrite it. Archive bookkeeping the container regenerates is excluded by design.")]
     public static RoundtripResult Roundtrip(
@@ -1187,6 +1202,16 @@ public static class Wc3Tools
         => Run(() => AuditCommand.Execute(LoadMap(map), ResolveGameDir(game_dir),
             check is null ? null : new[] { check }));
 
+    [McpServerTool(Name = "audit_trend", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Run the behavioural audit against two maps and report the findings the second added and removed, grouped by check. Where audit_map answers what is wrong now, this answers what an edit or a port changed. Issues are matched by check, rawcode and message.")]
+    public static AuditTrendResult AuditTrend(
+        [Description("Path to the first .w3x/.w3m map file.")] string map,
+        [Description("Path to the second .w3x/.w3m map file, the one treated as the newer state.")] string other,
+        [Description("Restrict to one check by name. Default: run all eight.")] string? check = null,
+        [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Without it the requirement and dangling-reference checks are skipped, with a diagnostic.")] string? game_dir = null)
+        => Run(() => AuditTrendCommand.Execute(map, other, ResolveGameDir(game_dir),
+            check is null ? null : new[] { check }));
+
     [McpServerTool(Name = "sound_list", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("List the map's sound catalog (war3map.w3s): each definition's name, file path, channel, flags, volume, pitch, priority and min/max distance.")]
     public static IReadOnlyList<SoundFields> SoundList(
@@ -1919,6 +1944,22 @@ public static class Wc3Tools
         [Description("Target build name or schema folder path to check compatibility against. Omit to use the configured default from settings, environment, or the newest available schema.")] string? target = null,
         [Description("Optional path to schemas directory containing schema folders with manifest.json. When omitted, searches <AppContext.BaseDirectory>/schemas first, then walks up from the base directory.")] string? schemas_dir = null)
         => Run(() => TargetCompatCommand.Execute(map, ResolveTarget(target, schemas_dir), schemas_dir));
+
+    [McpServerTool(Name = "compat_matrix", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Check several maps against several target builds and return a grid of pass or fail per cell, with the finding count in each cell. Pass means the target build raised no error-level finding, so a map that only warns still passes. The whole-map by whole-build view the single map_compat call cannot give.")]
+    public static CompatMatrixResult CompatMatrix(
+        [Description("One or more .w3x/.w3m map paths.")] string[] maps,
+        [Description("One or more target build names or schema folder paths.")] string[] targets,
+        [Description("Optional path to schemas directory containing schema folders with manifest.json. When omitted, searches <AppContext.BaseDirectory>/schemas first, then walks up from the base directory.")] string? schemas_dir = null)
+        => Run(() => CompatMatrixCommand.Execute(maps, targets, schemas_dir));
+
+    [McpServerTool(Name = "compat_explain", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Explain one identifier against a target build. Reports whether the target declares it as a native, global, type or function, and if not, the earliest build that added it plus the test build it was first seen in, and every build that declares it. Reuses the compat union index, so its answer about when a name appeared matches a compat finding.")]
+    public static CompatExplainResult CompatExplain(
+        [Description("Identifier to explain, a native, global, type or function name.")] string name,
+        [Description("Target build name or schema folder path to explain against. Omit to use the configured default from settings, environment, or the newest available schema.")] string? target = null,
+        [Description("Optional path to schemas directory containing schema folders with manifest.json.")] string? schemas_dir = null)
+        => Run(() => CompatExplainCommand.Execute(name, ResolveTarget(target, schemas_dir), schemas_dir));
 
     [McpServerTool(Name = "target_get", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("View the current target build setting: which build maps are checked against when compat or lint omit --target, where it comes from (option, environment, settings, default), and which schema sections are available. Also shows the installed game build version.")]

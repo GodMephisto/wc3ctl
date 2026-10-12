@@ -17,6 +17,7 @@ public class CliMcpParityTests
     private static readonly Dictionary<string, string> ToolToCliPath = new(StringComparer.Ordinal)
     {
         ["audit_map"] = "audit",
+        ["audit_trend"] = "audit trend",
         ["deprotect_map"] = "deprotect",
         ["file_list"] = "file list",
         ["file_get_text"] = "file get-text",
@@ -33,7 +34,9 @@ public class CliMcpParityTests
         ["asset_size_report"] = "asset size-report",
         ["asset_replace"] = "asset replace",
         ["lint"] = "lint",
+        ["lint_baseline"] = "lint baseline",
         ["validate"] = "validate",
+        ["validate_strict"] = "validate",
         ["roundtrip"] = "roundtrip",
         ["search"] = "search",
         ["diff"] = "diff",
@@ -132,6 +135,8 @@ public class CliMcpParityTests
         ["gamedata_bounds"] = "gamedata bounds",
         ["gamedata_coverage"] = "gamedata coverage",
         ["map_compat"] = "compat",
+        ["compat_matrix"] = "compat matrix",
+        ["compat_explain"] = "compat explain",
         ["region_list"] = "region list",
         ["region_remove"] = "region remove",
         ["new_map"] = "new",
