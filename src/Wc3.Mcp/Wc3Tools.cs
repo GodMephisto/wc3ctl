@@ -26,15 +26,18 @@ public static class Wc3Tools
         => Run(() => InfoCommand.Execute(LoadMap(map)));
 
     [McpServerTool(Name = "list_files", ReadOnly = true, Idempotent = true, OpenWorld = false)]
-    [Description("List the map archive's internal files, each with its name (null = unnamed/protected entry), size in bytes, whether wc3ctl knows/parses the format, and for unnamed entries the content type sniffed from their leading bytes ('BLP texture', 'MDX model', 'empty', ...).")]
-    public static FileListResult ListFiles(
+    [Description("List the map archive's internal files, each with its name (null = unnamed/protected entry), size in bytes, whether wc3ctl knows/parses the format, and for unnamed entries the content type sniffed from their leading bytes ('BLP texture', 'MDX model', 'empty', ...). Pass brief true to get the total and only the first 50 files when the full list would be too large for the context.")]
+    public static object ListFiles(
         [Description("Path to a .w3x/.w3m map file.")] string map,
-        [Description("Recover unnamed entries' names from the map's own script and object data before listing (worth paying for on a protected map). Recovered names are flagged nameFromHarvest.")] bool harvest = false)
-        => Run(() =>
+        [Description("Recover unnamed entries' names from the map's own script and object data before listing (worth paying for on a protected map). Recovered names are flagged nameFromHarvest.")] bool harvest = false,
+        [Description("Return the total file count and only the first 50 files instead of the full list. Default false.")] bool brief = false)
+        => Run<object>(() =>
         {
             var doc = LoadMap(map);
             if (harvest) doc.HarvestAssetNames();
-            return ListCommand.Execute(doc, typeUnnamed: true);
+            return brief
+                ? ListCommand.ExecuteBrief(doc, typeUnnamed: true)
+                : ListCommand.Execute(doc, typeUnnamed: true);
         });
 
     [McpServerTool(Name = "map_overview", ReadOnly = true, Idempotent = true, OpenWorld = false)]
@@ -223,12 +226,15 @@ public static class Wc3Tools
     }
 
     [McpServerTool(Name = "object_list", ReadOnly = true, Idempotent = true, OpenWorld = false)]
-    [Description("List the map's custom/modified objects of one Object Editor kind: rawcode, base rawcode (null = created from scratch) and resolved name.")]
-    public static ObjectListResult ObjectList(
+    [Description("List the map's custom/modified objects of one Object Editor kind: rawcode, base rawcode (null = created from scratch) and resolved name. Pass brief true to get the total and only the first 50 objects when the full list would be too large for the context.")]
+    public static object ObjectList(
         [Description("Path to a .w3x/.w3m map file.")] string map,
         [Description("Object kind: " + KindValues + ".")] string kind = "unit",
-        [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Used to resolve base-game names.")] string? game_dir = null)
-        => Run(() => ObjectListCommand.Execute(LoadMap(map), ParseKind(kind), ResolveGameDir(game_dir)));
+        [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Used to resolve base-game names.")] string? game_dir = null,
+        [Description("Return the total object count and only the first 50 objects instead of the full list. Default false.")] bool brief = false)
+        => Run<object>(() => brief
+            ? ObjectListCommand.ExecuteBrief(LoadMap(map), ParseKind(kind), ResolveGameDir(game_dir))
+            : ObjectListCommand.Execute(LoadMap(map), ParseKind(kind), ResolveGameDir(game_dir)));
 
     [McpServerTool(Name = "object_get", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Get an object's merged fields (base game data overlaid by the map's deltas), each labeled 'base' or 'map', with field names resolved. Omit kind to auto-detect it from the rawcode.")]
@@ -477,10 +483,13 @@ public static class Wc3Tools
         });
 
     [McpServerTool(Name = "placed_units_list", ReadOnly = true, Idempotent = true, OpenWorld = false)]
-    [Description("List every unit already PLACED on the map (war3mapUnits.doo), each with the creation number needed to edit or remove it, plus its type rawcode, owner, position and hero stats. Start locations appear here too. Call this before placed_unit_set or placed_unit_remove.")]
-    public static IReadOnlyList<UnitInstanceInfo> PlacedUnitsList(
-        [Description("Path to a .w3x/.w3m map file.")] string map)
-        => Run(() => UnitInstanceCommand.List(LoadMap(map)));
+    [Description("List every unit already PLACED on the map (war3mapUnits.doo), each with the creation number needed to edit or remove it, plus its type rawcode, owner, position and hero stats. Start locations appear here too. Call this before placed_unit_set or placed_unit_remove. Pass brief true to get the total and only the first 50 units when the full list would be too large for the context.")]
+    public static object PlacedUnitsList(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Return the total unit count and only the first 50 units instead of the full list. Default false.")] bool brief = false)
+        => Run<object>(() => brief
+            ? UnitInstanceCommand.ListBrief(LoadMap(map))
+            : UnitInstanceCommand.List(LoadMap(map)));
 
     [McpServerTool(Name = "placed_unit_get", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Show one placed unit's full state by creation number: type, owner, position, facing, scale, hero level and attributes, hit points and mana percentages, gold and target acquisition range.")]
