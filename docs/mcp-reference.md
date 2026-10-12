@@ -2,7 +2,7 @@
 
 Generated from the live tool surface by `wc3ctl docs mcp`. Do not edit by hand. Regenerate with `wc3ctl docs mcp --force`, and the CI guard fails when this file is stale.
 
-The server exposes 234 tool(s).
+The server exposes 235 tool(s).
 
 ## asset_audit
 
@@ -523,6 +523,12 @@ Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 ## model_export_obj
 
 Export a map-imported model to Wavefront OBJ at out_path, writing an MTL and any map-resolvable textures converted to PNG beside it. The map itself is never modified. Returns the .obj path, the .mtl path and the texture file names.
+
+Annotations. read-only no, destructive no, idempotent yes, open-world no.
+
+## model_optimize
+
+Decimate a .mdx or .mdl model's geometry with the quadric error metric and write a smaller MDX at out_path, leaving materials, textures, sequences and bones untouched. ratio is the target fraction of faces to keep. Returns the before and after vertex and face counts. The input is never modified.
 
 Annotations. read-only no, destructive no, idempotent yes, open-world no.
 

@@ -638,6 +638,17 @@ public static class Render
         return sb.ToString().TrimEnd();
     }
 
+    public static string ModelOptimize(ModelOptimizeResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"Wrote {Path.GetFileName(r.Path)}");
+        sb.AppendLine($"  {r.Geosets} geoset(s), vertices {r.VerticesBefore} -> {r.VerticesAfter} "
+            + $"(-{r.VerticesRemoved}), faces {r.FacesBefore} -> {r.FacesAfter} (-{r.FacesRemoved})");
+        sb.AppendLine($"  {r.BytesBefore} -> {r.BytesAfter} byte(s)");
+        foreach (var d in r.Diagnostics) sb.AppendLine($"  ! {d}");
+        return sb.ToString().TrimEnd();
+    }
+
     public static string Imports(ImportsListResult r)
     {
         var sb = new StringBuilder();

@@ -436,6 +436,19 @@ public static class Wc3Tools
         [Description("Path to a .mdx or .mdl model file.")] string model)
         => Run(() => ModelAuditCommand.ExecutePath(model));
 
+    [McpServerTool(Name = "model_optimize", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Decimate a .mdx or .mdl model's geometry with the quadric error metric and write a smaller MDX at out_path, leaving materials, textures, sequences and bones untouched. ratio is the target fraction of faces to keep. Returns the before and after vertex and face counts. The input is never modified.")]
+    public static ModelOptimizeResult ModelOptimize(
+        [Description("Path to a .mdx or .mdl model file.")] string model,
+        [Description("Output .mdx path. The input is never modified.")] string out_path,
+        [Description("Target fraction of faces to keep, between 0 and 1.")] float ratio = 0.5f)
+        => Run(() =>
+        {
+            if (string.Equals(Path.GetFullPath(out_path), Path.GetFullPath(model), StringComparison.OrdinalIgnoreCase))
+                throw new McpException("out_path must not be the input model");
+            return ModelOptimizeCommand.ExecutePath(model, ratio, out_path);
+        });
+
     [McpServerTool(Name = "model_export_obj", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Export a map-imported model to Wavefront OBJ at out_path, writing an MTL and any map-resolvable textures converted to PNG beside it. The map itself is never modified. Returns the .obj path, the .mtl path and the texture file names.")]
     public static ModelExportObjToolResult ModelExportObj(
