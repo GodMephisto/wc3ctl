@@ -46,6 +46,52 @@ public static class Wc3Tools
         [Description("Path to a .w3x/.w3m map file.")] string map)
         => Run(() => ScriptLeaksCommand.Execute(LoadMap(map)));
 
+    [McpServerTool(Name = "leak_list", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("The ranked static handle-leak list for a map's script plus the periodic timers and "
+        + "triggers that feed it, and every hot leak target by function. Read-only, a presentation over "
+        + "script_leaks for the leak workflow.")]
+    public static LeakListResult LeakList(
+        [Description("Path to a .w3x/.w3m map file.")] string map)
+        => Run(() => LeakListCommand.Execute(LoadMap(map)));
+
+    [McpServerTool(Name = "leak_harness", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Emit a small in-map harness in the map's own language (jass or lua) that drives the "
+        + "named hot leak candidates on a short timer so the runtime handle and memory slope is measurable "
+        + "in seconds rather than an hour, plus a handle count sampler. Writes the harness to out_path as "
+        + "valid syntax for the language. Does not start the game.")]
+    public static LeakHarnessResult LeakHarness(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Harness language, jass or lua.")] string lang,
+        [Description("A hot leak candidate function name, or all.")] string target,
+        [Description("Path to write the harness text to.")] string out_path)
+        => Run(() => LeakHarnessCommand.Execute(LoadMap(map), lang, target, out_path));
+
+    [McpServerTool(Name = "leak_join", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Join a map's static leak list to a wc3watch session folder. Reads samples.csv, fits "
+        + "the handle slope and the memory slope, and aligns a rising slope with the periodic candidates "
+        + "from the static list. Read-only. A folder with no samples.csv is reported clearly.")]
+    public static LeakJoinResult LeakJoin(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("A wc3watch session folder holding samples.csv.")] string session_folder)
+        => Run(() => LeakJoinCommand.Execute(LoadMap(map), session_folder));
+
+    [McpServerTool(Name = "leak_ab", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Diff two wc3watch sessions and report whether the handle and memory slope fell, the "
+        + "usual shape being one session with a trigger live and one with it disabled. With a map, name "
+        + "the periodic candidate whose predicted rate is nearest the drop, labelled an inference. Read-only.")]
+    public static LeakAbResult LeakAb(
+        [Description("First wc3watch session folder.")] string session_a,
+        [Description("Second wc3watch session folder.")] string session_b,
+        [Description("Optional map to attribute the drop to a periodic candidate.")] string? map = null)
+        => Run(() => LeakAbCommand.Execute(session_a, session_b, map is null ? null : LoadMap(map)));
+
+    [McpServerTool(Name = "leak_benchmark", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Run the leak detector over a set of synthetic maps, each with a known injected leak of "
+        + "one creator kind plus a clean control, and report true positive and false positive counts so "
+        + "the detector's accuracy is a measured number. Read-only.")]
+    public static LeakBenchmarkResult LeakBenchmark()
+        => Run(() => LeakBenchmarkCommand.Execute());
+
     [McpServerTool(Name = "script_unused_globals", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Find the globals a map's war3map.j declares and never reads, the variable half of "
         + "dead code. A global that is only ever assigned and never appears on the right of anything "

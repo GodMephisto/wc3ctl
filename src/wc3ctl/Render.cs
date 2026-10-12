@@ -133,6 +133,98 @@ public static class Render
         return sb.ToString();
     }
 
+    private static string Num(double? v) =>
+        v is { } x ? x.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) : "n/a";
+
+    public static string LeakList(LeakListResult r)
+    {
+        var sb = new StringBuilder();
+        foreach (var g in r.Findings.GroupBy(l => l.Heat))
+        {
+            sb.AppendLine($"{g.Key} ({g.Count()})");
+            foreach (var l in g)
+            {
+                string code = l.Code.Length > 110 ? l.Code[..107] + "..." : l.Code;
+                sb.AppendLine($"  {l.Line,7}  {l.Rule,-15} {l.Handle,-9} {l.Function}");
+                sb.AppendLine($"           {code}");
+            }
+        }
+        sb.AppendLine($"periodic, {r.Periodic.Count} driver(s)");
+        foreach (var p in r.Periodic)
+        {
+            string period = p.Period is { } s
+                ? s.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) + " s"
+                : "variable";
+            sb.AppendLine($"  {period,-9} line {p.Line,7}  {p.Function}  "
+                + $"({p.HotLeaks} hot leak(s), reaches {p.Reached})");
+        }
+        sb.AppendLine($"targets (hot), {r.Targets.Count}");
+        foreach (var t in r.Targets)
+            sb.AppendLine($"  {t.Function}  {t.Handle}  x{t.Count}  line {t.Line}");
+        foreach (var d in r.Diagnostics) sb.AppendLine($"note  {d}");
+        sb.AppendLine(r.Message);
+        return sb.ToString();
+    }
+
+    public static string LeakHarness(LeakHarnessResult r) =>
+        r.Ok ? r.Message + "\n" + r.Source : r.Message;
+
+    public static string LeakJoin(LeakJoinResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine(r.Message);
+        if (!r.Ok) return sb.ToString();
+        sb.AppendLine($"span {r.Span}, {r.SampleCount} sample(s)");
+        sb.AppendLine($"handle slope  {Num(r.HandleSlopePerMin)} per minute (r {Num(r.HandleCorrelation)})");
+        sb.AppendLine($"memory slope  {Num(r.MemorySlopePerMin)} MB per minute (r {Num(r.MemoryCorrelation)})");
+        sb.AppendLine("drivers by predicted handle rate");
+        foreach (var d in r.Drivers)
+        {
+            string period = d.Period is { } p
+                ? p.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) + " s"
+                : "variable";
+            sb.AppendLine($"  {d.Rank,2}. {d.Function,-24} {period,-9} {d.HotLeaks} hot leak(s)  "
+                + $"about {d.PredictedPerMin:0.#} a minute");
+        }
+        sb.AppendLine("rising windows");
+        if (r.Windows.Count == 0) sb.AppendLine("  none");
+        foreach (var w in r.Windows)
+            sb.AppendLine($"  {w.Start} to {w.End}  {w.Samples} sample(s)  {w.HandlesPerMin:0.#} handles a minute"
+                + (w.Driver is null ? "" : $"  ({w.Driver})"));
+        foreach (var d in r.Diagnostics) sb.AppendLine($"note  {d}");
+        return sb.ToString();
+    }
+
+    public static string LeakAb(LeakAbResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine(r.Message);
+        foreach (var s in new[] { r.A, r.B })
+        {
+            if (s.Error is not null) { sb.AppendLine($"  {s.Session}, {s.Error}"); continue; }
+            sb.AppendLine($"  {s.Session}");
+            sb.AppendLine($"    {s.Samples} sample(s), {s.Span}");
+            sb.AppendLine($"    handles {Num(s.HandlesPerMin)} per minute (r {Num(s.HandleCorrelation)}), "
+                + $"memory {Num(s.MemoryPerMin)} MB per minute (r {Num(s.MemoryCorrelation)})");
+        }
+        if (r.LikelyDisabled is not null)
+            sb.AppendLine($"likely disabled candidate, {r.LikelyDisabled} (inferred from the static list)");
+        foreach (var d in r.Diagnostics) sb.AppendLine($"note  {d}");
+        return sb.ToString();
+    }
+
+    public static string LeakBenchmark(LeakBenchmarkResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine(r.Message);
+        sb.AppendLine("  kind        creator             expected  detected  false+  ok");
+        foreach (var c in r.Cases)
+            sb.AppendLine($"  {c.Kind,-10}  {c.Creator,-18} {c.Expected,8}  {c.Detected,8}  "
+                + $"{c.FalsePositives,6}  {(c.TruePositive ? "yes" : "no")}");
+        foreach (var d in r.Diagnostics) sb.AppendLine($"note  {d}");
+        return sb.ToString();
+    }
+
     public static string Replays(ReplayReport r)
     {
         var sb = new StringBuilder();

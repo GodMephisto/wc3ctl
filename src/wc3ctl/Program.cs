@@ -4514,7 +4514,87 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         gamedata.AddCommand(gamedataBounds);
         gamedata.AddCommand(gamedataCoverage);
 
+        // ---- leak investigation, the static ranked list joined to a wc3watch runtime session ----
+        var leak = new Command("leak",
+            "Handle-leak investigation. The static ranked list from script leaks, an in-map harness "
+            + "that drives the hot candidates, and the join to a wc3watch session's runtime samples.");
+
+        var leakListCmd = new Command("list",
+            "The ranked static leak list and the periodic drivers that feed it. Read-only.") { mapArg };
+        leakListCmd.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = LeakListCommand.Execute(MapDocument.Load(p.GetValueForArgument(mapArg)));
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.LeakList(r));
+        }));
+        leak.AddCommand(leakListCmd);
+
+        var leakLang = new Option<string>("--lang", "Harness language, jass or lua.") { IsRequired = true };
+        var leakTarget = new Option<string>("--target",
+            "A hot leak candidate function name, or all.") { IsRequired = true };
+        var leakHarnessOut = new Option<string?>(new[] { "-o", "--out" },
+            "Path to write the harness.") { IsRequired = true };
+        var leakHarnessCmd = new Command("harness",
+            "Emit a small in-map harness that drives the named hot leak candidates on a short timer "
+            + "so the runtime slope is measurable in seconds, plus a handle count sampler. Emits valid "
+            + "jass or lua and does not start the game.")
+        { mapArg, leakLang, leakTarget, leakHarnessOut };
+        leakHarnessCmd.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = LeakHarnessCommand.Execute(MapDocument.Load(p.GetValueForArgument(mapArg)),
+                p.GetValueForOption(leakLang)!, p.GetValueForOption(leakTarget)!, p.GetValueForOption(leakHarnessOut));
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.LeakHarness(r));
+            if (!r.Ok) exitCode[0] = 1;
+        }));
+        leak.AddCommand(leakHarnessCmd);
+
+        var leakSession = new Argument<string>("session-folder",
+            "A wc3watch session folder holding samples.csv.");
+        var leakJoinCmd = new Command("join",
+            "Read a wc3watch session's handle and memory slope and align a rising slope with the "
+            + "periodic candidates from the static list. Read-only.") { mapArg, leakSession };
+        leakJoinCmd.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = LeakJoinCommand.Execute(MapDocument.Load(p.GetValueForArgument(mapArg)),
+                p.GetValueForArgument(leakSession));
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.LeakJoin(r));
+            if (!r.Ok) exitCode[0] = 1;
+        }));
+        leak.AddCommand(leakJoinCmd);
+
+        var abA = new Argument<string>("sessionA", "First wc3watch session folder.");
+        var abB = new Argument<string>("sessionB", "Second wc3watch session folder.");
+        var abMap = new Option<string?>("--map", "Map to attribute the drop to a periodic candidate.");
+        var leakAbCmd = new Command("ab",
+            "Diff two wc3watch sessions and report whether the handle and memory slope fell. With "
+            + "--map, name the candidate whose predicted rate is nearest the drop. Read-only.")
+        { abA, abB, abMap };
+        leakAbCmd.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string? mapPath = p.GetValueForOption(abMap);
+            var r = LeakAbCommand.Execute(p.GetValueForArgument(abA), p.GetValueForArgument(abB),
+                mapPath is null ? null : MapDocument.Load(mapPath));
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.LeakAb(r));
+            if (!r.Ok) exitCode[0] = 1;
+        }));
+        leak.AddCommand(leakAbCmd);
+
+        var leakBenchmarkCmd = new Command("benchmark",
+            "Run the detector over synthetic maps with a known injected leak, one per creator kind, "
+            + "and report true positive and false positive counts. Read-only.");
+        leakBenchmarkCmd.SetHandler(ctx => RunSafely(() =>
+        {
+            var r = LeakBenchmarkCommand.Execute();
+            Emit(ctx.ParseResult.GetValueForOption(jsonOption), r, () => Render.LeakBenchmark(r));
+            if (!r.Ok) exitCode[0] = 1;
+        }));
+        leak.AddCommand(leakBenchmarkCmd);
+
         root.AddCommand(file);
+        root.AddCommand(leak);
         root.AddCommand(info); root.AddCommand(ls); root.AddCommand(rt);
         root.AddCommand(search); root.AddCommand(diff); root.AddCommand(obj);
         root.AddCommand(extract); root.AddCommand(render); root.AddCommand(renderModel);
