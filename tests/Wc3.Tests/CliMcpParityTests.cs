@@ -41,6 +41,7 @@ public class CliMcpParityTests
         ["asset_import_wire"] = "asset import-wire",
         ["model_export_obj"] = "model export-obj",
         ["model_audit"] = "model audit",
+        ["model_optimize"] = "model optimize",
         ["lint"] = "lint",
         ["lint_baseline"] = "lint baseline",
         ["validate"] = "validate",

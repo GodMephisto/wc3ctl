@@ -57,6 +57,17 @@ public sealed class McpSmokeModelAssetTests : McpSmokeBase
         Assert.True(Prop(r, "geosets").GetInt32() >= 1);
     }
 
+    [Fact, Covers("model_optimize")]
+    public async Task Model_optimize_writes_a_smaller_model()
+    {
+        var modelFile = NewOut("optin", ".mdx");
+        File.WriteAllBytes(modelFile, SyntheticModel.TinyMdx());
+        var outFile = NewOut("optout", ".mdx");
+        var r = await Call("model_optimize", Args(("model", modelFile), ("out_path", outFile), ("ratio", 0.5)));
+        Assert.True(File.Exists(outFile));
+        Assert.True(Prop(r, "geosets").GetInt32() >= 1);
+    }
+
     [Fact, Covers("model_export_obj")]
     public async Task Model_export_obj_writes_obj_and_mtl()
     {

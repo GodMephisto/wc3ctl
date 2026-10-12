@@ -2,7 +2,7 @@
 
 Generated from the live command tree by `wc3ctl docs cli`. Do not edit by hand. Regenerate with `wc3ctl docs cli --force`, and the CI guard fails when this file is stale.
 
-The tree holds 63 top level verb(s) and 310 command path(s) in total.
+The tree holds 63 top level verb(s) and 311 command path(s) in total.
 
 ## Global options
 
@@ -424,6 +424,7 @@ Subcommands
 
 - `export-obj`. Export a map-imported model to Wavefront OBJ, with an MTL and any map-resolvable textures converted to PNG beside it.
 - `audit`. Audit a model for the resource waste and draw-nothing problems the optimiser can remove, and report what it holds, its geosets, vertices, faces, textures, sequences and nodes.
+- `optimize`. Decimate a model's geometry with the quadric error metric and write a smaller MDX, leaving materials, textures, sequences and bones byte for byte. Reports the before and after vertex and face counts.
 
 ### model export-obj
 
@@ -457,6 +458,25 @@ wc3ctl model audit <model>
 Arguments
 
 - `<model>` (required). Path to a .mdx or .mdl file.
+
+### model optimize
+
+Decimate a model's geometry with the quadric error metric and write a smaller MDX, leaving materials, textures, sequences and bones byte for byte. Reports the before and after vertex and face counts.
+
+Usage
+
+```
+wc3ctl model optimize <model> [options]
+```
+
+Arguments
+
+- `<model>` (required). Path to a .mdx or .mdl file.
+
+Options
+
+- `-o, --out <out>` (required). Output model path. The input is never modified.
+- `--ratio <ratio>`. Target fraction of faces to keep, between 0 and 1. Default `0.5`.
 
 ## strings
 

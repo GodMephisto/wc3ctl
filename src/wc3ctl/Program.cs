@@ -3212,9 +3212,27 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
                 Emit(json, r, () => Render.ModelAudit(r));
             }),
             modelAuditPath, jsonOption);
+        var modelOptimizePath = new Argument<string>("model", "Path to a .mdx or .mdl file.");
+        var modelOptimizeOut = new Option<string>(new[] { "-o", "--out" },
+            "Output model path. The input is never modified.") { IsRequired = true };
+        var modelOptimizeRatio = new Option<float>("--ratio", () => 0.5f,
+            "Target fraction of faces to keep, between 0 and 1.");
+        var modelOptimize = new Command("optimize",
+            "Decimate a model's geometry with the quadric error metric and write a smaller MDX, "
+            + "leaving materials, textures, sequences and bones byte for byte. Reports the before "
+            + "and after vertex and face counts.")
+            { modelOptimizePath, modelOptimizeOut, modelOptimizeRatio, jsonOption };
+        modelOptimize.SetHandler(
+            (string modelPath, string outPath, float ratio, bool json) => RunSafely(() =>
+            {
+                var r = ModelOptimizeCommand.ExecutePath(modelPath, ratio, outPath);
+                Emit(json, r, () => Render.ModelOptimize(r));
+            }),
+            modelOptimizePath, modelOptimizeOut, modelOptimizeRatio, jsonOption);
         var model = new Command("model", "Model asset operations.");
         model.AddCommand(modelExportObj);
         model.AddCommand(modelAudit);
+        model.AddCommand(modelOptimize);
         root.AddCommand(model);
 
         // ---- strings / imports / trigger read: reachable from the GUI, previously not here ----

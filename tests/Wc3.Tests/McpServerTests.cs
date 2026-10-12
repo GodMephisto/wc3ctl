@@ -39,6 +39,7 @@ public class McpServerTests
         "mcp_export_verify",
         "model_audit",
         "model_export_obj",
+        "model_optimize",
         "mpq_add", "mpq_bytes_diff", "mpq_extract_all", "mpq_listfile", "mpq_merge",
         "mpq_name_recover", "mpq_rebuild", "mpq_remove",
         "mpq_strip_bookkeeping", "mpq_verify", "new_map", "object_bulk_set", "object_clone", "object_deprecated",
