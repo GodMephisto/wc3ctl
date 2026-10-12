@@ -328,6 +328,17 @@ public static class TargetBuildSettings
         string? newestBuild = null;
         var newestParsed = default(Wc3.Commands.GameBuildName);
 
+        // Resolve the installed build once. Reading it inside the loop opened the registry and the
+        // install folder once per schema, which is what made every MCP session take seconds when a
+        // schemas dataset is present.
+        string? installBuild = null;
+        try
+        {
+            string? installDir = Wc3.GameData.GameInstall.Locate();
+            if (installDir is not null) installBuild = Wc3.GameData.GameInstall.ReadBuildVersion(installDir);
+        }
+        catch { /* no install, leave the default null */ }
+
         foreach (var subDir in Directory.EnumerateDirectories(resolvedSchemas))
         {
             string manifestPath = Path.Combine(subDir, "manifest.json");
@@ -335,17 +346,8 @@ public static class TargetBuildSettings
 
             var schema = GameSchemaCommand.Load(subDir);
 
-            // Try to find the installed game's build.
-            string? installDir = null;
-            try { installDir = Wc3.GameData.GameInstall.Locate(); } catch { /* ignore */ }
-            if (installDir is not null)
-            {
-                string? installBuild = Wc3.GameData.GameInstall.ReadBuildVersion(installDir);
-                if (installBuild is not null && installBuild == schema.Build)
-                {
-                    defaultBuild = schema.Build;
-                }
-            }
+            if (installBuild is not null && installBuild == schema.Build)
+                defaultBuild = schema.Build;
 
             // Track the newest schema by version.
             var parsed = Wc3.Commands.GameBuildName.Parse(schema.Build);

@@ -38,9 +38,18 @@ public static class Wc3McpServer
         {
             ServerInfo = new Implementation { Name = ServerIdentity.ProductId, Version = ServerIdentity.Version },
             ToolCollection = tools,
-            ServerInstructions = BuildInstructions(),
+            ServerInstructions = Instructions.Value,
         };
     }
+
+    /// <summary>
+    /// The initialize instructions, computed once per process. <see cref="BuildInstructions"/>
+    /// resolves the target, which walks the schemas folder, so recomputing it for every session
+    /// made each in-memory MCP test pay for a full scan and the suite took minutes instead of
+    /// seconds. The instructions are fixed at start, which matches the reply being sent once.
+    /// </summary>
+    private static readonly Lazy<string> Instructions =
+        new(BuildInstructions, LazyThreadSafetyMode.ExecutionAndPublication);
 
     private static string BuildInstructions()
     {
