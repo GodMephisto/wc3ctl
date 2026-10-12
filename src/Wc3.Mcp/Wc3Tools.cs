@@ -798,6 +798,51 @@ public static class Wc3Tools
             return r;
         });
 
+    // ---- mpq container tools ---------------------------------------------
+
+    [McpServerTool(Name = "mpq_verify", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Open every entry of a map archive and read it to its end, reporting any that "
+        + "fail with the error raised, plus a summary count. Use this to prove an archive is fully "
+        + "usable rather than merely addressable. Read-only.")]
+    public static MpqVerifyResult MpqVerify(
+        [Description("Path to a .w3x/.w3m map file.")] string map)
+        => Run(() => MpqVerifyCommand.Execute(RequireMapPath(map)));
+
+    [McpServerTool(Name = "mpq_listfile", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Report an archive's listfile coverage in three parts, the entries named by the "
+        + "listfile it ships, the entries recovered by the standard-name probe, and the entries "
+        + "with no name at all. Read-only.")]
+    public static MpqListfileResult MpqListfile(
+        [Description("Path to a .w3x/.w3m map file.")] string map)
+        => Run(() => MpqListfileCommand.Execute(RequireMapPath(map)));
+
+    [McpServerTool(Name = "mpq_name_recover", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Resolve a dictionary of candidate names against the archive's hash table and "
+        + "report the names that hit unnamed blocks. Narrower than deprotect_map, which harvests "
+        + "its own candidates from the map. Read-only.")]
+    public static MpqNameRecoverResult MpqNameRecover(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a dictionary file, one candidate name per line.")] string dictionary)
+        => Run(() => MpqNameRecoverCommand.Execute(LoadMap(map), dictionary));
+
+    [McpServerTool(Name = "mpq_strip_bookkeeping", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Save a copy of a map with the (listfile) and (attributes) bookkeeping entries "
+        + "dropped, then confirm the copy opens again. The input map is never overwritten. "
+        + "out_path defaults to a sibling '<map>.edited.<ext>'.")]
+    public static MpqStripResult MpqStripBookkeeping(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Output map path. Defaults to a sibling '<map>.edited.<ext>'. Must differ from the input.")] string? out_path = null)
+        => Run(() => MpqStripBookkeepingCommand.Execute(RequireMapPath(map), out_path));
+
+    [McpServerTool(Name = "mpq_bytes_diff", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Compare two archives entry by entry by name. For each name present in both, "
+        + "report whether the payload SHA256 matches, and list names only one side carries. The "
+        + "byte-level counterpart of the structural mpq-diff. Read-only.")]
+    public static MpqBytesDiffResult MpqBytesDiff(
+        [Description("Path to the first .w3x/.w3m map.")] string map,
+        [Description("Path to the second .w3x/.w3m map.")] string other)
+        => Run(() => MpqBytesDiffCommand.Execute(RequireMapPath(map), RequireMapPath(other)));
+
     [McpServerTool(Name = "file_list", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("List the archive's internal entries with their CURRENT size, which reflects a "
         + "pending replacement rather than the stale original. Name is null for an unnamed entry, "
@@ -1410,6 +1455,17 @@ public static class Wc3Tools
             throw new McpException($"map not found: {map}");
         try { return MapDocument.Load(map); }
         catch (Exception ex) { throw new McpException($"could not load '{map}': {ex.Message}"); }
+    }
+
+    /// <summary>Validate a map path without parsing it, for the container tools that read the
+    /// archive directly. Same "map not found" message LoadMap gives.</summary>
+    private static string RequireMapPath(string map)
+    {
+        if (string.IsNullOrWhiteSpace(map))
+            throw new McpException("map path is required");
+        if (!File.Exists(map))
+            throw new McpException($"map not found: {map}");
+        return map;
     }
 
     /// <summary>Load the map, apply a placement mutation, and save the edited copy to out_path.
