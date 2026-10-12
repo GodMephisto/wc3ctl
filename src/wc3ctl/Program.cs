@@ -1074,6 +1074,82 @@ public static class Program
         }), mapArg, refsName, jsonOption);
         script.AddCommand(scriptRefs);
 
+        var scriptReachable = new Command("reachable",
+            "List the functions reachable from main and the InitTrig entry points, and the dead "
+            + "functions nothing reaches, each with its line. Read-only.") { mapArg, jsonOption };
+        scriptReachable.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = ScriptReachableCommand.Execute(MapDocument.Load(p.GetValueForArgument(mapArg)));
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.ScriptReachable(r));
+        }));
+        script.AddCommand(scriptReachable);
+
+        var scriptToolTarget = new Option<string>("--target",
+            "Target build name or schema folder path.") { IsRequired = true };
+        var scriptToolSchemas = new Option<string?>("--schemas",
+            "Directory of schema folders. Default: search <base>/schemas then walk up to data/schemas.");
+        var scriptApiUsage = new Command("api-usage",
+            "List the natives and functions the script uses that the target build does not declare. "
+            + "Read-only.") { mapArg, scriptToolTarget, scriptToolSchemas, jsonOption };
+        scriptApiUsage.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var doc = MapDocument.Load(p.GetValueForArgument(mapArg));
+            var r = ScriptApiUsageCommand.Execute(doc,
+                p.GetValueForOption(scriptToolTarget)!, p.GetValueForOption(scriptToolSchemas));
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.ScriptApiUsage(r));
+        }));
+        script.AddCommand(scriptApiUsage);
+
+        var scriptSemanticDiff = new Command("semantic-diff",
+            "Compare two scripts line by line after normalizing whitespace and ignoring pure renames "
+            + "of local variables, reporting the real changes. Read-only.") { mapArg, mapB, jsonOption };
+        scriptSemanticDiff.SetHandler((string a, string b, bool json) => RunSafely(() =>
+        {
+            var r = ScriptSemanticDiffCommand.Execute(MapDocument.Load(a), MapDocument.Load(b));
+            Emit(json, r, () => Render.ScriptSemanticDiff(r));
+        }), mapArg, mapB, jsonOption);
+        script.AddCommand(scriptSemanticDiff);
+
+        var scriptDuplicateBodies = new Command("duplicate-bodies",
+            "Find functions whose normalized bodies are identical, up to comments, whitespace and "
+            + "local variable names. Read-only.") { mapArg, jsonOption };
+        scriptDuplicateBodies.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = ScriptDuplicateBodiesCommand.Execute(MapDocument.Load(p.GetValueForArgument(mapArg)));
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.ScriptDuplicateBodies(r));
+        }));
+        script.AddCommand(scriptDuplicateBodies);
+
+        var modernizeOut = new Option<string?>(new[] { "-o", "--out" },
+            "Output map path. Default: '<map>.modernized.<ext>' next to the input - the original is never overwritten.");
+        var scriptModernize = new Command("modernize",
+            "Rewrite deprecated or renamed natives in the script to the target build's spelling "
+            + "where a mapping is known, leaving everything else untouched.")
+        { mapArg, scriptToolTarget, scriptToolSchemas, modernizeOut, jsonOption };
+        scriptModernize.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = ScriptModernizeCommand.Execute(doc,
+                p.GetValueForOption(scriptToolTarget)!, p.GetValueForOption(scriptToolSchemas));
+            string? dest = null;
+            if (r.Rewrites > 0)
+            {
+                dest = p.GetValueForOption(modernizeOut) ?? Path.Combine(
+                    Path.GetDirectoryName(map) ?? "",
+                    Path.GetFileNameWithoutExtension(map) + ".modernized" + Path.GetExtension(map));
+                doc.Save(dest);
+            }
+            Emit(p.GetValueForOption(jsonOption),
+                new { r.ScriptFile, r.TargetBuild, r.Rewrites, r.Changes, SavedTo = dest },
+                () => Render.ScriptModernize(r, dest));
+        }));
+        script.AddCommand(scriptModernize);
+
         script.AddCommand(scriptLoops);
         script.AddCommand(scriptRoots);
         script.AddCommand(scriptStrip);

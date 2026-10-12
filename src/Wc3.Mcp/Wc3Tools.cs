@@ -450,6 +450,49 @@ public static class Wc3Tools
             return new { r.Files, r.Failed, SavedTo = r.Files.Count > 0 ? full : null };
         });
 
+    [McpServerTool(Name = "script_reachable", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("List the functions reachable from the map script's entry points, main and the InitTrig functions, and the dead functions nothing reaches, each with its declaration line. A function reached only through a string (ExecuteFunc) is reported dead here, which is the honest answer to what main reaches. Read-only.")]
+    public static ScriptReachableResult ScriptReachable(
+        [Description("Path to a .w3x/.w3m map file.")] string map)
+        => Run(() => ScriptReachableCommand.Execute(LoadMap(map)));
+
+    [McpServerTool(Name = "script_api_usage", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("List the natives and functions the map script uses that a target game build does not declare, the compile-time side of a port. Uses the same schema membership test as the compat check. Read-only.")]
+    public static ScriptApiUsageResult ScriptApiUsage(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Target build name or schema folder path.")] string target,
+        [Description("Directory of schema folders with manifest.json. Optional, the default search is used when omitted.")] string? schemas_dir = null)
+        => Run(() => ScriptApiUsageCommand.Execute(LoadMap(map), target, schemas_dir));
+
+    [McpServerTool(Name = "script_semantic_diff", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Compare two map scripts line by line after normalizing whitespace, dropping comments and ignoring pure renames of local variables, and report the real changes. Use this rather than diff for a before/after of a port or an edit where a variable rename or a reindent should not drown the intended change. Read-only.")]
+    public static ScriptSemanticDiffResult ScriptSemanticDiff(
+        [Description("Path to the first .w3x/.w3m map.")] string map,
+        [Description("Path to the second .w3x/.w3m map.")] string other)
+        => Run(() => ScriptSemanticDiffCommand.Execute(LoadMap(map), LoadMap(other)));
+
+    [McpServerTool(Name = "script_duplicate_bodies", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Find functions whose normalized bodies are identical, up to comments, whitespace and local variable names. A copied function is a maintenance trap, a fix in one copy silently misses the others. Read-only.")]
+    public static ScriptDuplicateBodiesResult ScriptDuplicateBodies(
+        [Description("Path to a .w3x/.w3m map file.")] string map)
+        => Run(() => ScriptDuplicateBodiesCommand.Execute(LoadMap(map)));
+
+    [McpServerTool(Name = "script_modernize", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Rewrite deprecated or renamed natives in the map script to the target build's spelling where a known mapping exists, and save the map to out_path. A rewrite is only applied when the target build declares the new name, and names inside strings or comments are never touched. Nothing is written when there is nothing to rewrite. The input map is NEVER modified.")]
+    public static object ScriptModernize(
+        [Description("Path to a .w3x/.w3m map file or map folder.")] string map,
+        [Description("Where to save the rewritten map.")] string out_path,
+        [Description("Target build name or schema folder path.")] string target,
+        [Description("Directory of schema folders with manifest.json. Optional, the default search is used when omitted.")] string? schemas_dir = null)
+        => Run(() =>
+        {
+            var full = ResolveOutPath(map, out_path);
+            var doc = LoadMap(map);
+            var r = ScriptModernizeCommand.Execute(doc, target, schemas_dir);
+            if (r.Rewrites > 0) doc.Save(full);
+            return new { r.ScriptFile, r.TargetBuild, r.Rewrites, r.Changes, SavedTo = r.Rewrites > 0 ? full : null };
+        });
+
     [McpServerTool(Name = "terrain_info", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("The terrain grid's extents in corners, plus the map's ground and cliff tile lists. Texture fields on a corner are indexes into those lists, so read this first to know what an index means.")]
     public static TerrainEditCommand.TerrainInfo TerrainInfoTool(

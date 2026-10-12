@@ -1265,6 +1265,70 @@ public static class Render
         return sb.ToString().TrimEnd();
     }
 
+    public static string ScriptReachable(ScriptReachableResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.ScriptFile} has {r.Reachable} reachable and {r.Dead} dead ({r.DeadPercent}%)");
+        sb.AppendLine("reachable");
+        foreach (var f in r.ReachableFunctions)
+            sb.AppendLine($"  line {f.Line,-7} {f.Name}");
+        if (r.DeadFunctions.Count > 0)
+        {
+            sb.AppendLine("dead");
+            foreach (var f in r.DeadFunctions)
+                sb.AppendLine($"  line {f.Line,-7} {f.Name}");
+        }
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string ScriptApiUsage(ScriptApiUsageResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.ScriptFile} against {r.TargetBuild}, "
+                      + $"{r.Missing} of {r.Used} native and function use(s) missing");
+        foreach (var u in r.Usages)
+            sb.AppendLine($"  line {u.Line,-7} {u.Kind,-9} {u.Name}  (used {u.Count}x)");
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string ScriptSemanticDiff(ScriptSemanticDiffResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.ScriptA} vs {r.ScriptB} ({r.Language}), {r.Changes} real change(s)");
+        foreach (var l in r.Lines)
+        {
+            string where = l.LineA > 0 && l.LineB > 0 ? $"{l.LineA}/{l.LineB}"
+                : l.LineA > 0 ? l.LineA.ToString()
+                : l.LineB.ToString();
+            sb.AppendLine($"  {l.Kind,-16} line {where,-10} {l.Text}");
+        }
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string ScriptDuplicateBodies(ScriptDuplicateBodiesResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.ScriptFile}, {r.Functions} function(s), {r.DuplicateGroups} duplicate group(s), "
+                      + $"{r.DuplicateFunctions} function(s) duplicated");
+        foreach (var g in r.Groups)
+        {
+            sb.AppendLine($"  {g.Size} copies");
+            foreach (var f in g.Functions)
+                sb.AppendLine($"    line {f.Line,-7} {f.Name}");
+        }
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string ScriptModernize(ScriptModernizeResult r, string? dest)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.ScriptFile} against {r.TargetBuild}, {r.Rewrites} native rewrite(s)");
+        foreach (var c in r.Changes)
+            sb.AppendLine($"  line {c.Line,-7} {c.From} to {c.To}  ({c.Count}x)");
+        if (dest is not null) sb.Append($"saved: {dest}");
+        return sb.ToString().TrimEnd();
+    }
+
     public static string MpqHash(HashTableView v)
     {
         var sb = new StringBuilder();
