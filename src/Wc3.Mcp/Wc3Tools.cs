@@ -2214,6 +2214,43 @@ public static class Wc3Tools
         [Description("Optional path to schemas directory containing schema folders with manifest.json.")] string? schemas_dir = null)
         => Run(() => GamedataCoverageCommand.Execute(schemas_dir));
 
+    // ---- bench tools -----------------------------------------------------
+
+    [McpServerTool(Name = "bench_schema_coverage", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Measure what object data a schemas corpus carries. One row per schema folder names the build, its era and whether the object data is real (the folder holds its own fields), era-derived (no fields here but a sibling build in the same era carries them) or absent, plus the real field count, and the totals. Reuses the compat schema resolution and the gamedata era labels.")]
+    public static SchemaCoverageResult BenchSchemaCoverage(
+        [Description("Optional path to schemas directory containing schema folders with manifest.json.")] string? schemas_dir = null)
+        => Run(() => BenchSchemaCoverageCommand.Execute(schemas_dir));
+
+    [McpServerTool(Name = "bench_compat", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Check every map against every target build and return a pass or fail matrix with the finding counts in each cell, plus the aggregate over the whole grid. Pass means the target build raised no error-level finding. The measured sweep behind compat_matrix, with the totals a benchmark report needs.")]
+    public static BenchCompatResult BenchCompat(
+        [Description("One or more .w3x/.w3m map paths.")] string[] maps,
+        [Description("One or more target build names or schema folder paths.")] string[] targets,
+        [Description("Optional path to schemas directory containing schema folders with manifest.json.")] string? schemas_dir = null)
+        => Run(() => BenchCompatCommand.Execute(maps, targets, schemas_dir));
+
+    [McpServerTool(Name = "bench_leaks", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Run the static leak detector over every map in a folder and report the counts per map and per leak kind, with the hot and repeat totals. The folder sweep the single script_leaks call cannot give, so a whole map set can be ranked by how much leaking code it carries.")]
+    public static BenchLeaksResult BenchLeaks(
+        [Description("Folder of .w3x/.w3m maps, searched recursively.")] string folder)
+        => Run(() => BenchLeaksCommand.Execute(folder));
+
+    [McpServerTool(Name = "bench_open", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Open every map in a folder through the loader and record the per-map open time in milliseconds, entry count and total decompressed bytes, reporting the slowest map and the median open time. The load is read-only and never writes a map back.")]
+    public static BenchOpenResult BenchOpen(
+        [Description("Folder of .w3x/.w3m maps, searched recursively.")] string folder)
+        => Run(() => BenchOpenCommand.Execute(folder));
+
+    [McpServerTool(Name = "bench_perf_gate", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Compare two recorded benchmark result JSON files and report whether any metric regressed by more than a threshold, for use as a CI gate. Each file is an object with a name, an optional generated stamp, a metrics map of name to value, and an optional higherIsBetter list naming metrics where an increase is an improvement. A metric in only one file is reported rather than counted. The comparison is pure data, it runs no benchmark.")]
+    public static PerfGateResult BenchPerfGate(
+        [Description("Path to the baseline benchmark JSON file.")] string baseline,
+        [Description("Path to the benchmark JSON file to compare against the baseline.")] string run,
+        [Description("Fail when any metric regressed by more than this percent. Default 10.")] double max_regression_pct = 10)
+        => Run(() => BenchPerfGateCommand.Execute(baseline, run, max_regression_pct));
+
+
     /// <summary>
     /// A tool's game_dir argument, else WC3_GAME_DIR, else null (auto-detect). A value still holding
     /// an unfilled placeholder such as ${user_config.game_dir}, which an MCPB host may pass through

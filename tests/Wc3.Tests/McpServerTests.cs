@@ -18,7 +18,9 @@ public class McpServerTests
     {
         "asset_audit", "asset_duplicates", "asset_list", "asset_replace", "asset_size_report",
         "asset_unused", "audit_ability", "audit_fidelity", "audit_hero", "audit_map",
-        "audit_readiness", "audit_trend", "bundle_diff", "bundle_merge", "bundle_unit",
+        "audit_readiness", "audit_trend",
+        "bench_compat", "bench_leaks", "bench_open", "bench_perf_gate", "bench_schema_coverage",
+        "bundle_diff", "bundle_merge", "bundle_unit",
         "camera_add", "camera_list", "camera_remove", "camera_set", "compat_explain",
         "compat_matrix", "deprotect_map", "diff", "doctor_check", "doctor_compare", "doctor_fix",
         "doctor_inspect", "editor_catalog_get", "editor_catalog_list",
