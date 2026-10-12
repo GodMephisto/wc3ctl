@@ -567,6 +567,58 @@ public static class Render
         return sb.ToString().TrimEnd();
     }
 
+    public static string AssetModelLint(AssetModelLintResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.Findings.Count} finding(s) across {r.ModelsScanned} imported model(s)");
+        foreach (var f in r.Findings)
+            sb.AppendLine($"  {f.Kind,-22} {f.Path}  ({f.Detail})");
+        foreach (var d in r.Diagnostics) sb.AppendLine($"note {d}");
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string AssetThumbnails(AssetThumbnailsResult r, string outDir)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.Rendered} thumbnail(s) written to {outDir}");
+        foreach (var t in r.Thumbnails)
+            sb.AppendLine($"  {t.Name}  <- {t.Source}  ({t.Width}x{t.Height})");
+        foreach (var d in r.Diagnostics) sb.AppendLine($"note {d}");
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string AssetConvertBatch(AssetConvertBatchResult r, string outDir)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.Converted} texture(s) converted to {r.ToExtension}, written under {outDir}");
+        foreach (var t in r.Textures)
+            sb.AppendLine($"  {t.RelativePath}");
+        foreach (var d in r.Diagnostics) sb.AppendLine($"note {d}");
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string AssetImportWire(AssetImportWireResult r, string? savedTo)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine(r.Message);
+        foreach (var p in r.Imported) sb.AppendLine($"  imported {p}");
+        foreach (var f in r.FieldsSet) sb.AppendLine($"  set {f}");
+        foreach (var d in r.Diagnostics) sb.AppendLine($"note {d}");
+        if (savedTo is not null) sb.AppendLine($"saved to {savedTo}");
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string ModelExportObj(ModelExport export, string objPath, string mtlPath, IReadOnlyList<string> textures)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"Wrote {objPath} + {mtlPath}");
+        if (textures.Count > 0)
+            sb.AppendLine($"{textures.Count} texture(s) converted, {string.Join(", ", textures)}");
+        else
+            sb.AppendLine("no map-resolvable textures, materials reference nothing or base-game files");
+        return sb.ToString().TrimEnd();
+    }
+
     public static string Imports(ImportsListResult r)
     {
         var sb = new StringBuilder();

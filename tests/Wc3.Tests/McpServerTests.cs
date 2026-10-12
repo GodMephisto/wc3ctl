@@ -16,8 +16,9 @@ public class McpServerTests
     // Underscore (0x5F) sorts before lowercase letters, so families group naturally.
     private static readonly string[] ExpectedTools =
     {
-        "asset_audit", "asset_duplicates", "asset_list", "asset_replace", "asset_size_report",
-        "asset_unused", "audit_ability", "audit_fidelity", "audit_hero", "audit_map",
+        "asset_audit", "asset_convert_batch", "asset_duplicates", "asset_import_wire", "asset_list",
+        "asset_model_lint", "asset_replace", "asset_size_report", "asset_thumbnails", "asset_unused",
+        "audit_ability", "audit_fidelity", "audit_hero", "audit_map",
         "audit_readiness", "audit_trend", "bench_compat", "bench_leaks", "bench_open",
         "bench_perf_gate", "bench_schema_coverage", "bundle_diff", "bundle_merge", "bundle_unit",
         "camera_add", "camera_list", "camera_remove", "camera_set", "camera_tour", "compat_explain",
@@ -31,6 +32,7 @@ public class McpServerTests
         "lint", "lint_baseline", "list_files", "map_compat", "map_info",
         "map_info_get", "map_info_set", "map_overview",
         "mcp_audit_annotations",
+        "model_export_obj",
         "mpq_bytes_diff", "mpq_listfile", "mpq_name_recover",
         "mpq_strip_bookkeeping", "mpq_verify", "new_map", "object_clone", "object_deprecated",
         "object_field_options", "object_form", "object_get", "object_list", "object_new",

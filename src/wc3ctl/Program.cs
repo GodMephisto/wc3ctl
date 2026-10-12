@@ -2708,6 +2708,110 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
                 () => $"{r.Message}\nsaved to {dest}");
         }));
 
+        var assetModelLint = new Command("model-lint",
+            "Scan every imported model (.mdx/.mdl) and report the structural problems a map cannot "
+            + "render or animate, a geoset with no material, a material naming a texture the map "
+            + "does not hold, a sequence with a zero duration, and an out of range bounding box. "
+            + "Read-only.")
+        { mapArg, jsonOption };
+        assetModelLint.SetHandler((string map, bool json) => RunSafely(() =>
+        {
+            var r = AssetModelLintCommand.Execute(MapDocument.Load(map));
+            Emit(json, r, () => Render.AssetModelLint(r));
+        }), mapArg, jsonOption);
+
+        var thumbFolderArg = new Argument<string>("folder",
+            "Folder holding model (.mdx/.mdl) files, or map (.w3x/.w3m) files whose imported models are rendered.");
+        var thumbOutOpt = new Option<string?>(new[] { "-o", "--out" },
+            "Output directory for the PNG thumbnails. Defaults to ./thumbnails");
+        var thumbSizeOpt = new Option<int>("--size", () => AssetThumbnailsCommand.DefaultSize,
+            "Thumbnail edge length in pixels.");
+        var assetThumbnails = new Command("thumbnails",
+            "Render a thumbnail PNG for every model in a folder, or for every imported model inside "
+            + "every map in the folder. Read-only over the source.")
+        { thumbFolderArg, thumbOutOpt, thumbSizeOpt, jsonOption };
+        assetThumbnails.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            int size = p.GetValueForOption(thumbSizeOpt);
+            var r = AssetThumbnailsCommand.Execute(p.GetValueForArgument(thumbFolderArg), size, size);
+            var dir = p.GetValueForOption(thumbOutOpt) ?? "thumbnails";
+            Directory.CreateDirectory(dir);
+            foreach (var t in r.Thumbnails) File.WriteAllBytes(Path.Combine(dir, t.Name), t.Png);
+            var files = r.Thumbnails.Select(t => t.Name).ToList();
+            Emit(p.GetValueForOption(jsonOption),
+                new { r.Rendered, r.Diagnostics, SavedTo = dir, Files = files },
+                () => Render.AssetThumbnails(r, dir));
+        }));
+
+        var convertBatchFolderArg = new Argument<string>("folder", "Folder holding texture files.");
+        var convertBatchToOpt = new Option<string>("--to", "Target format extension, e.g. .png or .blp.")
+        { IsRequired = true };
+        var convertBatchOutOpt = new Option<string?>(new[] { "-o", "--out" },
+            "Output directory for the converted textures. Defaults to ./converted");
+        var assetConvertBatch = new Command("convert-batch",
+            "Convert every texture in a folder to one target format, reusing the shared converter. "
+            + "Read-only over the source, the caller writes the copies.")
+        { convertBatchFolderArg, convertBatchToOpt, convertBatchOutOpt, jsonOption };
+        assetConvertBatch.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = AssetConvertBatchCommand.Execute(
+                p.GetValueForArgument(convertBatchFolderArg), p.GetValueForOption(convertBatchToOpt)!);
+            var dir = p.GetValueForOption(convertBatchOutOpt) ?? "converted";
+            Directory.CreateDirectory(dir);
+            foreach (var t in r.Textures)
+            {
+                var dest = Path.Combine(dir, t.RelativePath);
+                Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+                File.WriteAllBytes(dest, t.Bytes);
+            }
+            var files = r.Textures.Select(t => t.RelativePath).ToList();
+            Emit(p.GetValueForOption(jsonOption),
+                new { r.Converted, r.ToExtension, r.Diagnostics, SavedTo = dir, Files = files },
+                () => Render.AssetConvertBatch(r, dir));
+        }));
+
+        var wireFilesArg = new Argument<string[]>("files", "One or more disk files to add as imports.")
+        { Arity = ArgumentArity.OneOrMore };
+        var wireObjectOpt = new Option<string?>("--object",
+            "Rawcode of the object whose model or icon field is pointed at each imported file.");
+        var wireKindOpt = new Option<string?>("--kind",
+            "Object type, one of unit|item|destructable|doodad. Defaults to auto-detect from the object.");
+        var assetImportWire = new Command("import-wire",
+            "Add disk files to a map as imports and, when a file is a model or an icon and --object "
+            + "names an object, point its matching field at the new import. Saves a copy, refuses to "
+            + "overwrite the input map.")
+        { mapArg, wireFilesArg, wireObjectOpt, wireKindOpt, setOut, jsonOption };
+        assetImportWire.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var kind = p.GetValueForOption(wireKindOpt) is { Length: > 0 } k ? ObjectKinds.Parse(k) : (ObjectKind?)null;
+            var r = AssetImportWireCommand.Execute(doc, p.GetValueForArgument(wireFilesArg),
+                p.GetValueForOption(wireObjectOpt), kind);
+            var dest = p.GetValueForOption(setOut) ?? Path.Combine(
+                Path.GetDirectoryName(map) ?? "",
+                Path.GetFileNameWithoutExtension(map) + ".edited" + Path.GetExtension(map));
+            if (!r.Ok)
+            {
+                Emit(p.GetValueForOption(jsonOption), r, () => Render.AssetImportWire(r, null));
+                exitCode[0] = 1;
+                return;
+            }
+            if (string.Equals(Path.GetFullPath(dest), Path.GetFullPath(map), StringComparison.OrdinalIgnoreCase))
+            {
+                Console.Error.WriteLine("error: refusing to overwrite the input map, give -o a different path");
+                exitCode[0] = 1;
+                return;
+            }
+            doc.Save(dest);
+            Emit(p.GetValueForOption(jsonOption),
+                new { r.Ok, r.Message, r.Imported, r.FieldsSet, r.Diagnostics, SavedTo = dest },
+                () => Render.AssetImportWire(r, dest));
+        }));
+
         var asset = new Command("asset", "Asset paths available to an object field.");
         asset.AddCommand(assetList);
         asset.AddCommand(assetUnused);
@@ -2715,7 +2819,43 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         asset.AddCommand(assetAudit);
         asset.AddCommand(assetSizeReport);
         asset.AddCommand(assetReplace);
+        asset.AddCommand(assetModelLint);
+        asset.AddCommand(assetThumbnails);
+        asset.AddCommand(assetConvertBatch);
+        asset.AddCommand(assetImportWire);
         root.AddCommand(asset);
+
+        var modelPathArg = new Argument<string>("model",
+            "Internal model path (.mdx/.mdl) inside the map.");
+        var modelObjOutOpt = new Option<string?>(new[] { "-o", "--out" },
+            "Output .obj path. A .mtl and any map-resolvable textures are written beside it.");
+        var modelExportObj = new Command("export-obj",
+            "Export a map-imported model to Wavefront OBJ, with an MTL and any map-resolvable "
+            + "textures converted to PNG beside it.")
+        { mapArg, modelPathArg, modelObjOutOpt, jsonOption };
+        modelExportObj.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var doc = MapDocument.Load(p.GetValueForArgument(mapArg));
+            var export = ModelExportObjCommand.Execute(doc, p.GetValueForArgument(modelPathArg));
+            var dest = p.GetValueForOption(modelObjOutOpt) ?? "model.obj";
+            File.WriteAllText(dest, export.Obj);
+            var mtlPath = Path.ChangeExtension(dest, ".mtl");
+            File.WriteAllText(mtlPath, export.Mtl);
+            var dir = Path.GetDirectoryName(Path.GetFullPath(dest)) ?? ".";
+            var textures = new List<string>();
+            foreach (var (name, bytes) in export.Textures)
+            {
+                File.WriteAllBytes(Path.Combine(dir, name), bytes);
+                textures.Add(name);
+            }
+            Emit(p.GetValueForOption(jsonOption),
+                new { SavedTo = dest, Mtl = mtlPath, Textures = textures },
+                () => Render.ModelExportObj(export, dest, mtlPath, textures));
+        }));
+        var model = new Command("model", "Model asset operations.");
+        model.AddCommand(modelExportObj);
+        root.AddCommand(model);
 
         // ---- strings / imports / trigger read: reachable from the GUI, previously not here ----
         var stringsList = new Command("list",

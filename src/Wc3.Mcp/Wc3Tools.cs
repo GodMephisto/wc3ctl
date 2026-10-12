@@ -340,6 +340,100 @@ public static class Wc3Tools
             return r;
         });
 
+    [McpServerTool(Name = "asset_model_lint", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Scan every imported model (.mdx/.mdl) in the map and report the structural problems a static check can find, a geoset with no material, a material naming a texture the map does not hold, a sequence with a zero duration, and an out of range bounding box. Read-only, it parses bytes in memory and changes nothing.")]
+    public static AssetModelLintResult AssetModelLint(
+        [Description("Path to a .w3x/.w3m map file.")] string map)
+        => Run(() => AssetModelLintCommand.Execute(LoadMap(map)));
+
+    [McpServerTool(Name = "asset_thumbnails", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Render a thumbnail PNG for every model in a folder, or for every imported model inside every map in the folder, and write them under out_dir. Reuses the model renderer. Read-only over the source folder and every map it holds. Returns the output directory and the file names.")]
+    public static AssetThumbnailsToolResult AssetThumbnails(
+        [Description("Folder holding model (.mdx/.mdl) files, or map (.w3x/.w3m) files whose imported models are rendered.")] string folder,
+        [Description("Directory the PNG thumbnails are written under. Created if absent.")] string out_dir,
+        [Description("Thumbnail edge length in pixels. Default 256.")] int size = AssetThumbnailsCommand.DefaultSize)
+        => Run(() =>
+        {
+            if (string.IsNullOrWhiteSpace(out_dir)) throw new McpException("out_dir is required");
+            var r = AssetThumbnailsCommand.Execute(folder, size, size);
+            Directory.CreateDirectory(out_dir);
+            var files = new List<string>();
+            foreach (var t in r.Thumbnails)
+            {
+                File.WriteAllBytes(Path.Combine(out_dir, t.Name), t.Png);
+                files.Add(t.Name);
+            }
+            return new AssetThumbnailsToolResult(Path.GetFullPath(out_dir), r.Rendered, files, r.Diagnostics);
+        });
+
+    [McpServerTool(Name = "asset_convert_batch", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Convert every texture in a folder to one target format, reusing the shared converter, and write the copies under out_dir with their relative paths preserved. Read-only over the source folder. Returns the output directory, the count and the file names.")]
+    public static AssetConvertBatchToolResult AssetConvertBatch(
+        [Description("Folder holding texture files.")] string folder,
+        [Description("Target format extension, e.g. .png or .blp.")] string to,
+        [Description("Directory the converted textures are written under. Created if absent.")] string out_dir)
+        => Run(() =>
+        {
+            if (string.IsNullOrWhiteSpace(out_dir)) throw new McpException("out_dir is required");
+            var r = AssetConvertBatchCommand.Execute(folder, to);
+            Directory.CreateDirectory(out_dir);
+            var files = new List<string>();
+            foreach (var t in r.Textures)
+            {
+                var dest = Path.Combine(out_dir, t.RelativePath);
+                if (Path.GetDirectoryName(dest) is { Length: > 0 } dir) Directory.CreateDirectory(dir);
+                File.WriteAllBytes(dest, t.Bytes);
+                files.Add(t.RelativePath);
+            }
+            return new AssetConvertBatchToolResult(Path.GetFullPath(out_dir), r.Converted, r.ToExtension, files, r.Diagnostics);
+        });
+
+    [McpServerTool(Name = "asset_import_wire", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Add disk files to a map as imports and, when a file is a model or an icon and object names an object, point its matching model or icon field at the new import. Saves the edited copy to out_path. The input map is NEVER modified. Returns the imported paths and the fields set.")]
+    public static AssetImportWireToolResult AssetImportWire(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("One or more disk files to add as imports.")] string[] files,
+        [Description("Four-character rawcode of the object whose model or icon field is pointed at each imported file. Omit to import without setting a field.")] string? obj = null,
+        [Description("Object type, one of unit|item|destructable|doodad. Defaults to auto-detect from the object.")] string? kind = null)
+        => Run(() =>
+        {
+            string full = ResolveOutPath(map, out_path);
+            var doc = LoadMap(map);
+            var r = AssetImportWireCommand.Execute(doc, files, obj, kind is null ? null : ParseKind(kind));
+            if (!r.Ok) throw new McpException(r.Message);
+            if (Path.GetDirectoryName(full) is { Length: > 0 } dir) Directory.CreateDirectory(dir);
+            doc.Save(full);
+            return new AssetImportWireToolResult(full, r.Imported, r.FieldsSet, r.Diagnostics);
+        });
+
+    [McpServerTool(Name = "model_export_obj", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Export a map-imported model to Wavefront OBJ at out_path, writing an MTL and any map-resolvable textures converted to PNG beside it. The map itself is never modified. Returns the .obj path, the .mtl path and the texture file names.")]
+    public static ModelExportObjToolResult ModelExportObj(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Internal model path (.mdx/.mdl) inside the map.")] string model,
+        [Description("Output .obj file path. A .mtl and the converted textures are written beside it.")] string out_path)
+        => Run(() =>
+        {
+            var doc = LoadMap(map);
+            var export = ModelExportObjCommand.Execute(doc, model);
+            string full = Path.GetFullPath(out_path);
+            if (string.Equals(full, Path.GetFullPath(map), StringComparison.OrdinalIgnoreCase))
+                throw new McpException("out_path must not be the map file itself");
+            if (Path.GetDirectoryName(full) is { Length: > 0 } dir) Directory.CreateDirectory(dir);
+            File.WriteAllText(full, export.Obj);
+            var mtlPath = Path.ChangeExtension(full, ".mtl");
+            File.WriteAllText(mtlPath, export.Mtl);
+            var dirName = Path.GetDirectoryName(full)!;
+            var textures = new List<string>();
+            foreach (var (name, bytes) in export.Textures)
+            {
+                File.WriteAllBytes(Path.Combine(dirName, name), bytes);
+                textures.Add(name);
+            }
+            return new ModelExportObjToolResult(full, mtlPath, textures);
+        });
+
     [McpServerTool(Name = "lint", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Pre-flight the map: does its script compile, does war3map.imp agree with what the archive holds, do referenced asset paths resolve, and is every entry a loadable type. This is the 'is this map going to work' check and is the right thing to run before handing a map to anyone. A failure here usually means the map will not host or will hang on load with no error of its own.")]
     public static LintResult Lint(
@@ -2416,6 +2510,24 @@ public static class Wc3Tools
 
 /// <summary>render_model outcome: where the PNG landed and whether it was also inlined.</summary>
 public sealed record RenderModelToolResult(string SavedTo, int SizeBytes, bool ImageInline);
+
+/// <summary>asset_thumbnails outcome: where the PNGs landed, how many, their names and any skips.</summary>
+public sealed record AssetThumbnailsToolResult(
+    string OutDir, int Rendered, IReadOnlyList<string> Files, IReadOnlyList<string> Diagnostics);
+
+/// <summary>asset_convert_batch outcome: where the copies landed, how many, the target extension,
+/// their relative paths and any skips.</summary>
+public sealed record AssetConvertBatchToolResult(
+    string OutDir, int Converted, string To, IReadOnlyList<string> Files, IReadOnlyList<string> Diagnostics);
+
+/// <summary>asset_import_wire outcome: where the edited copy landed, the imported paths, the
+/// fields set and any skips.</summary>
+public sealed record AssetImportWireToolResult(
+    string SavedTo, IReadOnlyList<string> Imported, IReadOnlyList<string> FieldsSet,
+    IReadOnlyList<string> Diagnostics);
+
+/// <summary>model_export_obj outcome: where the .obj landed, its .mtl path and the texture names.</summary>
+public sealed record ModelExportObjToolResult(string SavedTo, string Mtl, IReadOnlyList<string> Textures);
 
 /// <summary>port_unit outcome: where the new .ported map was written plus the full port report.</summary>
 public sealed record PortUnitToolResult(string SavedTo, PortResult Report);
