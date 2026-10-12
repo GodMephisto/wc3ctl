@@ -141,6 +141,49 @@ public static class Wc3Tools
             AssetListCommand.ParseFamily(family),
             ResolveGameDir(game_dir)));
 
+    [McpServerTool(Name = "asset_unused", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("List the map's imported files that no object-data field value and no script string literal references, each with the size it holds. A lead to review before deleting an import, since the base game can also load a file a field does not name. Read-only.")]
+    public static AssetUnusedResult AssetUnused(
+        [Description("Path to a .w3x/.w3m map file.")] string map)
+        => Run(() => AssetUnusedCommand.Execute(LoadMap(map)));
+
+    [McpServerTool(Name = "asset_duplicates", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Group the map's imported files whose bytes are identical (by sha256) and report the space each duplicate group wastes. Zero-byte entries are excluded. Read-only.")]
+    public static AssetDuplicatesResult AssetDuplicates(
+        [Description("Path to a .w3x/.w3m map file.")] string map)
+        => Run(() => AssetDuplicatesCommand.Execute(LoadMap(map)));
+
+    [McpServerTool(Name = "asset_audit", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Flag suspicious imported assets. It reports entries larger than max_bytes, BLP textures whose width or height is not a power of two, a binary .mdx with no .mdl source beside it, and zero-byte entries. Read-only.")]
+    public static AssetAuditResult AssetAudit(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Flag imported entries larger than this many bytes. Default 4194304 (4 MiB).")] long max_bytes = AssetAuditCommand.DefaultMaxBytes)
+        => Run(() => AssetAuditCommand.Execute(LoadMap(map), max_bytes));
+
+    [McpServerTool(Name = "asset_size_report", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Break the map's imported bytes down by parent folder, largest total first, so the folders that dominate the map's weight are obvious. Read-only.")]
+    public static AssetSizeReportResult AssetSizeReport(
+        [Description("Path to a .w3x/.w3m map file.")] string map)
+        => Run(() => AssetSizeReportCommand.Execute(LoadMap(map)));
+
+    [McpServerTool(Name = "asset_replace", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Replace an asset path everywhere it is referenced (object-data field values, script string literals and the war3map.imp import table) and save the edited copy to out_path. Refuses when the old path is referenced nowhere. The input map is NEVER modified, and the archive entry itself is NOT renamed, move the file if the new path must resolve.")]
+    public static AssetReplaceResult AssetReplace(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("The asset path currently referenced.")] string old_path,
+        [Description("The asset path to reference instead.")] string new_path)
+        => Run(() =>
+        {
+            string full = ResolveOutPath(map, out_path);
+            var doc = LoadMap(map);
+            var r = AssetReplaceCommand.Execute(doc, old_path, new_path);
+            if (!r.Ok) throw new McpException(r.Message);
+            if (Path.GetDirectoryName(full) is { Length: > 0 } dir) Directory.CreateDirectory(dir);
+            doc.Save(full);
+            return r;
+        });
+
     [McpServerTool(Name = "lint", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Pre-flight the map: does its script compile, does war3map.imp agree with what the archive holds, do referenced asset paths resolve, and is every entry a loadable type. This is the 'is this map going to work' check and is the right thing to run before handing a map to anyone. A failure here usually means the map will not host or will hang on load with no error of its own.")]
     public static LintResult Lint(
