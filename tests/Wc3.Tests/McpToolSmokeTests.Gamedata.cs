@@ -77,4 +77,28 @@ public sealed class McpSmokeGameDataTests : McpSmokeBase
         Assert.All(rows, row => Assert.Contains("script", Prop(row, "sections").EnumerateArray()
             .Select(s => s.GetString())));
     }
+
+    [Fact, Covers("gamedata_sources")]
+    public async Task Gamedata_sources_reports_a_hash_per_section_file()
+    {
+        var root = BuildSchemas();
+        var r = await Call("gamedata_sources", Args(("schemas_dir", root)));
+        var sources = Rows(Prop(r, "sources"));
+        Assert.Equal(2, sources.Count);
+        var full = sources.Single(s => Prop(s, "build").GetString() == "TFT-v1.30.1.10211");
+        var hashes = Rows(Prop(full, "sectionHashes"));
+        Assert.Contains(hashes, h => Prop(h, "section").GetString() == "objects");
+        Assert.Contains(hashes, h => Prop(h, "section").GetString() == "script");
+    }
+
+    [Fact, Covers("gamedata_export_schemas")]
+    public async Task Gamedata_export_schemas_packs_a_zip()
+    {
+        var root = BuildSchemas();
+        var zip = Path.Combine(_f.Dir, "export-" + Guid.NewGuid().ToString("N") + ".zip");
+        var r = await Call("gamedata_export_schemas", Args(("out_path", zip), ("schemas_dir", root)));
+        Assert.True(Prop(r, "zipped").GetBoolean());
+        Assert.True(File.Exists(zip));
+        Assert.Equal(2, Prop(r, "builds").GetArrayLength());
+    }
 }
