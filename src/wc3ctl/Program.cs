@@ -2170,8 +2170,90 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
             };
             Emit(p.GetValueForOption(jsonOption), r, () => Render.AssetList(r, shown, source));
         }));
+        var assetUnused = new Command("unused",
+            "List imported files no object-data field value and no script string literal references, "
+            + "with the size each holds. Read-only.") { mapArg, jsonOption };
+        assetUnused.SetHandler((string map, bool json) => RunSafely(() =>
+        {
+            var r = AssetUnusedCommand.Execute(MapDocument.Load(map));
+            Emit(json, r, () => Render.AssetUnused(r));
+        }), mapArg, jsonOption);
+
+        var assetDuplicates = new Command("duplicates",
+            "Group imported files whose bytes are identical (by sha256) and report the space each "
+            + "duplicate group wastes. Read-only.") { mapArg, jsonOption };
+        assetDuplicates.SetHandler((string map, bool json) => RunSafely(() =>
+        {
+            var r = AssetDuplicatesCommand.Execute(MapDocument.Load(map));
+            Emit(json, r, () => Render.AssetDuplicates(r));
+        }), mapArg, jsonOption);
+
+        var auditMaxBytesOpt = new Option<long>("--max-bytes", () => AssetAuditCommand.DefaultMaxBytes,
+            "Flag imported entries larger than this many bytes.");
+        var assetAudit = new Command("audit",
+            "Flag suspicious imported assets. It reports entries over a size threshold, BLP textures "
+            + "whose dimensions are not powers of two, a .mdx with no sibling .mdl, and zero-byte "
+            + "entries. Read-only.") { mapArg, auditMaxBytesOpt, jsonOption };
+        assetAudit.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = AssetAuditCommand.Execute(MapDocument.Load(p.GetValueForArgument(mapArg)),
+                p.GetValueForOption(auditMaxBytesOpt));
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.AssetAudit(r));
+        }));
+
+        var assetSizeReport = new Command("size-report",
+            "Per-folder total size of the archive's imported entries, largest first. Read-only.")
+        { mapArg, jsonOption };
+        assetSizeReport.SetHandler((string map, bool json) => RunSafely(() =>
+        {
+            var r = AssetSizeReportCommand.Execute(MapDocument.Load(map));
+            Emit(json, r, () => Render.AssetSizeReport(r));
+        }), mapArg, jsonOption);
+
+        var replaceOldArg = new Argument<string>("old", "The asset path currently referenced.");
+        var replaceNewArg = new Argument<string>("new", "The asset path to reference instead.");
+        var assetReplace = new Command("replace",
+            "Replace an asset path everywhere it is referenced (object-data field values, script "
+            + "string literals and the import table) and save a copy. Refuses if the old path is "
+            + "referenced nowhere. The archive entry is not renamed.")
+        { mapArg, replaceOldArg, replaceNewArg, setOut };
+        assetReplace.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = AssetReplaceCommand.Execute(doc,
+                p.GetValueForArgument(replaceOldArg), p.GetValueForArgument(replaceNewArg));
+            if (!r.Ok)
+            {
+                Emit(p.GetValueForOption(jsonOption), r, () => r.Message);
+                exitCode[0] = 1;
+                return;
+            }
+            var dest = p.GetValueForOption(setOut) ?? Path.Combine(
+                Path.GetDirectoryName(map) ?? "",
+                Path.GetFileNameWithoutExtension(map) + ".edited" + Path.GetExtension(map));
+            if (string.Equals(Path.GetFullPath(dest), Path.GetFullPath(map), StringComparison.OrdinalIgnoreCase))
+            {
+                Console.Error.WriteLine("error: refusing to overwrite the input map, give -o a different path");
+                exitCode[0] = 1;
+                return;
+            }
+            doc.Save(dest);
+            Emit(p.GetValueForOption(jsonOption),
+                new { r.Ok, r.Message, r.ObjectFieldsChanged, r.ScriptLiteralsChanged,
+                      r.ImportTableEntriesChanged, SavedTo = dest },
+                () => $"{r.Message}\nsaved to {dest}");
+        }));
+
         var asset = new Command("asset", "Asset paths available to an object field.");
         asset.AddCommand(assetList);
+        asset.AddCommand(assetUnused);
+        asset.AddCommand(assetDuplicates);
+        asset.AddCommand(assetAudit);
+        asset.AddCommand(assetSizeReport);
+        asset.AddCommand(assetReplace);
         root.AddCommand(asset);
 
         // ---- strings / imports / trigger read: reachable from the GUI, previously not here ----

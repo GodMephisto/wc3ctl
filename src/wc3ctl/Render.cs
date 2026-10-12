@@ -331,6 +331,48 @@ public static class Render
         return sb.ToString().TrimEnd();
     }
 
+    public static string AssetUnused(AssetUnusedResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.Unused.Count} of {r.ImportedEntries} imported file(s) are referenced nowhere");
+        foreach (var e in r.Unused)
+            sb.AppendLine($"  {e.Path}  {e.SizeBytes} bytes");
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string AssetDuplicates(AssetDuplicatesResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.Groups.Count} duplicate group(s) across {r.ImportedEntries} imported file(s), "
+            + $"{r.RecoverableBytes} recoverable byte(s)");
+        foreach (var g in r.Groups)
+        {
+            sb.AppendLine($"  {g.SizeBytes} bytes each, {g.Paths.Count} copies ({g.Sha256[..12]})");
+            foreach (var p in g.Paths) sb.AppendLine($"    {p}");
+        }
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string AssetAudit(AssetAuditResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.Findings.Count} finding(s) across {r.Scanned} imported file(s), "
+            + $"oversized threshold {r.MaxBytes} bytes");
+        foreach (var f in r.Findings)
+            sb.AppendLine($"  {f.Kind,-20} {f.Path}  ({f.Detail})");
+        foreach (var d in r.Diagnostics) sb.AppendLine($"note {d}");
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string AssetSizeReport(AssetSizeReportResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.TotalEntries} imported file(s), {r.TotalBytes} bytes total");
+        foreach (var f in r.Folders)
+            sb.AppendLine($"  {f.Bytes,12}  {f.Entries,5} file(s)  {f.Folder}");
+        return sb.ToString().TrimEnd();
+    }
+
     public static string Imports(ImportsListResult r)
     {
         var sb = new StringBuilder();
