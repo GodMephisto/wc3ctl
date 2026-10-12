@@ -25,7 +25,7 @@ public class McpServerTests
         "file_get_text", "file_list", "file_set", "force_list", "force_set_flags",
         "gamedata_bounds", "gamedata_changelog", "gamedata_coverage", "gamedata_field_lookup",
         "gamedata_history", "gamedata_schema_diff", "hero_install", "hero_lint", "hero_roster",
-        "imports_list",
+        "imports_list", "leak_ab", "leak_benchmark", "leak_harness", "leak_join", "leak_list",
         "lint", "lint_baseline", "list_files", "map_compat", "map_info",
         "map_info_get", "map_info_set", "mpq_bytes_diff", "mpq_listfile", "mpq_name_recover",
         "mpq_strip_bookkeeping", "mpq_verify", "new_map", "object_clone", "object_deprecated",
