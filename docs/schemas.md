@@ -62,6 +62,34 @@ the same shape the release workflow uses for the binaries.
 a release. The same two steps are on the agent surface as the `gamedata_sources` and
 `gamedata_export_schemas` tools.
 
+## Schema commands and the coverage limit
+
+The dataset is reached through the `gamedata` group. These verbs read it.
+
+- `gamedata coverage` lists one row per build, with its era and the sections it holds, so a build
+  with real object data is told apart from a script-only one. This is the view
+  `GamedataCoverageCommand` builds.
+- `gamedata sources` writes `sources.json`, the provenance index with a hash of every section file
+  and every manifest input.
+- `gamedata field-lookup` and `gamedata bounds` answer where a field code comes from and what values
+  it accepts.
+- `gamedata schema`, `gamedata schema-index` and `gamedata schema-diff` build, index and compare a
+  schema folder.
+- `gamedata changelog` and `gamedata history` track what a patch changed.
+- `gamedata export-schemas` copies the dataset to a directory or packs it into one zip.
+- `gamedata snapshot` writes the base game data to a directory for diffing across patches.
+
+The coverage limit is the honest boundary of the dataset. Object data is real for a subset of builds,
+the ones derived from a full game data dump, and every one of those carries `objects.json`. For the
+rest the object data is era-derived or absent. A build that carries only `script.json` has no object
+data of its own, so its fields are taken from a sibling build in the same era when one carries them,
+and are unknown when none does. The `bench schema-coverage` command states the same three states as
+`real`, `era-derived` and `absent` with corpus totals, so a script-only build is never reported as
+though it held the object editor.
+
+A command that needs an object field therefore works only where the coverage says real or era-derived,
+and a map whose target build is absent cannot be checked for the fields the editor would show.
+
 ## Licence note
 
 A schema is derived metadata. It records field codes, types and bounds, native signatures and trigger

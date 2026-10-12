@@ -5035,6 +5035,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         });
         target.AddCommand(targetClear);
         root.AddCommand(target);
+        root.AddCommand(DocsCommand.Build());
         return root;
     }
 }
