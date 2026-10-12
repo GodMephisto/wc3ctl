@@ -1390,6 +1390,82 @@ public static class Render
         return sb.ToString().TrimEnd();
     }
 
+    public static string LuaScriptLeaks(LuaScriptLeaksResult r, bool all)
+    {
+        if (!r.Ok) return r.Message;
+        var sb = new StringBuilder();
+        var shown = all ? r.Leaks : r.Leaks.Where(l => l.Heat != "once").ToList();
+        foreach (var g in shown.GroupBy(l => l.Heat))
+        {
+            sb.AppendLine($"{g.Key} ({g.Count()})");
+            foreach (var l in g.Take(all ? int.MaxValue : 80))
+            {
+                string code = l.Code.Length > 110 ? l.Code[..107] + "..." : l.Code;
+                sb.AppendLine($"  {l.Line,7}  {l.Rule,-15} {l.Handle,-9} {l.Function}");
+                sb.AppendLine($"           {code}");
+            }
+            if (!all && g.Count() > 80) sb.AppendLine($"  and {g.Count() - 80} more, --all or --json lists every one");
+        }
+        sb.AppendLine($"periodic, {r.Periodic.Count} driver(s)");
+        foreach (var p in r.Periodic.Take(25))
+            sb.AppendLine($"  {(p.Period is { } s ? s.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) + " s" : "variable"),-9} line {p.Line,7}  {p.Function}  (reaches {p.Reached} function(s))");
+        foreach (var d in r.Diagnostics) sb.AppendLine($"note  {d}");
+        sb.AppendLine(r.Message);
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string LuaGlobals(LuaGlobalsResult r)
+    {
+        if (!r.Ok) return r.Message;
+        var sb = new StringBuilder();
+        sb.AppendLine(r.Message);
+        foreach (var g in r.Globals)
+        {
+            string reads = g.Reads == 0 ? "never read" : $"read x{g.Reads} at {string.Join(",", g.ReadLines)}";
+            sb.AppendLine($"  line {g.FirstWriteLine,-7} {g.Name}  (written x{g.Writes}, {reads}){(g.Framework ? "  [entry point]" : "")}");
+        }
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string LuaCheck(LuaCheckResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.Files} Lua file(s), {r.Errors} with a syntax error");
+        foreach (var c in r.Checks)
+            sb.AppendLine(c.Ok
+                ? $"  ok      {c.FileName}  ({c.Bytes} bytes, {c.Lines} lines)"
+                : $"  error   {c.FileName}:{c.Line}:{c.Column}  {c.Message}");
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string LuaApi(LuaApiResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.ScriptFile} against {r.TargetBuild}, {r.Missing} of {r.Used} native and function use(s) missing");
+        sb.AppendLine($"mapping  {r.Mapping}");
+        foreach (var u in r.Usages)
+            sb.AppendLine($"  line {u.Line,-7} {u.Kind,-9} {u.Name}  (used {u.Count}x"
+                          + (u.JassSpelling != u.Name ? $", jass {u.JassSpelling}" : "") + ")");
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string LuaToJass(LuaToJassResult r)
+    {
+        var sb = new StringBuilder();
+        if (!r.Ok)
+        {
+            sb.AppendLine(string.Join("\n", r.Diagnostics));
+            return sb.ToString().TrimEnd();
+        }
+        sb.AppendLine($"{r.ScriptFile} converted to JASS, {r.FunctionsConverted} function(s), "
+                      + $"{r.GlobalsConverted} global(s), {r.FunctionsSkipped} function(s) left");
+        foreach (var u in r.Unconverted)
+            sb.AppendLine($"  ! line {u.Line,7}  {u.Construct,-10} {u.Detail}");
+        foreach (var d in r.Diagnostics) sb.AppendLine($"note  {d}");
+        return sb.ToString().TrimEnd();
+    }
+
+
     public static string ScriptSemanticDiff(ScriptSemanticDiffResult r)
     {
         var sb = new StringBuilder();

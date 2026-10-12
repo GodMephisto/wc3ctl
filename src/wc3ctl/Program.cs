@@ -1491,6 +1491,84 @@ public static class Program
         }));
         script.AddCommand(scriptDecompile);
 
+        var luaLeaksAll = new Option<bool>("--all", "List every finding, including code that runs only once.");
+        var scriptLuaLeaks = new Command("lua-leaks",
+            "Find handle leaks in a Lua map script: a creator dropped as a statement, a creator on a "
+            + "period that is never released, and a handle kept in a table the script never clears. "
+            + "Read-only.") { mapArg, luaLeaksAll, jsonOption };
+        scriptLuaLeaks.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = LuaScriptLeaksCommand.Execute(MapDocument.Load(p.GetValueForArgument(mapArg)));
+            Emit(p.GetValueForOption(jsonOption),
+                new { r.Ok, r.Message, r.Functions, r.HotFunctions, r.RepeatFunctions, r.Leaks, r.Periodic, r.Diagnostics },
+                () => Render.LuaScriptLeaks(r, p.GetValueForOption(luaLeaksAll)));
+            if (!r.Ok) exitCode[0] = 1;
+        }));
+        script.AddCommand(scriptLuaLeaks);
+
+        var scriptLuaGlobals = new Command("lua-globals",
+            "List the globals a Lua map defines, where each is read and written, and any global that "
+            + "is written but never read. Read-only.") { mapArg, jsonOption };
+        scriptLuaGlobals.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = LuaGlobalsCommand.Execute(MapDocument.Load(p.GetValueForArgument(mapArg)));
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.LuaGlobals(r));
+        }));
+        script.AddCommand(scriptLuaGlobals);
+
+        var scriptLuaCheck = new Command("lua-check",
+            "Parse every Lua file in a map and report the syntax errors with their line and column, "
+            + "the way luac 5.3 refuses them. Exits 1 on an error.") { mapArg, jsonOption };
+        scriptLuaCheck.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = LuaCheckCommand.Execute(MapDocument.Load(p.GetValueForArgument(mapArg)));
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.LuaCheck(r));
+            if (!r.Ok) exitCode[0] = 1;
+        }));
+        script.AddCommand(scriptLuaCheck);
+
+        var scriptLuaApi = new Command("lua-api",
+            "List the natives and functions a Lua script calls that the target build does not declare. "
+            + "Read-only.") { mapArg, scriptToolTarget, scriptToolSchemas, jsonOption };
+        scriptLuaApi.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var doc = MapDocument.Load(p.GetValueForArgument(mapArg));
+            var r = LuaApiCommand.Execute(doc,
+                p.GetValueForOption(scriptToolTarget)!, p.GetValueForOption(scriptToolSchemas));
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.LuaApi(r));
+        }));
+        script.AddCommand(scriptLuaApi);
+
+        var luaToJassOut = new Option<string?>(new[] { "-o", "--out" },
+            "Output map path. Default '<map>.jass.<ext>' next to the input. An existing file is never overwritten.");
+        var scriptLuaToJass = new Command("lua-to-jass",
+            "Best effort conversion of a Lua map back to JASS. Only the constructs that map back "
+            + "without guessing are converted, and every construct left is reported.")
+        { mapArg, luaToJassOut };
+        scriptLuaToJass.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            string trimmed = Path.TrimEndingDirectorySeparator(map);
+            string dest = p.GetValueForOption(luaToJassOut) ?? Path.Combine(
+                Path.GetDirectoryName(trimmed) ?? "",
+                Path.GetFileNameWithoutExtension(trimmed) + ".jass" + Path.GetExtension(trimmed));
+            if (File.Exists(dest) || Directory.Exists(dest))
+                throw new IOException($"{dest} already exists, choose another path with -o.");
+            var doc = MapDocument.Load(map);
+            var r = LuaToJassCommand.Execute(doc);
+            if (r.Ok) doc.Save(dest);
+            if (!r.Ok) exitCode[0] = 1;
+            Emit(p.GetValueForOption(jsonOption),
+                new { r.ScriptFile, r.Ok, r.FunctionsConverted, r.FunctionsSkipped, r.GlobalsConverted, r.Unconverted, r.Diagnostics, SavedTo = r.Ok ? dest : null },
+                () => Render.LuaToJass(r));
+        }));
+        script.AddCommand(scriptLuaToJass);
+
         var internalPathArg = new Argument<string?>("internal-path", () => null, "Exact internal file path to extract.");
         var outOption = new Option<string?>(new[] { "-o", "--out" },
             "Output directory (or output file for a single named extraction). Default: current directory.");

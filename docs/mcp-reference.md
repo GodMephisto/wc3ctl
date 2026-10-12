@@ -2,7 +2,7 @@
 
 Generated from the live tool surface by `wc3ctl docs mcp`. Do not edit by hand. Regenerate with `wc3ctl docs mcp --force`, and the CI guard fails when this file is stale.
 
-The server exposes 209 tool(s).
+The server exposes 214 tool(s).
 
 ## asset_audit
 
@@ -903,6 +903,36 @@ Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 Find handle leaks in a map's war3map.j (locations, groups, forces, effects, timers, text tags, lightning and triggers created and never destroyed), each ranked by how often its code runs, hot (periodic), repeat (any callback) or once (init), plus every periodic timer and trigger with its period. Read-only.
 
 Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
+## script_lua_api
+
+List the natives and functions a Lua script calls that a target game build does not declare. Uses the same schema membership test as the compat check, and reads the calls from the parsed tree. Read-only.
+
+Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
+## script_lua_check
+
+Parse every Lua file in a map and report the syntax errors with their line and column, the way luac 5.3 refuses them. Wider than script_check, which parses only the entry the map runs. Read-only.
+
+Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
+## script_lua_globals
+
+List the globals a Lua map defines, where each is read and written, and any global that is written but never read. The Lua twin of script_unused_globals, parser based rather than a line scan. Read-only.
+
+Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
+## script_lua_leaks
+
+Find handle leaks in a Lua map script. Lua collects the wrapper but the engine still owns the handle, so a creator dropped as a statement, a creator on a period that is never released, and a handle kept in a table the script never clears are the shapes that grow memory. Each finding is ranked hot, repeat or once. Read-only.
+
+Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
+## script_lua_to_jass
+
+Best effort conversion of a Lua map back to JASS, saved to out_path. The JASS to Lua conversion is not reversible in general, so only the constructs that map back without guessing are converted and every construct left is reported. Nothing is written when the script does not convert. The input map is NEVER modified.
+
+Annotations. read-only no, destructive no, idempotent yes, open-world no.
 
 ## script_modernize
 

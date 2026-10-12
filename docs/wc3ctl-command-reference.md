@@ -2,7 +2,7 @@
 
 Generated from the live command tree by `wc3ctl docs cli`. Do not edit by hand. Regenerate with `wc3ctl docs cli --force`, and the CI guard fails when this file is stale.
 
-The tree holds 58 top level verb(s) and 282 command path(s) in total.
+The tree holds 58 top level verb(s) and 287 command path(s) in total.
 
 ## Global options
 
@@ -1764,6 +1764,11 @@ Subcommands
 - `format`. Reprint a Lua map script, pretty or canonical. The result compiles to the same Lua instructions as the original. JASS maps are refused.
 - `to-lua`. Convert a JASS map to a Lua map. The script becomes war3map.lua with the JASS integer, division and null string rules kept, and the w3i script language is set to Lua.
 - `decompile`. Turn Lua entries shipped as Lua 5.3 bytecode back into Lua source that runs the same. Nothing is written when the map holds no bytecode.
+- `lua-leaks`. Find handle leaks in a Lua map script: a creator dropped as a statement, a creator on a period that is never released, and a handle kept in a table the script never clears. Read-only.
+- `lua-globals`. List the globals a Lua map defines, where each is read and written, and any global that is written but never read. Read-only.
+- `lua-check`. Parse every Lua file in a map and report the syntax errors with their line and column, the way luac 5.3 refuses them. Exits 1 on an error.
+- `lua-api`. List the natives and functions a Lua script calls that the target build does not declare. Read-only.
+- `lua-to-jass`. Best effort conversion of a Lua map back to JASS. Only the constructs that map back without guessing are converted, and every construct left is reported.
 
 ### script functions
 
@@ -2104,6 +2109,89 @@ Arguments
 Options
 
 - `-o, --out <out>`. Output map path. Default '<map>.decompiled.<ext>' next to the input. An existing file is never overwritten.
+
+### script lua-leaks
+
+Find handle leaks in a Lua map script: a creator dropped as a statement, a creator on a period that is never released, and a handle kept in a table the script never clears. Read-only.
+
+Usage
+
+```
+wc3ctl script lua-leaks <map> [options]
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+
+Options
+
+- `--all`. List every finding, including code that runs only once.
+
+### script lua-globals
+
+List the globals a Lua map defines, where each is read and written, and any global that is written but never read. Read-only.
+
+Usage
+
+```
+wc3ctl script lua-globals <map>
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+
+### script lua-check
+
+Parse every Lua file in a map and report the syntax errors with their line and column, the way luac 5.3 refuses them. Exits 1 on an error.
+
+Usage
+
+```
+wc3ctl script lua-check <map>
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+
+### script lua-api
+
+List the natives and functions a Lua script calls that the target build does not declare. Read-only.
+
+Usage
+
+```
+wc3ctl script lua-api <map> [options]
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+
+Options
+
+- `--target <target>` (required). Target build name or schema folder path.
+- `--schemas <schemas>`. Directory of schema folders. Default: search <base>/schemas then walk up to data/schemas.
+
+### script lua-to-jass
+
+Best effort conversion of a Lua map back to JASS. Only the constructs that map back without guessing are converted, and every construct left is reported.
+
+Usage
+
+```
+wc3ctl script lua-to-jass <map> [options]
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+
+Options
+
+- `-o, --out <out>`. Output map path. Default '<map>.jass.<ext>' next to the input. An existing file is never overwritten.
 
 ## bundle
 
