@@ -44,6 +44,13 @@ public static class MpqMergeCommand
     public static MpqMergeResult Execute(string pathA, string pathB, string? outPath, string prefer)
     {
         string dest = MpqStripBookkeepingCommand.ResolveOutput(pathA, outPath);
+        // The second input is an original too, so refuse a destination that is it or sits inside it.
+        string fullDest = Path.GetFullPath(dest), fullB = Path.GetFullPath(pathB);
+        if (fullDest.Equals(fullB, StringComparison.OrdinalIgnoreCase)
+            || (Directory.Exists(fullB)
+                && fullDest.StartsWith(fullB + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)))
+            throw new ArgumentException(
+                "output must differ from both input maps, the originals are never written.");
         bool preferB = string.Equals(prefer, "b", StringComparison.OrdinalIgnoreCase);
         if (!preferB && !string.Equals(prefer, "a", StringComparison.OrdinalIgnoreCase))
             throw new ArgumentException($"prefer must be 'a' or 'b', not '{prefer}'.", nameof(prefer));

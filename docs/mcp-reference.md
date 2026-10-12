@@ -2,7 +2,7 @@
 
 Generated from the live tool surface by `wc3ctl docs mcp`. Do not edit by hand. Regenerate with `wc3ctl docs mcp --force`, and the CI guard fails when this file is stale.
 
-The server exposes 212 tool(s).
+The server exposes 232 tool(s).
 
 ## asset_audit
 
@@ -181,6 +181,36 @@ Annotations. read-only no, destructive no, idempotent no, open-world no.
 ## changelog
 
 Generate release notes from git log between two refs, grouped by Conventional Commit type (feat, fix, perf, docs, chore and the rest), a heading per group with its subjects under it. Read-only over git.
+
+Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
+## ci_all
+
+Run lint, validate and, when target is given, compat in one pass. Returns one summary line per gate and the overall pass or fail with an exit code (0 pass, 1 fail), so a pipeline gets the whole map picture from one call. Reuses the lint and validate gates, so a gate means here exactly what ci_lint and ci_validate mean on their own. Read-only.
+
+Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
+## ci_compat
+
+Run the compat check as a CI gate. Returns one pass or fail with what was examined and an exit code (0 pass, 1 fail). Fails on an error-level finding, a native, global, type or function the map uses that the target build does not declare. Warnings about object fields the target no longer defines do not fail the gate. Read-only.
+
+Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
+## ci_lint
+
+Run the lint as a CI gate. Returns one pass or fail per check with what was examined and an exit code (0 pass, 1 fail). Fails on an error-level finding, or, with baseline, only on a finding the baseline does not already hold, so a map with known and accepted warnings can still be gated on regressions. With target it also runs the compat check and fails on an error-level finding. Read-only, never writes the map or the baseline.
+
+Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
+## ci_schema
+
+Check the schema dataset for regressions as a CI gate. Returns one pass or fail per check with what was examined and an exit code (0 pass, 1 fail). Fails when any build stops parsing or fewer than min_real builds carry real object data. Each folder is loaded on its own so a broken build is named rather than aborting the whole check. Read-only.
+
+Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
+## ci_validate
+
+Run the validation as a CI gate. Returns one pass or fail with what was examined and an exit code (0 pass, 1 fail). Fails when the map cannot load or reports an error-level issue. With strict the extra strict checks (missing listfile, a script with no entry point, an undefined placement type) are included. Read-only.
 
 Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 
@@ -388,6 +418,36 @@ The ranked static handle-leak list for a map's script plus the periodic timers a
 
 Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 
+## library_audit
+
+Run the behavioural audit over every map in a folder and report the findings per map and the totals per check, so a whole library is ranked by how much it needs fixing. Opens one map at a time. Read-only.
+
+Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
+## library_compare
+
+Compare two folders of maps by file name and content hash, listing the maps only in the first folder, only in the second, and changed between them, plus the identical count and any file name that is not unique inside a folder. Read-only.
+
+Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
+## library_report
+
+Write one Markdown report over a folder of maps, a summary line, a per-map table and the aggregated findings, to out_path. The report is built from the same probes the scan, audit and validate sweeps use. Writes only out_path and never a map.
+
+Annotations. read-only no, destructive no, idempotent yes, open-world no.
+
+## library_scan
+
+Open every map in a folder through the loader and report per map its size in bytes, the build it targets if known, whether it loads, its archive entry count and its diagnostic count, plus the loaded, failed and byte totals. Opens one map at a time. Read-only.
+
+Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
+## library_validate
+
+Run the load validation over every map in a folder and list the ones that fail, with the reason. A map that cannot be opened counts as invalid. Opens one map at a time. Read-only.
+
+Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
 ## lint
 
 Pre-flight the map: does its script compile, does war3map.imp agree with what the archive holds, do referenced asset paths resolve, and is every entry a loadable type. This is the 'is this map going to work' check and is the right thing to run before handing a map to anyone. A failure here usually means the map will not host or will hang on load with no error of its own.
@@ -454,11 +514,23 @@ Export a map-imported model to Wavefront OBJ at out_path, writing an MTL and any
 
 Annotations. read-only no, destructive no, idempotent yes, open-world no.
 
+## mpq_add
+
+Add or replace one internal archive file from a file on disk, byte-faithfully. Reports whether the name was added or replaced and whether the payload round-trips. Writes a copy, the input map is never modified in place.
+
+Annotations. read-only no, destructive no, idempotent no, open-world no.
+
 ## mpq_bytes_diff
 
 Compare two archives entry by entry by name. For each name present in both, report whether the payload SHA256 matches, and list names only one side carries. The byte-level counterpart of the structural mpq-diff. Read-only.
 
 Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
+## mpq_extract_all
+
+Extract every entry of a map archive to a directory, including unnamed protected blocks, through the same path-safety rule 'extract' uses. Read-only over the map. Returns the output directory, the counts and the written file names.
+
+Annotations. read-only no, destructive no, idempotent no, open-world no.
 
 ## mpq_listfile
 
@@ -466,11 +538,29 @@ Report an archive's listfile coverage in three parts, the entries named by the l
 
 Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 
+## mpq_merge
+
+Merge two map archives into one, taking every readable named entry from both. A name in both is resolved by the preferred side and reported as a conflict. Writes a copy of the first map plus both maps' entries, the input maps are never modified.
+
+Annotations. read-only no, destructive no, idempotent no, open-world no.
+
 ## mpq_name_recover
 
 Resolve a dictionary of candidate names against the archive's hash table and report the names that hit unnamed blocks. Narrower than deprotect_map, which harvests its own candidates from the map. Read-only.
 
 Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
+## mpq_rebuild
+
+Rebuild a map archive from scratch into a healthy one, re-placing every readable entry and dropping the blocks protection made unreadable or left nameless. Reports the entry counts before and after and the names dropped. Writes a copy, the input map is never modified in place.
+
+Annotations. read-only no, destructive no, idempotent no, open-world no.
+
+## mpq_remove
+
+Remove one internal file by rebuilding the archive without it, and report whether the rebuild actually dropped the name. Writes a copy, the input map is never modified in place.
+
+Annotations. read-only no, destructive no, idempotent no, open-world no.
 
 ## mpq_strip_bookkeeping
 
@@ -596,7 +686,7 @@ Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 
 Render a map's war3map.wpm pathing grid to a colour-coded PNG at out_path, one pixel per pathing cell with a legend strip of the pathing flags. Read-only, the map is not modified. The same file re-imports through pathing_import_png.
 
-Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+Annotations. read-only no, destructive unset, idempotent yes, open-world no.
 
 ## pathing_import_png
 
@@ -916,6 +1006,36 @@ Find handle leaks in a map's war3map.j (locations, groups, forces, effects, time
 
 Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 
+## script_lua_api
+
+List the natives and functions a Lua script calls that a target game build does not declare. Uses the same schema membership test as the compat check, and reads the calls from the parsed tree. Read-only.
+
+Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
+## script_lua_check
+
+Parse every Lua file in a map and report the syntax errors with their line and column, the way luac 5.3 refuses them. Wider than script_check, which parses only the entry the map runs. Read-only.
+
+Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
+## script_lua_globals
+
+List the globals a Lua map defines, where each is read and written, and any global that is written but never read. The Lua twin of script_unused_globals, parser based rather than a line scan. Read-only.
+
+Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
+## script_lua_leaks
+
+Find handle leaks in a Lua map script. Lua collects the wrapper but the engine still owns the handle, so a creator dropped as a statement, a creator on a period that is never released, and a handle kept in a table the script never clears are the shapes that grow memory. Each finding is ranked hot, repeat or once. Read-only.
+
+Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
+## script_lua_to_jass
+
+Best effort conversion of a Lua map back to JASS, saved to out_path. The JASS to Lua conversion is not reversible in general, so only the constructs that map back without guessing are converted and every construct left is reported. Nothing is written when the script does not convert. The input map is NEVER modified.
+
+Annotations. read-only no, destructive no, idempotent yes, open-world no.
+
 ## script_modernize
 
 Rewrite deprecated or renamed natives in the map script to the target build's spelling where a known mapping exists, and save the map to out_path. A rewrite is only applied when the target build declares the new name, and names inside strings or comments are never touched. Nothing is written when there is nothing to rewrite. The input map is NEVER modified.
@@ -1082,7 +1202,7 @@ Annotations. read-only no, destructive no, idempotent no, open-world no.
 
 Export a map's terrain heights as a 16-bit grayscale PNG of the (Width+1) by (Height+1) corner grid, one pixel per corner, to out_path. Read-only, the map is not modified, and the same file re-imports through terrain_import_heightmap.
 
-Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+Annotations. read-only no, destructive unset, idempotent yes, open-world no.
 
 ## terrain_fill
 

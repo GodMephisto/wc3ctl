@@ -2,7 +2,7 @@
 
 Generated from the live command tree by `wc3ctl docs cli`. Do not edit by hand. Regenerate with `wc3ctl docs cli --force`, and the CI guard fails when this file is stale.
 
-The tree holds 61 top level verb(s) and 286 command path(s) in total.
+The tree holds 63 top level verb(s) and 308 command path(s) in total.
 
 ## Global options
 
@@ -992,6 +992,11 @@ Subcommands
 - `name-recover`. Resolve a dictionary of candidate names against the archive's hash table and report the names that hit unnamed blocks. Read-only.
 - `strip-bookkeeping`. Save a copy with (listfile) and (attributes) dropped, using the same switch the toolkit already reads, and confirm the copy opens again. The input is never overwritten.
 - `bytes-diff`. Compare two archives entry by entry by name. For each name present in both, report whether the payload SHA256 matches, and list names only one side carries. Read-only.
+- `rebuild`. Rebuild the archive from scratch into a healthy one, re-placing every readable entry and dropping the blocks protection made unreadable or left nameless. Reports the entry counts before and after. Writes a copy.
+- `merge`. Merge two archives into one, taking every readable named entry from both. A name in both is resolved by the preferred side and reported as a conflict. Writes a copy.
+- `add`. Add or replace one internal file from a file on disk, byte-faithfully. Reports whether it was added or replaced. Writes a copy.
+- `remove`. Remove one internal file by rebuilding the container without it, and report whether the rebuild actually dropped the name. Writes a copy.
+- `extract-all`. Extract every entry of the archive to a directory, including unnamed protected blocks, through the same path-safety rule 'extract' uses. Read-only over the map.
 
 ### mpq verify
 
@@ -1071,6 +1076,102 @@ Arguments
 
 - `<map>` (required). Path to a .w3x/.w3m map.
 - `<mapB>` (required). Second map to compare against.
+
+### mpq rebuild
+
+Rebuild the archive from scratch into a healthy one, re-placing every readable entry and dropping the blocks protection made unreadable or left nameless. Reports the entry counts before and after. Writes a copy.
+
+Usage
+
+```
+wc3ctl mpq rebuild <map> [options]
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+
+Options
+
+- `-o, --out <out>`. Output map path. The input map is never overwritten.
+- `--grow-hash`. Force a larger hash table on the rebuilt archive. Doubles the source capacity, then raises it until 3/4 occupancy fits. Off by default, most maps need no growth.
+
+### mpq merge
+
+Merge two archives into one, taking every readable named entry from both. A name in both is resolved by the preferred side and reported as a conflict. Writes a copy.
+
+Usage
+
+```
+wc3ctl mpq merge <map> <mapB> [options]
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+- `<mapB>` (required). Second map to compare against.
+
+Options
+
+- `-o, --out <out>`. Output map path. The input map is never overwritten.
+- `--prefer <prefer>`. Which side wins a name both maps carry, 'a' or 'b'. Default 'a'. Default `a`.
+
+### mpq add
+
+Add or replace one internal file from a file on disk, byte-faithfully. Reports whether it was added or replaced. Writes a copy.
+
+Usage
+
+```
+wc3ctl mpq add <map> <name> [options]
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+- `<name>` (required). Internal archive path, for example war3map.j.
+
+Options
+
+- `--file <file>` (required). Path to the file whose bytes become the internal file.
+- `-o, --out <out>`. Output map path. The input map is never overwritten.
+
+### mpq remove
+
+Remove one internal file by rebuilding the container without it, and report whether the rebuild actually dropped the name. Writes a copy.
+
+Usage
+
+```
+wc3ctl mpq remove <map> <name> [options]
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+- `<name>` (required). Internal archive path, for example war3map.j.
+
+Options
+
+- `-o, --out <out>`. Output map path. The input map is never overwritten.
+
+### mpq extract-all
+
+Extract every entry of the archive to a directory, including unnamed protected blocks, through the same path-safety rule 'extract' uses. Read-only over the map.
+
+Usage
+
+```
+wc3ctl mpq extract-all <map> [options]
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+
+Options
+
+- `-o, --out <out>`. Output directory. Default '<map>.extracted' beside the input. Created if absent.
 
 ## file
 
@@ -1764,6 +1865,11 @@ Subcommands
 - `format`. Reprint a Lua map script, pretty or canonical. The result compiles to the same Lua instructions as the original. JASS maps are refused.
 - `to-lua`. Convert a JASS map to a Lua map. The script becomes war3map.lua with the JASS integer, division and null string rules kept, and the w3i script language is set to Lua.
 - `decompile`. Turn Lua entries shipped as Lua 5.3 bytecode back into Lua source that runs the same. Nothing is written when the map holds no bytecode.
+- `lua-leaks`. Find handle leaks in a Lua map script: a creator dropped as a statement, a creator on a period that is never released, and a handle kept in a table the script never clears. Read-only.
+- `lua-globals`. List the globals a Lua map defines, where each is read and written, and any global that is written but never read. Read-only.
+- `lua-check`. Parse every Lua file in a map and report the syntax errors with their line and column, the way luac 5.3 refuses them. Exits 1 on an error.
+- `lua-api`. List the natives and functions a Lua script calls that the target build does not declare. Read-only.
+- `lua-to-jass`. Best effort conversion of a Lua map back to JASS. Only the constructs that map back without guessing are converted, and every construct left is reported.
 
 ### script functions
 
@@ -2105,6 +2211,89 @@ Options
 
 - `-o, --out <out>`. Output map path. Default '<map>.decompiled.<ext>' next to the input. An existing file is never overwritten.
 
+### script lua-leaks
+
+Find handle leaks in a Lua map script: a creator dropped as a statement, a creator on a period that is never released, and a handle kept in a table the script never clears. Read-only.
+
+Usage
+
+```
+wc3ctl script lua-leaks <map> [options]
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+
+Options
+
+- `--all`. List every finding, including code that runs only once.
+
+### script lua-globals
+
+List the globals a Lua map defines, where each is read and written, and any global that is written but never read. Read-only.
+
+Usage
+
+```
+wc3ctl script lua-globals <map>
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+
+### script lua-check
+
+Parse every Lua file in a map and report the syntax errors with their line and column, the way luac 5.3 refuses them. Exits 1 on an error.
+
+Usage
+
+```
+wc3ctl script lua-check <map>
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+
+### script lua-api
+
+List the natives and functions a Lua script calls that the target build does not declare. Read-only.
+
+Usage
+
+```
+wc3ctl script lua-api <map> [options]
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+
+Options
+
+- `--target <target>` (required). Target build name or schema folder path.
+- `--schemas <schemas>`. Directory of schema folders. Default: search <base>/schemas then walk up to data/schemas.
+
+### script lua-to-jass
+
+Best effort conversion of a Lua map back to JASS. Only the constructs that map back without guessing are converted, and every construct left is reported.
+
+Usage
+
+```
+wc3ctl script lua-to-jass <map> [options]
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+
+Options
+
+- `-o, --out <out>`. Output map path. Default '<map>.jass.<ext>' next to the input. An existing file is never overwritten.
+
 ## bundle
 
 Dependency bundles for porting between maps.
@@ -2233,7 +2422,7 @@ Options
 - `-o, --out <out>`. Output directory (or output file for a single named extraction). Default: current directory.
 - `--no-script`. Port object data + assets + strings only; skip the best-effort JASS script closure append.
 - `--dry-run`. Preview the port: print the full report (remaps, objects, files, strings, script) without writing anything.
-- `--synth-dispatch`. Single-unit port only. Instead of carrying the source's shared cast dispatcher (every gate it was written to satisfy on the source map — a placed-hero registration array, a map rect that reads null off the source map, a cooldown hashtable), read the unit's OWN branch of it and synthesize a fresh, minimal, self-contained dispatcher for exactly its abilities. Does not make the unit dependency-free (spell handlers still need their own carried state), only replaces the SHARED entry point into them. Default off: a plain port is unaffected.
+- `--synth-dispatch`. Single-unit port only. Instead of carrying the source's shared cast dispatcher (every gate it was written to satisfy on the source map, a placed-hero registration array, a map rect that reads null off the source map, a cooldown hashtable), read the unit's OWN branch of it and synthesize a fresh, minimal, self-contained dispatcher for exactly its abilities. Does not make the unit dependency-free (spell handlers still need their own carried state), only replaces the SHARED entry point into them. Default off: a plain port is unaffected.
 - `--bootstrap-state`. Construct every carried global the ported code reads but nothing ever assigns (a region CreateRegions never carried, a timer only a hand-written Init reached through ExecuteFunc("Init") ever built), so it holds a real handle instead of silently sitting at its type default. Only timer, group, hashtable, trigger, rect and force are ever constructed this way (a rect is built empty, never guessed at). Anything else this cannot safely build, unit, item, destructable, effect, code, framehandle, an array, is left alone and reported instead. Default off, a plain port is unaffected.
 
 ### port deps
@@ -2544,7 +2733,7 @@ Subcommands
 - `doodad`. Place a doodad at (x, y) and save the edited map. Writes war3map.doo.
 - `region`. Add a rectangular region and save the edited map. Writes war3map.w3r.
 - `unit`. Place a unit at (x, y) and save the edited map. Writes war3mapUnits.doo, and the map's script when a spawn call has to be wired (a preplaced unit no script creates never appears in the game).
-- `start-location`. Place or move a player's start location at (x, y) and save the edited map. One per player — an existing one for this player is moved. Writes war3mapUnits.doo, and the map's script when a spawn call has to be wired.
+- `start-location`. Place or move a player's start location at (x, y) and save the edited map. One per player. An existing one for this player is moved. Writes war3mapUnits.doo, and the map's script when a spawn call has to be wired.
 - `item`. Place a preplaced item at (x, y) and save the edited map. Writes war3mapUnits.doo (item slot), and the map's script when a spawn call has to be wired.
 - `grid`. Place a regular rows x cols grid of copies of one type and save the edited map. The grid is centred on the map origin. Writes war3mapUnits.doo for units or war3map.doo for doodads.
 - `scatter`. Place N copies of a unit type at deterministic random positions and save the edited map. Positions are uniform inside a named region or the whole playable area, and the same seed reproduces the same layout. Writes war3mapUnits.doo.
@@ -2625,7 +2814,7 @@ Options
 
 ### place start-location
 
-Place or move a player's start location at (x, y) and save the edited map. One per player — an existing one for this player is moved. Writes war3mapUnits.doo, and the map's script when a spawn call has to be wired.
+Place or move a player's start location at (x, y) and save the edited map. One per player. An existing one for this player is moved. Writes war3mapUnits.doo, and the map's script when a spawn call has to be wired.
 
 Usage
 
@@ -4827,6 +5016,209 @@ Arguments
 Options
 
 - `--max-regression-pct <max-regression-pct>`. Fail when any metric regressed by more than this percent. Default `10`.
+
+## ci
+
+CI gates. Each runs a check on a map or the schema dataset, prints what it checked, and exits non-zero when it fails. Read-only.
+
+Usage
+
+```
+wc3ctl ci
+```
+
+Subcommands
+
+- `lint`. Run the lint as a gate. Fails on an error-level finding, or, with --baseline, only on a finding the baseline does not already hold. With --target it also runs the compat check and fails on an error-level finding.
+- `validate`. Run the validation as a gate. Exits non-zero when the map cannot load or reports an error-level issue. With --strict the extra strict checks are included.
+- `compat`. Run the compat check as a gate. Exits non-zero on an error-level finding.
+- `schema`. Check the schema dataset for regressions. Fails when any build stops parsing or fewer than --min-real builds carry real object data.
+- `all`. Run lint, validate and, when --target is given, compat in one pass. Prints a summary line per gate and the overall pass or fail with the exit code.
+
+### ci lint
+
+Run the lint as a gate. Fails on an error-level finding, or, with --baseline, only on a finding the baseline does not already hold. With --target it also runs the compat check and fails on an error-level finding.
+
+Usage
+
+```
+wc3ctl ci lint <map> [options]
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+
+Options
+
+- `--baseline <baseline>`. Baseline file written by 'lint baseline'. When given, the gate fails only on a finding the baseline does not already hold.
+- `--target <target>`. Target build name or schema folder path. When given, a compat check runs and fails on an error-level finding.
+- `--schemas <schemas>`. Path to schemas directory containing schema folders with manifest.json.
+- `--against <against>`. Optional path to the ORIGINAL map this one was built from, so the lint also reports what a rebuild lost or clobbered.
+
+### ci validate
+
+Run the validation as a gate. Exits non-zero when the map cannot load or reports an error-level issue. With --strict the extra strict checks are included.
+
+Usage
+
+```
+wc3ctl ci validate <map> [options]
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+
+Options
+
+- `--strict`. Run the stricter validation, whose extra checks are too strict to be a default.
+
+### ci compat
+
+Run the compat check as a gate. Exits non-zero on an error-level finding.
+
+Usage
+
+```
+wc3ctl ci compat <map> [options]
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+
+Options
+
+- `--target <target>` (required). Target build name or schema folder path.
+- `--schemas <schemas>`. Path to schemas directory containing schema folders with manifest.json.
+
+### ci schema
+
+Check the schema dataset for regressions. Fails when any build stops parsing or fewer than --min-real builds carry real object data.
+
+Usage
+
+```
+wc3ctl ci schema [options]
+```
+
+Options
+
+- `--schemas <schemas>`. Path to schemas directory containing schema folders with manifest.json.
+- `--min-real <min-real>`. Fail when fewer than this many builds carry real object data. Default `0`.
+
+### ci all
+
+Run lint, validate and, when --target is given, compat in one pass. Prints a summary line per gate and the overall pass or fail with the exit code.
+
+Usage
+
+```
+wc3ctl ci all <map> [options]
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+
+Options
+
+- `--target <target>`. Target build name or schema folder path. When given, a compat check runs and fails on an error-level finding.
+- `--schemas <schemas>`. Path to schemas directory containing schema folders with manifest.json.
+
+## library
+
+Sweep a folder of maps instead of one map, the way a maintainer checks a whole library. Every subcommand is read-only and opens one map at a time.
+
+Usage
+
+```
+wc3ctl library
+```
+
+Subcommands
+
+- `scan`. Open every map in a folder and report per map its size, the build it targets if known, whether it loads, its entry count and its diagnostic count. Read-only.
+- `audit`. Run the behavioural audit over every map in a folder and report the findings per map and the totals per check, so a whole library is ranked by how much it needs fixing. Read-only.
+- `validate`. Run the load validation over every map in a folder and list the ones that fail, with the reason. Read-only.
+- `compare`. Compare two folders by map file name and content hash, listing the maps only in the first, only in the second, and changed between them. Read-only.
+- `report`. Write one Markdown report over a folder, a summary line, a per-map table and the aggregated findings, an artifact a maintainer can attach to a review.
+
+### library scan
+
+Open every map in a folder and report per map its size, the build it targets if known, whether it loads, its entry count and its diagnostic count. Read-only.
+
+Usage
+
+```
+wc3ctl library scan <folder>
+```
+
+Arguments
+
+- `<folder>` (required). Folder of .w3x/.w3m maps, searched recursively.
+
+### library audit
+
+Run the behavioural audit over every map in a folder and report the findings per map and the totals per check, so a whole library is ranked by how much it needs fixing. Read-only.
+
+Usage
+
+```
+wc3ctl library audit <folder>
+```
+
+Arguments
+
+- `<folder>` (required). Folder of .w3x/.w3m maps, searched recursively.
+
+### library validate
+
+Run the load validation over every map in a folder and list the ones that fail, with the reason. Read-only.
+
+Usage
+
+```
+wc3ctl library validate <folder>
+```
+
+Arguments
+
+- `<folder>` (required). Folder of .w3x/.w3m maps, searched recursively.
+
+### library compare
+
+Compare two folders by map file name and content hash, listing the maps only in the first, only in the second, and changed between them. Read-only.
+
+Usage
+
+```
+wc3ctl library compare <folderA> <folderB>
+```
+
+Arguments
+
+- `<folderA>` (required). The first folder of maps.
+- `<folderB>` (required). The second folder of maps.
+
+### library report
+
+Write one Markdown report over a folder, a summary line, a per-map table and the aggregated findings, an artifact a maintainer can attach to a review.
+
+Usage
+
+```
+wc3ctl library report <folder> [options]
+```
+
+Arguments
+
+- `<folder>` (required). Folder of .w3x/.w3m maps, searched recursively.
+
+Options
+
+- `-o, --out <out>` (required). Path to write the Markdown report to.
 
 ## mcp
 

@@ -254,8 +254,8 @@ public class CliMcpParityTests
     {
         "gamedata schema",
         "gamedata schema-index",
-        "roundtrip", "search", "diff", "render", "bundle object",
-        "script functions", "extract", "convert", "validate",
+        "render", "bundle object",
+        "script functions", "extract", "convert",
         "repair generated-heroes", "repair reforged-3",
         // A structural edit to binary model assets, deliberately kept off the agent surface.
         // It rewrites imported .mdx files, a clean parse is not proof the game renders them,

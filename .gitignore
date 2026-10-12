@@ -35,3 +35,7 @@ __pycache__/
 docs/superpowers/
 CLAUDE.md
 tmp/
+
+# Test run artifacts
+TestResults/
+*.trx

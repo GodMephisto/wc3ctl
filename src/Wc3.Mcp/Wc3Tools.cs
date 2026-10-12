@@ -1578,7 +1578,7 @@ public static class Wc3Tools
             return (r.Ok, r.Message, r.TilesChanged);
         }));
 
-    [McpServerTool(Name = "terrain_export_heightmap", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [McpServerTool(Name = "terrain_export_heightmap", ReadOnly = false, Idempotent = true, OpenWorld = false)]
     [Description("Export a map's terrain heights as a 16-bit grayscale PNG of the (Width+1) by (Height+1) corner grid, one pixel per corner, to out_path. Read-only, the map is not modified, and the same file re-imports through terrain_import_heightmap.")]
     public static ImageExportToolResult TerrainExportHeightmap(
         [Description("Path to a .w3x/.w3m map file.")] string map,
@@ -1954,7 +1954,7 @@ public static class Wc3Tools
             return (r.Ok, r.Ok ? $"{r.Message} ({r.CellsChanged} cells)" : r.Message);
         }));
 
-    [McpServerTool(Name = "pathing_export_png", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [McpServerTool(Name = "pathing_export_png", ReadOnly = false, Idempotent = true, OpenWorld = false)]
     [Description("Render a map's war3map.wpm pathing grid to a colour-coded PNG at out_path, one pixel per pathing cell with a legend strip of the pathing flags. Read-only, the map is not modified. The same file re-imports through pathing_import_png.")]
     public static PathingExportToolResult PathingExportPng(
         [Description("Path to a .w3x/.w3m map file.")] string map,

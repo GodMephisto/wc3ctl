@@ -303,9 +303,8 @@ public static class Program
                 exitCode[0] = 1;
                 return;
             }
-            var dest = p.GetValueForOption(setOut) ?? Path.Combine(
-                Path.GetDirectoryName(map) ?? "",
-                Path.GetFileNameWithoutExtension(map) + ".edited" + Path.GetExtension(map));
+            var dest = ObjectEditedPath(p, map);
+            if (dest is null) { exitCode[0] = 1; return; }
             doc.Save(dest);
             Emit(p.GetValueForOption(jsonOption),
                 new { r.Ok, r.Message, r.Warning, SavedTo = dest },
@@ -334,9 +333,8 @@ public static class Program
                 exitCode[0] = 1;
                 return;
             }
-            var dest = p.GetValueForOption(setOut) ?? Path.Combine(
-                Path.GetDirectoryName(map) ?? "",
-                Path.GetFileNameWithoutExtension(map) + ".edited" + Path.GetExtension(map));
+            var dest = ObjectEditedPath(p, map);
+            if (dest is null) { exitCode[0] = 1; return; }
             doc.Save(dest);
             Emit(p.GetValueForOption(jsonOption),
                 new { r.Ok, r.Message, r.NewRawcode, SavedTo = dest },
@@ -664,9 +662,8 @@ public static class Program
                 exitCode[0] = 1;
                 return;
             }
-            var dest = p.GetValueForOption(setOut) ?? Path.Combine(
-                Path.GetDirectoryName(map) ?? "",
-                Path.GetFileNameWithoutExtension(map) + ".edited" + Path.GetExtension(map));
+            var dest = ObjectEditedPath(p, map);
+            if (dest is null) { exitCode[0] = 1; return; }
             doc.Save(dest);
             Emit(p.GetValueForOption(jsonOption),
                 new { r.Ok, r.Message, r.CreationNumber, SavedTo = dest },
@@ -699,9 +696,8 @@ public static class Program
                 exitCode[0] = 1;
                 return;
             }
-            var dest = p.GetValueForOption(setOut) ?? Path.Combine(
-                Path.GetDirectoryName(map) ?? "",
-                Path.GetFileNameWithoutExtension(map) + ".edited" + Path.GetExtension(map));
+            var dest = ObjectEditedPath(p, map);
+            if (dest is null) { exitCode[0] = 1; return; }
             doc.Save(dest);
             Emit(p.GetValueForOption(jsonOption),
                 new { r.Ok, r.Message, r.CreationNumber, SavedTo = dest },
@@ -735,9 +731,8 @@ public static class Program
                 exitCode[0] = 1;
                 return;
             }
-            var dest = p.GetValueForOption(setOut) ?? Path.Combine(
-                Path.GetDirectoryName(map) ?? "",
-                Path.GetFileNameWithoutExtension(map) + ".edited" + Path.GetExtension(map));
+            var dest = ObjectEditedPath(p, map);
+            if (dest is null) { exitCode[0] = 1; return; }
             doc.Save(dest);
             Emit(p.GetValueForOption(jsonOption),
                 new { r.Ok, r.Message, r.CreationNumber, SavedTo = dest },
@@ -748,7 +743,7 @@ public static class Program
         var placePlayerArg = new Argument<int>("player", "Player whose start location this is (0-based; 0 = red).");
         var placeStartLoc = new Command("start-location",
             "Place or move a player's start location at (x, y) and save the edited map. "
-            + "One per player — an existing one for this player is moved. Writes war3mapUnits.doo, "
+            + "One per player. An existing one for this player is moved. Writes war3mapUnits.doo, "
             + "and the map's script when a spawn call has to be wired.")
         { mapArg, placePlayerArg, placeXArg, placeYArg, setOut };
         placeStartLoc.SetHandler(ctx => RunSafely(() =>
@@ -766,9 +761,8 @@ public static class Program
                 exitCode[0] = 1;
                 return;
             }
-            var dest = p.GetValueForOption(setOut) ?? Path.Combine(
-                Path.GetDirectoryName(map) ?? "",
-                Path.GetFileNameWithoutExtension(map) + ".edited" + Path.GetExtension(map));
+            var dest = ObjectEditedPath(p, map);
+            if (dest is null) { exitCode[0] = 1; return; }
             doc.Save(dest);
             Emit(p.GetValueForOption(jsonOption),
                 new { r.Ok, r.Message, r.CreationNumber, SavedTo = dest },
@@ -799,9 +793,8 @@ public static class Program
                 exitCode[0] = 1;
                 return;
             }
-            var dest = p.GetValueForOption(setOut) ?? Path.Combine(
-                Path.GetDirectoryName(map) ?? "",
-                Path.GetFileNameWithoutExtension(map) + ".edited" + Path.GetExtension(map));
+            var dest = ObjectEditedPath(p, map);
+            if (dest is null) { exitCode[0] = 1; return; }
             doc.Save(dest);
             Emit(p.GetValueForOption(jsonOption),
                 new { r.Ok, r.Message, r.CreationNumber, SavedTo = dest },
@@ -841,9 +834,8 @@ public static class Program
                 exitCode[0] = 1;
                 return;
             }
-            var dest = p.GetValueForOption(setOut) ?? Path.Combine(
-                Path.GetDirectoryName(map) ?? "",
-                Path.GetFileNameWithoutExtension(map) + ".edited" + Path.GetExtension(map));
+            var dest = ObjectEditedPath(p, map);
+            if (dest is null) { exitCode[0] = 1; return; }
             doc.Save(dest);
             Emit(p.GetValueForOption(jsonOption),
                 new { r.Ok, r.Message, r.Placed, r.CreationNumbers, SavedTo = dest },
@@ -878,9 +870,8 @@ public static class Program
                 exitCode[0] = 1;
                 return;
             }
-            var dest = p.GetValueForOption(setOut) ?? Path.Combine(
-                Path.GetDirectoryName(map) ?? "",
-                Path.GetFileNameWithoutExtension(map) + ".edited" + Path.GetExtension(map));
+            var dest = ObjectEditedPath(p, map);
+            if (dest is null) { exitCode[0] = 1; return; }
             doc.Save(dest);
             Emit(p.GetValueForOption(jsonOption),
                 new { r.Ok, r.Message, r.Placed, r.CreationNumbers, SavedTo = dest },
@@ -906,9 +897,8 @@ public static class Program
                 exitCode[0] = 1;
                 return;
             }
-            var dest = p.GetValueForOption(setOut) ?? Path.Combine(
-                Path.GetDirectoryName(map) ?? "",
-                Path.GetFileNameWithoutExtension(map) + ".edited" + Path.GetExtension(map));
+            var dest = ObjectEditedPath(p, map);
+            if (dest is null) { exitCode[0] = 1; return; }
             doc.Save(dest);
             Emit(p.GetValueForOption(jsonOption),
                 new { r.Ok, r.Message, r.Units, r.Items, SavedTo = dest },
@@ -976,9 +966,8 @@ public static class Program
                 exitCode[0] = 1;
                 return;
             }
-            var dest = p.GetValueForOption(setOut) ?? Path.Combine(
-                Path.GetDirectoryName(map) ?? "",
-                Path.GetFileNameWithoutExtension(map) + ".edited" + Path.GetExtension(map));
+            var dest = ObjectEditedPath(p, map);
+            if (dest is null) { exitCode[0] = 1; return; }
             doc.Save(dest);
             Emit(p.GetValueForOption(jsonOption),
                 new { r.Ok, r.Message, r.Changed, r.Changes, SavedTo = dest },
@@ -1640,8 +1629,8 @@ public static class Program
             bool objOutput = string.Equals(toExt, ".obj", StringComparison.OrdinalIgnoreCase);
             if (modelInput != objOutput)
                 throw new ArgumentException(modelInput
-                    ? "models convert to .obj only — pass an output ending in .obj"
-                    : $"only .mdx/.mdl convert to {toExt} — image sources convert to image formats");
+                    ? "models convert to .obj only, pass an output ending in .obj"
+                    : $"only .mdx/.mdl convert to {toExt}, image sources convert to image formats");
 
             if (modelInput)
             {
@@ -1672,7 +1661,7 @@ public static class Program
             "Preview the port: print the full report (remaps, objects, files, strings, script) without writing anything.");
         var synthDispatchOption = new Option<bool>("--synth-dispatch",
             "Single-unit port only. Instead of carrying the source's shared cast dispatcher (every gate it was "
-            + "written to satisfy on the source map — a placed-hero registration array, a map rect that reads "
+            + "written to satisfy on the source map, a placed-hero registration array, a map rect that reads "
             + "null off the source map, a cooldown hashtable), read the unit's OWN branch of it and synthesize "
             + "a fresh, minimal, self-contained dispatcher for exactly its abilities. Does not make the unit "
             + "dependency-free (spell handlers still need their own carried state), only replaces the SHARED "
@@ -3052,9 +3041,8 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
                 exitCode[0] = 1;
                 return;
             }
-            var dest = p.GetValueForOption(setOut) ?? Path.Combine(
-                Path.GetDirectoryName(map) ?? "",
-                Path.GetFileNameWithoutExtension(map) + ".edited" + Path.GetExtension(map));
+            var dest = ObjectEditedPath(p, map);
+            if (dest is null) { exitCode[0] = 1; return; }
             if (string.Equals(Path.GetFullPath(dest), Path.GetFullPath(map), StringComparison.OrdinalIgnoreCase))
             {
                 Console.Error.WriteLine("error: refusing to overwrite the input map, give -o a different path");
@@ -3151,9 +3139,8 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
             var kind = p.GetValueForOption(wireKindOpt) is { Length: > 0 } k ? ObjectKinds.Parse(k) : (ObjectKind?)null;
             var r = AssetImportWireCommand.Execute(doc, p.GetValueForArgument(wireFilesArg),
                 p.GetValueForOption(wireObjectOpt), kind);
-            var dest = p.GetValueForOption(setOut) ?? Path.Combine(
-                Path.GetDirectoryName(map) ?? "",
-                Path.GetFileNameWithoutExtension(map) + ".edited" + Path.GetExtension(map));
+            var dest = ObjectEditedPath(p, map);
+            if (dest is null) { exitCode[0] = 1; return; }
             if (!r.Ok)
             {
                 Emit(p.GetValueForOption(jsonOption), r, () => Render.AssetImportWire(r, null));
@@ -3991,9 +3978,8 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
             string map = p.GetValueForArgument(mapArg);
             var doc = MapDocument.Load(map);
             var f = MapInfoCommand.Set(doc, p.GetValueForArgument(miFieldArg), p.GetValueForArgument(miValueArg));
-            var dest = p.GetValueForOption(setOut) ?? Path.Combine(
-                Path.GetDirectoryName(map) ?? "",
-                Path.GetFileNameWithoutExtension(map) + ".edited" + Path.GetExtension(map));
+            var dest = ObjectEditedPath(p, map);
+            if (dest is null) { exitCode[0] = 1; return; }
             doc.Save(dest);
             Emit(p.GetValueForOption(jsonOption), new { Ok = true, Fields = f, SavedTo = dest },
                 () => $"set {p.GetValueForArgument(miFieldArg)} = {p.GetValueForArgument(miValueArg)}\nsaved: {dest}");
@@ -4244,9 +4230,8 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
                 return;
             }
 
-            var dest = p.GetValueForOption(setOut) ?? Path.Combine(
-                Path.GetDirectoryName(map) ?? "",
-                Path.GetFileNameWithoutExtension(map) + ".edited" + Path.GetExtension(map));
+            var dest = ObjectEditedPath(p, map);
+            if (dest is null) { exitCode[0] = 1; return; }
             doc.Save(dest);
             Emit(p.GetValueForOption(jsonOption),
                 new
@@ -4368,7 +4353,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
                         $"{f.Kind,-9} {f.Name}" +
                         (f.ReturnType is null ? "" : $" : {f.ReturnType}") +
                         $"  ({string.Join(", ", f.ArgumentTypes)})" +
-                        (f.DisplayName is null ? "" : $"  — {f.DisplayName}")))
+                        (f.DisplayName is null ? "" : $"  ({f.DisplayName})")))
                       + $"\n\n{res.Total} function(s) from {res.Source}");
         }));
 
