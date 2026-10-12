@@ -810,6 +810,53 @@ public static class Render
         return string.Join("\n", new[] { head }.Concat(lines).Concat(notes));
     }
 
+    public static string ObjectMigrate(ObjectMigrateResult r, string? savedTo = null)
+    {
+        var head = r.Ok
+            ? $"migrated to {r.TargetBuild}: {r.FieldsKept} field(s) kept, {r.FieldsDropped} dropped"
+            : r.Message;
+        var lines = r.Drops.Select(d => $"  dropped {d.Kind} {d.Rawcode} field {d.FieldCode}");
+        var notes = r.UncheckedKinds.Count > 0
+            ? new[] { $"  kinds not checked (no object schema): {string.Join(", ", r.UncheckedKinds)}" }
+            : Array.Empty<string>();
+        var diags = r.Diagnostics.Select(d => $"note: {d}");
+        var tail = savedTo is null ? Array.Empty<string>() : new[] { $"saved: {savedTo}" };
+        return string.Join("\n", new[] { head }.Concat(lines).Concat(notes).Concat(diags).Concat(tail));
+    }
+
+    public static string ObjectBulkSet(ObjectBulkSetResult r, string? savedTo = null)
+    {
+        var head = $"{r.Message}, {r.Skipped} skipped";
+        var lines = r.Entries.Where(e => !e.Changed)
+            .Select(e => $"  {e.Rawcode}: {e.Detail}");
+        var notes = r.Diagnostics.Select(d => $"note: {d}");
+        var tail = savedTo is null ? Array.Empty<string>() : new[] { $"saved: {savedTo}" };
+        return string.Join("\n", new[] { head }.Concat(lines).Concat(notes).Concat(tail));
+    }
+
+    public static string ObjectExport(ObjectExportResult r, string? writtenTo = null)
+    {
+        var head = $"{r.Message} ({r.Columns.Count} column(s))";
+        var notes = r.Diagnostics.Select(d => $"note: {d}");
+        var tail = writtenTo is null ? Array.Empty<string>() : new[] { $"written: {writtenTo}" };
+        return string.Join("\n", new[] { head }.Concat(notes).Concat(tail));
+    }
+
+    public static string ObjectImport(ObjectImportResult r, string? savedTo = null)
+    {
+        var head = r.Ok ? $"{r.Message}" : $"refused: {r.Message}";
+        var notes = r.Diagnostics.Select(d => $"note: {d}");
+        var tail = savedTo is null || !r.Ok ? Array.Empty<string>() : new[] { $"saved: {savedTo}" };
+        return string.Join("\n", new[] { head }.Concat(notes).Concat(tail));
+    }
+
+    public static string ObjectRename(ObjectRenameResult r, string? savedTo = null)
+    {
+        var head = r.Ok ? r.Message : $"refused: {r.Message}";
+        var tail = savedTo is null || !r.Ok ? Array.Empty<string>() : new[] { $"saved: {savedTo}" };
+        return string.Join("\n", new[] { head }.Concat(tail));
+    }
+
     public static string DoodadPalette(DoodadPaletteResult r)
     {
         // A base doodad the map edits in place carries BaseRawcode == its own code; suppress

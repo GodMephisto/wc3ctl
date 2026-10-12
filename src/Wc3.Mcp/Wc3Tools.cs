@@ -830,6 +830,111 @@ public static class Wc3Tools
             return new ObjectCloneToolResult(full, r.Message, r.NewRawcode, r.FieldsCopied);
         });
 
+    [McpServerTool(Name = "object_migrate", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Rewrite a map's object data to a target build's field set, dropping every field the target does not define, and save the edited copy to out_path. The input map is NEVER modified in place. Every drop is reported, and a target with no object data section refuses rather than stripping everything.")]
+    public static ObjectMigrateToolResult ObjectMigrate(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Target build name or path to a schema folder, read the same way the compat command reads it.")] string to,
+        [Description("Optional path to a schemas directory. When omitted, searches <AppContext.BaseDirectory>/schemas then walks up to data/schemas.")] string? schemas_dir = null)
+        => Run(() =>
+        {
+            string full = ResolveOutPath(map, out_path);
+            var doc = LoadMap(map);
+            var r = ObjectMigrateCommand.Execute(doc, to, schemas_dir);
+            if (!r.Ok) throw new McpException(r.Message);
+            if (Path.GetDirectoryName(full) is { Length: > 0 } dir) Directory.CreateDirectory(dir);
+            doc.Save(full);
+            return new ObjectMigrateToolResult(
+                full, r.Message, r.TargetBuild, r.FieldsKept, r.FieldsDropped, r.Drops.Count);
+        });
+
+    [McpServerTool(Name = "object_bulk_set", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Set one field on every object of a kind that matches every where clause, and save the edited copy to out_path. The input map is NEVER modified in place. A where clause is code=value and tests the object's merged value (base game data overlaid by the map). Reports how many objects changed.")]
+    public static ObjectBulkSetToolResult ObjectBulkSet(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("The field and value to write, as code=value (e.g. uhpm=1000).")] string set,
+        [Description("Object kind: " + KindValues + ".")] string kind = "unit",
+        [Description("Zero or more match clauses code=value. An object must match every clause to be written.")] string[]? where = null,
+        [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Used to test where clauses against base game values.")] string? game_dir = null)
+        => Run(() =>
+        {
+            if (!TrySplitPair(set, out var field, out var value))
+                throw new McpException($"expected set as code=value, got '{set}'");
+            var clauses = new List<BulkSetWhere>();
+            foreach (var raw in where ?? Array.Empty<string>())
+            {
+                if (!TrySplitPair(raw, out var wc, out var wv))
+                    throw new McpException($"expected a where clause as code=value, got '{raw}'");
+                clauses.Add(new BulkSetWhere(wc, wv));
+            }
+            string full = ResolveOutPath(map, out_path);
+            var doc = LoadMap(map);
+            var r = ObjectBulkSetCommand.Execute(doc, ParseKind(kind), field, value, clauses, ResolveGameDir(game_dir));
+            if (Path.GetDirectoryName(full) is { Length: > 0 } dir) Directory.CreateDirectory(dir);
+            doc.Save(full);
+            return new ObjectBulkSetToolResult(
+                full, r.Message, r.Kind, r.Matched, r.Changed, r.Skipped);
+        });
+
+    [McpServerTool(Name = "object_export", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Export the objects of one kind (base game data overlaid by the map's deltas) to a CSV file at out_path, one row per object, one column per field code, with a header. Read-only on the map. Feed the CSV back with object_import.")]
+    public static ObjectExportToolResult ObjectExport(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("CSV output file path.")] string out_path,
+        [Description("Object kind: " + KindValues + ".")] string kind = "unit",
+        [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Without it the export carries the map's own deltas only.")] string? game_dir = null)
+        => Run(() =>
+        {
+            var r = ObjectExportCommand.Execute(LoadMap(map), ParseKind(kind), ResolveGameDir(game_dir));
+            string full = Path.GetFullPath(out_path);
+            if (Path.GetDirectoryName(full) is { Length: > 0 } dir) Directory.CreateDirectory(dir);
+            File.WriteAllText(full, r.Csv);
+            return new ObjectExportToolResult(full, r.Message, r.Kind, r.ObjectCount, r.Columns.Count);
+        });
+
+    [McpServerTool(Name = "object_import", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Import a CSV of one kind back into the map, adding objects the map does not define and updating those it does, then save the edited copy to out_path. The input map is NEVER modified in place. An unknown column refuses the whole import. A blank cell leaves that field untouched.")]
+    public static ObjectImportToolResult ObjectImport(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Path to the CSV file to import.")] string csv_path,
+        [Description("Object kind: " + KindValues + ".")] string kind = "unit",
+        [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Used to verify a column is a field the kind defines.")] string? game_dir = null)
+        => Run(() =>
+        {
+            if (!File.Exists(csv_path)) throw new McpException($"no CSV file at {csv_path}");
+            string full = ResolveOutPath(map, out_path);
+            var doc = LoadMap(map);
+            var r = ObjectImportCommand.Execute(doc, ParseKind(kind), File.ReadAllText(csv_path), ResolveGameDir(game_dir));
+            if (!r.Ok) throw new McpException(r.Message);
+            if (Path.GetDirectoryName(full) is { Length: > 0 } dir) Directory.CreateDirectory(dir);
+            doc.Save(full);
+            return new ObjectImportToolResult(full, r.Message, r.Kind, r.Added, r.Updated, r.FieldsSet);
+        });
+
+    [McpServerTool(Name = "object_rename", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Rename an object rawcode and save the edited copy to out_path. The input map is NEVER modified in place. With rewrite_refs true, every object-data field value and script string literal that names the old rawcode is rewritten too, so references do not dangle. Refuses a new rawcode already taken by the map.")]
+    public static ObjectRenameToolResult ObjectRename(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("The rawcode to rename.")] string old_rawcode,
+        [Description("The new rawcode.")] string new_rawcode,
+        [Description("Object kind: " + KindValues + ".")] string kind = "unit",
+        [Description("Also rewrite every field value and script literal that references the old rawcode. Default false.")] bool rewrite_refs = false)
+        => Run(() =>
+        {
+            string full = ResolveOutPath(map, out_path);
+            var doc = LoadMap(map);
+            var r = ObjectRenameCommand.Execute(doc, ParseKind(kind), old_rawcode, new_rawcode, rewrite_refs);
+            if (!r.Ok) throw new McpException(r.Message);
+            if (Path.GetDirectoryName(full) is { Length: > 0 } dir) Directory.CreateDirectory(dir);
+            doc.Save(full);
+            return new ObjectRenameToolResult(
+                full, r.Message, r.Kind, r.OldRawcode, r.NewRawcode, r.FieldsRewritten, r.ScriptLiteralsRewritten);
+        });
+
     [McpServerTool(Name = "unit_abilities", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Every ability a unit has, each tagged with where it comes from. ObjectNormal and ObjectHero are the "
         + "unit type's own lists (uabi, uhab). Spellbook is inside a spellbook the unit has (passives often hide there). "
@@ -2200,6 +2305,16 @@ public static class Wc3Tools
         catch (ArgumentException ex) { throw new McpException(ex.Message); }
     }
 
+    /// <summary>Split a "code=value" pair on its first '=', the value may itself contain '='.</summary>
+    private static bool TrySplitPair(string token, out string code, out string value)
+    {
+        int eq = token.IndexOf('=');
+        if (eq <= 0) { code = ""; value = ""; return false; }
+        code = token[..eq];
+        value = token[(eq + 1)..];
+        return true;
+    }
+
     /// <summary>Read a PNG the caller named; a missing file is a clean MCP error.</summary>
     private static byte[] ReadPngFile(string png)
     {
@@ -2460,6 +2575,27 @@ public sealed record ObjectNewToolResult(string SavedTo, string Message, string?
 /// <summary>object_clone outcome: where the edited map was written, a message, the new
 /// rawcode, and how many field values the clone received.</summary>
 public sealed record ObjectCloneToolResult(string SavedTo, string Message, string? NewRawcode, int FieldsCopied);
+
+/// <summary>object_migrate outcome: the saved map, the target build, and the field counts.</summary>
+public sealed record ObjectMigrateToolResult(
+    string SavedTo, string Message, string TargetBuild, int FieldsKept, int FieldsDropped, int Drops);
+
+/// <summary>object_bulk_set outcome: the saved map and how many objects matched and changed.</summary>
+public sealed record ObjectBulkSetToolResult(
+    string SavedTo, string Message, string Kind, int Matched, int Changed, int Skipped);
+
+/// <summary>object_export outcome: the CSV path, the kind, and the row and column counts.</summary>
+public sealed record ObjectExportToolResult(
+    string CsvPath, string Message, string Kind, int ObjectCount, int Columns);
+
+/// <summary>object_import outcome: the saved map and the added, updated and field counts.</summary>
+public sealed record ObjectImportToolResult(
+    string SavedTo, string Message, string Kind, int Added, int Updated, int FieldsSet);
+
+/// <summary>object_rename outcome: the saved map, the old and new rawcodes, and the reference counts.</summary>
+public sealed record ObjectRenameToolResult(
+    string SavedTo, string Message, string Kind, string OldRawcode, string NewRawcode,
+    int FieldsRewritten, int ScriptLiteralsRewritten);
 
 /// <summary>sound_* write outcome: where the edited map was written plus a human-readable message.</summary>
 public sealed record SoundToolResult(string SavedTo, string Message);

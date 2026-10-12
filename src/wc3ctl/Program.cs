@@ -1,5 +1,6 @@
 // src/wc3ctl/Program.cs
 using System.CommandLine;
+using System.CommandLine.Parsing;
 using Wc3.Commands;
 using Wc3.Model;
 
@@ -250,6 +251,38 @@ public static class Program
         var setValueArg = new Argument<string>("value", "New value for the field.");
         var setOut = new Option<string?>(new[] { "-o", "--out" },
             "Output map path. Default: '<map>.edited.<ext>' next to the input - the original is never overwritten.");
+
+        // The one rule every mutating object command shares: the default output sits beside the
+        // input, and writing in place is refused so an original is never clobbered. Emits the
+        // refusal and returns null when the caller must stop.
+        string? ObjectEditedPath(ParseResult p, string map)
+        {
+            var dest = p.GetValueForOption(setOut) ?? Path.Combine(
+                Path.GetDirectoryName(map) ?? "",
+                Path.GetFileNameWithoutExtension(map) + ".edited" + Path.GetExtension(map));
+            if (Path.GetFullPath(dest).Equals(Path.GetFullPath(map), StringComparison.OrdinalIgnoreCase))
+            {
+                const string inPlace =
+                    "refusing to overwrite the input map, pass -o <path> for a distinct output";
+                Emit(p.GetValueForOption(jsonOption),
+                    new { Ok = false, Message = inPlace, SavedTo = (string?)null },
+                    () => inPlace);
+                exitCode[0] = 1;
+                return null;
+            }
+            return dest;
+        }
+
+        // Split a "code=value" pair on the first '='; the value may itself contain '='.
+        static bool TrySplitPair(string token, out string code, out string value)
+        {
+            int eq = token.IndexOf('=');
+            if (eq <= 0) { code = ""; value = ""; return false; }
+            code = token[..eq];
+            value = token[(eq + 1)..];
+            return true;
+        }
+
         var objSetKind = new Option<string>("--kind", () => "unit",
             "Object type: unit|item|ability|destructable|doodad|buff|upgrade.");
         var objSet = new Command("set", "Set an object field (any kind) and save the edited map.")
@@ -425,6 +458,179 @@ public static class Program
                 () => $"{r.Message}\nsaved: {dest}");
         }));
         obj.AddCommand(objClone);
+
+        // ---- migrate: rewrite object data to a target build's field set ----
+        var migrateTo = new Option<string>("--to",
+            "Target build name or path to a schema folder (read like compat).") { IsRequired = true };
+        var migrateSchemas = new Option<string?>("--schemas",
+            "Directory of schema folders. Default: search <base>/schemas then walk up to data/schemas.");
+        var objMigrate = new Command("migrate",
+            "Rewrite the map's object data to the target build's field set, dropping fields the "
+            + "target does not define and reporting each drop. Saves an edited copy.")
+        { mapArg, migrateTo, migrateSchemas, setOut };
+        objMigrate.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = ObjectMigrateCommand.Execute(doc, p.GetValueForOption(migrateTo)!, p.GetValueForOption(migrateSchemas));
+            if (!r.Ok)
+            {
+                Emit(p.GetValueForOption(jsonOption), r, () => r.Message);
+                exitCode[0] = 1;
+                return;
+            }
+            var dest = ObjectEditedPath(p, map);
+            if (dest is null) { exitCode[0] = 1; return; }
+            doc.Save(dest);
+            Emit(p.GetValueForOption(jsonOption),
+                new { r.Ok, r.Message, r.TargetBuild, r.FieldsKept, r.FieldsDropped, r.Drops, r.UncheckedKinds, SavedTo = dest },
+                () => Render.ObjectMigrate(r, dest));
+        }));
+        obj.AddCommand(objMigrate);
+
+        // ---- bulk-set: set one field on every object matching every where clause ----
+        var bulkKind = new Option<string>("--kind", () => "unit",
+            "Object type: unit|item|ability|destructable|doodad|buff|upgrade.");
+        var bulkSet = new Option<string>("--set",
+            "The field and value to write, as code=value (e.g. uhpm=1000).") { IsRequired = true };
+        var bulkWhere = new Option<string[]>("--where",
+            "A match clause code=value; repeat for several. An object must match every clause.")
+        { AllowMultipleArgumentsPerToken = false };
+        var objBulkSet = new Command("bulk-set",
+            "Set one field on every object of a kind matching every --where clause, and save the "
+            + "edited copy. Reports how many changed.")
+        { mapArg, bulkKind, bulkSet, bulkWhere, setOut };
+        objBulkSet.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            if (!TrySplitPair(p.GetValueForOption(bulkSet)!, out var setField, out var setValue))
+            {
+                Emit(p.GetValueForOption(jsonOption), new { Ok = false, Message = "expected --set code=value" },
+                    () => "expected --set code=value");
+                exitCode[0] = 1;
+                return;
+            }
+            var clauses = new List<BulkSetWhere>();
+            foreach (var raw in p.GetValueForOption(bulkWhere) ?? Array.Empty<string>())
+            {
+                if (!TrySplitPair(raw, out var wc, out var wv))
+                {
+                    Emit(p.GetValueForOption(jsonOption), new { Ok = false, Message = $"expected --where code=value, got '{raw}'" },
+                        () => $"expected --where code=value, got '{raw}'");
+                    exitCode[0] = 1;
+                    return;
+                }
+                clauses.Add(new BulkSetWhere(wc, wv));
+            }
+            var doc = MapDocument.Load(map);
+            var r = ObjectBulkSetCommand.Execute(doc, ObjectKinds.Parse(p.GetValueForOption(bulkKind)!),
+                setField, setValue, clauses, p.GetValueForOption(gameDirOption));
+            var dest = ObjectEditedPath(p, map);
+            if (dest is null) { exitCode[0] = 1; return; }
+            doc.Save(dest);
+            Emit(p.GetValueForOption(jsonOption),
+                new { r.Ok, r.Message, r.Kind, r.Field, r.Value, r.Matched, r.Changed, r.Skipped, r.Entries, SavedTo = dest },
+                () => Render.ObjectBulkSet(r, dest));
+        }));
+        obj.AddCommand(objBulkSet);
+
+        // ---- export: write one kind's objects to CSV ----
+        var exportKind = new Option<string>("--kind", () => "unit",
+            "Object type: unit|item|ability|destructable|doodad|buff|upgrade.");
+        var exportOut = new Option<string>(new[] { "-o", "--out" },
+            "CSV output path.") { IsRequired = true };
+        var objExport = new Command("export",
+            "Export the objects of a kind (base game data overlaid by the map) to CSV, one row per "
+            + "object, one column per field code. Read-only.")
+        { mapArg, exportKind, exportOut };
+        objExport.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            string outPath = p.GetValueForOption(exportOut)!;
+            var r = ObjectExportCommand.Execute(MapDocument.Load(map),
+                ObjectKinds.Parse(p.GetValueForOption(exportKind)!), p.GetValueForOption(gameDirOption));
+            if (Path.GetDirectoryName(Path.GetFullPath(outPath)) is { Length: > 0 } dir)
+                Directory.CreateDirectory(dir);
+            File.WriteAllText(outPath, r.Csv);
+            Emit(p.GetValueForOption(jsonOption),
+                new { r.Ok, r.Message, r.Kind, r.ObjectCount, r.Columns, r.Diagnostics, WrittenTo = Path.GetFullPath(outPath) },
+                () => Render.ObjectExport(r, outPath));
+        }));
+        obj.AddCommand(objExport);
+
+        // ---- import: read a kind's CSV back into the map ----
+        var importKind = new Option<string>("--kind", () => "unit",
+            "Object type: unit|item|ability|destructable|doodad|buff|upgrade.");
+        var importCsv = new Option<string>("--csv", "Path to the CSV file to import.") { IsRequired = true };
+        var objImport = new Command("import",
+            "Import a CSV of one kind back into the map, adding or updating its objects. Refuses an "
+            + "unknown column. Saves an edited copy.")
+        { mapArg, importKind, importCsv, setOut };
+        objImport.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            string csvPath = p.GetValueForOption(importCsv)!;
+            if (!File.Exists(csvPath))
+            {
+                Emit(p.GetValueForOption(jsonOption), new { Ok = false, Message = $"no CSV file at {csvPath}" },
+                    () => $"no CSV file at {csvPath}");
+                exitCode[0] = 1;
+                return;
+            }
+            var doc = MapDocument.Load(map);
+            var r = ObjectImportCommand.Execute(doc, ObjectKinds.Parse(p.GetValueForOption(importKind)!),
+                File.ReadAllText(csvPath), p.GetValueForOption(gameDirOption));
+            if (!r.Ok)
+            {
+                Emit(p.GetValueForOption(jsonOption), r, () => r.Message);
+                exitCode[0] = 1;
+                return;
+            }
+            var dest = ObjectEditedPath(p, map);
+            if (dest is null) { exitCode[0] = 1; return; }
+            doc.Save(dest);
+            Emit(p.GetValueForOption(jsonOption),
+                new { r.Ok, r.Message, r.Kind, r.Added, r.Updated, r.FieldsSet, r.Diagnostics, SavedTo = dest },
+                () => Render.ObjectImport(r, dest));
+        }));
+        obj.AddCommand(objImport);
+
+        // ---- rename: rename a rawcode and repoint its references ----
+        var renameKind = new Option<string>("--kind", () => "unit",
+            "Object type: unit|item|ability|destructable|doodad|buff|upgrade.");
+        var renameOld = new Argument<string>("old", "The rawcode to rename.");
+        var renameNew = new Argument<string>("new", "The new rawcode.");
+        var renameRefs = new Option<bool>("--rewrite-refs",
+            "Also rewrite every object-data field value and script string literal that names the old rawcode.");
+        var objRename = new Command("rename",
+            "Rename an object rawcode and optionally rewrite every field and script literal that "
+            + "references it. Saves an edited copy.")
+        { mapArg, renameKind, renameOld, renameNew, renameRefs, setOut };
+        objRename.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = ObjectRenameCommand.Execute(doc, ObjectKinds.Parse(p.GetValueForOption(renameKind)!),
+                p.GetValueForArgument(renameOld), p.GetValueForArgument(renameNew), p.GetValueForOption(renameRefs));
+            if (!r.Ok)
+            {
+                Emit(p.GetValueForOption(jsonOption), r, () => r.Message);
+                exitCode[0] = 1;
+                return;
+            }
+            var dest = ObjectEditedPath(p, map);
+            if (dest is null) { exitCode[0] = 1; return; }
+            doc.Save(dest);
+            Emit(p.GetValueForOption(jsonOption),
+                new { r.Ok, r.Message, r.Kind, r.OldRawcode, r.NewRawcode, r.FieldsRewritten, r.ScriptLiteralsRewritten, SavedTo = dest },
+                () => Render.ObjectRename(r, dest));
+        }));
+        obj.AddCommand(objRename);
 
         // ---- placement: add doodads/regions to a map and save the edited copy ----
         var placeXArg = new Argument<float>("x", "World X coordinate.");

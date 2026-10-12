@@ -317,6 +317,77 @@ public sealed class McpSmokeObjectsTests : McpSmokeBase
         Assert.True(Prop(got, "found").GetBoolean());
     }
 
+    [Fact, Covers("object_migrate")]
+    public async Task Object_migrate_drops_a_field_the_target_lacks()
+    {
+        var schemaDir = Path.Combine(_f.Dir, $"schema-{Guid.NewGuid():N}");
+        GameSchemaCommand.Save(new GameSchema(1, "smoke-build", "test",
+            Array.Empty<SchemaInput>(), Array.Empty<string>(),
+            new Dictionary<string, IReadOnlyList<SchemaField>>
+            { ["units/unitmetadata.slk"] = new[] { SchemaFieldOf("unam") } },
+            null, null), schemaDir);
+
+        var map = UnitMap("uhpm", "999");
+        var migrated = await Write("object_migrate", Args(("to", schemaDir), ("kind", "unit")), map: map);
+
+        var got = await Call("object_get", Args(("map", migrated), ("rawcode", "u000"), ("kind", "unit")));
+        var fields = Prop(got, "fields").EnumerateArray();
+        // The map delta is gone; a base-game value for the same code may still show with source "base".
+        Assert.DoesNotContain(fields, f =>
+            string.Equals(Prop(f, "code").GetString(), "uhpm", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(Prop(f, "source").GetString(), "map", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact, Covers("object_bulk_set")]
+    public async Task Object_bulk_set_writes_only_matching_objects()
+    {
+        var map = UnitMap("uhpm", "999");
+        var edited = await Write("object_bulk_set",
+            Args(("set", "uhpm=1000"), ("kind", "unit"), ("where", new[] { "uhpm=999" })), map: map);
+
+        var got = await Call("object_get", Args(("map", edited), ("rawcode", "u000"), ("kind", "unit")));
+        var uhpm = Prop(got, "fields").EnumerateArray()
+            .First(f => string.Equals(Prop(f, "code").GetString(), "uhpm", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal("1000", Prop(uhpm, "value").GetString());
+    }
+
+    [Fact, Covers("object_export")]
+    public async Task Object_export_writes_a_csv_with_a_rawcode_header()
+    {
+        var map = UnitMap("uhpm", "999");
+        var csv = NewOut("export", ".csv");
+        var result = await Call("object_export", Args(("map", map), ("out_path", csv), ("kind", "unit")));
+
+        Assert.True(File.Exists(csv), "object_export wrote no CSV");
+        Assert.Contains("rawcode", File.ReadAllText(csv));
+        Assert.Equal(1, Prop(result, "objectCount").GetInt32());
+    }
+
+    [Fact, Covers("object_import")]
+    public async Task Object_import_adds_a_row_and_the_read_tools_confirm()
+    {
+        var csv = Path.Combine(_f.Dir, $"import-{Guid.NewGuid():N}.csv");
+        File.WriteAllText(csv, "rawcode,uhpm\nhfoo,777\n");
+
+        var map = UnitMap("uhpm", "999");
+        var edited = await Write("object_import", Args(("csv_path", csv), ("kind", "unit")), map: map);
+
+        var got = await Call("object_get", Args(("map", edited), ("rawcode", "hfoo"), ("kind", "unit")));
+        Assert.True(Prop(got, "found").GetBoolean());
+    }
+
+    [Fact, Covers("object_rename")]
+    public async Task Object_rename_changes_the_rawcode_the_read_tools_confirm()
+    {
+        var map = UnitMap("uhpm", "999");
+        var edited = await Write("object_rename",
+            Args(("old_rawcode", "u000"), ("new_rawcode", "u001"), ("kind", "unit"), ("rewrite_refs", true)),
+            map: map);
+
+        var got = await Call("object_get", Args(("map", edited), ("rawcode", "u001"), ("kind", "unit")));
+        Assert.True(Prop(got, "found").GetBoolean());
+    }
+
     /// <summary>A map holding one custom unit u000 (base hfoo) with a single int field.</summary>
     private string UnitMap(string field, string value)
     {
