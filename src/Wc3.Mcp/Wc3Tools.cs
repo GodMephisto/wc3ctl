@@ -1822,6 +1822,76 @@ public static class Wc3Tools
             return (r.Ok, r.Message);
         }));
 
+    [McpServerTool(Name = "player_set_name", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Set a player's display name (war3map.w3i) and save the edited map to out_path. The input map is NEVER modified in place.")]
+    public static EditToolResult PlayerSetName(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
+        [Description("Player id (0-based).")] int player_id,
+        [Description("New display name.")] string name)
+        => Run(() => SaveEdit(map, out_path, doc =>
+        {
+            var r = PlayerSetNameCommand.Execute(doc, player_id, name);
+            return (r.Ok, r.Message);
+        }));
+
+    [McpServerTool(Name = "player_set_color", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Set a player's team color and save the edited map to out_path. war3map.w3i has no per-player color field, so this rewrites the SetPlayerColor call the map script already carries. The input map is NEVER modified in place.")]
+    public static EditToolResult PlayerSetColor(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
+        [Description("Player id (0-based).")] int player_id,
+        [Description("Team color name, for example red, lightblue or darkgreen.")] string color)
+        => Run(() => SaveEdit(map, out_path, doc =>
+        {
+            var r = PlayerSetColorCommand.Execute(doc, player_id, color);
+            return (r.Ok, r.Message);
+        }));
+
+    [McpServerTool(Name = "player_set_race", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Set a player's race (war3map.w3i) and save the edited map to out_path. Accepted values are human, orc, undead, nightelf and random. The input map is NEVER modified in place.")]
+    public static EditToolResult PlayerSetRace(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
+        [Description("Player id (0-based).")] int player_id,
+        [Description("One of human, orc, undead, nightelf or random.")] string race)
+        => Run(() => SaveEdit(map, out_path, doc =>
+        {
+            var r = PlayerSetRaceCommand.Execute(doc, player_id, race);
+            return (r.Ok, r.Message);
+        }));
+
+    [McpServerTool(Name = "force_rename", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Rename a force (team) in war3map.w3i and save the edited map to out_path. The input map is NEVER modified in place.")]
+    public static EditToolResult ForceRename(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
+        [Description("Force index (0-based).")] int force_index,
+        [Description("New force name.")] string name)
+        => Run(() => SaveEdit(map, out_path, doc =>
+        {
+            var r = ForceRenameCommand.Execute(doc, force_index, name);
+            return (r.Ok, r.Message);
+        }));
+
+    [McpServerTool(Name = "force_set_players", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Add or remove a player from a force (team) in war3map.w3i and save the edited map to out_path. Pass exactly one of add or remove. Adding clears the player from every other force so the masks stay consistent. The input map is NEVER modified in place.")]
+    public static EditToolResult ForceSetPlayers(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
+        [Description("Force index (0-based).")] int force_index,
+        [Description("Add this player id to the force. Pass exactly one of add or remove.")] int? add = null,
+        [Description("Remove this player id from the force. Pass exactly one of add or remove.")] int? remove = null)
+        => Run(() => SaveEdit(map, out_path, doc =>
+        {
+            if ((add is null) == (remove is null))
+                return (false, "pass exactly one of add or remove");
+            var r = add is not null
+                ? ForceSetPlayersCommand.Add(doc, force_index, add.Value)
+                : ForceSetPlayersCommand.Remove(doc, force_index, remove!.Value);
+            return (r.Ok, r.Message);
+        }));
+
     [McpServerTool(Name = "new_map", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Create a blank, World-Editor-openable map (.w3x) at out_path. No input map. Returns where it was written.")]
     public static EditToolResult NewMap(

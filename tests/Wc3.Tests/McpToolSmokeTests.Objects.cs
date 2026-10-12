@@ -1,7 +1,8 @@
 // tests/Wc3.Tests/McpToolSmokeTests.Objects.cs
 // Objects family. object_list, object_get, object_new, object_set, object_search,
 // object_noop_fields, object_deprecated, object_rawcode_suggest, object_clone,
-// player_list, player_set_force, force_list, force_set_flags.
+// player_list, player_set_force, player_set_name, player_set_color, player_set_race,
+// force_list, force_set_flags, force_rename, force_set_players.
 // object_new and object_set open game data when the map references
 // standard objects, so they need a game install directory.
 using System.Text.Json;
@@ -251,6 +252,92 @@ public sealed class McpSmokeObjectsTests : McpSmokeBase
     {
         await CallError("force_set_flags", Args(("map", Fixture), ("out_path", NewOut("fsf")),
             ("force_index", 5), ("allied", true)));
+    }
+
+    [Fact, Covers("player_set_name")]
+    public async Task Player_set_name_changes_the_display_name()
+    {
+        var updated = await Write("player_set_name", Args(("player_id", 0), ("name", "Grom Hellscream")));
+        var players = Rows(await Call("player_list", Args(("map", updated))));
+        var p0 = players.Single(p => Prop(p, "id").GetInt32() == 0);
+        Assert.Equal("Grom Hellscream", Prop(p0, "name").GetString());
+    }
+
+    [Fact, Covers("player_set_name")]
+    public async Task Player_set_name_on_a_missing_player_is_refused()
+    {
+        await CallError("player_set_name", Args(("map", Fixture), ("out_path", NewOut("psn")),
+            ("player_id", 999), ("name", "Nobody")));
+    }
+
+    [Fact, Covers("player_set_race")]
+    public async Task Player_set_race_changes_the_race()
+    {
+        var updated = await Write("player_set_race", Args(("player_id", 0), ("race", "orc")));
+        var players = Rows(await Call("player_list", Args(("map", updated))));
+        var p0 = players.Single(p => Prop(p, "id").GetInt32() == 0);
+        Assert.Equal("Orc", Prop(p0, "race").GetString());
+    }
+
+    [Fact, Covers("player_set_race")]
+    public async Task Player_set_race_on_an_unknown_race_is_refused()
+    {
+        await CallError("player_set_race", Args(("map", Fixture), ("out_path", NewOut("psr")),
+            ("player_id", 0), ("race", "dragon")));
+    }
+
+    [Fact, Covers("player_set_color")]
+    public async Task Player_set_color_rewrites_the_script_color_call()
+    {
+        // war3map.w3i has no color field, so the edit lands in the script's SetPlayerColor call.
+        var updated = await Write("player_set_color", Args(("player_id", 0), ("color", "blue")));
+        var text = Prop(await Call("file_get_text",
+            Args(("map", updated), ("internal_path", "war3map.j"))), "text").GetString();
+        Assert.Contains("SetPlayerColor( Player(0), ConvertPlayerColor(1) )", text);
+    }
+
+    [Fact, Covers("player_set_color")]
+    public async Task Player_set_color_on_an_unknown_color_is_refused()
+    {
+        await CallError("player_set_color", Args(("map", Fixture), ("out_path", NewOut("psc")),
+            ("player_id", 0), ("color", "chartreuse")));
+    }
+
+    [Fact, Covers("force_rename")]
+    public async Task Force_rename_changes_the_force_name()
+    {
+        var updated = await Write("force_rename", Args(("force_index", 0), ("name", "The Horde")));
+        var forces = Rows(await Call("force_list", Args(("map", updated))));
+        Assert.Equal("The Horde", Prop(forces[0], "name").GetString());
+    }
+
+    [Fact, Covers("force_rename")]
+    public async Task Force_rename_on_a_missing_force_is_refused()
+    {
+        await CallError("force_rename", Args(("map", Fixture), ("out_path", NewOut("frn")),
+            ("force_index", 9), ("name", "Nope")));
+    }
+
+    [Fact, Covers("force_set_players")]
+    public async Task Force_set_players_remove_then_add_round_trips_through_force_list()
+    {
+        // A blank map puts every slot in force 0, so remove slot 0 and put it back.
+        var removed = await Write("force_set_players", Args(("force_index", 0), ("remove", 0)));
+        var afterRemove = Rows(await Call("force_list", Args(("map", removed))));
+        var pids = Prop(afterRemove[0], "playerIds").EnumerateArray().Select(e => e.GetInt32()).ToList();
+        Assert.DoesNotContain(0, pids);
+
+        var added = await Write("force_set_players", Args(("force_index", 0), ("add", 0)), removed);
+        var afterAdd = Rows(await Call("force_list", Args(("map", added))));
+        var pids2 = Prop(afterAdd[0], "playerIds").EnumerateArray().Select(e => e.GetInt32()).ToList();
+        Assert.Contains(0, pids2);
+    }
+
+    [Fact, Covers("force_set_players")]
+    public async Task Force_set_players_needs_exactly_one_of_add_or_remove()
+    {
+        await CallError("force_set_players", Args(("map", Fixture), ("out_path", NewOut("fsp")),
+            ("force_index", 0)));
     }
 
     [Fact, Covers("object_search")]
