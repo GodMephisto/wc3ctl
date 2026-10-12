@@ -3218,9 +3218,9 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         var modelOptimizeRatio = new Option<float>("--ratio", () => 0.5f,
             "Target fraction of faces to keep, between 0 and 1.");
         var modelOptimize = new Command("optimize",
-            "Decimate a model's geometry with the quadric error metric and write a smaller MDX, "
-            + "leaving materials, textures, sequences and bones byte for byte. Reports the before "
-            + "and after vertex and face counts.")
+            "Decimate a model's geometry with the quadric error metric, drop zero-area faces and "
+            + "duplicate textures, and write a smaller MDX, leaving the other chunks byte for byte. "
+            + "Reports the before and after vertex and face counts.")
             { modelOptimizePath, modelOptimizeOut, modelOptimizeRatio, jsonOption };
         modelOptimize.SetHandler(
             (string modelPath, string outPath, float ratio, bool json) => RunSafely(() =>

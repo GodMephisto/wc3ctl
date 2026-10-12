@@ -437,7 +437,7 @@ public static class Wc3Tools
         => Run(() => ModelAuditCommand.ExecutePath(model));
 
     [McpServerTool(Name = "model_optimize", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
-    [Description("Decimate a .mdx or .mdl model's geometry with the quadric error metric and write a smaller MDX at out_path, leaving materials, textures, sequences and bones untouched. ratio is the target fraction of faces to keep. Returns the before and after vertex and face counts. The input is never modified.")]
+    [Description("Decimate a .mdx or .mdl model's geometry with the quadric error metric, drop zero-area faces and duplicate textures, and write a smaller MDX at out_path, leaving the other chunks untouched. ratio is the target fraction of faces to keep. Returns the before and after vertex and face counts. The input is never modified.")]
     public static ModelOptimizeResult ModelOptimize(
         [Description("Path to a .mdx or .mdl model file.")] string model,
         [Description("Output .mdx path. The input is never modified.")] string out_path,

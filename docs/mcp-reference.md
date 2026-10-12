@@ -528,7 +528,7 @@ Annotations. read-only no, destructive no, idempotent yes, open-world no.
 
 ## model_optimize
 
-Decimate a .mdx or .mdl model's geometry with the quadric error metric and write a smaller MDX at out_path, leaving materials, textures, sequences and bones untouched. ratio is the target fraction of faces to keep. Returns the before and after vertex and face counts. The input is never modified.
+Decimate a .mdx or .mdl model's geometry with the quadric error metric, drop zero-area faces and duplicate textures, and write a smaller MDX at out_path, leaving the other chunks untouched. ratio is the target fraction of faces to keep. Returns the before and after vertex and face counts. The input is never modified.
 
 Annotations. read-only no, destructive no, idempotent yes, open-world no.
 

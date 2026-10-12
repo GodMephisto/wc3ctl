@@ -424,7 +424,7 @@ Subcommands
 
 - `export-obj`. Export a map-imported model to Wavefront OBJ, with an MTL and any map-resolvable textures converted to PNG beside it.
 - `audit`. Audit a model for the resource waste and draw-nothing problems the optimiser can remove, and report what it holds, its geosets, vertices, faces, textures, sequences and nodes.
-- `optimize`. Decimate a model's geometry with the quadric error metric and write a smaller MDX, leaving materials, textures, sequences and bones byte for byte. Reports the before and after vertex and face counts.
+- `optimize`. Decimate a model's geometry with the quadric error metric, drop zero-area faces and duplicate textures, and write a smaller MDX, leaving the other chunks byte for byte. Reports the before and after vertex and face counts.
 
 ### model export-obj
 
@@ -461,7 +461,7 @@ Arguments
 
 ### model optimize
 
-Decimate a model's geometry with the quadric error metric and write a smaller MDX, leaving materials, textures, sequences and bones byte for byte. Reports the before and after vertex and face counts.
+Decimate a model's geometry with the quadric error metric, drop zero-area faces and duplicate textures, and write a smaller MDX, leaving the other chunks byte for byte. Reports the before and after vertex and face counts.
 
 Usage
 
