@@ -1450,12 +1450,18 @@ public static class Program
             "Move the lists and write the adder into the script. Without it, only the counts are shown.");
         var repairUabi = new Command("uabi-runtime",
             "Move each unit type's normal ability list (uabi) out of the object data and add the same "
-            + "abilities by script the moment each unit is created. Hero abilities and morph targets "
-            + "stay. Reported fix for disconnects on maps with thousands of distinct uabi ids.");
+            + "abilities by script the moment each unit is created. Hero abilities, morph targets and "
+            + "dummy units (Locust) stay whole, and Locust, Invulnerable and inventory abilities stay in "
+            + "every list. Reported fix for disconnects on maps with thousands of distinct uabi ids.");
         var uabiIds = new Option<string[]>("--ids",
             "Move only these ability ids, comma or space separated, and leave every other uabi entry in place.")
         { AllowMultipleArgumentsPerToken = true };
         repairUabi.AddOption(uabiIds);
+        var uabiKeepShared = new Option<int>("--keep-shared",
+            "Also keep in the data every ability id that at least this many unit types list. Shared ids barely "
+            + "raise the distinct count, and moving them costs a runtime add on every unit. 0 keeps only the "
+            + "fixed list (Locust, Invulnerable, inventories).");
+        repairUabi.AddOption(uabiKeepShared);
         repairUabi.AddArgument(mapArg); repairUabi.AddOption(uabiApply); repairUabi.AddOption(setOut);
         repairUabi.SetHandler(ctx => RunSafely(() =>
         {
@@ -1466,7 +1472,7 @@ public static class Program
             bool apply = p.GetValueForOption(uabiApply);
             var ids = (p.GetValueForOption(uabiIds) ?? Array.Empty<string>())
                 .SelectMany(v => v.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)).ToList();
-            var r = UabiRuntimeRepairCommand.Execute(doc, apply, ids);
+            var r = UabiRuntimeRepairCommand.Execute(doc, apply, ids, p.GetValueForOption(uabiKeepShared));
             if (!apply || !r.Ok || r.UnitTypesMoved == 0)
             {
                 Emit(json, r, () => Render.UabiRuntime(r));
