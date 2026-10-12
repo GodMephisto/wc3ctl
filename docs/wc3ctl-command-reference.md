@@ -2,7 +2,7 @@
 
 Generated from the live command tree by `wc3ctl docs cli`. Do not edit by hand. Regenerate with `wc3ctl docs cli --force`, and the CI guard fails when this file is stale.
 
-The tree holds 58 top level verb(s) and 282 command path(s) in total.
+The tree holds 61 top level verb(s) and 286 command path(s) in total.
 
 ## Global options
 
@@ -5013,6 +5013,68 @@ Usage
 ```
 wc3ctl target clear
 ```
+
+## version
+
+Print the product version, the git short hash and build time stamped into this build, and the MCP server name and version. With --set, write a new version into Directory.Build.props. Read-only unless --set is given.
+
+Usage
+
+```
+wc3ctl version [options]
+```
+
+Options
+
+- `--set <set>`. Write this x.y.z version into Directory.Build.props instead of reporting the current one.
+
+## changelog
+
+Generate release notes from git log between two refs, grouped by Conventional Commit type (feat, fix, perf, docs, chore and the rest), a heading per group with its subjects under it. Read-only over git.
+
+Usage
+
+```
+wc3ctl changelog [options]
+```
+
+Options
+
+- `--from <from>`. Git ref to start after. Default, the most recent tag reachable from the end ref.
+- `--to <to>`. Git ref to end at. Default, HEAD.
+- `-o, --out <out>` (required). Path to write the release notes markdown to.
+
+## export
+
+Export tooling for the public wc3-mcp repository.
+
+Usage
+
+```
+wc3ctl export
+```
+
+Subcommands
+
+- `verify`. Verify a wc3-mcp checkout holds the same server source this repository would export, reporting every file that differs. Writes nothing.
+
+### export verify
+
+Verify a wc3-mcp checkout holds the same server source this repository would export, reporting every file that differs. Writes nothing.
+
+Usage
+
+```
+wc3ctl export verify <path> [options]
+```
+
+Arguments
+
+- `<path>` (required). Path to the wc3-mcp checkout to check.
+
+Options
+
+- `--source <source>`. wc3ctl repository directory. Default, the located repository.
 
 ## docs
 

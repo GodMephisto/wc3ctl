@@ -2,7 +2,7 @@
 
 Generated from the live tool surface by `wc3ctl docs mcp`. Do not edit by hand. Regenerate with `wc3ctl docs mcp --force`, and the CI guard fails when this file is stale.
 
-The server exposes 209 tool(s).
+The server exposes 212 tool(s).
 
 ## asset_audit
 
@@ -177,6 +177,12 @@ Annotations. read-only no, destructive no, idempotent no, open-world no.
 Add N cameras interpolated between two existing cameras as a smooth tour path, and save the edited map to out_path. Every float field is blended linearly and the generated cameras sit strictly between the endpoints, named <from>-tour-i. The input map is NEVER modified in place.
 
 Annotations. read-only no, destructive no, idempotent no, open-world no.
+
+## changelog
+
+Generate release notes from git log between two refs, grouped by Conventional Commit type (feat, fix, perf, docs, chore and the rest), a heading per group with its subjects under it. Read-only over git.
+
+Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 
 ## compat_explain
 
@@ -433,6 +439,12 @@ Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 ## mcp_audit_annotations
 
 Audit the MCP tool surface itself. Reports every tool whose annotations disagree with its name (a mutating name marked read-only) and every tool that declares no annotations, as a list of problems plus a count. An empty list means the surface is clean. Read-only.
+
+Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
+## mcp_export_verify
+
+Verify that a wc3-mcp checkout holds the same server source scripts/export-wc3-mcp.py would export from this repository, reporting every file that differs without writing. Read-only.
 
 Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 
@@ -1255,6 +1267,12 @@ Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 ## validate_strict
 
 A stricter validate. Runs the default checks and adds three that are too strict to be a default, a map with no (listfile), a script that declares no entry point function, and a placement whose type neither the map nor the installed game defines. The undefined-type check needs the installed game and reports a diagnostic rather than a clean result when it cannot run. The default validate is unchanged.
+
+Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
+## version_info
+
+Report the product version, the git short hash and UTC build time stamped into this build, and the name and version of the MCP server it carries. Read-only.
 
 Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 

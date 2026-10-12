@@ -5557,6 +5557,98 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         });
         target.AddCommand(targetClear);
         root.AddCommand(target);
+
+        // ---- version: what this build is, and the one command that bumps it ----
+        var versionSet = new Option<string?>("--set",
+            "Write this x.y.z version into Directory.Build.props instead of reporting the current one.");
+        var versionProps = new Option<string?>("--props",
+            "Path to Directory.Build.props. Default, the repository file.") { IsHidden = true };
+        var version = new Command("version",
+            "Print the product version, the git short hash and build time stamped into this build, "
+            + "and the MCP server name and version. With --set, write a new version into "
+            + "Directory.Build.props. Read-only unless --set is given.")
+        { versionSet, versionProps };
+        version.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            bool json = p.GetValueForOption(jsonOption);
+            string? set = p.GetValueForOption(versionSet);
+            if (set is not null)
+            {
+                string? props = p.GetValueForOption(versionProps) ?? RepoLayout.FindBuildProps();
+                if (props is null)
+                {
+                    const string noProps = "could not locate Directory.Build.props, pass --props <path>";
+                    Emit(json, new { Ok = false, Message = noProps }, () => noProps);
+                    exitCode[0] = 1;
+                    return;
+                }
+                var written = VersionSetCommand.Execute(props, set);
+                Emit(json, written, () => written.Message);
+                if (!written.Ok) exitCode[0] = 1;
+                return;
+            }
+            var info = ReleaseVersionCommand.Read(typeof(Program).Assembly,
+                Wc3.Mcp.ServerIdentity.ServerName, Wc3.Mcp.ServerIdentity.Version);
+            Emit(json, info, () => Render.ReleaseVersion(info));
+        }));
+        root.AddCommand(version);
+
+        // ---- changelog: release notes from git log, grouped by Conventional Commit type ----
+        var changelogFrom = new Option<string?>("--from",
+            "Git ref to start after. Default, the most recent tag reachable from the end ref.");
+        var changelogTo = new Option<string?>("--to", "Git ref to end at. Default, HEAD.");
+        var changelogRepo = new Option<string?>("--repo",
+            "Repository directory. Default, the located repository.") { IsHidden = true };
+        var changelogOut = new Option<string>(new[] { "-o", "--out" },
+            "Path to write the release notes markdown to.") { IsRequired = true };
+        var changelog = new Command("changelog",
+            "Generate release notes from git log between two refs, grouped by Conventional Commit "
+            + "type (feat, fix, perf, docs, chore and the rest), a heading per group with its subjects "
+            + "under it. Read-only over git.")
+        { changelogFrom, changelogTo, changelogRepo, changelogOut };
+        changelog.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string repo = p.GetValueForOption(changelogRepo)
+                ?? RepoLayout.FindRoot() ?? Directory.GetCurrentDirectory();
+            var r = ChangelogCommand.Execute(repo,
+                p.GetValueForOption(changelogFrom), p.GetValueForOption(changelogTo));
+            if (!r.Ok)
+            {
+                Emit(p.GetValueForOption(jsonOption), r, () => r.Message ?? "changelog failed");
+                exitCode[0] = 1;
+                return;
+            }
+            string outPath = p.GetValueForOption(changelogOut)!;
+            if (Path.GetDirectoryName(Path.GetFullPath(outPath)) is { Length: > 0 } dir)
+                Directory.CreateDirectory(dir);
+            File.WriteAllText(outPath, r.Markdown);
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.Changelog(r, outPath));
+        }));
+        root.AddCommand(changelog);
+
+        // ---- export: keep the public wc3-mcp checkout in step with this repository ----
+        var exportTarget = new Argument<string>("path", "Path to the wc3-mcp checkout to check.");
+        var exportSource = new Option<string?>("--source",
+            "wc3ctl repository directory. Default, the located repository.");
+        var export = new Command("export", "Export tooling for the public wc3-mcp repository.");
+        var exportVerify = new Command("verify",
+            "Verify a wc3-mcp checkout holds the same server source this repository would export, "
+            + "reporting every file that differs. Writes nothing.")
+        { exportTarget, exportSource };
+        exportVerify.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string source = p.GetValueForOption(exportSource)
+                ?? RepoLayout.FindRoot() ?? Directory.GetCurrentDirectory();
+            var r = McpExportVerifyCommand.Execute(source, p.GetValueForArgument(exportTarget));
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.McpExportVerify(r));
+            if (!r.InStep) exitCode[0] = 1;
+        }));
+        export.AddCommand(exportVerify);
+        root.AddCommand(export);
+
         root.AddCommand(DocsCommand.Build());
         return root;
     }

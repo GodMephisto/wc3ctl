@@ -51,6 +51,29 @@ public static class Wc3Tools
     public static McpAnnotationAuditResult McpAuditAnnotations()
         => Run(() => McpToolAudit.InspectServer());
 
+    [McpServerTool(Name = "version_info", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Report the product version, the git short hash and UTC build time stamped into this build, and the name and version of the MCP server it carries. Read-only.")]
+    public static ReleaseVersion VersionInfo()
+        => Run(() => ReleaseVersionCommand.Read(typeof(Wc3Tools).Assembly,
+            ServerIdentity.ServerName, ServerIdentity.Version));
+
+    [McpServerTool(Name = "changelog", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Generate release notes from git log between two refs, grouped by Conventional Commit type (feat, fix, perf, docs, chore and the rest), a heading per group with its subjects under it. Read-only over git.")]
+    public static ChangelogResult Changelog(
+        [Description("Git ref to start after. Omit for the most recent tag reachable from the end ref.")] string? from_ref = null,
+        [Description("Git ref to end at. Omit for HEAD.")] string? to_ref = null,
+        [Description("Repository directory. Omit to locate the wc3ctl repository.")] string? repo_dir = null)
+        => Run(() => ChangelogCommand.Execute(
+            repo_dir ?? RepoLayout.FindRoot() ?? Directory.GetCurrentDirectory(), from_ref, to_ref));
+
+    [McpServerTool(Name = "mcp_export_verify", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Verify that a wc3-mcp checkout holds the same server source scripts/export-wc3-mcp.py would export from this repository, reporting every file that differs without writing. Read-only.")]
+    public static McpExportVerifyResult McpExportVerify(
+        [Description("Path to the wc3-mcp checkout to check.")] string target_dir,
+        [Description("Source repository directory. Omit to locate the wc3ctl repository.")] string? source_dir = null)
+        => Run(() => McpExportVerifyCommand.Execute(
+            source_dir ?? RepoLayout.FindRoot() ?? Directory.GetCurrentDirectory(), target_dir));
+
     [McpServerTool(Name = "script_leaks", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Find handle leaks in a map's war3map.j (locations, groups, forces, effects, timers, "
         + "text tags, lightning and triggers created and never destroyed), each ranked by how often "
