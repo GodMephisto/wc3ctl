@@ -831,9 +831,11 @@ public static class Program
         }));
 
         var bundle = new Command("bundle", "Dependency bundles for porting between maps.");
+        var bundleOut = new Option<string?>(new[] { "-o", "--out" },
+            "Write the resolved bundle to this JSON file, so 'bundle diff' and 'bundle merge' can read it.");
         var bundleUnit = new Command("unit",
             "Resolve everything a unit depends on: objects, asset files and trigger strings.")
-        { mapArg, objRawcode };
+        { mapArg, objRawcode, bundleOut };
         bundleUnit.SetHandler(ctx => RunSafely(() =>
         {
             var p = ctx.ParseResult;
@@ -841,7 +843,12 @@ public static class Program
                 MapDocument.Load(p.GetValueForArgument(mapArg)),
                 p.GetValueForArgument(objRawcode),
                 p.GetValueForOption(gameDirOption));
-            Emit(p.GetValueForOption(jsonOption), r, () => Render.BundleUnit(r));
+            if (p.GetValueForOption(bundleOut) is { } outPath)
+            {
+                BundleJson.Save(r, outPath);
+                Console.WriteLine($"Wrote bundle to {outPath}");
+            }
+            else Emit(p.GetValueForOption(jsonOption), r, () => Render.BundleUnit(r));
         }));
         bundle.AddCommand(bundleUnit);
 
@@ -849,7 +856,7 @@ public static class Program
             "Root object type: unit|item|ability|destructable|doodad|buff|upgrade.");
         var bundleObject = new Command("object",
             "Resolve everything an object of any kind depends on ('bundle unit', generalized).")
-        { mapArg, objRawcode, bundleObjKind };
+        { mapArg, objRawcode, bundleObjKind, bundleOut };
         bundleObject.SetHandler(ctx => RunSafely(() =>
         {
             var p = ctx.ParseResult;
@@ -858,9 +865,52 @@ public static class Program
                 ObjectKinds.Parse(p.GetValueForOption(bundleObjKind)!),
                 p.GetValueForArgument(objRawcode),
                 p.GetValueForOption(gameDirOption));
-            Emit(p.GetValueForOption(jsonOption), r, () => Render.BundleUnit(r));
+            if (p.GetValueForOption(bundleOut) is { } outPath)
+            {
+                BundleJson.Save(r, outPath);
+                Console.WriteLine($"Wrote bundle to {outPath}");
+            }
+            else Emit(p.GetValueForOption(jsonOption), r, () => Render.BundleUnit(r));
         }));
         bundle.AddCommand(bundleObject);
+
+        var bundleA = new Argument<string>("bundle-a", "Path to a bundle JSON file (from 'bundle unit -o').");
+        var bundleB = new Argument<string>("bundle-b", "Path to a second bundle JSON file.");
+        var bundleDiff = new Command("diff",
+            "Compare two dependency bundles by their object and asset members, listing what each adds.")
+        { bundleA, bundleB };
+        bundleDiff.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = BundleDiffCommand.Execute(
+                BundleJson.Load(p.GetValueForArgument(bundleA)),
+                BundleJson.Load(p.GetValueForArgument(bundleB)));
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.BundleDiff(r));
+        }));
+        bundle.AddCommand(bundleDiff);
+
+        var bundleMergeOut = new Option<string?>(new[] { "-o", "--out" },
+            "Path to write the merged bundle JSON.");
+        var bundleMerge = new Command("merge",
+            "Merge two dependency bundles into one, refusing when the same rawcode is defined differently.")
+        { bundleA, bundleB, bundleMergeOut };
+        bundleMerge.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = BundleMergeCommand.Execute(
+                BundleJson.Load(p.GetValueForArgument(bundleA)),
+                BundleJson.Load(p.GetValueForArgument(bundleB)));
+            string? outPath = null;
+            if (r.Ok)
+            {
+                outPath = p.GetValueForOption(bundleMergeOut) ?? throw new ArgumentException(
+                    "-o <out> is required to write the merged bundle");
+                BundleJson.Save(r.Merged!, outPath);
+            }
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.BundleMerge(r, outPath));
+            if (!r.Ok) exitCode[0] = 1;
+        }));
+        bundle.AddCommand(bundleMerge);
 
 
         // Loops that may never terminate. A JASS loop that cannot exit presents as a tight native
@@ -1317,6 +1367,74 @@ public static class Program
             }
         }));
         port.AddCommand(portUnit);
+
+        var portDepsKind = new Option<string>("--kind", () => "unit",
+            "Root object type: unit|item|ability|destructable|doodad|buff|upgrade.");
+        var portDeps = new Command("deps",
+            "Report the full dependency closure of a rawcode, its objects grouped by kind, its "
+            + "assets with sizes, its display strings and its script functions.")
+        { mapArg, objRawcode, portDepsKind };
+        portDeps.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = PortDepsCommand.Execute(
+                MapDocument.Load(p.GetValueForArgument(mapArg)),
+                p.GetValueForArgument(objRawcode),
+                ObjectKinds.Parse(p.GetValueForOption(portDepsKind)!),
+                p.GetValueForOption(gameDirOption));
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.PortDeps(r));
+        }));
+        port.AddCommand(portDeps);
+
+        var previewRawcode = new Argument<string>("rawcode", "Four-character unit rawcode to preview.");
+        var portPreview = new Command("preview",
+            "Dry run, listing exactly what a port of the rawcode into the target would add or change, "
+            + "writing nothing. Same code path as 'port unit', so the two cannot drift.")
+        { portSource, previewRawcode, portTarget, noScriptOption };
+        portPreview.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = PortPreviewCommand.Execute(
+                MapDocument.Load(p.GetValueForArgument(portSource)),
+                p.GetValueForArgument(previewRawcode),
+                MapDocument.Load(p.GetValueForArgument(portTarget)),
+                p.GetValueForOption(gameDirOption),
+                includeScript: !p.GetValueForOption(noScriptOption));
+            // No path, so the shared footer prints DRY RUN rather than a Saved line.
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.Port(r, null));
+        }));
+        port.AddCommand(portPreview);
+
+        var intoTarget = new Option<string>("--target",
+            "Target build name or schema folder path.") { IsRequired = true };
+        var intoSchemas = new Option<string?>("--schemas",
+            "Schemas directory, when --target is a build name rather than a folder.");
+        var portIntoVersion = new Command("into-version",
+            "Port a unit, then downgrade the result to a target build's schema. Object fields the "
+            + "build does not declare are removed, and script identifiers it lacks are flagged. "
+            + "Writes a copy, never in place.")
+        { portSource, previewRawcode, portTarget, intoTarget, intoSchemas, outOption, noScriptOption };
+        portIntoVersion.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string sourcePath = p.GetValueForArgument(portSource);
+            string targetPath = p.GetValueForArgument(portTarget);
+            string outPath = p.GetValueForOption(outOption)
+                ?? Path.Combine(Path.GetDirectoryName(Path.GetFullPath(targetPath)) ?? ".",
+                    Path.GetFileNameWithoutExtension(targetPath) + ".ported" + Path.GetExtension(targetPath));
+            if (string.Equals(Path.GetFullPath(outPath), Path.GetFullPath(targetPath), StringComparison.OrdinalIgnoreCase)
+                || string.Equals(Path.GetFullPath(outPath), Path.GetFullPath(sourcePath), StringComparison.OrdinalIgnoreCase))
+                throw new ArgumentException("out path must not be the source or target map itself");
+
+            var target = MapDocument.Load(targetPath);
+            var r = PortIntoVersionCommand.Execute(
+                MapDocument.Load(sourcePath), p.GetValueForArgument(previewRawcode), target,
+                p.GetValueForOption(intoTarget)!, p.GetValueForOption(intoSchemas),
+                p.GetValueForOption(gameDirOption), includeScript: !p.GetValueForOption(noScriptOption));
+            target.Save(outPath);
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.PortIntoVersion(r, outPath));
+        }));
+        port.AddCommand(portIntoVersion);
 
         var auditHeroArg = new Argument<string?>("hero", () => null,
             "Hero rawcode to audit. Omit to audit every hero placed on the map.");

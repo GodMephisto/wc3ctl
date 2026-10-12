@@ -777,6 +777,87 @@ public static class Wc3Tools
             return new PortUnitToolResult(outPath, report);
         });
 
+    [McpServerTool(Name = "port_deps", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Report the full dependency closure of a rawcode, its objects grouped by kind, its assets with their byte sizes, its display strings and its script functions. The readable shape of a dependency bundle, before porting it.")]
+    public static PortDepsResult PortDeps(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Four-character object rawcode, e.g. 'H000'.")] string rawcode,
+        [Description("Root object kind: unit|item|ability|destructable|doodad|buff|upgrade. Default unit.")] string? kind = null,
+        [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var).")] string? game_dir = null)
+        => Run(() => PortDepsCommand.Execute(LoadMap(map), rawcode,
+            kind is null ? ObjectKind.Unit : ParseKind(kind), ResolveGameDir(game_dir)));
+
+    [McpServerTool(Name = "port_preview", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Dry run, listing exactly what a port of the rawcode into the target map would add or change, writing nothing. Same code path as port_unit, so the preview and the port cannot drift.")]
+    public static PortResult PortPreview(
+        [Description("Map to port FROM (.w3x/.w3m). Read-only.")] string source_map,
+        [Description("Four-character rawcode of the unit to preview, e.g. 'H000'.")] string rawcode,
+        [Description("Map to port INTO (.w3x/.w3m). Read-only - nothing is written.")] string target_map,
+        [Description("Also report the JASS trigger-function closure that would be carried. Default true.")] bool include_script = true,
+        [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var).")] string? game_dir = null)
+        => Run(() => PortPreviewCommand.Execute(
+            LoadMap(source_map), rawcode, LoadMap(target_map), ResolveGameDir(game_dir), include_script));
+
+    [McpServerTool(Name = "port_into_version", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Port a unit, then downgrade the result to a target build's schema. Object fields the build does not declare are removed and script identifiers it lacks are flagged. Writes a NEW file at out_path - the source and target maps are NEVER modified.")]
+    public static PortIntoVersionToolResult PortIntoVersion(
+        [Description("Map to port FROM (.w3x/.w3m). Read-only.")] string source_map,
+        [Description("Four-character rawcode of the unit to port, e.g. 'H000'.")] string rawcode,
+        [Description("Map to port INTO (.w3x/.w3m). Read-only - the result is saved to out_path.")] string target_map,
+        [Description("Target build name or schema folder path.")] string target,
+        [Description("Path to write the downgraded map. Must differ from the source and target maps.")] string out_path,
+        [Description("Schemas directory, when target is a build name rather than a folder path.")] string? schemas_dir = null,
+        [Description("Also carry the unit's JASS trigger-function closure before downgrading. Default true.")] bool include_script = true,
+        [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var).")] string? game_dir = null)
+        => Run(() =>
+        {
+            string full = ResolveOutPath(target_map, out_path);
+            if (string.Equals(full, Path.GetFullPath(source_map), StringComparison.OrdinalIgnoreCase))
+                throw new McpException("out_path must not be the source map file itself");
+            var targetDoc = LoadMap(target_map);
+            var report = PortIntoVersionCommand.Execute(
+                LoadMap(source_map), rawcode, targetDoc, target, schemas_dir,
+                ResolveGameDir(game_dir), include_script);
+            if (Path.GetDirectoryName(full) is { Length: > 0 } dir) Directory.CreateDirectory(dir);
+            targetDoc.Save(full);
+            return new PortIntoVersionToolResult(full, report);
+        });
+
+    [McpServerTool(Name = "bundle_diff", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Compare two dependency bundles (the JSON written by 'bundle unit -o') by their object and asset members, listing what each adds, removes or renames.")]
+    public static BundleDiffResult BundleDiff(
+        [Description("Path to the first bundle JSON file.")] string bundle_a,
+        [Description("Path to the second bundle JSON file.")] string bundle_b)
+        => Run(() => BundleDiffCommand.Execute(LoadBundle(bundle_a), LoadBundle(bundle_b)));
+
+    [McpServerTool(Name = "bundle_merge", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Merge two dependency bundles into one, written as JSON at out_path. Refuses when the same rawcode is defined differently in the two bundles (a different kind, custom-vs-base, or a contradicting name).")]
+    public static BundleMergeToolResult BundleMerge(
+        [Description("Path to the first bundle JSON file.")] string bundle_a,
+        [Description("Path to the second bundle JSON file.")] string bundle_b,
+        [Description("Path to write the merged bundle JSON.")] string out_path)
+        => Run(() =>
+        {
+            if (string.IsNullOrWhiteSpace(out_path)) throw new McpException("out_path is required");
+            var result = BundleMergeCommand.Execute(LoadBundle(bundle_a), LoadBundle(bundle_b));
+            if (!result.Ok)
+                throw new McpException(result.Message + " " + string.Join("; ",
+                    result.Conflicts.Select(c => $"{c.Rawcode} {c.Detail}")));
+            string full = Path.GetFullPath(out_path);
+            if (Path.GetDirectoryName(full) is { Length: > 0 } dir) Directory.CreateDirectory(dir);
+            BundleJson.Save(result.Merged!, full);
+            return new BundleMergeToolResult(full, result);
+        });
+
+    /// <summary>Read a bundle JSON file, surfacing a clean MCP error when it cannot be read.</summary>
+    private static UnitBundle LoadBundle(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) throw new McpException("bundle path is required");
+        if (!File.Exists(path)) throw new McpException($"bundle not found: {path}");
+        try { return BundleJson.Load(path); }
+        catch (Exception ex) { throw new McpException($"could not read bundle '{path}': {ex.Message}"); }
+    }
+
     // ---- audits (diagnostics over data already in the map) ---------------
 
     [McpServerTool(Name = "audit_hero", ReadOnly = true, Idempotent = true, OpenWorld = false)]
@@ -2085,6 +2166,12 @@ public sealed record RenderModelToolResult(string SavedTo, int SizeBytes, bool I
 
 /// <summary>port_unit outcome: where the new .ported map was written plus the full port report.</summary>
 public sealed record PortUnitToolResult(string SavedTo, PortResult Report);
+
+/// <summary>port_into_version outcome: where the downgraded map was written plus the report.</summary>
+public sealed record PortIntoVersionToolResult(string SavedTo, PortIntoVersionResult Report);
+
+/// <summary>bundle_merge outcome: where the merged bundle was written plus the merge result.</summary>
+public sealed record BundleMergeToolResult(string SavedTo, BundleMergeResult Merge);
 
 /// <summary>place_doodad / place_region outcome: where the edited map was written, a
 /// human-readable message, and the creation number assigned to the new instance.</summary>

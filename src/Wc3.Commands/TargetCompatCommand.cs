@@ -548,6 +548,14 @@ public static class TargetCompatCommand
         return found.Select(kv => (kv.Key, kv.Value.FirstLine, kv.Value.Count)).ToList();
     }
 
+    /// <summary>
+    /// Identifiers a JASS source uses but does not itself declare, skipping keywords and numeric
+    /// literals. The same scanner the compat check runs, exposed so a caller that holds a source
+    /// (the into-version downgrade) judges identifiers exactly as the compat check does.
+    /// </summary>
+    internal static IReadOnlyList<(string Name, int FirstLine, int Count)> UsedIdentifiers(string source) =>
+        CollectAllIdentifiers(source, JassApiIndex.Parse(source));
+
     /// <summary>Strip comments (// style) and string literals from a single line.</summary>
     private static string StripCommentAndStrings(string line)
     {
