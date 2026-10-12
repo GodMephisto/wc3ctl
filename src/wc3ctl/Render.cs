@@ -159,6 +159,90 @@ public static class Render
         return sb.ToString();
     }
 
+    public static string ReplayPlayers(ReplayPlayersReport r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{"slot",4}  {"name",-22}  {"team",4}  {"race",10}  {"result",-12}  "
+            + $"{"left",8}  reason");
+        foreach (var p in r.Players)
+            sb.AppendLine($"{p.Slot,4}  {Short(p.Name,22),-22}  {Num(p.Team),4}  {Short(p.Race,10),-10}  "
+                + $"{Short(p.LeaveMeaning,12),-12}  {Clock(p.LeftAt),8}  {Num(p.LeaveReason)}");
+        if (r.Problem is not null) sb.AppendLine("note " + r.Problem);
+        return sb.ToString();
+    }
+
+    public static string ReplayTimeline(ReplayTimelineReport r)
+    {
+        var sb = new StringBuilder();
+        foreach (var e in r.Events)
+        {
+            string who = e.PlayerId is { } id ? $"{id} {e.Name}" : string.Empty;
+            sb.AppendLine($"{e.At:mm\\:ss}  {e.Kind,-10}  {who,-24}  {e.Text}");
+        }
+        if (r.Problem is not null) sb.AppendLine("note " + r.Problem);
+        return sb.ToString();
+    }
+
+    public static string ReplayDiff(ReplayDiffReport r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"A  {Path.GetFileName(r.FileA)}  {Leaf(r.MapA)}");
+        sb.AppendLine($"B  {Path.GetFileName(r.FileB)}  {Leaf(r.MapB)}");
+        sb.AppendLine($"same map {(r.SameMap ? "yes" : "no")}   length A {r.LengthA:mm\\:ss}  "
+            + $"B {r.LengthB:mm\\:ss}  delta {r.LengthDelta:mm\\:ss}");
+        sb.AppendLine();
+        sb.AppendLine($"{"slot",4}  {"name",-22}  {"A left",8}  {"B left",8}  {"delta",8}");
+        foreach (var d in r.LeaveDeltas)
+            sb.AppendLine($"{d.PlayerId,4}  {Short(d.Name,22),-22}  {Clock(d.AtA),8}  "
+                + $"{Clock(d.AtB),8}  {Clock(d.Delta),8}");
+        if (r.ProblemA is not null) sb.AppendLine("note A " + r.ProblemA);
+        if (r.ProblemB is not null) sb.AppendLine("note B " + r.ProblemB);
+        return sb.ToString();
+    }
+
+    public static string ReplayFindMap(ReplayFindMapReport r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"recorded  {r.RecordedMap ?? "(none)"}");
+        sb.AppendLine($"cleaned   {r.CleanMapPath ?? "(none)"}");
+        sb.AppendLine($"folder    {r.MapsFolder}");
+        sb.AppendLine(r.Found ? $"found     {r.ResolvedPath}" : "found     no");
+        foreach (var c in r.Candidates) sb.AppendLine($"  candidate {c}");
+        if (r.Problem is not null) sb.AppendLine("note " + r.Problem);
+        return sb.ToString();
+    }
+
+    public static string ReplayStats(ReplayStatsReport r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"duration {r.Duration:mm\\:ss}   players {r.PlayerCount}   disconnects {r.Disconnects}");
+        if (r.ActionsAvailable)
+        {
+            sb.AppendLine($"{"slot",4}  {"name",-22}  {"actions",8}  {"apm",8}");
+            foreach (var p in r.Players)
+                sb.AppendLine($"{p.Slot,4}  {Short(p.Name,22),-22}  {Num(p.Actions),8}  "
+                    + $"{(p.ActionsPerMinute is { } a ? a.ToString("0.0") : "-"),8}");
+        }
+        else
+        {
+            sb.AppendLine("actions per minute not carried in this record");
+            foreach (var p in r.Players)
+                sb.AppendLine($"  slot {p.Slot}  {p.Name}  {p.LeaveMeaning ?? "in game"}");
+        }
+        if (r.Problem is not null) sb.AppendLine("note " + r.Problem);
+        return sb.ToString();
+    }
+
+    private static string Short(string? s, int max) =>
+        s is null ? string.Empty : s.Length <= max ? s : s[..Math.Max(0, max - 1)] + "~";
+
+    private static string Num(int? v) => v is { } n ? n.ToString() : "-";
+
+    private static string Clock(TimeSpan? t) => t is { } v ? v.ToString("mm\\:ss") : "-";
+
+    private static string Leaf(string? map) =>
+        map is null ? "(map unknown)" : Path.GetFileName(map.Replace('\\', '/'));
+
     public static string UabiProfiles(UabiProfileReport r)
     {
         var sb = new StringBuilder();

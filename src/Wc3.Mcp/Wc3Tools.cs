@@ -116,6 +116,55 @@ public static class Wc3Tools
             return ReplayCommand.Execute(path, map);
         });
 
+    [McpServerTool(Name = "replay_diff", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Compare two recorded games (.w3g). Reports whether they played the same map, the "
+        + "length difference, and each player's leave time difference, keyed by slot. Read-only.")]
+    public static ReplayDiffReport ReplayDiff(
+        [Description("Path to the first .w3g recorded game.")] string a,
+        [Description("Path to the second .w3g recorded game.")] string b)
+        => Run(() => ReplayDiffCommand.Execute(RequireReplay(a), RequireReplay(b)));
+
+    [McpServerTool(Name = "replay_players", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Per-player table for one recorded game (.w3g). Reports name, slot, team, race, "
+        + "result, leave time and leave reason. Team and race are reported as unknown when the "
+        + "record does not carry them. Read-only.")]
+    public static ReplayPlayersReport ReplayPlayers(
+        [Description("Path to a .w3g recorded game.")] string replay)
+        => Run(() => ReplayPlayersCommand.Execute(RequireReplay(replay)));
+
+    [McpServerTool(Name = "replay_timeline", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Ordered event list for one recorded game (.w3g). Reports the game start, each "
+        + "chat line and player leave with its reason, and the game end time. Read-only.")]
+    public static ReplayTimelineReport ReplayTimeline(
+        [Description("Path to a .w3g recorded game.")] string replay)
+        => Run(() => ReplayTimelineCommand.Execute(RequireReplay(replay)));
+
+    [McpServerTool(Name = "replay_find_map", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("The map path a replay (.w3g) records, and whether that map file exists in the "
+        + "Maps folder, resolving the .w3x or .w3m. Default folder is the user's "
+        + "Documents\\Warcraft III\\Maps. Read-only.")]
+    public static ReplayFindMapReport ReplayFindMap(
+        [Description("Path to a .w3g recorded game.")] string replay,
+        [Description("Folder to search for the recorded map. Default Documents\\Warcraft III\\Maps.")] string? maps = null)
+        => Run(() => ReplayFindMapCommand.Execute(RequireReplay(replay), maps));
+
+    [McpServerTool(Name = "replay_stats", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Aggregate stats for one recorded game (.w3g). Reports duration, player count, "
+        + "actions per minute per player when the record carries them, and the disconnect count. Read-only.")]
+    public static ReplayStatsReport ReplayStats(
+        [Description("Path to a .w3g recorded game.")] string replay)
+        => Run(() => ReplayStatsCommand.Execute(RequireReplay(replay)));
+
+    /// <summary>Validate a replay path, the same clean refusal replay_summary gives.</summary>
+    private static string RequireReplay(string replay)
+    {
+        if (string.IsNullOrWhiteSpace(replay))
+            throw new McpException("replay path is required");
+        if (!File.Exists(replay))
+            throw new McpException($"no .w3g file at {replay}");
+        return replay;
+    }
+
     [McpServerTool(Name = "object_list", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("List the map's custom/modified objects of one Object Editor kind: rawcode, base rawcode (null = created from scratch) and resolved name.")]
     public static ObjectListResult ObjectList(

@@ -154,6 +154,70 @@ public sealed class McpSmokeAnalysisTests : McpSmokeBase
         Assert.Empty(Rows(Prop(r, "games")));
     }
 
+    /// <summary>A synthetic .w3g in the fixture folder, so the replay tools need no real game.</summary>
+    private string SyntheticReplay(params ReplayFixtures.Event[] events)
+    {
+        string path = Path.Combine(_f.Dir, $"replay-{Guid.NewGuid():N}.w3g");
+        File.WriteAllBytes(path, ReplayFixtures.Build(events: events));
+        return path;
+    }
+
+    [Fact, Covers("replay_players")]
+    public async Task Replay_players_lists_each_player_and_their_leave()
+    {
+        var replay = SyntheticReplay(new ReplayFixtures.Leave(1000, 2, 0x0C, 0x07));
+        var r = await Call("replay_players", Args(("replay", replay)));
+        var players = Rows(Prop(r, "players"));
+        Assert.Equal(2, players.Count);
+        var guest = Assert.Single(players, p => Prop(p, "slot").GetInt32() == 2);
+        Assert.Equal("Guest#2", Prop(guest, "name").GetString());
+        Assert.Equal("left", Prop(guest, "leaveMeaning").GetString());
+    }
+
+    [Fact, Covers("replay_timeline")]
+    public async Task Replay_timeline_orders_start_chat_leave_and_end()
+    {
+        var replay = SyntheticReplay(
+            new ReplayFixtures.Chat(500, 1, "hello"),
+            new ReplayFixtures.Leave(1000, 2, 0x0C, 0x07));
+        var r = await Call("replay_timeline", Args(("replay", replay)));
+        var events = Rows(Prop(r, "events"));
+        Assert.Equal(new[] { "game start", "chat", "leave", "game end" },
+            events.Select(e => Prop(e, "kind").GetString()).ToArray());
+    }
+
+    [Fact, Covers("replay_diff")]
+    public async Task Replay_diff_reports_a_length_delta_between_two_games()
+    {
+        var a = SyntheticReplay(new ReplayFixtures.Leave(500, 2, 0x0C, 0x07));
+        var b = SyntheticReplay(new ReplayFixtures.Leave(900, 2, 0x0C, 0x07));
+        var r = await Call("replay_diff", Args(("a", a), ("b", b)));
+        Assert.True(Prop(r, "sameMap").GetBoolean());
+        var delta = Prop(r, "leaveDeltas").EnumerateArray()
+            .Single(d => Prop(d, "playerId").GetInt32() == 2).GetProperty("delta").GetString();
+        Assert.Equal(TimeSpan.FromMilliseconds(400), TimeSpan.Parse(delta!));
+    }
+
+    [Fact, Covers("replay_find_map")]
+    public async Task Replay_find_map_resolves_the_recorded_map_in_a_folder()
+    {
+        var folder = Directory.CreateDirectory(Path.Combine(_f.Dir, "maps-" + Guid.NewGuid().ToString("N"))).FullName;
+        Directory.CreateDirectory(Path.Combine(folder, "Download"));
+        File.WriteAllBytes(Path.Combine(folder, "Download", "BaseMap_Repro.w3x"), new byte[] { 1 });
+        var replay = SyntheticReplay();
+        var r = await Call("replay_find_map", Args(("replay", replay), ("maps", folder)));
+        Assert.True(Prop(r, "found").GetBoolean());
+    }
+
+    [Fact, Covers("replay_stats")]
+    public async Task Replay_stats_aggregates_duration_players_and_disconnects()
+    {
+        var replay = SyntheticReplay(new ReplayFixtures.Leave(3000, 2, 0x0C, 0x01));
+        var r = await Call("replay_stats", Args(("replay", replay)));
+        Assert.Equal(2, Prop(r, "playerCount").GetInt32());
+        Assert.Equal(1, Prop(r, "disconnects").GetInt32());
+    }
+
     // The trigger catalog is read from the install's ui\triggerdata.txt.
     [Fact, Trait("Category", "GameData"), Covers("trigger_catalog_list", "trigger_catalog_describe")]
     public async Task Trigger_catalog_lists_and_describes_a_known_action()
