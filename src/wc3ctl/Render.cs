@@ -430,6 +430,52 @@ public static class Render
         r.Items.Count == 0 ? "(no custom objects)"
         : string.Join("\n", r.Items.Select(i => Headline(i.Rawcode, i.Name, i.BaseRawcode)));
 
+    public static string ObjectSearch(ObjectSearchResult r)
+    {
+        var head = $"{r.Count} match(es) for \"{r.Query}\"";
+        var lines = r.Hits.Select(h =>
+        {
+            var name = h.Name is null ? "" : $" \"{h.Name}\"";
+            var baseVal = h.BaseValue is null ? "" : $" base={h.BaseValue}";
+            var mapVal = h.MapValue is null ? "" : $" map={h.MapValue}";
+            return $"{h.Kind} {h.Rawcode}{name} {h.FieldName} ({h.FieldCode}){baseVal}{mapVal}";
+        });
+        var notes = r.Diagnostics.Select(d => $"note: {d}");
+        return string.Join("\n", new[] { head }.Concat(lines).Concat(notes));
+    }
+
+    public static string ObjectNoopFields(ObjectNoopFieldsResult r)
+    {
+        var head = r.Count == 0
+            ? "no fields equal their base game value"
+            : $"{r.Count} field(s) equal their base game value";
+        var lines = r.Fields.Select(f =>
+            $"{f.Kind} {f.Rawcode}{(f.Name is null ? "" : $" \"{f.Name}\"")} "
+            + $"{f.FieldName} ({f.FieldCode}) = {f.Value}  [same as base]");
+        var notes = r.Diagnostics.Select(d => $"note: {d}");
+        return string.Join("\n", new[] { head }.Concat(lines).Concat(notes));
+    }
+
+    public static string ObjectDeprecated(ObjectDeprecatedResult r)
+    {
+        var head = $"{r.Fields.Count} field(s) not defined in {r.TargetBuild} "
+            + $"({r.FieldsChecked} map field(s) checked)";
+        var lines = r.Fields.Select(f =>
+            $"{f.Kind} {f.Rawcode}{(f.Name is null ? "" : $" \"{f.Name}\"")} field {f.FieldCode}");
+        var notes = r.Diagnostics.Select(d => $"note: {d}");
+        return string.Join("\n", new[] { head }.Concat(lines).Concat(notes));
+    }
+
+    public static string ObjectRawcodeSuggest(ObjectRawcodeSuggestResult r)
+    {
+        var head = r.Count == 0
+            ? $"no free {r.Kind} rawcodes proposed"
+            : $"{r.Count} free {r.Kind} rawcode(s)";
+        var lines = r.Rawcodes.Select(c => $"  {c}");
+        var notes = r.Diagnostics.Select(d => $"note: {d}");
+        return string.Join("\n", new[] { head }.Concat(lines).Concat(notes));
+    }
+
     public static string DoodadPalette(DoodadPaletteResult r)
     {
         // A base doodad the map edits in place carries BaseRawcode == its own code; suppress
