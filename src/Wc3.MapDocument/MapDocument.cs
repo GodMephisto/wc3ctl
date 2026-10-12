@@ -409,6 +409,8 @@ public sealed class MapDocument
 
     // Bytes resolved by MPQ name hash, cached per name. null means the archive does not hold it.
     private readonly Dictionary<string, byte[]?> _byNameCache = new(StringComparer.OrdinalIgnoreCase);
+    // Opened on the first by-name read over the in-memory original, so it holds no file handle.
+    private MpqArchive? _byNameArchive;
 
     /// <summary>
     /// Reads a file by name through the archive's HASH table rather than through the listfile.
@@ -439,26 +441,31 @@ public sealed class MapDocument
             return bytes.Length > 0;
         }
 
-        if (!_byNameCache.TryGetValue(fileName, out var cached))
+        byte[]? cached;
+        lock (_byNameCache)
         {
-            cached = null;
-            try
+            if (!_byNameCache.TryGetValue(fileName, out cached))
             {
-                using var source = new MemoryStream(_originalBytes);
-                using var archive = MpqArchive.Open(source, loadListFile: false);
-                using var fs = archive.OpenFile(fileName);
-                using var ms = new MemoryStream();
-                fs.CopyTo(ms);
-                cached = ms.ToArray();
+                try
+                {
+                    // One archive per document. Opening one parses the hash and block tables,
+                    // which on a 65,536 entry map cost far more than the read, and an audit
+                    // probes hundreds of names. It is not thread safe, hence the lock.
+                    _byNameArchive ??= MpqArchive.Open(new MemoryStream(_originalBytes), loadListFile: false);
+                    using var fs = _byNameArchive.OpenFile(fileName);
+                    using var ms = new MemoryStream();
+                    fs.CopyTo(ms);
+                    cached = ms.ToArray();
+                }
+                catch (Exception)
+                {
+                    // Not present, or unreadable. Both are "the archive cannot give you this name",
+                    // and neither is worth a diagnostic, because callers probe several candidate
+                    // spellings of a model path and most probes are expected to miss.
+                    cached = null;
+                }
+                _byNameCache[fileName] = cached;
             }
-            catch (Exception)
-            {
-                // Not present, or unreadable. Both are "the archive cannot give you this name",
-                // and neither is worth a diagnostic, because callers probe several candidate
-                // spellings of a model path and most probes are expected to miss.
-                cached = null;
-            }
-            _byNameCache[fileName] = cached;
         }
 
         if (cached is null) return false;
@@ -565,7 +572,7 @@ public sealed class MapDocument
             named.OverrideBytes = bytes;
             named.Model = null;
             named.IsDirty = true;
-            _byNameCache.Remove(fileName);
+            lock (_byNameCache) _byNameCache.Remove(fileName);
             return true;
         }
 
@@ -581,7 +588,7 @@ public sealed class MapDocument
             entry.Model = null;
             entry.IsDirty = true;
             entry.RecoveredFileName ??= fileName;
-            _byNameCache.Remove(fileName);
+            lock (_byNameCache) _byNameCache.Remove(fileName);
             return true;
         }
         return false;
