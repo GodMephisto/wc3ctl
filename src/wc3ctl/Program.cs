@@ -1724,6 +1724,71 @@ public static class Program
             var r = ReplayCommand.Execute(p.GetValueForArgument(replayPath), p.GetValueForOption(replayMap));
             Emit(p.GetValueForOption(jsonOption), r, () => Render.Replays(r));
         }));
+
+        var replayArg = new Argument<string>("replay", "Path to a .w3g recorded game.");
+        var replayDiffA = new Argument<string>("a", "Path to the first .w3g recorded game.");
+        var replayDiffB = new Argument<string>("b", "Path to the second .w3g recorded game.");
+
+        var replayDiff = new Command("diff",
+            "Compare two recorded games. Reports same map or not, length delta, and each player's "
+            + "leave delta.")
+        { replayDiffA, replayDiffB };
+        replayDiff.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = ReplayDiffCommand.Execute(
+                p.GetValueForArgument(replayDiffA), p.GetValueForArgument(replayDiffB));
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.ReplayDiff(r));
+        }));
+
+        var replayPlayers = new Command("players",
+            "Per-player table for one recorded game. Columns are name, slot, team, race, result, "
+            + "leave time and leave reason.") { replayArg };
+        replayPlayers.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = ReplayPlayersCommand.Execute(p.GetValueForArgument(replayArg));
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.ReplayPlayers(r));
+        }));
+
+        var replayTimeline = new Command("timeline",
+            "Ordered event list for one recorded game. Reports game start, each chat line and "
+            + "player leave with its reason, and the game end.") { replayArg };
+        replayTimeline.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = ReplayTimelineCommand.Execute(p.GetValueForArgument(replayArg));
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.ReplayTimeline(r));
+        }));
+
+        var replayMaps = new Option<string?>("--maps",
+            "Folder to search for the recorded map. Default Documents\\Warcraft III\\Maps.");
+        var replayFindMap = new Command("find-map",
+            "The map path a replay records, and whether that map file exists in the Maps folder, "
+            + "resolving the .w3x or .w3m.") { replayArg, replayMaps };
+        replayFindMap.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = ReplayFindMapCommand.Execute(
+                p.GetValueForArgument(replayArg), p.GetValueForOption(replayMaps));
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.ReplayFindMap(r));
+        }));
+
+        var replayStats = new Command("stats",
+            "Aggregate stats for one recorded game. Reports duration, player count, actions per "
+            + "minute per player if the record carries them, and the disconnect count.") { replayArg };
+        replayStats.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = ReplayStatsCommand.Execute(p.GetValueForArgument(replayArg));
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.ReplayStats(r));
+        }));
+
+        replay.AddCommand(replayDiff);
+        replay.AddCommand(replayPlayers);
+        replay.AddCommand(replayTimeline);
+        replay.AddCommand(replayFindMap);
+        replay.AddCommand(replayStats);
         root.AddCommand(replay);
 
         // ---- uabi-profile: compare unit ability lists across many maps at once ----
