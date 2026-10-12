@@ -79,4 +79,20 @@ public static class Wc3McpServer
             .Select(m => McpServerTool.Create(m, target: null,
                 new McpServerToolCreateOptions { SerializerOptions = JsonOptions }))
             .ToList();
+
+    /// <summary>
+    /// Populates a host's options from <see cref="CreateOptions"/>. Both the stdio entry point and
+    /// the in-memory protocol tests call this one method, so what the tests verify is exactly what a
+    /// client receives, ServerInstructions included. Copying the fields by hand instead is what left
+    /// the instructions off the initialize reply.
+    /// </summary>
+    public static void ApplyTo(McpServerOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        var configured = CreateOptions();
+        options.ServerInfo = configured.ServerInfo;
+        options.Capabilities = configured.Capabilities;
+        options.ServerInstructions = configured.ServerInstructions;
+        options.ToolCollection = configured.ToolCollection;
+    }
 }

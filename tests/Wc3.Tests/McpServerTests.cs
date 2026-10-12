@@ -58,6 +58,20 @@ public class McpServerTests
     }
 
     [Fact]
+    public async Task Initialize_carries_the_server_instructions_with_the_target_line()
+    {
+        // The initialize reply must carry BuildInstructions (the "target ..." line), which only
+        // reaches a client when Program copies ServerInstructions onto the host options. Before
+        // that copy the field was empty.
+        await WithClient(async (client, ct) =>
+        {
+            Assert.False(string.IsNullOrWhiteSpace(client.ServerInstructions));
+            Assert.Contains("target", client.ServerInstructions);
+            await Task.CompletedTask;
+        });
+    }
+
+    [Fact]
     public void The_identity_comes_from_the_build_not_the_fallbacks()
     {
         // Both values must be written into the assembly by Wc3.Mcp.csproj. If the metadata went
