@@ -2,7 +2,7 @@
 
 Generated from the live command tree by `wc3ctl docs cli`. Do not edit by hand. Regenerate with `wc3ctl docs cli --force`, and the CI guard fails when this file is stale.
 
-The tree holds 58 top level verb(s) and 282 command path(s) in total.
+The tree holds 59 top level verb(s) and 288 command path(s) in total.
 
 ## Global options
 
@@ -4827,6 +4827,99 @@ Arguments
 Options
 
 - `--max-regression-pct <max-regression-pct>`. Fail when any metric regressed by more than this percent. Default `10`.
+
+## library
+
+Sweep a folder of maps instead of one map, the way a maintainer checks a whole library. Every subcommand is read-only and opens one map at a time.
+
+Usage
+
+```
+wc3ctl library
+```
+
+Subcommands
+
+- `scan`. Open every map in a folder and report per map its size, the build it targets if known, whether it loads, its entry count and its diagnostic count. Read-only.
+- `audit`. Run the behavioural audit over every map in a folder and report the findings per map and the totals per check, so a whole library is ranked by how much it needs fixing. Read-only.
+- `validate`. Run the load validation over every map in a folder and list the ones that fail, with the reason. Read-only.
+- `compare`. Compare two folders by map file name and content hash, listing the maps only in the first, only in the second, and changed between them. Read-only.
+- `report`. Write one Markdown report over a folder, a summary line, a per-map table and the aggregated findings, an artifact a maintainer can attach to a review.
+
+### library scan
+
+Open every map in a folder and report per map its size, the build it targets if known, whether it loads, its entry count and its diagnostic count. Read-only.
+
+Usage
+
+```
+wc3ctl library scan <folder>
+```
+
+Arguments
+
+- `<folder>` (required). Folder of .w3x/.w3m maps, searched recursively.
+
+### library audit
+
+Run the behavioural audit over every map in a folder and report the findings per map and the totals per check, so a whole library is ranked by how much it needs fixing. Read-only.
+
+Usage
+
+```
+wc3ctl library audit <folder>
+```
+
+Arguments
+
+- `<folder>` (required). Folder of .w3x/.w3m maps, searched recursively.
+
+### library validate
+
+Run the load validation over every map in a folder and list the ones that fail, with the reason. Read-only.
+
+Usage
+
+```
+wc3ctl library validate <folder>
+```
+
+Arguments
+
+- `<folder>` (required). Folder of .w3x/.w3m maps, searched recursively.
+
+### library compare
+
+Compare two folders by map file name and content hash, listing the maps only in the first, only in the second, and changed between them. Read-only.
+
+Usage
+
+```
+wc3ctl library compare <folderA> <folderB>
+```
+
+Arguments
+
+- `<folderA>` (required). The first folder of maps.
+- `<folderB>` (required). The second folder of maps.
+
+### library report
+
+Write one Markdown report over a folder, a summary line, a per-map table and the aggregated findings, an artifact a maintainer can attach to a review.
+
+Usage
+
+```
+wc3ctl library report <folder> [options]
+```
+
+Arguments
+
+- `<folder>` (required). Folder of .w3x/.w3m maps, searched recursively.
+
+Options
+
+- `-o, --out <out>` (required). Path to write the Markdown report to.
 
 ## mcp
 

@@ -2246,6 +2246,77 @@ public static class Render
         return sb.ToString().TrimEnd('\r', '\n');
     }
 
+    public static string LibraryScan(LibraryScanResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.Maps.Count} map(s), {r.Loaded} loaded, {r.Failed} failed, {r.TotalBytes} byte(s)");
+        sb.AppendLine();
+        sb.AppendLine($"  {"map",-36} {"bytes",12} {"build",-16} {"load",4} {"entries",8} {"diag",5}");
+        foreach (var m in r.Maps)
+            sb.AppendLine($"  {Short(m.Map, 36),-36} {m.Bytes,12} {Short(m.TargetBuild ?? "unknown", 16),-16} "
+                + $"{(m.Loads ? "yes" : "no"),4} {m.Entries,8} {m.Diagnostics,5}"
+                + (m.Error is null ? "" : "  " + m.Error));
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
+    public static string LibraryAudit(LibraryAuditResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.Maps.Count} map(s), {r.TotalFindings} finding(s), {r.MapsWithFindings} map(s) with findings");
+        sb.AppendLine();
+        sb.AppendLine($"  {"map",-36} {"errors",6} {"warnings",8} {"findings",8}");
+        foreach (var m in r.Maps)
+            sb.AppendLine($"  {Short(m.Map, 36),-36} {m.Errors,6} {m.Warnings,8} {m.Issues.Count,8}"
+                + (m.Error is null ? "" : "  " + m.Error));
+        if (r.Checks.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"  {"check",-28} {"count",6}");
+            foreach (var c in r.Checks)
+                sb.AppendLine($"  {c.Check,-28} {c.Count,6}");
+        }
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
+    public static string LibraryValidate(LibraryValidateResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.Maps.Count} map(s), {r.Valid} valid, {r.Invalid} invalid");
+        foreach (var m in r.Maps.Where(m => !m.Valid))
+        {
+            sb.AppendLine();
+            sb.AppendLine($"  {Short(m.Map, 36),-36} {m.Errors} error(s)"
+                + (m.Error is null ? "" : "  " + m.Error));
+            foreach (var i in m.Issues.Where(i => i.Severity == DiagnosticSeverity.Error))
+                sb.AppendLine($"     ({i.Category}) {i.Message}");
+        }
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
+    public static string LibraryCompare(LibraryCompareResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"only in A {r.OnlyInA.Count}, only in B {r.OnlyInB.Count}, "
+            + $"changed {r.Changed.Count}, same {r.Same}, ambiguous {r.AmbiguousNames.Count}");
+        AppendNames(sb, "only in A", r.OnlyInA);
+        AppendNames(sb, "only in B", r.OnlyInB);
+        AppendNames(sb, "changed", r.Changed);
+        AppendNames(sb, "ambiguous name", r.AmbiguousNames);
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
+    private static void AppendNames(StringBuilder sb, string label, IReadOnlyList<string> names)
+    {
+        if (names.Count == 0) return;
+        sb.AppendLine();
+        sb.AppendLine("  " + label);
+        foreach (var n in names) sb.AppendLine("    " + n);
+    }
+
+    public static string LibraryReport(LibraryReportResult r) =>
+        $"wrote {r.Path}\n{r.Maps} map(s), {r.Loaded} loaded, {r.Failed} failed, "
+        + $"{r.Findings} finding(s), {r.Invalid} invalid";
+
     public static string BenchPerfGate(PerfGateResult r)
     {
         var sb = new StringBuilder();

@@ -2,7 +2,7 @@
 
 Generated from the live tool surface by `wc3ctl docs mcp`. Do not edit by hand. Regenerate with `wc3ctl docs mcp --force`, and the CI guard fails when this file is stale.
 
-The server exposes 209 tool(s).
+The server exposes 214 tool(s).
 
 ## asset_audit
 
@@ -379,6 +379,36 @@ Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 ## leak_list
 
 The ranked static handle-leak list for a map's script plus the periodic timers and triggers that feed it, and every hot leak target by function. Read-only, a presentation over script_leaks for the leak workflow.
+
+Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
+## library_audit
+
+Run the behavioural audit over every map in a folder and report the findings per map and the totals per check, so a whole library is ranked by how much it needs fixing. Opens one map at a time. Read-only.
+
+Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
+## library_compare
+
+Compare two folders of maps by file name and content hash, listing the maps only in the first folder, only in the second, and changed between them, plus the identical count and any file name that is not unique inside a folder. Read-only.
+
+Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
+## library_report
+
+Write one Markdown report over a folder of maps, a summary line, a per-map table and the aggregated findings, to out_path. The report is built from the same probes the scan, audit and validate sweeps use. Writes only out_path and never a map.
+
+Annotations. read-only no, destructive no, idempotent yes, open-world no.
+
+## library_scan
+
+Open every map in a folder through the loader and report per map its size in bytes, the build it targets if known, whether it loads, its archive entry count and its diagnostic count, plus the loaded, failed and byte totals. Opens one map at a time. Read-only.
+
+Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
+## library_validate
+
+Run the load validation over every map in a folder and list the ones that fail, with the reason. A map that cannot be opened counts as invalid. Opens one map at a time. Read-only.
 
 Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 
