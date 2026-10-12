@@ -67,6 +67,16 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     /// <summary>Fields applied via ObjectSetCommand but not yet written to disk.</summary>
     private int _unsavedEdits;
 
+    /// <summary>The build the form's bounds are shown against, or null for the installed game
+    /// data. Set from the Target combo; a build with no object data is reported rather than
+    /// silently showing the installed build's fields.</summary>
+    private string? _targetBuild;
+    /// <summary>Field-code to target-schema hints for the shown object, or null when the target
+    /// is the installed data (or a build with no object data).</summary>
+    private Dictionary<string, ObjectTargetField>? _targetHints;
+    /// <summary>Canonical combo id for the installed-data choice.</summary>
+    private const string InstalledTargetId = "(installed)";
+
     /// <summary>
     /// The value a field held BEFORE this session first changed it, keyed by kind, object and
     /// field. Captured on the first edit only, so reverting always returns to what the map was
@@ -149,6 +159,8 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         // The picker fills the text editor rather than replacing it, so a hand-typed
         // path (a file the map does not hold yet) keeps working.
         AssetPickerCombo.SelectionChanged += (_, item) => EditorBox.Text = item.Id;
+        TargetCombo.SelectionChanged += OnTargetBuildChanged;
+        RefreshTargetBuilds();
     }
 
     /// <summary>
@@ -167,13 +179,112 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     /// <summary>Canonical dropdown id for a kind - the enum name the CLI parses (case-insensitive).</summary>
     private static string KindId(ObjectKind kind) => kind.ToString().ToLowerInvariant();
 
+    /// <summary>The schemas directory to resolve target builds from, injected by a test session or
+    /// auto-resolved by the command layer when null.</summary>
+    private string? SchemasDir => _session?.SchemasDir;
+
+    /// <summary>
+    /// Lists the builds the object editor can target, with an "Installed (game data)" choice
+    /// first. Defaults to the resolved target build when it carries object data, such a build is
+    /// safe to show, otherwise to the installed data. Rebuilt per session because the schemas
+    /// directory can differ between maps.
+    /// </summary>
+    private void RefreshTargetBuilds()
+    {
+        var items = new List<SearchableComboBoxItem>
+        {
+            new("Installed (game data)", InstalledTargetId),
+        };
+        try
+        {
+            foreach (var b in ObjectTargetFieldsCommand.Builds(SchemasDir))
+                items.Add(new SearchableComboBoxItem(
+                    $"{b.Build}  ({b.Era}{(b.HasObjectData ? "" : ", no object data")})", b.Build));
+        }
+        catch
+        {
+            // With no schemas directory the installed data is the only target.
+        }
+
+        // Keep the current choice while it still exists; otherwise prefer the resolved target
+        // build when it has object data, else the installed data.
+        string selectId = InstalledTargetId;
+        if (_targetBuild is not null && items.Any(i => i.Id == _targetBuild))
+            selectId = _targetBuild;
+        else
+        {
+            try
+            {
+                var resolved = TargetBuildSettings.Get(schemasDir: SchemasDir).Build;
+                if (items.Any(i => i.Id == resolved
+                        && ObjectTargetFieldsCommand.HasObjectData(resolved, SchemasDir)))
+                    selectId = resolved;
+            }
+            catch
+            {
+                // No resolvable default, so stay on the installed data.
+            }
+        }
+
+        _targetBuild = selectId == InstalledTargetId ? null : selectId;
+        TargetCombo.SetItems(items, selectId: selectId);
+    }
+
+    private void OnTargetBuildChanged(object? sender, SearchableComboBoxItem item)
+    {
+        if (_suppress)
+            return;
+        _targetBuild = item.Id == InstalledTargetId ? null : item.Id;
+        // Reload the form for the chosen build, same selection with new target annotations.
+        RefreshFieldPane((FieldList.SelectedItem as FieldRow)?.Code);
+    }
+
+    /// <summary>
+    /// The target-schema hints for the object in the field pane, or null when the target is the
+    /// installed data. When the chosen build has no object data this returns null and sets
+    /// <paramref name="message"/> so the caller can say so instead of showing installed fields.
+    /// </summary>
+    private Dictionary<string, ObjectTargetField>? TargetHintsFor(
+        MapDocument doc, ObjectKind kind, string rawcode, out string? message)
+    {
+        message = null;
+        if (_targetBuild is null) return null;
+        try
+        {
+            var result = ObjectTargetFieldsCommand.Execute(
+                doc, kind, rawcode, _targetBuild, SchemasDir, _session?.GameDir);
+            if (!result.HasObjectData)
+            {
+                message = result.Message;
+                return null;
+            }
+            var hints = new Dictionary<string, ObjectTargetField>(StringComparer.Ordinal);
+            foreach (var f in result.Fields)
+                hints[BareCode(f.Code)] = f;
+            return hints;
+        }
+        catch (Exception ex)
+        {
+            message = $"Target build {_targetBuild} could not be read: {ex.Message}";
+            return null;
+        }
+    }
+
+    private static string BareCode(string code)
+    {
+        int colon = code.IndexOf(':');
+        return colon > 0 ? code[..colon] : code;
+    }
+
     public void ShowMap(MapSession session)
     {
         _session = session;
         _unsavedEdits = 0;
         _refNames = null;   // another map's objects; rebuild lazily
         _fieldTypes.Clear(); // GameDir may differ per session
+        _targetHints = null;
         StatusText.Text = "";
+        RefreshTargetBuilds(); // the schemas directory can differ between sessions
 
         if (session.Current is null)
         {
@@ -344,6 +455,19 @@ public partial class ObjectEditorView : UserControl, IMapPanel
 
         var first = selected[0];
         NotifyObjectSelected(SelectedKind.Kind, first.Rawcode);
+
+        // A chosen target build reloads the form against its schema. A build with no object data
+        // is reported here rather than silently showing the installed build's fields.
+        var hints = TargetHintsFor(doc, SelectedKind.Kind, first.Rawcode, out var targetMessage);
+        if (targetMessage is not null)
+        {
+            ClearFieldPane();
+            SelectedHeader.Text = targetMessage;
+            StatusText.Text = targetMessage;
+            return;
+        }
+        _targetHints = hints;
+
         MultiSelectNote.IsVisible = selected.Count > 1;
         MultiSelectNote.Text = selected.Count > 1
             ? $"{selected.Count} objects selected - edits apply to all (fields shown are {first.Rawcode}'s)"
@@ -390,6 +514,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     private void ClearFieldPane()
     {
         _lastNotified = null; // reselecting the same object later re-notifies
+        _targetHints = null;
         _suppress = true;
         FieldList.ItemsSource = null;
         _suppress = false;
@@ -435,13 +560,19 @@ public partial class ObjectEditorView : UserControl, IMapPanel
 
     /// <summary>Legal range and target layer, shown beside the value so an edit that the game
     /// would reject, or that would land in the layer the game ignores, is visible before it is
-    /// made rather than after the map fails to load.</summary>
-    private static string HintFor(FormField f)
+    /// made rather than after the map fails to load. When a target build is chosen its schema
+    /// supplies the bounds; otherwise the installed field metadata does.</summary>
+    private string HintFor(FormField f)
     {
+        var layer = f.Layer == ObjectLayer.Skin ? "skin" : "";
+        if (_targetHints is not null && _targetHints.TryGetValue(BareCode(f.Code), out var target))
+            return target.Known
+                ? string.Join("  ", new[] { target.Hint, layer }.Where(x => x.Length > 0))
+                : string.Join("  ", new[] { "not in target", layer }.Where(x => x.Length > 0));
+
         var bounds = f.MinValue is null && f.MaxValue is null
             ? ""
             : $"{f.MinValue ?? "*"}..{f.MaxValue ?? "*"}";
-        var layer = f.Layer == ObjectLayer.Skin ? "skin" : "";
         return string.Join("  ", new[] { bounds, layer }.Where(x => x.Length > 0));
     }
 
@@ -1006,12 +1137,44 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         {
             FieldEditLabel.Text = $"{row.Name} ({row.Code})";
             ShowValueContext(row);
+            ShowFieldBounds(row);
             ConfigureEditor(row);
             UpdateApplyState();
         }
         else
         {
             ResetEditor();
+        }
+    }
+
+    /// <summary>
+    /// Type, min, max and blank policy for the field under edit, from the chosen target build's
+    /// schema when one is selected, otherwise from the installed field metadata. Says which source
+    /// it read, so a bounds line is never mistaken for the other build's.
+    /// </summary>
+    private void ShowFieldBounds(FieldRow row)
+    {
+        FieldBoundsText.IsVisible = false;
+        FieldBoundsText.Text = "";
+
+        if (_targetHints is not null && _targetHints.TryGetValue(BareCode(row.Code), out var target))
+        {
+            FieldBoundsText.Text = target.Known
+                ? $"target build {_targetBuild}  {target.Hint}"
+                : $"not defined in target build {_targetBuild}";
+            FieldBoundsText.IsVisible = true;
+            return;
+        }
+
+        if (row.Form is { } form)
+        {
+            var bounds = form.MinValue is null && form.MaxValue is null
+                ? "any value"
+                : $"{form.MinValue ?? "*"}..{form.MaxValue ?? "*"}";
+            var type = form.Type.Length == 0 ? "type unknown" : form.Type;
+            var blank = form.CanBeEmpty ? "blank allowed" : "blank not allowed";
+            FieldBoundsText.Text = $"{type}  {bounds}  {blank}";
+            FieldBoundsText.IsVisible = true;
         }
     }
 
@@ -1416,6 +1579,8 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         ShowEditor(EditorBox);
         AssetPickerCombo.IsVisible = false;
         EditNote.Text = "";
+        FieldBoundsText.IsVisible = false;
+        FieldBoundsText.Text = "";
         UpdateApplyState();
     }
 

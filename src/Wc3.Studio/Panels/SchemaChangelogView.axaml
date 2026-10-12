@@ -1,0 +1,43 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="using:Wc3.Studio.Controls"
+             x:Class="Wc3.Studio.Panels.SchemaChangelogView">
+    <DockPanel Margin="8">
+
+        <StackPanel DockPanel.Dock="Top" Spacing="6">
+            <controls:SectionHeader Text="Object field changelog" Collapsible="False"/>
+            <TextBlock FontSize="11" Foreground="#8FA3B8" TextWrapping="Wrap"
+                       Text="Diff the object fields two builds define. Shows fields added, removed, retyped, or whose minimum or maximum bound changed."/>
+            <!-- Pick two builds. Selection drives GamedataChangelogCommand, exactly like the CLI. -->
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="From build" VerticalAlignment="Center"/>
+                <controls:SearchableComboBox Name="BuildACombo" MinWidth="220"/>
+                <TextBlock Text="To build" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                <controls:SearchableComboBox Name="BuildBCombo" MinWidth="220"/>
+                <Button Name="CompareButton" Content="Compare" Click="OnCompareClick"
+                        ToolTip.Tip="Run the field-level diff between the two chosen builds"/>
+            </StackPanel>
+            <TextBlock Name="SummaryText" TextWrapping="Wrap" FontWeight="SemiBold" Text=""/>
+            <TextBlock Name="StatusText" TextWrapping="Wrap" FontSize="11"
+                       Foreground="#8FA3B8" Text=""/>
+        </StackPanel>
+
+        <ListBox Name="ChangeList" Margin="0,8,0,0">
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <Grid ColumnDefinitions="260,*" Margin="{Binding RowMargin}">
+                        <TextBlock Grid.Column="0" Text="{Binding Display}"
+                                   Foreground="{Binding RowBrush}"
+                                   FontWeight="{Binding RowWeight}"
+                                   FontFamily="Cascadia Mono,Consolas,monospace"
+                                   TextTrimming="CharacterEllipsis"/>
+                        <TextBlock Grid.Column="1" Text="{Binding Detail}" Margin="8,0,0,0"
+                                   Foreground="{Binding RowBrush}"
+                                   TextWrapping="Wrap"/>
+                    </Grid>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+
+    </DockPanel>
+</UserControl>

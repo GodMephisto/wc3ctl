@@ -302,6 +302,31 @@ public partial class MapWorkspaceView : UserControl
     public void SetStatus(string text) => StatusText.Text = text;
 
     /// <summary>
+    /// Shows the earliest build the open map runs on, in the workspace status area, from the same
+    /// identifier index the compat check uses. Hidden when there is no map, no script, or no
+    /// schema known identifier. Public so the shell and tests can refresh it directly.
+    /// </summary>
+    public void RefreshMinBuildStatus()
+    {
+        MinBuildText.Text = "";
+        MinBuildText.IsVisible = false;
+        if (Session.Current is not { } doc) return;
+        try
+        {
+            if (MapMinBuildCommand.Execute(doc, Session.SchemasDir).Summary is { Length: > 0 } summary)
+            {
+                MinBuildText.Text = summary;
+                MinBuildText.IsVisible = true;
+            }
+        }
+        catch
+        {
+            // No schemas directory, or a load failure, so the status line stays hidden rather than
+            // reporting a build the toolkit could not actually check against.
+        }
+    }
+
+    /// <summary>
     /// The Dependencies tab's selection changed (manual pick, push-through of the
     /// Objects tab, or cleared on map change): it becomes the current port selection,
     /// upgrading the label to the panel's friendly "Name (rawcode)" display.
@@ -434,6 +459,7 @@ public partial class MapWorkspaceView : UserControl
             StatusText.Text = info.Diagnostics.Count > 0
                 ? $"{path} - {name} - {list.Files.Count} file(s) - {info.Diagnostics.Count} diagnostic(s): {string.Join("; ", info.Diagnostics)}"
                 : $"{path} - {name} - {list.Files.Count} file(s)";
+            RefreshMinBuildStatus();
 
             // Lazy loading: only the visible tab refreshes now; the other
             // panels load on first selection (see OnPanelTabsSelectionChanged).
@@ -565,6 +591,7 @@ public partial class MapWorkspaceView : UserControl
             LoadSelectedPanel();
             MapChanged?.Invoke(this, EventArgs.Empty);
             StatusText.Text = "New blank map created (in memory) — edit it, then Save to write it to disk.";
+            RefreshMinBuildStatus();
         }
         catch (Exception ex)
         {
@@ -587,6 +614,7 @@ public partial class MapWorkspaceView : UserControl
         _currentDoodad = null;
         LoadSelectedPanel();
         MapChanged?.Invoke(this, EventArgs.Empty);
+        RefreshMinBuildStatus();
     }
 
     private void OnPanelTabsSelectionChanged(object? sender, SelectionChangedEventArgs e)
