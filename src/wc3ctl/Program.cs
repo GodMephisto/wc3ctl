@@ -2276,8 +2276,99 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
                     : string.Join("\n", r.Entries.Select(e =>
                         $"TRIGSTR_{e.Id,-6} {Trim(e.Text)}")));
         }));
+
+        var stringsMissing = new Command("missing",
+            "List the TRIGSTR_ keys the script and the trigger tree reference that have no "
+            + "war3map.wts entry. Read-only.")
+        { mapArg, jsonOption };
+        stringsMissing.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = StringsMissingCommand.Execute(MapDocument.Load(p.GetValueForArgument(mapArg)));
+            Emit(p.GetValueForOption(jsonOption), r,
+                () => r.MissingIds.Count == 0
+                    ? $"(no missing keys, {r.ReferencedIds} referenced, {r.DefinedEntries} defined)"
+                    : string.Join("\n", r.MissingIds.Select(id => $"TRIGSTR_{id}")));
+        }));
+
+        var stringsUnused = new Command("unused",
+            "List war3map.wts entries no object field, map-info field, trigger or script line "
+            + "references. Read-only.")
+        { mapArg, jsonOption };
+        stringsUnused.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = StringsUnusedCommand.Execute(MapDocument.Load(p.GetValueForArgument(mapArg)));
+            Emit(p.GetValueForOption(jsonOption), r,
+                () => r.Unused.Count == 0
+                    ? $"(no unused entries, {r.DefinedEntries} defined)"
+                    : string.Join("\n", r.Unused.Select(u => $"TRIGSTR_{u.Id,-6} {Trim(u.Text)}")));
+        }));
+
+        var stringsMapA = new Argument<string>("mapA", "Path to the first .w3x/.w3m map.");
+        var stringsMapB = new Argument<string>("mapB", "Path to the second .w3x/.w3m map.");
+        var stringsDiff = new Command("diff",
+            "Compare two maps' string tables and report entries added, removed and changed. Read-only.")
+        { stringsMapA, stringsMapB, jsonOption };
+        stringsDiff.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = StringsDiffCommand.Execute(
+                MapDocument.Load(p.GetValueForArgument(stringsMapA)),
+                MapDocument.Load(p.GetValueForArgument(stringsMapB)));
+            Emit(p.GetValueForOption(jsonOption), r, () =>
+            {
+                var lines = new List<string>();
+                lines.AddRange(r.Added.Select(e => $"+ TRIGSTR_{e.Id,-6} {Trim(e.Text)}"));
+                lines.AddRange(r.Removed.Select(e => $"- TRIGSTR_{e.Id,-6} {Trim(e.Text)}"));
+                lines.AddRange(r.Changed.Select(c => $"~ TRIGSTR_{c.Id,-6} {Trim(c.NewText ?? "")}"));
+                return lines.Count == 0 ? "(identical string tables)" : string.Join("\n", lines);
+            });
+        }));
+
+        var stringsTextArg = new Argument<string>("text",
+            "Text to find in entry text, a case-insensitive substring.");
+        var stringsFind = new Command("find",
+            "Find war3map.wts entries whose text contains the given text (case-insensitive), with "
+            + "the id. Read-only.")
+        { mapArg, stringsTextArg, jsonOption };
+        stringsFind.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = StringsFindCommand.Execute(
+                MapDocument.Load(p.GetValueForArgument(mapArg)),
+                p.GetValueForArgument(stringsTextArg));
+            Emit(p.GetValueForOption(jsonOption), r,
+                () => r.Matches.Count == 0
+                    ? $"(no match for '{r.Query}')"
+                    : string.Join("\n", r.Matches.Select(e => $"TRIGSTR_{e.Id,-6} {Trim(e.Text)}")));
+        }));
+
+        var stringsIdArg = new Argument<int>("id", "war3map.wts entry id to set or add.");
+        var stringsSetTextArg = new Argument<string>("text", "New text for the entry.");
+        var stringsSet = new Command("set",
+            "Set one war3map.wts entry's text, or add it when the id is absent, and save a copy. "
+            + "The input map is never overwritten.")
+        { mapArg, stringsIdArg, stringsSetTextArg, setOut };
+        stringsSet.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = StringsSetCommand.Execute(
+                p.GetValueForArgument(mapArg),
+                p.GetValueForArgument(stringsIdArg),
+                p.GetValueForArgument(stringsSetTextArg),
+                p.GetValueForOption(setOut));
+            Emit(p.GetValueForOption(jsonOption), r,
+                () => $"{(r.Added ? "added" : "set")} TRIGSTR_{r.Id}\nsaved to {r.SavedTo}");
+        }));
+
         var strings = new Command("strings", "The map's string table (war3map.wts).");
         strings.AddCommand(stringsList);
+        strings.AddCommand(stringsMissing);
+        strings.AddCommand(stringsUnused);
+        strings.AddCommand(stringsDiff);
+        strings.AddCommand(stringsFind);
+        strings.AddCommand(stringsSet);
         root.AddCommand(strings);
 
         var importsList = new Command("list",

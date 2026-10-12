@@ -490,6 +490,41 @@ public static class Wc3Tools
         [Description("Path to a .w3x/.w3m map file.")] string map)
         => Run(() => StringsCommand.List(LoadMap(map)));
 
+    [McpServerTool(Name = "strings_missing", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("List the TRIGSTR_ keys the map script and the GUI trigger tree reference that have no war3map.wts entry behind them. A missing key shows the literal token TRIGSTR_nnn in game where a name or a message was meant. Read-only.")]
+    public static StringsMissingResult StringsMissing(
+        [Description("Path to a .w3x/.w3m map file.")] string map)
+        => Run(() => StringsMissingCommand.Execute(LoadMap(map)));
+
+    [McpServerTool(Name = "strings_unused", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("List the war3map.wts entries no object-data field, map-info field, GUI trigger or script line references, each with its text. Read-only. An unreferenced entry is dead weight rather than a fault, so treat the list as a lead to review and not an instruction to delete.")]
+    public static StringsUnusedResult StringsUnused(
+        [Description("Path to a .w3x/.w3m map file.")] string map)
+        => Run(() => StringsUnusedCommand.Execute(LoadMap(map)));
+
+    [McpServerTool(Name = "strings_diff", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Compare two maps' string tables (war3map.wts) and report entries added, removed and changed. Entries are matched by id, so a text change on the same key reads as a change rather than a remove plus an add. Read-only.")]
+    public static StringsDiffResult StringsDiff(
+        [Description("Path to the first .w3x/.w3m map file.")] string map_a,
+        [Description("Path to the second .w3x/.w3m map file.")] string map_b)
+        => Run(() => StringsDiffCommand.Execute(LoadMap(map_a), LoadMap(map_b)));
+
+    [McpServerTool(Name = "strings_find", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Find war3map.wts entries whose text contains the given text, case-insensitive, each with its id. Read-only. An empty query matches every entry.")]
+    public static StringsFindResult StringsFind(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Text to find in entry text, a case-insensitive substring.")] string text)
+        => Run(() => StringsFindCommand.Execute(LoadMap(map), text));
+
+    [McpServerTool(Name = "strings_set", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Set one war3map.wts entry's text, or add the entry when the id is absent, and save the edited map to out_path. The file's own encoding and line endings are preserved and the input map is NEVER modified. out_path defaults to a sibling '<map>.edited.<ext>' and must differ from the input.")]
+    public static StringsSetResult StringsSet(
+        [Description("Path to the source .w3x/.w3m map file. Read-only. The edited copy is written to out_path.")] string map,
+        [Description("war3map.wts entry id to set or add, e.g. 4084.")] int id,
+        [Description("New text for the entry. Empty text clears the entry to an empty block.")] string text,
+        [Description("Output map path. Defaults to a sibling '<map>.edited.<ext>'. Must differ from the input.")] string? out_path = null)
+        => Run(() => StringsSetCommand.Execute(RequireMapPath(map), id, text, out_path));
+
     [McpServerTool(Name = "imports_list", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("List the map's import table (war3map.imp) against what the archive actually holds, so a table entry with no file behind it and a file absent from the table both show up.")]
     public static ImportsListResult ImportsList(
