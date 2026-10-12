@@ -68,6 +68,17 @@ public sealed class McpSmokeModelAssetTests : McpSmokeBase
         Assert.True(Prop(r, "geosets").GetInt32() >= 1);
     }
 
+    [Fact, Covers("texture_optimize")]
+    public async Task Texture_optimize_shrinks_a_texture()
+    {
+        var blp = NewOut("texin", ".blp");
+        File.WriteAllBytes(blp, SyntheticModel.Blp(64, 64));
+        var outBlp = NewOut("texout", ".blp");
+        var r = await Call("texture_optimize", Args(("texture", blp), ("out_path", outBlp), ("max", 32)));
+        Assert.True(File.Exists(outBlp));
+        Assert.Equal(32, Prop(r, "widthAfter").GetInt32());
+    }
+
     [Fact, Covers("model_export_obj")]
     public async Task Model_export_obj_writes_obj_and_mtl()
     {

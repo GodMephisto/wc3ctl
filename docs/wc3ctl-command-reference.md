@@ -2,7 +2,7 @@
 
 Generated from the live command tree by `wc3ctl docs cli`. Do not edit by hand. Regenerate with `wc3ctl docs cli --force`, and the CI guard fails when this file is stale.
 
-The tree holds 63 top level verb(s) and 311 command path(s) in total.
+The tree holds 64 top level verb(s) and 313 command path(s) in total.
 
 ## Global options
 
@@ -477,6 +477,39 @@ Options
 
 - `-o, --out <out>` (required). Output model path. The input is never modified.
 - `--ratio <ratio>`. Target fraction of faces to keep, between 0 and 1. Default `0.5`.
+
+## texture
+
+Texture asset operations.
+
+Usage
+
+```
+wc3ctl texture
+```
+
+Subcommands
+
+- `optimize`. Shrink a texture to fit a maximum side, preserving aspect ratio, and write it back in the same format. The other half of making a model compact.
+
+### texture optimize
+
+Shrink a texture to fit a maximum side, preserving aspect ratio, and write it back in the same format. The other half of making a model compact.
+
+Usage
+
+```
+wc3ctl texture optimize <texture> [options]
+```
+
+Arguments
+
+- `<texture>` (required). Path to a .blp, .dds or standard image file.
+
+Options
+
+- `-o, --out <out>` (required). Output path. The input is never modified.
+- `--max <max>`. Maximum side length in pixels. A texture larger than this on either side is scaled down. Default `256`.
 
 ## strings
 

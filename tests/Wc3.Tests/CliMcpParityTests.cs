@@ -42,6 +42,7 @@ public class CliMcpParityTests
         ["model_export_obj"] = "model export-obj",
         ["model_audit"] = "model audit",
         ["model_optimize"] = "model optimize",
+        ["texture_optimize"] = "texture optimize",
         ["lint"] = "lint",
         ["lint_baseline"] = "lint baseline",
         ["validate"] = "validate",

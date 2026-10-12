@@ -449,6 +449,19 @@ public static class Wc3Tools
             return ModelOptimizeCommand.ExecutePath(model, ratio, out_path);
         });
 
+    [McpServerTool(Name = "texture_optimize", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Shrink a .blp, .dds or standard image texture to fit a maximum side, preserving aspect ratio, and write it at out_path in the same format. The input is never modified. Returns the before and after dimensions and byte sizes.")]
+    public static TextureOptimizeResult TextureOptimize(
+        [Description("Path to a texture file.")] string texture,
+        [Description("Output path. The input is never modified.")] string out_path,
+        [Description("Maximum side length in pixels.")] int max = 256)
+        => Run(() =>
+        {
+            if (string.Equals(Path.GetFullPath(out_path), Path.GetFullPath(texture), StringComparison.OrdinalIgnoreCase))
+                throw new McpException("out_path must not be the input texture");
+            return TextureOptimizeCommand.ExecutePath(texture, max, out_path);
+        });
+
     [McpServerTool(Name = "model_export_obj", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Export a map-imported model to Wavefront OBJ at out_path, writing an MTL and any map-resolvable textures converted to PNG beside it. The map itself is never modified. Returns the .obj path, the .mtl path and the texture file names.")]
     public static ModelExportObjToolResult ModelExportObj(

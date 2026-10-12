@@ -649,6 +649,15 @@ public static class Render
         return sb.ToString().TrimEnd();
     }
 
+    public static string TextureOptimize(TextureOptimizeResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"Wrote {Path.GetFileName(r.Path)}  {r.Format}");
+        sb.AppendLine($"  {r.WidthBefore}x{r.HeightBefore} -> {r.WidthAfter}x{r.HeightAfter}, "
+            + $"{r.BytesBefore} -> {r.BytesAfter} byte(s)");
+        return sb.ToString().TrimEnd();
+    }
+
     public static string Imports(ImportsListResult r)
     {
         var sb = new StringBuilder();
