@@ -2204,6 +2204,34 @@ public static class Render
         return sb.ToString().TrimEnd('\r', '\n');
     }
 
+    /// <summary>
+    /// Render a CI run, one line per gate followed by the overall verdict and exit code. Shared by
+    /// every ci command so a passing gate prints its summary and detail, not just silence.
+    /// </summary>
+    public static string CiGates(string title, bool passed, int exitCode, IReadOnlyList<CiGateLine> gates)
+    {
+        var sb = new StringBuilder();
+        foreach (var g in gates)
+        {
+            sb.AppendLine($"{(g.Passed ? "PASS" : "FAIL")}  {g.Name,-16} {g.Summary}");
+            foreach (var d in g.Detail)
+                sb.AppendLine($"                              {d}");
+        }
+        sb.AppendLine();
+        sb.Append($"{title} {(passed ? "PASS" : "FAIL")}  exit {exitCode}");
+        return sb.ToString();
+    }
+
+    public static string CiLint(CiLintResult r) => CiGates("ci lint", r.Passed, r.ExitCode, r.Gates);
+
+    public static string CiValidate(CiValidateResult r) => CiGates("ci validate", r.Passed, r.ExitCode, r.Gates);
+
+    public static string CiCompat(CiCompatResult r) => CiGates("ci compat", r.Passed, r.ExitCode, r.Gates);
+
+    public static string CiSchema(CiSchemaResult r) => CiGates("ci schema", r.Passed, r.ExitCode, r.Gates);
+
+    public static string CiAll(CiAllResult r) => CiGates("ci all", r.Passed, r.ExitCode, r.Gates);
+
     /// <summary>Render the compat matrix as a table, one row per map.</summary>
     public static string CompatMatrix(CompatMatrixResult r)
     {

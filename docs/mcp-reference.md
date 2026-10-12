@@ -178,6 +178,36 @@ Add N cameras interpolated between two existing cameras as a smooth tour path, a
 
 Annotations. read-only no, destructive no, idempotent no, open-world no.
 
+## ci_all
+
+Run lint, validate and, when target is given, compat in one pass. Returns one summary line per gate and the overall pass or fail with an exit code (0 pass, 1 fail), so a pipeline gets the whole map picture from one call. Reuses the lint and validate gates, so a gate means here exactly what ci_lint and ci_validate mean on their own. Read-only.
+
+Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
+## ci_compat
+
+Run the compat check as a CI gate. Returns one pass or fail with what was examined and an exit code (0 pass, 1 fail). Fails on an error-level finding, a native, global, type or function the map uses that the target build does not declare. Warnings about object fields the target no longer defines do not fail the gate. Read-only.
+
+Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
+## ci_lint
+
+Run the lint as a CI gate. Returns one pass or fail per check with what was examined and an exit code (0 pass, 1 fail). Fails on an error-level finding, or, with baseline, only on a finding the baseline does not already hold, so a map with known and accepted warnings can still be gated on regressions. With target it also runs the compat check and fails on an error-level finding. Read-only, never writes the map or the baseline.
+
+Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
+## ci_schema
+
+Check the schema dataset for regressions as a CI gate. Returns one pass or fail per check with what was examined and an exit code (0 pass, 1 fail). Fails when any build stops parsing or fewer than min_real builds carry real object data. Each folder is loaded on its own so a broken build is named rather than aborting the whole check. Read-only.
+
+Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
+## ci_validate
+
+Run the validation as a CI gate. Returns one pass or fail with what was examined and an exit code (0 pass, 1 fail). Fails when the map cannot load or reports an error-level issue. With strict the extra strict checks (missing listfile, a script with no entry point, an undefined placement type) are included. Read-only.
+
+Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
 ## compat_explain
 
 Explain one identifier against a target build. Reports whether the target declares it as a native, global, type or function, and if not, the earliest build that added it plus the test build it was first seen in, and every build that declares it. Reuses the compat union index, so its answer about when a name appeared matches a compat finding.

@@ -2808,6 +2808,49 @@ public static class Wc3Tools
         [Description("Fail when any metric regressed by more than this percent. Default 10.")] double max_regression_pct = 10)
         => Run(() => BenchPerfGateCommand.Execute(baseline, run, max_regression_pct));
 
+    // ---- ci gate tools ---------------------------------------------------
+
+    [McpServerTool(Name = "ci_lint", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Run the lint as a CI gate. Returns one pass or fail per check with what was examined and an exit code (0 pass, 1 fail). Fails on an error-level finding, or, with baseline, only on a finding the baseline does not already hold, so a map with known and accepted warnings can still be gated on regressions. With target it also runs the compat check and fails on an error-level finding. Read-only, never writes the map or the baseline.")]
+    public static CiLintResult CiLint(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Baseline file written by lint_baseline. When given, the gate fails only on a finding the baseline does not already hold.")] string? baseline = null,
+        [Description("Target build name or schema folder path. When given, a compat check runs and fails on an error-level finding.")] string? target = null,
+        [Description("Optional path to schemas directory containing schema folders with manifest.json.")] string? schemas_dir = null,
+        [Description("Optional path to the ORIGINAL map this one was built from, so the lint also reports what a rebuild lost or clobbered.")] string? against = null)
+        => Run(() => CiLintCommand.Execute(map, baseline, target, schemas_dir, against));
+
+    [McpServerTool(Name = "ci_validate", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Run the validation as a CI gate. Returns one pass or fail with what was examined and an exit code (0 pass, 1 fail). Fails when the map cannot load or reports an error-level issue. With strict the extra strict checks (missing listfile, a script with no entry point, an undefined placement type) are included. Read-only.")]
+    public static CiValidateResult CiValidate(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Run the stricter validation, whose extra checks are too strict to be a default.")] bool strict = false,
+        [Description("Warcraft III install directory for the strict undefined-type check. Overrides auto-detection and the WC3_GAME_DIR env var.")] string? game_dir = null)
+        => Run(() => CiValidateCommand.Execute(map, strict, ResolveGameDir(game_dir)));
+
+    [McpServerTool(Name = "ci_compat", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Run the compat check as a CI gate. Returns one pass or fail with what was examined and an exit code (0 pass, 1 fail). Fails on an error-level finding, a native, global, type or function the map uses that the target build does not declare. Warnings about object fields the target no longer defines do not fail the gate. Read-only.")]
+    public static CiCompatResult CiCompat(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Target build name or schema folder path.")] string target,
+        [Description("Optional path to schemas directory containing schema folders with manifest.json.")] string? schemas_dir = null)
+        => Run(() => CiCompatCommand.Execute(map, target, schemas_dir));
+
+    [McpServerTool(Name = "ci_schema", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Check the schema dataset for regressions as a CI gate. Returns one pass or fail per check with what was examined and an exit code (0 pass, 1 fail). Fails when any build stops parsing or fewer than min_real builds carry real object data. Each folder is loaded on its own so a broken build is named rather than aborting the whole check. Read-only.")]
+    public static CiSchemaResult CiSchema(
+        [Description("Optional path to schemas directory containing schema folders with manifest.json.")] string? schemas_dir = null,
+        [Description("Least number of builds with real object data that passes. 0 means no floor.")] int min_real = 0)
+        => Run(() => CiSchemaCommand.Execute(schemas_dir, min_real));
+
+    [McpServerTool(Name = "ci_all", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Run lint, validate and, when target is given, compat in one pass. Returns one summary line per gate and the overall pass or fail with an exit code (0 pass, 1 fail), so a pipeline gets the whole map picture from one call. Reuses the lint and validate gates, so a gate means here exactly what ci_lint and ci_validate mean on their own. Read-only.")]
+    public static CiAllResult CiAll(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Target build name or schema folder path. When given, the compat gate runs. When omitted the gate is reported as skipped.")] string? target = null,
+        [Description("Optional path to schemas directory containing schema folders with manifest.json.")] string? schemas_dir = null)
+        => Run(() => CiAllCommand.Execute(map, target, schemas_dir));
+
     [McpServerTool(Name = "gamedata_sources", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Return the dataset's provenance index. For every schema folder it reports the build, its era, the sections present, the SHA-256 of each section file, and the input hashes from the folder's manifest, so the whole dataset can be traced back to the game files it was derived from.")]
     public static GamedataSourcesResult GameDataSources(
