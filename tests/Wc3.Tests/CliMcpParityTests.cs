@@ -312,6 +312,10 @@ public class CliMcpParityTests
         "script roots",
         // Reachability-based function removal; a repair utility like 'script repair'.
         "script strip",
+        // Generates the two reference documents into local files, so it is about the tool surface
+        // rather than about a map, the same reason 'mcp tools' is here. The guard test regenerates
+        // both documents in memory instead, so the agent surface needs no docs tool.
+        "docs",
     };
 
     // The real MCP tool names, read straight from the [McpServerTool] attributes the
