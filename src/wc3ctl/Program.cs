@@ -3200,8 +3200,21 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
                 new { SavedTo = dest, Mtl = mtlPath, Textures = textures },
                 () => Render.ModelExportObj(export, dest, mtlPath, textures));
         }));
+        var modelAuditPath = new Argument<string>("model", "Path to a .mdx or .mdl file.");
+        var modelAudit = new Command("audit",
+            "Audit a model for the resource waste and draw-nothing problems the optimiser can remove, "
+            + "and report what it holds, its geosets, vertices, faces, textures, sequences and nodes.")
+            { modelAuditPath, jsonOption };
+        modelAudit.SetHandler(
+            (string modelPath, bool json) => RunSafely(() =>
+            {
+                var r = ModelAuditCommand.ExecutePath(modelPath);
+                Emit(json, r, () => Render.ModelAudit(r));
+            }),
+            modelAuditPath, jsonOption);
         var model = new Command("model", "Model asset operations.");
         model.AddCommand(modelExportObj);
+        model.AddCommand(modelAudit);
         root.AddCommand(model);
 
         // ---- strings / imports / trigger read: reachable from the GUI, previously not here ----

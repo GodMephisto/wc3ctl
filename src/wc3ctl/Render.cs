@@ -619,6 +619,25 @@ public static class Render
         return sb.ToString().TrimEnd();
     }
 
+    public static string ModelAudit(ModelAuditResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{Path.GetFileName(r.Path)}  {r.Format}  {r.Bytes} byte(s)");
+        sb.AppendLine($"  geosets {r.Geosets}  vertices {r.Vertices}  faces {r.Faces}  "
+            + $"textures {r.Textures}  sequences {r.Sequences}  nodes {r.Nodes}");
+        if (r.Diagnostics.Count > 0)
+            foreach (var d in r.Diagnostics) sb.AppendLine($"  ! {d}");
+        if (r.Issues.Count == 0)
+        {
+            sb.AppendLine("  no issues");
+            return sb.ToString().TrimEnd();
+        }
+        sb.AppendLine($"  {r.Issues.Count} issue(s)");
+        foreach (var issue in r.Issues)
+            sb.AppendLine($"    {issue.Kind,-18} {issue.Detail}");
+        return sb.ToString().TrimEnd();
+    }
+
     public static string Imports(ImportsListResult r)
     {
         var sb = new StringBuilder();
