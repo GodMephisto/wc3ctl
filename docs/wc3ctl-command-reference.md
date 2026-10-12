@@ -2,7 +2,7 @@
 
 Generated from the live command tree by `wc3ctl docs cli`. Do not edit by hand. Regenerate with `wc3ctl docs cli --force`, and the CI guard fails when this file is stale.
 
-The tree holds 63 top level verb(s) and 309 command path(s) in total.
+The tree holds 63 top level verb(s) and 310 command path(s) in total.
 
 ## Global options
 
@@ -423,6 +423,7 @@ wc3ctl model
 Subcommands
 
 - `export-obj`. Export a map-imported model to Wavefront OBJ, with an MTL and any map-resolvable textures converted to PNG beside it.
+- `audit`. Audit a model for the resource waste and draw-nothing problems the optimiser can remove, and report what it holds, its geosets, vertices, faces, textures, sequences and nodes.
 
 ### model export-obj
 
@@ -442,6 +443,20 @@ Arguments
 Options
 
 - `-o, --out <out>`. Output .obj path. A .mtl and any map-resolvable textures are written beside it.
+
+### model audit
+
+Audit a model for the resource waste and draw-nothing problems the optimiser can remove, and report what it holds, its geosets, vertices, faces, textures, sequences and nodes.
+
+Usage
+
+```
+wc3ctl model audit <model>
+```
+
+Arguments
+
+- `<model>` (required). Path to a .mdx or .mdl file.
 
 ## strings
 

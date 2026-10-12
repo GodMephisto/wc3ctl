@@ -430,6 +430,12 @@ public static class Wc3Tools
             return new AssetImportWireToolResult(full, r.Imported, r.FieldsSet, r.Diagnostics);
         });
 
+    [McpServerTool(Name = "model_audit", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Audit a .mdx or .mdl model for the resource waste and draw-nothing problems an optimiser can remove, and report what it holds. Finds duplicate textures, geosets with no texture or no triangles, zero-area faces, unused skeleton nodes and non-finite vertices. Read-only.")]
+    public static ModelAuditResult ModelAudit(
+        [Description("Path to a .mdx or .mdl model file.")] string model)
+        => Run(() => ModelAuditCommand.ExecutePath(model));
+
     [McpServerTool(Name = "model_export_obj", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Export a map-imported model to Wavefront OBJ at out_path, writing an MTL and any map-resolvable textures converted to PNG beside it. The map itself is never modified. Returns the .obj path, the .mtl path and the texture file names.")]
     public static ModelExportObjToolResult ModelExportObj(

@@ -2,7 +2,7 @@
 
 Generated from the live tool surface by `wc3ctl docs mcp`. Do not edit by hand. Regenerate with `wc3ctl docs mcp --force`, and the CI guard fails when this file is stale.
 
-The server exposes 233 tool(s).
+The server exposes 234 tool(s).
 
 ## asset_audit
 
@@ -511,6 +511,12 @@ Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 ## mcp_export_verify
 
 Verify that a wc3-mcp checkout holds the same server source scripts/export-wc3-mcp.py would export from this repository, reporting every file that differs without writing. Read-only.
+
+Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
+## model_audit
+
+Audit a .mdx or .mdl model for the resource waste and draw-nothing problems an optimiser can remove, and report what it holds. Finds duplicate textures, geosets with no texture or no triangles, zero-area faces, unused skeleton nodes and non-finite vertices. Read-only.
 
 Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 

@@ -37,6 +37,7 @@ public class McpServerTests
         "map_info_get", "map_info_set", "map_overview",
         "mcp_audit_annotations",
         "mcp_export_verify",
+        "model_audit",
         "model_export_obj",
         "mpq_add", "mpq_bytes_diff", "mpq_extract_all", "mpq_listfile", "mpq_merge",
         "mpq_name_recover", "mpq_rebuild", "mpq_remove",

@@ -47,6 +47,16 @@ public sealed class McpSmokeModelAssetTests : McpSmokeBase
         Assert.True(File.Exists(Path.Combine(outDir, "Tex.png")));
     }
 
+    [Fact, Covers("model_audit")]
+    public async Task Model_audit_reports_the_model()
+    {
+        var modelFile = NewOut("audit", ".mdx");
+        File.WriteAllBytes(modelFile, SyntheticModel.TinyMdx());
+        var r = await Call("model_audit", Args(("model", modelFile)));
+        Assert.Equal("mdx", Prop(r, "format").GetString());
+        Assert.True(Prop(r, "geosets").GetInt32() >= 1);
+    }
+
     [Fact, Covers("model_export_obj")]
     public async Task Model_export_obj_writes_obj_and_mtl()
     {
