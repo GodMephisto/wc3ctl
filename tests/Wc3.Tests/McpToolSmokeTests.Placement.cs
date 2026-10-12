@@ -142,6 +142,44 @@ public sealed class McpSmokePlacementTests : McpSmokeBase
         Assert.NotEqual(before, after);
     }
 
+    [Fact, Covers("region_create")]
+    public async Task Region_create_writes_the_region_from_corner_and_size()
+    {
+        var outPath = await Write("region_create", Args(("name", "Box"),
+            ("x", -128f), ("y", -64f), ("w", 256f), ("h", 128f)));
+        var region = Assert.Single(Model<MapRegions>(outPath, PlacementCommand.RegionsFile).Regions,
+            x => x.Name == "Box");
+        Assert.Equal(-128f, region.Left);
+        Assert.Equal(-64f, region.Bottom);
+        Assert.Equal(128f, region.Right);
+        Assert.Equal(64f, region.Top);
+    }
+
+    [Fact, Covers("region_to_rect")]
+    public async Task Region_to_rect_returns_the_corner_values()
+    {
+        var map = await PopulatedMap();
+        var r = await Call("region_to_rect", Args(("map", map), ("region", "Spawn")));
+        Assert.Equal(-256f, Prop(r, "left").GetSingle());
+        Assert.Equal(256f, Prop(r, "right").GetSingle());
+        Assert.Contains("Rect(", Prop(r, "jass").GetString());
+    }
+
+    [Fact, Covers("region_validate")]
+    public async Task Region_validate_is_clean_on_a_single_region()
+    {
+        var map = await PopulatedMap();
+        var r = await Call("region_validate", Args(("map", map)));
+        Assert.Equal(0, Prop(r, "issues").GetArrayLength());
+    }
+
+    [Fact, Covers("pathing_validate")]
+    public async Task Pathing_validate_is_clean_on_a_blank_map()
+    {
+        var r = await Call("pathing_validate", Args(("map", Fixture)));
+        Assert.Equal(0, Prop(r, "issues").GetArrayLength());
+    }
+
     private static TerrainTile Tile(string map, int x, int y)
     {
         var env = Model<MapEnvironment>(map, TerrainCommand.TerrainFile);

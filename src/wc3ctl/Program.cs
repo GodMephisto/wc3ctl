@@ -3322,11 +3322,33 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         }));
 
         var camera = new Command("camera",
-            "Camera catalog editing (war3map.w3c): list, add, set, remove.");
+            "Camera catalog editing (war3map.w3c). List, add, set, remove, tour.");
         camera.AddCommand(camList);
         camera.AddCommand(camAdd);
         camera.AddCommand(camSet);
         camera.AddCommand(camRemove);
+
+        var camTourFrom = new Option<string>("--from",
+            "Name of the camera the tour starts at.") { IsRequired = true };
+        var camTourTo = new Option<string>("--to",
+            "Name of the camera the tour ends at.") { IsRequired = true };
+        var camTourCount = new Option<int>("--count", () => 3,
+            "How many cameras to interpolate between the two.");
+        var camTour = new Command("tour",
+            "Interpolate N cameras between two existing cameras as a smooth path and save the "
+            + "edited map. Every field is blended linearly and the generated cameras sit strictly "
+            + "between the endpoints, named <from>-tour-i.")
+        { mapArg, camTourFrom, camTourTo, camTourCount, setOut };
+        camTour.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = CameraCommand.Tour(doc, p.GetValueForOption(camTourFrom)!,
+                p.GetValueForOption(camTourTo)!, p.GetValueForOption(camTourCount));
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message);
+        }));
+        camera.AddCommand(camTour);
 
         // ---- pathing: HiveWE-style brush over the pathing map (war3map.wpm) ----
         var pathCX = new Argument<int>("cx", "Brush centre pathing-cell X.");
@@ -3415,6 +3437,23 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         }));
         pathing.AddCommand(pathingExportPng);
         pathing.AddCommand(pathingImportPng);
+
+        var pathingValidate = new Command("validate",
+            "Flag enclosed unpathable pockets, start locations on unpathable tiles, and "
+            + "unreachable map corners. Read-only.")
+        { mapArg };
+        pathingValidate.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = PathingCommand.Validate(MapDocument.Load(p.GetValueForArgument(mapArg)));
+            Emit(p.GetValueForOption(jsonOption), r,
+                () => r.Message + (r.Issues.Count == 0
+                    ? ""
+                    : "\n" + string.Join("\n", r.Issues.Select(i => $"  [{i.Kind}] {i.Detail}"))));
+            if (r.Issues.Count > 0) exitCode[0] = 2;
+            else if (!r.Ok) exitCode[0] = 1;
+        }));
+        pathing.AddCommand(pathingValidate);
 
         // ---- map-info: read/edit the editable scenario fields (war3map.w3i) ----
         var miGet = new Command("get", "Show the map's editable scenario fields.") { mapArg };
@@ -3917,9 +3956,69 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
             FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message);
         }));
 
-        var region = new Command("region", "Region tooling for war3map.w3r, list and remove. Add via 'place region'.");
+        var regionCreateName = new Option<string>("--name", "Region name.") { IsRequired = true };
+        var regionCreateX = new Option<float>("--x", "South-west corner X (world units).") { IsRequired = true };
+        var regionCreateY = new Option<float>("--y", "South-west corner Y (world units).") { IsRequired = true };
+        var regionCreateW = new Option<float>("--w", "Region width (world units).") { IsRequired = true };
+        var regionCreateH = new Option<float>("--h", "Region height (world units).") { IsRequired = true };
+        var regionCreateWeather = new Option<bool>("--weather",
+            "Attach the default weather effect to the region.");
+        var regionCreate = new Command("create",
+            "Create a rectangular region (south-west corner plus width and height) and save the "
+            + "edited map. Writes war3map.w3r.")
+        { mapArg, regionCreateName, regionCreateX, regionCreateY, regionCreateW, regionCreateH,
+          regionCreateWeather, setOut };
+        regionCreate.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = RegionCommand.Create(doc, p.GetValueForOption(regionCreateName)!,
+                p.GetValueForOption(regionCreateX), p.GetValueForOption(regionCreateY),
+                p.GetValueForOption(regionCreateW), p.GetValueForOption(regionCreateH),
+                p.GetValueForOption(regionCreateWeather));
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message);
+        }));
+
+        var regionToRectName = new Argument<string>("region", "Region name to convert.");
+        var regionToRect = new Command("to-rect",
+            "Print one region's four corner values for a trigger Rect call. Read-only.")
+        { mapArg, regionToRectName };
+        regionToRect.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = RegionCommand.ToRect(MapDocument.Load(p.GetValueForArgument(mapArg)),
+                p.GetValueForArgument(regionToRectName));
+            Emit(p.GetValueForOption(jsonOption), r,
+                () => r.Ok
+                    ? $"{r.Name}  left={r.Left}  bottom={r.Bottom}  right={r.Right}  top={r.Top}\n{r.Jass}"
+                    : r.Message);
+            if (!r.Ok) exitCode[0] = 1;
+        }));
+
+        var regionValidate = new Command("validate",
+            "Flag overlapping regions, zero-area regions and regions outside the playable "
+            + "bounds. Read-only.")
+        { mapArg };
+        regionValidate.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = RegionCommand.Validate(MapDocument.Load(p.GetValueForArgument(mapArg)));
+            Emit(p.GetValueForOption(jsonOption), r,
+                () => r.Message + (r.Issues.Count == 0
+                    ? ""
+                    : "\n" + string.Join("\n", r.Issues.Select(i => $"  [{i.Kind}] {i.Detail}"))));
+            if (r.Issues.Count > 0) exitCode[0] = 2;
+            else if (!r.Ok) exitCode[0] = 1;
+        }));
+
+        var region = new Command("region",
+            "Region tooling for war3map.w3r. Create, list, remove, to-rect, validate.");
+        region.AddCommand(regionCreate);
         region.AddCommand(regionList);
         region.AddCommand(regionRemove);
+        region.AddCommand(regionToRect);
+        region.AddCommand(regionValidate);
 
         // Pre-flight checks that exist because their absence cost real debugging time. Every
         // rule here corresponds to a failure that a green build, passing tests and a clean

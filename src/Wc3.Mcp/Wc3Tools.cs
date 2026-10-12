@@ -1463,6 +1463,25 @@ public static class Wc3Tools
             return (r.Ok, r.Message);
         }));
 
+    [McpServerTool(Name = "camera_tour", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Add N cameras interpolated between two existing cameras as a smooth tour path, and save the edited map to out_path. Every float field is blended linearly and the generated cameras sit strictly between the endpoints, named <from>-tour-i. The input map is NEVER modified in place.")]
+    public static CameraTourToolResult CameraTour(
+        [Description("Path to the source .w3x/.w3m map file. The file is read-only and the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
+        [Description("Name of the camera the tour starts at.")] string from,
+        [Description("Name of the camera the tour ends at.")] string to,
+        [Description("How many cameras to interpolate between the two. Default 3.")] int count = 3)
+        => Run(() =>
+        {
+            var doc = LoadMap(map);
+            var r = CameraCommand.Tour(doc, from, to, count);
+            if (!r.Ok) throw new McpException(r.Message);
+            string full = ResolveOutPath(map, out_path);
+            if (Path.GetDirectoryName(full) is { Length: > 0 } dir) Directory.CreateDirectory(dir);
+            doc.Save(full);
+            return new CameraTourToolResult(full, r.Message, r.Names, r.Count);
+        });
+
     // ---- pathing map (war3map.wpm) ---------------------------------------
 
     private const string PathingFlagValues = "Walk|Fly|Build|Blight|Water";
@@ -1513,6 +1532,12 @@ public static class Wc3Tools
             var r = PathingImportPngCommand.Import(doc, ReadPngFile(png));
             return (r.Ok, r.Message);
         }));
+
+    [McpServerTool(Name = "pathing_validate", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Flag pathing problems in a map's war3map.wpm. It reports a pocket of unpathable tiles fully enclosed by pathable ones, a start location sitting on an unpathable tile, and a map corner that is unpathable or sealed off from the main walkable area. Read-only.")]
+    public static PathingValidateResult PathingValidate(
+        [Description("Path to a .w3x/.w3m map file.")] string map)
+        => Run(() => PathingCommand.Validate(LoadMap(map)));
 
     // ---- scenario: map-info, players, forces (war3map.w3i) ---------------
 
@@ -1621,6 +1646,36 @@ public static class Wc3Tools
             var r = PlacementCommand.RemoveRegion(doc, name);
             return (r.Ok, r.Message);
         }));
+
+    [McpServerTool(Name = "region_create", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Create a rectangular region from its south-west corner (x, y) plus a width w and height h, and save the edited map to out_path. The input map is NEVER modified in place. Rejects a blank or duplicate name and a non-positive size. Set weather to attach the default weather effect. Returns the assigned creation number.")]
+    public static PlacementToolResult RegionCreate(
+        [Description("Path to the source .w3x/.w3m map file. The file is read-only and the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map). Created or overwritten, and parent directories are created as needed. To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
+        [Description("Region name (non-empty, unique).")] string name,
+        [Description("South-west corner X (world coordinate).")] float x,
+        [Description("South-west corner Y (world coordinate).")] float y,
+        [Description("Region width in world units (must be > 0).")] float w,
+        [Description("Region height in world units (must be > 0).")] float h,
+        [Description("Attach the default weather effect to the region. Default false.")] bool weather = false)
+        => Run(() => SavePlacement(map, out_path, doc =>
+        {
+            var r = RegionCommand.Create(doc, name, x, y, w, h, weather);
+            return (r.Ok, r.Message, r.CreationNumber);
+        }));
+
+    [McpServerTool(Name = "region_to_rect", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Resolve one named region to the four corner values a JASS trigger's Rect call needs (left, bottom, right, top), with a ready-to-copy Rect(...) line. Read-only.")]
+    public static RegionRectResult RegionToRect(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Region name to convert.")] string region)
+        => Run(() => RegionCommand.ToRect(LoadMap(map), region));
+
+    [McpServerTool(Name = "region_validate", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Flag overlapping regions, zero-area regions and regions that fall outside the playable bounds in a map's war3map.w3r. Regions sharing only an edge do not overlap. Read-only.")]
+    public static RegionValidateResult RegionValidate(
+        [Description("Path to a .w3x/.w3m map file.")] string map)
+        => Run(() => RegionCommand.Validate(LoadMap(map)));
 
     [McpServerTool(Name = "trigger_add_eca", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Add an event, condition or action to a GUI trigger and save the edited map to out_path. Parameters are given in the order the function declares them; any left off are filled from the World-Editor table's own defaults. This matters more than it looks: war3map.wtg stores a function's parameters but NOT how many there are, so a function written with the wrong number of parameters yields a map that nothing, including this tool, can read afterwards. Use trigger_catalog_list and trigger_catalog_describe to find a function name and its arguments. Custom-text (script) triggers are refused, since their body is JASS rather than a list of functions. IMPORTANT: this edits war3map.wtg, the World Editor's trigger SOURCE, not war3map.j, the compiled script Warcraft III actually runs. wc3ctl does not regenerate the compiled script, so a trigger authored this way is inert in game until the map is opened and saved in the World Editor. The input map is NEVER modified in place.")]
@@ -2260,6 +2315,11 @@ public sealed record BundleMergeToolResult(string SavedTo, BundleMergeResult Mer
 /// <summary>place_doodad / place_region outcome: where the edited map was written, a
 /// human-readable message, and the creation number assigned to the new instance.</summary>
 public sealed record PlacementToolResult(string SavedTo, string Message, int CreationNumber);
+
+/// <summary>camera_tour outcome, where the edited map was written, the generated camera names
+/// in order, and the camera total after the op.</summary>
+public sealed record CameraTourToolResult(
+    string SavedTo, string Message, IReadOnlyList<string> Names, int Count);
 
 /// <summary>place_grid / place_scatter outcome, where the edited map was written, how many
 /// copies were placed, and each copy's creation number in placement order.</summary>
