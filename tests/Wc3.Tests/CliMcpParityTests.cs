@@ -23,6 +23,7 @@ public class CliMcpParityTests
         ["file_get_text"] = "file get-text",
         ["file_set"] = "file set",
         ["map_info"] = "info",
+        ["map_overview"] = "overview",
         ["list_files"] = "ls",
         ["object_form"] = "object form",
         ["unit_abilities"] = "unit abilities",

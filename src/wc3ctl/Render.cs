@@ -445,6 +445,12 @@ public static class Render
         $"Name:    {r.Name}\nAuthor:  {r.Author}\nPlayers: {r.Players}\nSize:    {r.Width}x{r.Height}"
         + (r.Diagnostics.Count == 0 ? "" : "\n\nDiagnostics:\n" + string.Join("\n", r.Diagnostics));
 
+    public static string MapOverview(MapOverviewResult r) =>
+        Info(r.Info)
+        + $"\n\nFiles {r.Files.Count}"
+        + "\nObjects by kind\n"
+        + string.Join("\n", r.ObjectCounts.Select(c => $"  {c.Kind,-13} {c.Count}"));
+
     public static string Roundtrip(RoundtripResult r)
     {
         var verdict = r.Faithful ? "OK - round-trip is byte-faithful for all files."

@@ -288,6 +288,29 @@ public class CliTests
     }
 
     [Fact]
+    public async Task Overview_json_returns_info_files_and_object_counts()
+    {
+        var map = SyntheticMap.Build(new Dictionary<string, byte[]> { ["war3map.j"] = new byte[] { 1 } });
+        var path = Path.Combine(Path.GetTempPath(), $"wc3ctl_ov_{System.Guid.NewGuid():N}.w3x");
+        File.WriteAllBytes(path, map);
+        try
+        {
+            var sw = new StringWriter();
+            var console = System.Console.Out;
+            System.Console.SetOut(sw);
+            int code = await Wc3Ctl.Program.Main(new[] { "overview", path, "--json" });
+            System.Console.SetOut(console);
+            Assert.Equal(0, code);
+            var output = sw.ToString();
+            Assert.Contains("\"Info\"", output);
+            Assert.Contains("\"Files\"", output);
+            Assert.Contains("\"ObjectCounts\"", output);
+            Assert.Contains("\"Diagnostics\"", output);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
     public async Task Missing_file_exits_nonzero_with_clean_message_no_stack_trace()
     {
         var missing = Path.Combine(Path.GetTempPath(), $"wc3ctl_missing_{System.Guid.NewGuid():N}.w3x");

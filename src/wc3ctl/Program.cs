@@ -143,6 +143,15 @@ public static class Program
             Emit(json, r, () => Render.List(r));
         }), mapArg, lsHarvestOption, jsonOption);
 
+        var overview = new Command("overview",
+            "One call per map, metadata, every archive file, the custom object counts by kind and the diagnostics.")
+        { mapArg };
+        overview.SetHandler((string map, bool json) => RunSafely(() =>
+        {
+            var r = MapOverviewCommand.Execute(MapDocument.Load(map));
+            Emit(json, r, () => Render.MapOverview(r));
+        }), mapArg, jsonOption);
+
         var rt = new Command("roundtrip", "Verify byte-faithful round-trip.") { mapArg };
         rt.SetHandler((string map, bool json) => RunSafely(() =>
         {
@@ -4726,7 +4735,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
 
         root.AddCommand(file);
         root.AddCommand(leak);
-        root.AddCommand(info); root.AddCommand(ls); root.AddCommand(rt);
+        root.AddCommand(info); root.AddCommand(ls); root.AddCommand(overview); root.AddCommand(rt);
         root.AddCommand(search); root.AddCommand(diff); root.AddCommand(obj);
         root.AddCommand(extract); root.AddCommand(render); root.AddCommand(renderModel);
         root.AddCommand(script); root.AddCommand(bundle); root.AddCommand(port);

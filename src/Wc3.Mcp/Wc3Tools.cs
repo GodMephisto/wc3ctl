@@ -37,6 +37,12 @@ public static class Wc3Tools
             return ListCommand.Execute(doc, typeUnnamed: true);
         });
 
+    [McpServerTool(Name = "map_overview", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("One call per map: metadata (name, author, player count, dimensions), every archive file, the custom or modified object counts by Object Editor kind, and the load diagnostics. Use this when you need a map's overall shape instead of calling map_info, list_files and object_list separately.")]
+    public static MapOverviewResult MapOverview(
+        [Description("Path to a .w3x/.w3m map file.")] string map)
+        => Run(() => MapOverviewCommand.Execute(LoadMap(map)));
+
     [McpServerTool(Name = "script_leaks", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Find handle leaks in a map's war3map.j (locations, groups, forces, effects, timers, "
         + "text tags, lightning and triggers created and never destroyed), each ranked by how often "
