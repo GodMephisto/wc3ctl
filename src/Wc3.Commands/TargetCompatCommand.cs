@@ -703,8 +703,9 @@ public static class TargetCompatCommand
         }
     }
 
-    /// <summary>Map a schema file path to an object kind name for the kind-lookup table.</summary>
-    private static string? SchemaKindFromPath(string schemaPath)
+    /// <summary>Map a schema file path to an object kind name for the kind-lookup table.
+    /// Shared with the object commands so a schema file is classified one way.</summary>
+    internal static string? SchemaKindFromPath(string schemaPath)
     {
         string lower = schemaPath.ToLowerInvariant();
         if (lower.Contains("unitmetadata")) return "unit";

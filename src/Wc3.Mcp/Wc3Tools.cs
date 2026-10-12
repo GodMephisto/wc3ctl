@@ -414,6 +414,63 @@ public static class Wc3Tools
             return new ObjectNewToolResult(full, r.Message, r.NewRawcode);
         });
 
+    [McpServerTool(Name = "object_search", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Full-text search across every custom or modified object's field values, in both the base game data and the map's own deltas. Read-only. Reports the kind, rawcode, resolved name, field code, and the base and map values, so a hit is traceable. Pass kind to search one Object Editor type or field to restrict to one field code.")]
+    public static ObjectSearchResult ObjectSearch(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Text to find in field values, a case-insensitive substring.")] string query,
+        [Description("Object kind: " + KindValues + ". Omit to search every kind.")] string? kind = null,
+        [Description("Restrict the search to one field code, e.g. 'uhpm'.")] string? field = null,
+        [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Without it only the map's own deltas are searched.")] string? game_dir = null)
+        => Run(() => ObjectSearchCommand.Execute(
+            LoadMap(map), query, kind is null ? null : ParseKind(kind), field, ResolveGameDir(game_dir)));
+
+    [McpServerTool(Name = "object_noop_fields", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("List object fields whose map value equals the base game value, so the edit changes nothing. Read-only. Needs a game_dir for the base values; without one the answer is map-only and says so.")]
+    public static ObjectNoopFieldsResult ObjectNoopFields(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Object kind: " + KindValues + ". Omit to check every kind.")] string? kind = null,
+        [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Without it there is no base value to compare against.")] string? game_dir = null)
+        => Run(() => ObjectNoopFieldsCommand.Execute(
+            LoadMap(map), kind is null ? null : ParseKind(kind), ResolveGameDir(game_dir)));
+
+    [McpServerTool(Name = "object_deprecated", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("List object fields the target build's schema does not define but the map still sets, meaning the edit is ignored on that build. Read-only. The target is a schema folder path or a build name under the schemas directory. A target with no object data section is reported as such rather than as a clean result.")]
+    public static ObjectDeprecatedResult ObjectDeprecated(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Target build name or path to a schema folder.")] string target,
+        [Description("Optional path to a schemas directory. When omitted, searches <AppContext.BaseDirectory>/schemas then walks up to data/schemas.")] string? schemas_dir = null)
+        => Run(() => ObjectDeprecatedCommand.Execute(LoadMap(map), target, schemas_dir));
+
+    [McpServerTool(Name = "object_rawcode_suggest", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Propose free four-character rawcodes for one Object Editor kind that collide with neither the map's objects nor the base game data. Read-only. Without a game_dir the suggestions are checked against the map only.")]
+    public static ObjectRawcodeSuggestResult ObjectRawcodeSuggest(
+        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Object kind: " + KindValues + ".")] string kind,
+        [Description("How many rawcodes to propose. Default 10.")] int count = 10,
+        [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Without it base game data is not excluded.")] string? game_dir = null)
+        => Run(() => ObjectRawcodeSuggestCommand.Execute(
+            LoadMap(map), ParseKind(kind), count, ResolveGameDir(game_dir)));
+
+    [McpServerTool(Name = "object_clone", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Deep-clone a map object under a new rawcode and save the edited map to out_path. The input map is NEVER modified in place. The clone copies the source's field deltas and, for a leveled kind, its per-level data too, keeping the source's base. Refuses a rawcode already taken by the map.")]
+    public static ObjectCloneToolResult ObjectClone(
+        [Description("Path to the source .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Four-character source rawcode to clone.")] string rawcode,
+        [Description("Four-character rawcode for the clone.")] string new_rawcode,
+        [Description("Object kind: " + KindValues + ".")] string kind = "unit")
+        => Run(() =>
+        {
+            string full = ResolveOutPath(map, out_path);
+            var doc = LoadMap(map);
+            var r = ObjectCloneCommand.Execute(doc, ParseKind(kind), rawcode, new_rawcode);
+            if (!r.Ok) throw new McpException(r.Message);
+            if (Path.GetDirectoryName(full) is { Length: > 0 } dir) Directory.CreateDirectory(dir);
+            doc.Save(full);
+            return new ObjectCloneToolResult(full, r.Message, r.NewRawcode, r.FieldsCopied);
+        });
+
     [McpServerTool(Name = "unit_abilities", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Every ability a unit has, each tagged with where it comes from. ObjectNormal and ObjectHero are the "
         + "unit type's own lists (uabi, uhab). Spellbook is inside a spellbook the unit has (passives often hide there). "
@@ -1669,6 +1726,10 @@ public sealed record ObjectSetToolResult(string SavedTo, string Message, string?
 
 /// <summary>object_new outcome: where the edited map was written, a message, and the newly allocated rawcode.</summary>
 public sealed record ObjectNewToolResult(string SavedTo, string Message, string? NewRawcode);
+
+/// <summary>object_clone outcome: where the edited map was written, a message, the new
+/// rawcode, and how many field values the clone received.</summary>
+public sealed record ObjectCloneToolResult(string SavedTo, string Message, string? NewRawcode, int FieldsCopied);
 
 /// <summary>sound_* write outcome: where the edited map was written plus a human-readable message.</summary>
 public sealed record SoundToolResult(string SavedTo, string Message);

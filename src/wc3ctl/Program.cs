@@ -296,6 +296,121 @@ public static class Program
         }));
         obj.AddCommand(objNew);
 
+        var objSearchQuery = new Argument<string>("query",
+            "Text to find in object field values (case-insensitive substring).");
+        var objSearchField = new Option<string?>("--field", "Restrict the search to one field code.");
+        var objSearch = new Command("search",
+            "Search every custom/modified object's field values (base and map) for text. Read-only.")
+        { mapArg, objSearchQuery, objSearchField, objGetKind };
+        objSearch.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var kindToken = p.GetValueForOption(objGetKind);
+            var r = ObjectSearchCommand.Execute(
+                MapDocument.Load(p.GetValueForArgument(mapArg)),
+                p.GetValueForArgument(objSearchQuery),
+                kindToken is null ? null : ObjectKinds.Parse(kindToken),
+                p.GetValueForOption(objSearchField),
+                p.GetValueForOption(gameDirOption));
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.ObjectSearch(r));
+        }));
+        obj.AddCommand(objSearch);
+
+        var objNoop = new Command("noop-fields",
+            "List fields whose map value equals the base game value, so the edit changes nothing. "
+            + "Read-only. Needs --game-dir for the base, or it reports map-only.")
+        { mapArg, objGetKind };
+        objNoop.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var kindToken = p.GetValueForOption(objGetKind);
+            var r = ObjectNoopFieldsCommand.Execute(
+                MapDocument.Load(p.GetValueForArgument(mapArg)),
+                kindToken is null ? null : ObjectKinds.Parse(kindToken),
+                p.GetValueForOption(gameDirOption));
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.ObjectNoopFields(r));
+        }));
+        obj.AddCommand(objNoop);
+
+        var objDeprecatedTarget = new Option<string>("--target",
+            "Target build name or path to a schema folder.") { IsRequired = true };
+        var objDeprecatedSchemas = new Option<string?>("--schemas",
+            "Directory of schema folders. Default: search <base>/schemas then walk up to data/schemas.");
+        var objDeprecated = new Command("deprecated",
+            "List object fields the target build's schema does not define but the map still sets. Read-only.")
+        { mapArg, objDeprecatedTarget, objDeprecatedSchemas };
+        objDeprecated.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = ObjectDeprecatedCommand.Execute(
+                MapDocument.Load(p.GetValueForArgument(mapArg)),
+                p.GetValueForOption(objDeprecatedTarget)!,
+                p.GetValueForOption(objDeprecatedSchemas));
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.ObjectDeprecated(r));
+        }));
+        obj.AddCommand(objDeprecated);
+
+        var objSuggestKind = new Argument<string>("kind",
+            "Object type: unit|item|ability|destructable|doodad|buff|upgrade.");
+        var objSuggestCount = new Option<int>("--count", () => 10, "How many rawcodes to propose.");
+        var objSuggest = new Command("rawcode-suggest",
+            "Propose free four-character rawcodes that collide with neither the map nor the "
+            + "base game data for the kind. Read-only.")
+        { mapArg, objSuggestKind, objSuggestCount };
+        objSuggest.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = ObjectRawcodeSuggestCommand.Execute(
+                MapDocument.Load(p.GetValueForArgument(mapArg)),
+                ObjectKinds.Parse(p.GetValueForArgument(objSuggestKind)),
+                p.GetValueForOption(objSuggestCount),
+                p.GetValueForOption(gameDirOption));
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.ObjectRawcodeSuggest(r));
+        }));
+        obj.AddCommand(objSuggest);
+
+        var objCloneKind = new Argument<string>("kind",
+            "Object type: unit|item|ability|destructable|doodad|buff|upgrade.");
+        var objCloneSource = new Argument<string>("rawcode", "Four-character source rawcode to clone.");
+        var objCloneNew = new Argument<string>("new-rawcode", "Four-character rawcode for the clone.");
+        var objClone = new Command("clone",
+            "Deep-clone a map object (its field deltas, and level data for an ability) under a new "
+            + "rawcode and save the edited map. Refuses a rawcode already taken.")
+        { mapArg, objCloneKind, objCloneSource, objCloneNew, setOut };
+        objClone.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = ObjectCloneCommand.Execute(doc,
+                ObjectKinds.Parse(p.GetValueForArgument(objCloneKind)),
+                p.GetValueForArgument(objCloneSource),
+                p.GetValueForArgument(objCloneNew));
+            if (!r.Ok)
+            {
+                Emit(p.GetValueForOption(jsonOption), r, () => r.Message);
+                exitCode[0] = 1;
+                return;
+            }
+            var dest = p.GetValueForOption(setOut) ?? Path.Combine(
+                Path.GetDirectoryName(map) ?? "",
+                Path.GetFileNameWithoutExtension(map) + ".edited" + Path.GetExtension(map));
+            if (Path.GetFullPath(dest).Equals(Path.GetFullPath(map), StringComparison.OrdinalIgnoreCase))
+            {
+                const string inPlace = "refusing to overwrite the input map, pass -o <path> for a distinct output";
+                Emit(p.GetValueForOption(jsonOption),
+                    new { Ok = false, Message = inPlace, SavedTo = (string?)null },
+                    () => inPlace);
+                exitCode[0] = 1;
+                return;
+            }
+            doc.Save(dest);
+            Emit(p.GetValueForOption(jsonOption),
+                new { r.Ok, r.Message, r.NewRawcode, r.FieldsCopied, SavedTo = dest },
+                () => $"{r.Message}\nsaved: {dest}");
+        }));
+        obj.AddCommand(objClone);
+
         // ---- placement: add doodads/regions to a map and save the edited copy ----
         var placeXArg = new Argument<float>("x", "World X coordinate.");
         var placeYArg = new Argument<float>("y", "World Y coordinate.");

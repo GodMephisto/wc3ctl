@@ -1,10 +1,14 @@
 // tests/Wc3.Tests/McpToolSmokeTests.Objects.cs
-// Objects family. object_list, object_get, object_new, object_set,
+// Objects family. object_list, object_get, object_new, object_set, object_search,
+// object_noop_fields, object_deprecated, object_rawcode_suggest, object_clone,
 // player_list, player_set_force, force_list, force_set_flags.
 // object_new and object_set open game data when the map references
 // standard objects, so they need a game install directory.
 using System.Text.Json;
 using ModelContextProtocol.Protocol;
+using War3Net.Build.Object;
+using War3Net.Common.Extensions;
+using Wc3.Commands;
 
 namespace Wc3.Tests;
 
@@ -248,4 +252,98 @@ public sealed class McpSmokeObjectsTests : McpSmokeBase
         await CallError("force_set_flags", Args(("map", Fixture), ("out_path", NewOut("fsf")),
             ("force_index", 5), ("allied", true)));
     }
+
+    [Fact, Covers("object_search")]
+    public async Task Object_search_finds_a_map_field_value()
+    {
+        var map = UnitMap("uhpm", "999");
+        var result = await Call("object_search", Args(("map", map), ("query", "999")));
+        Assert.True(Prop(result, "count").GetInt32() >= 1, "expected at least one hit for 999");
+        var hits = Prop(result, "hits");
+        Assert.Equal(JsonValueKind.Array, hits.ValueKind);
+        Assert.Contains(hits.EnumerateArray(),
+            h => string.Equals(Prop(h, "rawcode").GetString(), "u000", StringComparison.Ordinal));
+    }
+
+    [Fact, Covers("object_noop_fields")]
+    public async Task Object_noop_fields_without_game_data_says_so()
+    {
+        // A deliberately absent game_dir keeps this hermetic on a machine that does have
+        // a WC3 install, since an explicit override never falls back to auto-detection.
+        var map = UnitMap("uhpm", "999");
+        var result = await Call("object_noop_fields",
+            Args(("map", map), ("game_dir", "Z:\\no_such_install")));
+        Assert.Equal(0, Prop(result, "count").GetInt32());
+        Assert.NotEmpty(Prop(result, "diagnostics").EnumerateArray());
+    }
+
+    [Fact, Covers("object_deprecated")]
+    public async Task Object_deprecated_reports_a_field_the_target_lacks()
+    {
+        var map = UnitMap("uhpm", "999");
+        var schemaDir = Path.Combine(_f.Dir, $"schema-{Guid.NewGuid():N}");
+        var schema = new GameSchema(1, "smoke-build", "test",
+            Array.Empty<SchemaInput>(), Array.Empty<string>(),
+            new Dictionary<string, IReadOnlyList<SchemaField>>
+            { ["units/unitmetadata.slk"] = new[] { SchemaFieldOf("unam") } },
+            null, null);
+        GameSchemaCommand.Save(schema, schemaDir);
+
+        var result = await Call("object_deprecated", Args(("map", map), ("target", schemaDir)));
+        Assert.True(Prop(result, "fieldsChecked").GetInt32() >= 1);
+        var fields = Prop(result, "fields");
+        Assert.Contains(fields.EnumerateArray(),
+            f => string.Equals(Prop(f, "fieldCode").GetString(), "uhpm", StringComparison.Ordinal));
+    }
+
+    [Fact, Covers("object_rawcode_suggest")]
+    public async Task Object_rawcode_suggest_avoids_used_codes()
+    {
+        var map = UnitMap("uhpm", "999");
+        var result = await Call("object_rawcode_suggest", Args(("map", map), ("kind", "unit"), ("count", 3)));
+        var codes = Prop(result, "rawcodes").EnumerateArray().Select(c => c.GetString()).ToList();
+        Assert.Equal(3, codes.Count);
+        Assert.DoesNotContain("u000", codes);
+    }
+
+    [Fact, Covers("object_clone")]
+    public async Task Object_clone_writes_a_copy_the_read_tools_confirm()
+    {
+        var map = UnitMap("uhpm", "999");
+        var cloned = await Write("object_clone",
+            Args(("rawcode", "u000"), ("new_rawcode", "u001"), ("kind", "unit")), map: map);
+
+        var got = await Call("object_get", Args(("map", cloned), ("rawcode", "u001"), ("kind", "unit")));
+        Assert.True(Prop(got, "found").GetBoolean());
+    }
+
+    /// <summary>A map holding one custom unit u000 (base hfoo) with a single int field.</summary>
+    private string UnitMap(string field, string value)
+    {
+        var w3u = new UnitObjectData(ObjectDataFormatVersion.v2);
+        var unit = new SimpleObjectModification
+        { OldId = "hfoo".FromRawcode(), NewId = "u000".FromRawcode() };
+        unit.Modifications.Add(new SimpleObjectDataModification
+        { Id = field.FromRawcode(), Type = ObjectDataType.Int, Value = int.Parse(value) });
+        w3u.NewUnits.Add(unit);
+
+        var map = Path.Combine(_f.Dir, $"obj-{Guid.NewGuid():N}.w3x");
+        File.WriteAllBytes(map, SyntheticMap.Build(new Dictionary<string, byte[]>
+        {
+            ["war3map.w3u"] = Ser(w => War3Net.Build.Extensions.BinaryWriterExtensions.Write(w, w3u)),
+        }));
+        return map;
+    }
+
+    private static byte[] Ser(Action<BinaryWriter> write)
+    {
+        using var ms = new MemoryStream();
+        using (var bw = new BinaryWriter(ms, System.Text.Encoding.UTF8, leaveOpen: true)) write(bw);
+        return ms.ToArray();
+    }
+
+    /// <summary>A schema field row carrying only the field code, enough for a deprecated check.</summary>
+    private static SchemaField SchemaFieldOf(string code) =>
+        new(code, "UnitBalance", "HP", "int", "WESTRING", code, "data", 0, 0, 0,
+            "", "", "", "", true, true, true, true, true);
 }
