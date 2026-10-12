@@ -62,6 +62,15 @@ public static class McpCommand
         serve.SetHandler(Serve);
         mcp.AddCommand(serve);
 
+        var tools = new Command("tools",
+            "Dump the MCP tool surface the server builds. Name, description and the four annotations, read-only.");
+        tools.SetHandler((bool json) =>
+        {
+            var catalog = Wc3.Mcp.McpToolCatalog.Describe();
+            Console.WriteLine(json ? Render.AsJson(catalog) : Render.McpTools(catalog));
+        }, jsonOption);
+        mcp.AddCommand(tools);
+
         var audit = new Command("audit-annotations",
             "Report MCP tools whose annotations disagree with their name or that declare no annotations.");
         audit.SetHandler((bool json) =>

@@ -311,6 +311,23 @@ public class CliTests
     }
 
     [Fact]
+    public async Task Mcp_tools_json_dumps_the_surface_with_annotations()
+    {
+        var sw = new StringWriter();
+        var console = System.Console.Out;
+        System.Console.SetOut(sw);
+        int code = await Wc3Ctl.Program.Main(new[] { "mcp", "tools", "--json" });
+        System.Console.SetOut(console);
+        Assert.Equal(0, code);
+        var output = sw.ToString();
+        Assert.Contains("\"Name\": \"map_info\"", output);
+        Assert.Contains("\"ReadOnly\"", output);
+        Assert.Contains("\"Destructive\"", output);
+        Assert.Contains("\"Idempotent\"", output);
+        Assert.Contains("\"OpenWorld\"", output);
+    }
+
+    [Fact]
     public async Task Mcp_audit_annotations_json_is_clean_and_exits_zero()
     {
         var sw = new StringWriter();

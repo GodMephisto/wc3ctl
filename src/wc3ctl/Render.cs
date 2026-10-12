@@ -451,6 +451,13 @@ public static class Render
         + "\nObjects by kind\n"
         + string.Join("\n", r.ObjectCounts.Select(c => $"  {c.Kind,-13} {c.Count}"));
 
+    /// <summary>A null annotation prints as '?' since the server omitted it, a real bool prints as true or false.</summary>
+    private static string Hint(bool? value) => value is null ? "?" : value.Value ? "true" : "false";
+
+    public static string McpTools(IReadOnlyList<Wc3.Mcp.McpToolInfo> tools) =>
+        string.Join("\n", tools.Select(t =>
+            $"{t.Name,-30} ro={Hint(t.ReadOnly)} d={Hint(t.Destructive)} i={Hint(t.Idempotent)} ow={Hint(t.OpenWorld)}"));
+
     public static string McpAudit(Wc3.Mcp.McpAnnotationAuditResult r) =>
         r.Count == 0
             ? "clean, no annotation problems"

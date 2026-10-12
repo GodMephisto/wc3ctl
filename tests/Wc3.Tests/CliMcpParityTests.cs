@@ -242,6 +242,9 @@ public class CliMcpParityTests
         // surface is reached, not map operations, so there is nothing for a tool to mirror.
         "mcp serve", "mcp install", "mcp uninstall", "mcp config", "mcp clients", "mcp doctor",
         "mcp version", "mcp help",
+        // Dumps the tool catalog the server itself builds, so it is about the surface rather
+        // than about a map and there is no map operation for a tool to mirror.
+        "mcp tools",
         "target clear",
         // Writes an image to a path on this machine, so the output is a local file rather
         // than an answer. Same reason as extract.
