@@ -214,4 +214,114 @@ public class TargetBuildSettingsTests
                 Directory.Delete(settingsDir, true);
         }
     }
+
+    private static int CountOccurrences(string text, string needle)
+    {
+        int n = 0, i = 0;
+        while ((i = text.IndexOf(needle, i, StringComparison.Ordinal)) >= 0) { n++; i += needle.Length; }
+        return n;
+    }
+
+    // A schema folder is enough to make a path a valid target, the manifest content is not read here.
+    private static string TempSchemaFolder()
+    {
+        var dir = Path.Combine(TempSettingsDir(), "TFT-v1.30.1.10211");
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, "manifest.json"), "{}");
+        return dir;
+    }
+
+    [Fact]
+    public void Set_twice_keeps_other_keys_and_writes_one_target_build()
+    {
+        TargetBuildSettings.ResetSettingsDir();
+        var settingsDir = TempSettingsDir();
+        var schemasDir = TempSettingsDir();
+        var buildDir = TempSchemaFolder();
+        try
+        {
+            Environment.SetEnvironmentVariable("WC3CTL_SETTINGS_DIR", settingsDir);
+            TargetBuildSettings.ResetSettingsDir();
+
+            var settingsFile = Path.Combine(settingsDir, "settings.json");
+            File.WriteAllText(settingsFile, "{\"other\":1,\"targetBuild\":\"x\"}");
+
+            TargetBuildSettings.Set(buildDir, schemasDir);
+            // The second Set is what produced a duplicate key before the fix.
+            TargetBuildSettings.Set(buildDir, schemasDir);
+
+            var text = File.ReadAllText(settingsFile);
+            Assert.Contains("\"other\"", text);
+            Assert.Equal(1, CountOccurrences(text, "targetBuild"));
+            using var doc = System.Text.Json.JsonDocument.Parse(text); // throws if the file is not valid JSON
+            Assert.Equal(buildDir, doc.RootElement.GetProperty("targetBuild").GetString());
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("WC3CTL_SETTINGS_DIR", null);
+            if (Directory.Exists(settingsDir)) Directory.Delete(settingsDir, true);
+            if (Directory.Exists(schemasDir)) Directory.Delete(schemasDir, true);
+            if (Directory.Exists(buildDir)) Directory.Delete(Path.GetDirectoryName(buildDir)!, true);
+        }
+    }
+
+    [Fact]
+    public void Set_with_a_schema_folder_path_persists_it()
+    {
+        TargetBuildSettings.ResetSettingsDir();
+        var settingsDir = TempSettingsDir();
+        var schemasDir = TempSettingsDir();
+        var buildDir = TempSchemaFolder();
+        try
+        {
+            Environment.SetEnvironmentVariable("WC3CTL_SETTINGS_DIR", settingsDir);
+            TargetBuildSettings.ResetSettingsDir();
+
+            TargetBuildSettings.Set(buildDir, schemasDir);
+
+            var result = TargetBuildSettings.Get();
+            Assert.Equal(buildDir, result.Build);
+            Assert.Equal(TargetSource.Settings, result.Source);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("WC3CTL_SETTINGS_DIR", null);
+            if (Directory.Exists(settingsDir)) Directory.Delete(settingsDir, true);
+            if (Directory.Exists(schemasDir)) Directory.Delete(schemasDir, true);
+            if (Directory.Exists(buildDir)) Directory.Delete(Path.GetDirectoryName(buildDir)!, true);
+        }
+    }
+
+    // Plain strings, so the suggestion function is tested with no schemas folder at all.
+    private static readonly string[] SampleBuilds =
+    {
+        "TFT-v1.30.1.10211", "TFT-v1.31.0.11889-w3t", "TFT-v1.31.1.12173",
+        "1.30.4.11274", "3.0.0.24268", "Beta-ROC-v1.00",
+    };
+
+    [Fact]
+    public void Suggest_finds_a_substring_match_over_a_distance_only_one()
+    {
+        // "1.30.1" is not a prefix of any build, but it is inside TFT-v1.30.1.10211.
+        var s = TargetBuildSettings.Suggest("1.30.1", SampleBuilds);
+        Assert.Equal("TFT-v1.30.1.10211", s[0]);
+    }
+
+    [Fact]
+    public void Suggest_matches_a_prefix_case_insensitively_and_nearest_first()
+    {
+        var s = TargetBuildSettings.Suggest("tft-v1.31", SampleBuilds);
+        Assert.Equal(2, s.Take(2).Count(b => b.StartsWith("TFT-v1.31", StringComparison.Ordinal)));
+        Assert.Contains("TFT-v1.31.0.11889-w3t", s.Take(2));
+        Assert.Contains("TFT-v1.31.1.12173", s.Take(2));
+    }
+
+    [Fact]
+    public void Suggest_is_capped_at_max_and_never_empty_for_a_nonempty_list()
+    {
+        var builds = Enumerable.Range(0, 40).Select(i => $"TFT-v1.3{i}.1.10211").ToArray();
+        var s = TargetBuildSettings.Suggest("bogus-name", builds);
+        Assert.Equal(10, s.Count);
+        Assert.Empty(TargetBuildSettings.Suggest("x", Array.Empty<string>()));
+    }
 }

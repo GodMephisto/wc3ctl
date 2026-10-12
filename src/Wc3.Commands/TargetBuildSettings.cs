@@ -127,75 +127,127 @@ public static class TargetBuildSettings
     /// </param>
     public static void Set(string build, string? schemasDir = null)
     {
-        // Validate the build by looking it up in schemas, reusing
-        // TargetCompatCommand lookup logic (LoadTargetSchema is private there).
-        // lookup logic (LoadTargetSchema is private there, so replicate).
         var resolvedSchemas = ResolveSchemasDir(schemasDir);
 
-        // Try as a path first.
-        if (Directory.Exists(build) && File.Exists(Path.Combine(build, "manifest.json")))
-            return; // valid path.
-
-        // Try as a build name.
-        bool found = false;
-        foreach (var subDir in Directory.EnumerateDirectories(resolvedSchemas))
+        // A schema folder is a valid target in its own right, so persist the path unchanged. Any
+        // other value must name a build the schemas folder declares.
+        bool isPath = Directory.Exists(build) && File.Exists(Path.Combine(build, "manifest.json"));
+        if (!isPath)
         {
-            string manifestPath = Path.Combine(subDir, "manifest.json");
-            if (!File.Exists(manifestPath)) continue;
-            var manifest = GameSchemaCommand.Load(subDir);
-            if (manifest.Build == build)
+            var names = BuildNames(resolvedSchemas);
+            if (!names.Contains(build, StringComparer.Ordinal))
             {
-                found = true;
-                break;
+                var close = Suggest(build, names);
+                throw new FileNotFoundException(
+                    "build '" + build + "' not found"
+                    + (close.Count > 0 ? (". Close names: " + string.Join(", ", close)) : ""));
             }
         }
 
-        if (!found)
+        WriteTarget(build);
+    }
+
+    /// <summary>Every build name the schemas folder declares.</summary>
+    private static List<string> BuildNames(string schemasDir)
+    {
+        var names = new List<string>();
+        foreach (var subDir in Directory.EnumerateDirectories(schemasDir))
         {
-            // List up to 10 close names.
-            var builds = new List<string>();
-            foreach (var subDir in Directory.EnumerateDirectories(resolvedSchemas))
-            {
-                string manifestPath = Path.Combine(subDir, "manifest.json");
-                if (!File.Exists(manifestPath)) continue;
-                builds.Add(GameSchemaCommand.Load(subDir).Build);
-            }
-            builds.Sort((a, b) => Wc3.Commands.GameBuildName.Compare(
-                Wc3.Commands.GameBuildName.Parse(a),
-                Wc3.Commands.GameBuildName.Parse(b)));
-
-            var close = builds.Where(b =>
-                b.Contains(build, StringComparison.OrdinalIgnoreCase)
-                || build.Contains(b.Split('-').FirstOrDefault() ?? "", StringComparison.OrdinalIgnoreCase)
-            ).Take(10).ToList();
-
-            throw new FileNotFoundException(
-                "build '" + build + "' not found"
-                + (close.Count > 0 ? (". Close names: " + string.Join(", ", close)) : ""));
+            if (!File.Exists(Path.Combine(subDir, "manifest.json"))) continue;
+            names.Add(GameSchemaCommand.Load(subDir).Build);
         }
+        return names;
+    }
 
-        // Write settings file.
+    /// <summary>
+    /// The up-to-<paramref name="max"/> closest build names to an unknown input, nearest first.
+    /// A build that starts with the input ranks above one that merely contains it, and both rank
+    /// above the rest, which are ordered by Levenshtein distance over the lowercased names. So
+    /// "1.30.1" suggests TFT-v1.30.1.10211 and "tft-v1.31" suggests the 1.31 builds. It works on
+    /// plain strings, so it is unit testable with no schemas folder.
+    /// </summary>
+    internal static IReadOnlyList<string> Suggest(
+        string input, IReadOnlyList<string> builds, int max = 10)
+    {
+        string needle = (input ?? string.Empty).Trim();
+        if (needle.Length == 0 || builds.Count == 0 || max <= 0) return Array.Empty<string>();
+
+        string lowered = needle.ToLowerInvariant();
+        return builds
+            .Select(b => (
+                Build: b,
+                Rank: b.StartsWith(needle, StringComparison.OrdinalIgnoreCase) ? 0
+                    : b.Contains(needle, StringComparison.OrdinalIgnoreCase) ? 1
+                    : 2,
+                Distance: Levenshtein(lowered, b.ToLowerInvariant())))
+            .OrderBy(r => r.Rank)
+            .ThenBy(r => r.Distance)
+            .ThenBy(r => r.Build, StringComparer.Ordinal)
+            .Take(max)
+            .Select(r => r.Build)
+            .ToList();
+    }
+
+    /// <summary>Plain Levenshtein edit distance between two short strings.</summary>
+    private static int Levenshtein(string a, string b)
+    {
+        var previous = new int[b.Length + 1];
+        var current = new int[b.Length + 1];
+        for (int j = 0; j <= b.Length; j++) previous[j] = j;
+        for (int i = 1; i <= a.Length; i++)
+        {
+            current[0] = i;
+            for (int j = 1; j <= b.Length; j++)
+            {
+                int cost = a[i - 1] == b[j - 1] ? 0 : 1;
+                current[j] = Math.Min(
+                    Math.Min(current[j - 1] + 1, previous[j] + 1), previous[j - 1] + cost);
+            }
+            (previous, current) = (current, previous);
+        }
+        return previous[b.Length];
+    }
+
+    /// <summary>
+    /// Writes targetBuild and keeps every other key. <c>JsonProperty.WriteTo</c> writes a property's
+    /// name and value together, so the replaced key is skipped entirely rather than named a second
+    /// time, which is what produced a duplicate targetBuild. A file that cannot be parsed starts
+    /// fresh rather than aborting the set.
+    /// </summary>
+    private static void WriteTarget(string build)
+    {
         string? dir = Path.GetDirectoryName(FilePath);
         if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
 
-        var existing = File.Exists(FilePath)
-            ? JsonDocument.Parse(File.ReadAllText(FilePath)).RootElement
-            : JsonDocument.Parse("{}").RootElement;
-
-        var doc = JsonDocument.Parse("{}");
-        // Reuse what was there and overwrite targetBuild.
-        using var writer = new Utf8JsonWriter(
-            System.IO.File.Open(FilePath, FileMode.Create, FileAccess.Write, FileShare.Read));
-        writer.WriteStartObject();
-        foreach (var prop in existing.EnumerateObject())
+        JsonDocument existingDoc;
+        try
         {
-            if (prop.Name != SettingsKey)
-                writer.WritePropertyName(prop.Name);
-            prop.WriteTo(writer);
+            existingDoc = File.Exists(FilePath)
+                ? JsonDocument.Parse(File.ReadAllText(FilePath))
+                : JsonDocument.Parse("{}");
         }
-        writer.WriteString(SettingsKey, build);
-        writer.WriteEndObject();
-        writer.Flush();
+        catch (JsonException)
+        {
+            existingDoc = JsonDocument.Parse("{}");
+        }
+
+        using (existingDoc)
+        {
+            // The stream is disposed explicitly, Utf8JsonWriter does not release it, and leaving it
+            // open kept settings.json locked so a second Set in the same process failed to open it.
+            using var stream = System.IO.File.Open(
+                FilePath, FileMode.Create, FileAccess.Write, FileShare.Read);
+            using var writer = new Utf8JsonWriter(stream);
+            writer.WriteStartObject();
+            foreach (var prop in existingDoc.RootElement.EnumerateObject())
+            {
+                if (prop.Name == SettingsKey) continue;
+                prop.WriteTo(writer);
+            }
+            writer.WriteString(SettingsKey, build);
+            writer.WriteEndObject();
+            writer.Flush();
+        }
     }
 
     /// <summary>
