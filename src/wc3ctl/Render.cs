@@ -1540,6 +1540,118 @@ public static class Render
         return sb.ToString().TrimEnd('\r', '\n');
     }
 
+    /// <summary>Render the strict validate result, the merged issues plus the strict-only count.</summary>
+    public static string ValidateStrict(ValidateStrictResult r)
+    {
+        var sb = new StringBuilder();
+        foreach (var i in r.Issues)
+            sb.AppendLine($"{i.Severity} [{i.Category}] {i.FileName} {i.Message}");
+        if (r.Issues.Count > 0) sb.AppendLine();
+        sb.Append(r.Valid
+            ? $"OK, valid ({r.Errors} error(s), {r.Warnings} warning(s), {r.StrictIssues.Count} strict-only)"
+            : $"INVALID ({r.Errors} error(s), {r.Warnings} warning(s), {r.StrictIssues.Count} strict-only)");
+        foreach (var d in r.Diagnostics) sb.AppendLine($"note {d}");
+        return sb.ToString();
+    }
+
+    /// <summary>Render the outcome of writing a lint baseline.</summary>
+    public static string LintBaselineWrite(LintBaselineWriteResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"wrote baseline, {r.Findings} finding(s)");
+        sb.AppendLine($"  {r.OutPath}");
+        sb.Append($"map  {r.Map}");
+        return sb.ToString();
+    }
+
+    /// <summary>Render the lint baseline gate, the new findings first.</summary>
+    public static string LintGate(LintGateResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine(r.Ok
+            ? "baseline OK, no new findings"
+            : $"baseline FAILED, {r.Added.Count} finding(s) not in the baseline");
+        foreach (var f in r.Added)
+        {
+            sb.AppendLine($"NEW  {f.Check}  {f.Summary}");
+            foreach (var d in f.Detail) sb.AppendLine($"     {d}");
+        }
+        if (r.Resolved.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"{r.Resolved.Count} baseline finding(s) are no longer reported");
+            foreach (var f in r.Resolved) sb.AppendLine($"GONE {f.Check}");
+        }
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
+    /// <summary>Render the compat matrix as a table, one row per map.</summary>
+    public static string CompatMatrix(CompatMatrixResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"compat matrix, {r.Maps.Count} map(s) by {r.Targets.Count} target build(s)");
+        int mapWidth = Math.Max(3, r.Maps.Count == 0 ? 3 : r.Maps.Max(m => m.Length));
+        sb.Append("map".PadRight(mapWidth));
+        foreach (var t in r.Targets) sb.Append($"  {t}");
+        sb.AppendLine();
+        foreach (var m in r.Maps)
+        {
+            sb.Append(m.PadRight(mapWidth));
+            foreach (var t in r.Targets)
+            {
+                var cell = r.Cells.First(c => c.Map == m && c.Target == t);
+                sb.Append($"  {(cell.Pass ? "pass" : "fail")}({cell.Findings})");
+            }
+            sb.AppendLine();
+        }
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
+    /// <summary>Render the explanation of one identifier against one target build.</summary>
+    public static string CompatExplain(CompatExplainResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"compat explain  {r.Name}");
+        sb.AppendLine($"target build  {r.TargetBuild}");
+        if (!r.IsIdentifier)
+        {
+            sb.Append("no schema declares this name in any kind");
+            return sb.ToString();
+        }
+        sb.AppendLine($"kind  {r.Kind}");
+        sb.AppendLine(r.DeclaredInTarget
+            ? "declared by the target build"
+            : "not declared by the target build");
+        if (!r.DeclaredInTarget)
+        {
+            if (r.AddedIn is not null) sb.AppendLine($"added in  {r.AddedIn}");
+            if (r.FirstSeen is not null) sb.AppendLine($"first seen in  {r.FirstSeen}");
+            if (r.AddedIn is null && r.FirstSeen is null)
+                sb.AppendLine("no newer build declares it either");
+        }
+        sb.AppendLine($"declared by {r.Builds.Count} build(s)");
+        foreach (var b in r.Builds) sb.AppendLine($"  {b}");
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
+    /// <summary>Render the audit trend between two maps, grouped by check.</summary>
+    public static string AuditTrend(AuditTrendResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"audit trend");
+        sb.AppendLine($"  from  {r.MapA}");
+        sb.AppendLine($"  to    {r.MapB}");
+        sb.AppendLine($"{r.Added} added, {r.Removed} removed");
+        foreach (var row in r.Rows)
+        {
+            sb.AppendLine($"  {row.Check}  +{row.Added} -{row.Removed}");
+            foreach (var d in row.AddedDetail) sb.AppendLine($"     + {d}");
+            foreach (var d in row.RemovedDetail) sb.AppendLine($"     - {d}");
+        }
+        foreach (var d in r.Diagnostics) sb.AppendLine($"note  {d}");
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
     public static string GamedataHistory(GamedataHistoryResult r)
     {
         var sb = new StringBuilder();

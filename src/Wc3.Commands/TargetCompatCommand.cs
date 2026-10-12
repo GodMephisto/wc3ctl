@@ -160,6 +160,80 @@ public static class TargetCompatCommand
         }
     }
 
+    /// <summary>
+    /// Every identifier any schema under a schemas directory declares, with the kind it is and
+    /// every build that declares it, oldest build first. Kind is inferred the way a compat finding
+    /// infers it, native over global over type over function when a name is several at once.
+    /// </summary>
+    public sealed record IdentifierIndex(
+        IReadOnlyDictionary<string, string> Kinds,
+        IReadOnlyDictionary<string, IReadOnlyList<string>> Builds);
+
+    /// <summary>
+    /// Build the identifier index across every schema folder, the same union the compat check
+    /// walks. Reused by compat explain so one identifier can be asked about without a map.
+    /// </summary>
+    public static IdentifierIndex LoadIdentifierIndex(string? schemasDir = null)
+    {
+        var resolved = ResolveSchemasDir(schemasDir);
+        var natives = new Dictionary<string, JassNativeDecl>(StringComparer.Ordinal);
+        var globals = new Dictionary<string, JassGlobalDecl>(StringComparer.Ordinal);
+        var types = new Dictionary<string, JassTypeDecl>(StringComparer.Ordinal);
+        var functions = new Dictionary<string, JassFunctionDecl>(StringComparer.Ordinal);
+        var builds = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+        BuildUnionIndex(resolved, natives, globals, types, functions, builds);
+
+        var kinds = new Dictionary<string, string>(StringComparer.Ordinal);
+        var byBuild = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+        foreach (var kv in builds)
+        {
+            kinds[kv.Key] = InferKind(kv.Key, natives, globals, types, functions);
+            byBuild[kv.Key] = kv.Value
+                .OrderBy(b => b, Comparer<string>.Create((a, b) => Gbn.Compare(Gbn.Parse(a), Gbn.Parse(b))))
+                .ToList();
+        }
+        return new IdentifierIndex(kinds, byBuild);
+    }
+
+    /// <summary>
+    /// True when the schema declares the name as a native, global, type or function in common.j
+    /// or blizzard.j. The same membership test the compile check uses against a target.
+    /// </summary>
+    public static bool TargetDeclares(string name, GameSchema targetSchema)
+    {
+        var sets = TargetDeclaredSets(targetSchema);
+        return CheckInTarget(name, sets.Natives, sets.Globals, sets.Types, sets.Functions);
+    }
+
+    /// <summary>
+    /// The names a schema declares in common.j and blizzard.j, split by kind. Shared by the
+    /// compile check and <see cref="TargetDeclares"/> so both agree on what the target declares.
+    /// </summary>
+    internal static (HashSet<string> Natives, HashSet<string> Globals,
+        HashSet<string> Types, HashSet<string> Functions) TargetDeclaredSets(GameSchema schema)
+    {
+        var natives = new HashSet<string>(StringComparer.Ordinal);
+        var globals = new HashSet<string>(StringComparer.Ordinal);
+        var types = new HashSet<string>(StringComparer.Ordinal);
+        var functions = new HashSet<string>(StringComparer.Ordinal);
+
+        if (schema.Script is not null)
+            foreach (var scriptFile in schema.Script)
+            {
+                string shortName = scriptFile.Key;
+                // Only common.j and blizzard.j for the compile check.
+                if (shortName != "scripts/common.j" && shortName != "scripts/blizzard.j") continue;
+
+                var api = scriptFile.Value;
+                foreach (var nat in api.Natives) natives.Add(nat.Name);
+                foreach (var gl in api.Globals) globals.Add(gl.Name);
+                foreach (var tp in api.Types) types.Add(tp.Name);
+                foreach (var fn in api.Functions) functions.Add(fn.Name);
+            }
+
+        return (natives, globals, types, functions);
+    }
+
     /// <summary>Add a build name to the set for an identifier.</summary>
     private static void AddBuild(
         Dictionary<string, HashSet<string>> identifierBuilds, string name, string build)
@@ -320,32 +394,14 @@ public static class TargetCompatCommand
         // Parse the target schema to know what the target declares.
         GameSchema targetSchema = LoadTargetSchema(target, schemasDir);
 
-        // Build a set of what the target defines in common.j and blizzard.j.
-        var targetNatives = new HashSet<string>(StringComparer.Ordinal);
-        var targetGlobals = new HashSet<string>(StringComparer.Ordinal);
-        var targetTypes = new HashSet<string>(StringComparer.Ordinal);
-        var targetFunctions = new HashSet<string>(StringComparer.Ordinal);
-
-        if (targetSchema.Script is not null)
-        {
-            foreach (var scriptFile in targetSchema.Script)
-            {
-                string shortName = scriptFile.Key;
-                // Only common.j and blizzard.j for the compile check.
-                if (shortName != "scripts/common.j" && shortName != "scripts/blizzard.j") continue;
-
-                var api = scriptFile.Value;
-                foreach (var nat in api.Natives) targetNatives.Add(nat.Name);
-                foreach (var gl in api.Globals) targetGlobals.Add(gl.Name);
-                foreach (var tp in api.Types) targetTypes.Add(tp.Name);
-                foreach (var fn in api.Functions) targetFunctions.Add(fn.Name);
-            }
-        }
-        else
-        {
-            if (!notChecked.Contains("script"))
-                notChecked.Add("script");
-        }
+        // What the target defines in common.j and blizzard.j, shared with the explain command.
+        if (targetSchema.Script is null && !notChecked.Contains("script"))
+            notChecked.Add("script");
+        var targetSets = TargetDeclaredSets(targetSchema);
+        var targetNatives = targetSets.Natives;
+        var targetGlobals = targetSets.Globals;
+        var targetTypes = targetSets.Types;
+        var targetFunctions = targetSets.Functions;
 
         // Parse the map's script.
         JassApi mapApi = JassApiIndex.Parse(source);
