@@ -18,7 +18,7 @@ public class McpServerTests
     {
         "asset_audit", "asset_duplicates", "asset_list", "asset_replace", "asset_size_report",
         "asset_unused", "audit_ability", "audit_fidelity", "audit_hero", "audit_map",
-        "audit_readiness", "bundle_unit", "camera_add", "camera_list", "camera_remove",
+        "audit_readiness", "bundle_diff", "bundle_merge", "bundle_unit", "camera_add", "camera_list", "camera_remove",
         "camera_set", "deprotect_map", "diff", "doctor_check", "doctor_compare", "doctor_fix",
         "doctor_inspect", "editor_catalog_get", "editor_catalog_list",
         "file_get_text", "file_list", "file_set", "force_list", "force_set_flags",
@@ -34,7 +34,7 @@ public class McpServerTests
         "place_doodad", "place_item", "place_region", "place_start_location", "place_unit",
         "placed_doodad_get", "placed_doodad_remove", "placed_doodad_set", "placed_doodads_list",
         "placed_unit_get", "placed_unit_remove", "placed_unit_set", "placed_units_list",
-        "player_list", "player_set_force", "port_unit", "region_list", "region_remove",
+        "player_list", "player_set_force", "port_deps", "port_into_version", "port_preview", "port_unit", "region_list", "region_remove",
         "render_model", "repair_generated", "replay_summary", "roundtrip", "script_callgraph",
         "script_check", "script_complexity", "script_decompile", "script_format", "script_functions",
         "script_leaks", "script_null_locals", "script_references", "script_to_lua",

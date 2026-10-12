@@ -797,6 +797,103 @@ public static class Render
     private static void AppendPortFooter(StringBuilder sb, string? outPath) =>
         sb.AppendLine().AppendLine(outPath is null ? "DRY RUN - nothing written" : $"Saved: {outPath}");
 
+    /// <summary>The full dependency report for a rawcode, grouped, with asset sizes.</summary>
+    public static string PortDeps(PortDepsResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.RootRawcode}{(r.RootName is null ? "" : $"  \"{r.RootName}\"")}  ({r.RootKind})");
+        sb.AppendLine($"  {r.ObjectCount} object(s), {r.Assets.Count} asset(s) "
+            + $"({r.AssetsInMap} in map, {r.AssetsMissing} base-game), "
+            + $"{Size(r.BytesInMap)} of imported bytes, {r.Strings.Count} string(s), {r.Functions} function(s).");
+
+        sb.AppendLine().AppendLine($"Objects ({r.ObjectCount})");
+        foreach (var g in r.ObjectGroups)
+        {
+            sb.AppendLine($"  {g.Kind} ({g.Objects.Count})");
+            foreach (var o in g.Objects)
+                sb.AppendLine($"    {o.Rawcode}{(o.Name is null ? "" : $"  \"{o.Name}\"")}"
+                    + $"{(o.CustomToMap ? "  custom" : "  base")}"
+                    + $"{(o.CarriedByScriptClosure ? "  [carried by the script closure]" : "")}");
+        }
+
+        sb.AppendLine().AppendLine($"Assets ({r.Assets.Count})");
+        foreach (var a in r.Assets)
+            sb.AppendLine($"  {(a.PresentInMap ? "[in map] " : "[missing]")} {a.Path}  ({a.Category}"
+                + (a.SizeBytes is { } s ? $", {Size(s)}" : "") + ")");
+
+        if (r.Strings.Count > 0)
+        {
+            sb.AppendLine().AppendLine($"Strings ({r.Strings.Count})");
+            foreach (var s in r.Strings) sb.AppendLine($"  \"{s}\"");
+        }
+
+        foreach (var d in r.Diagnostics) sb.AppendLine($"note: {d}");
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
+    /// <summary>Human byte size, e.g. "1.2 KB".</summary>
+    private static string Size(long bytes) => bytes switch
+    {
+        >= 1024 * 1024 => $"{bytes / 1024.0 / 1024.0:0.0} MB",
+        >= 1024 => $"{bytes / 1024.0:0.0} KB",
+        _ => $"{bytes} B",
+    };
+
+    /// <summary>What one bundle has that another does not.</summary>
+    public static string BundleDiff(BundleDiffResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.RootA} vs {r.RootB}, {r.Shared} shared member(s).");
+        void Section(string title, IReadOnlyList<BundleMember> members)
+        {
+            sb.AppendLine().AppendLine($"{title} ({members.Count})");
+            if (members.Count == 0) sb.AppendLine("  (none)");
+            foreach (var m in members)
+                sb.AppendLine($"  {m.Kind} {m.Id}{(m.Name is null ? "" : $"  \"{m.Name}\"")}");
+        }
+        Section("Added (only in the second)", r.Added);
+        Section("Removed (only in the first)", r.Removed);
+        Section("Changed", r.Changed);
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
+    /// <summary>The merge outcome, or the refusal with every conflicting rawcode named.</summary>
+    public static string BundleMerge(BundleMergeResult r, string? outPath)
+    {
+        var sb = new StringBuilder();
+        if (!r.Ok)
+        {
+            sb.AppendLine(r.Message);
+            foreach (var c in r.Conflicts)
+                sb.AppendLine($"  {c.Rawcode}  ({c.Kind})  {c.Detail}");
+            sb.AppendLine().AppendLine("nothing written, resolve the conflict and rerun");
+            return sb.ToString().TrimEnd('\r', '\n');
+        }
+        sb.AppendLine(r.Message);
+        sb.AppendLine().AppendLine(outPath is null ? "DRY RUN - nothing written" : $"Saved: {outPath}");
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
+    /// <summary>The port report plus the downgrade: fields removed and identifiers flagged.</summary>
+    public static string PortIntoVersion(PortIntoVersionResult r, string? outPath)
+    {
+        var sb = new StringBuilder();
+        AppendPortBody(sb, r.Port);
+        sb.AppendLine().AppendLine($"Downgraded to {r.TargetBuild}");
+        sb.AppendLine($"  {r.FieldsRemoved.Count} object field(s) not declared by the build were removed, "
+            + $"{r.ScriptIdentifiersFlagged.Count} script identifier(s) are not declared and were flagged.");
+        foreach (var f in r.FieldsRemoved.Take(40))
+            sb.AppendLine($"  removed  {f.Kind} {f.Rawcode}{(f.Name is null ? "" : $"  \"{f.Name}\"")}.{f.FieldCode}");
+        if (r.FieldsRemoved.Count > 40) sb.AppendLine($"  ... and {r.FieldsRemoved.Count - 40} more");
+        foreach (var i in r.ScriptIdentifiersFlagged.Take(40))
+            sb.AppendLine($"  flagged  {i.Name}  (line {i.FirstLine}, used {i.Count} time(s))");
+        if (r.ScriptIdentifiersFlagged.Count > 40)
+            sb.AppendLine($"  ... and {r.ScriptIdentifiersFlagged.Count - 40} more");
+        foreach (var d in r.Diagnostics) sb.AppendLine($"note: {d}");
+        AppendPortFooter(sb, outPath);
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
     // One shared report body, PortReport in Wc3.Commands. It used to live here and again inline
     // in Studio's port dialog, and the copies drifted, so Studio kept listing the whole closure.
     private static void AppendPortBody(StringBuilder sb, PortResult r) => PortReport.Append(sb, r);
