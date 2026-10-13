@@ -3247,7 +3247,9 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
             "Audit a model for the resource waste and draw-nothing problems the optimiser can remove, "
             + "and report what it holds, its geosets, vertices, faces, textures, sequences, nodes and "
             + "effects. Effects are counted from the chunk list, particle emitters, particle emitters 2, "
-            + "ribbons and popcorns, and their payloads are not parsed.")
+            + "ribbons and popcorns, and each particle emitter's node and texture references are "
+            + "checked, reporting one that names a node the model does not define or a texture outside "
+            + "its texture list.")
             { modelAuditPath, jsonOption };
         modelAudit.SetHandler(
             (string modelPath, bool json) => RunSafely(() =>

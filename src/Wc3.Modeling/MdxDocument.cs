@@ -126,6 +126,20 @@ public sealed class MdxDocument
     }
 
     /// <summary>
+    /// The number of nodes the model declares, taken from the PIVT chunk which carries one pivot per
+    /// node, the array a node's objectId indexes. Zero when the model carries no PIVT chunk, in
+    /// which case a node id cannot be checked against the model and the caller should skip the
+    /// check rather than treat every id as dangling.
+    /// </summary>
+    public int NodeCount()
+    {
+        foreach (var c in _chunks)
+            if (c.Tag == "PIVT")
+                return c.Payload.Length / 12;
+        return 0;
+    }
+
+    /// <summary>
     /// Drops every effect chunk from the document, particle emitters (PREM), particle emitters 2
     /// (PRE2), ribbons (RIBB) and corns (CORN), and returns how many chunks were removed. The
     /// remaining chunks keep their order and their bytes, so a model written after this is the same
