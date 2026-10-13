@@ -715,6 +715,18 @@ public static class Render
         return sb.ToString().TrimEnd();
     }
 
+    public static string ModelLod(ModelLodResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"Wrote {r.Levels.Count} level(s) of {Path.GetFileName(r.Path)}");
+        foreach (var l in r.Levels)
+            sb.AppendLine($"  {l.Ratio.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)}  "
+                + $"{Path.GetFileName(l.Path)}  vertices {l.Vertices}  faces {l.Faces}  {l.Bytes} byte(s)");
+        sb.AppendLine($"  total {r.TotalBytes} byte(s)");
+        foreach (var d in r.Diagnostics) sb.AppendLine($"  ! {d}");
+        return sb.ToString().TrimEnd();
+    }
+
     public static string ModelImport(ModelImportResult r)
     {
         var sb = new StringBuilder();
