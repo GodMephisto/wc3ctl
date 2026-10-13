@@ -2,7 +2,7 @@
 
 Generated from the live command tree by `wc3ctl docs cli`. Do not edit by hand. Regenerate with `wc3ctl docs cli --force`, and the CI guard fails when this file is stale.
 
-The tree holds 64 top level verb(s) and 318 command path(s) in total.
+The tree holds 64 top level verb(s) and 319 command path(s) in total.
 
 ## Global options
 
@@ -425,6 +425,7 @@ Subcommands
 - `export-obj`. Export a map-imported model to Wavefront OBJ, with an MTL and any map-resolvable textures converted to PNG beside it.
 - `audit`. Audit a model for the resource waste and draw-nothing problems the optimiser can remove, and report what it holds, its geosets, vertices, faces, textures, sequences, nodes and effects. Effects are counted from the chunk list, particle emitters, particle emitters 2, ribbons and popcorns, and each particle emitter's node and texture references are checked, reporting one that names a node the model does not define or a texture outside its texture list.
 - `optimize`. Decimate a model's geometry with the quadric error metric, drop zero-area faces and duplicate textures, and write a smaller MDX, leaving the other chunks byte for byte. Optionally strip its effects when they are not wanted. Reports the before and after vertex and face counts.
+- `lod`. Generate a level-of-detail chain for a model, one decimated MDX per ratio, by running the optimiser once per ratio. Each level is the full model reduced to the fraction of faces its ratio names, with materials, textures, sequences, bones, emitters and cameras written back byte for byte. Ratio 1 is the original geometry, byte identical to the input. Reports the vertex and face count for each level and the total bytes written.
 - `import`. Import a foreign model into a Warcraft III MDX. Accepts Wavefront OBJ, glTF 2.0 (.gltf and .glb), STL (binary and ASCII), PLY (ASCII and binary little-endian) and FBX ASCII. Builds one v800 geoset per source primitive with normals and UVs, triangulating an n-gon face as a fan, computing a per-face normal when the source carries none and zeroing UVs when it has none. Each glTF material's baseColorTexture is written as .blp beside the MDX and referenced from a texture entry, one per distinct texture. Reports the geoset, vertex, face, texture and material counts and the written texture files.
 
 ### model export-obj
@@ -479,6 +480,25 @@ Options
 - `-o, --out <out>` (required). Output model path. The input is never modified.
 - `--ratio <ratio>`. Target fraction of faces to keep, between 0 and 1. Default `0.5`.
 - `--strip-effects`. Drop the model's effect chunks, particle emitters (PREM), particle emitters 2 (PRE2), ribbons (RIBB) and corns (CORN), for a smaller MDX. This changes how the model looks, so it is off by default.
+
+### model lod
+
+Generate a level-of-detail chain for a model, one decimated MDX per ratio, by running the optimiser once per ratio. Each level is the full model reduced to the fraction of faces its ratio names, with materials, textures, sequences, bones, emitters and cameras written back byte for byte. Ratio 1 is the original geometry, byte identical to the input. Reports the vertex and face count for each level and the total bytes written.
+
+Usage
+
+```
+wc3ctl model lod <model> [options]
+```
+
+Arguments
+
+- `<model>` (required). Path to a .mdx or .mdl file.
+
+Options
+
+- `--ratios <ratios>`. Comma-separated target fractions of faces to keep, each between 0 and 1, for example 1,0.5,0.25. One MDX is written per ratio, in the order given, so a descending list produces a descending chain. Default `1,0.5,0.25`.
+- `-o, --out <out>` (required). Output directory for the LOD chain. Created when missing. The input is never modified.
 
 ### model import
 

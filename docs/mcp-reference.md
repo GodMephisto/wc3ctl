@@ -2,7 +2,7 @@
 
 Generated from the live tool surface by `wc3ctl docs mcp`. Do not edit by hand. Regenerate with `wc3ctl docs mcp --force`, and the CI guard fails when this file is stale.
 
-The server exposes 241 tool(s).
+The server exposes 242 tool(s).
 
 ## asset_audit
 
@@ -535,6 +535,12 @@ Annotations. read-only no, destructive no, idempotent yes, open-world no.
 ## model_import
 
 Import a foreign model file into a Warcraft III MDX at out_path. Accepts Wavefront OBJ (.obj), glTF 2.0 (.gltf and .glb), STL (.stl, binary and ASCII), PLY (.ply, ASCII and binary little-endian) and FBX ASCII (.fbx). Binary FBX is not supported. The format is detected from the file content, so a correct extension is not required. Builds one v800 geoset per source primitive with normals and UVs, triangulating an n-gon face as a fan, computing a per-face normal when the source carries none and zeroing UVs when it has none. Each glTF material's baseColorTexture image is converted to .blp beside the MDX and referenced by a texture entry, one entry per distinct texture, so a multi-material model keeps every material. A model that names no material keeps the single default texture. The input is never modified. Returns the output path, the geoset, vertex, face, texture and material counts, and the texture files written.
+
+Annotations. read-only no, destructive no, idempotent yes, open-world no.
+
+## model_lod
+
+Generate a level-of-detail chain for a .mdx or .mdl model, writing one decimated MDX per ratio into out_dir by running the optimiser once per ratio. ratios is a comma-separated list of target fractions of faces to keep, each between 0 and 1, for example 1,0.5,0.25, processed in the order given so a descending list produces a descending chain. Each level keeps the model's materials, textures, sequences, bones, emitters and cameras byte for byte and shrinks only the geometry. Ratio 1 is the original geometry and its file is byte identical to the input. The input is never modified. Returns one level per ratio with its vertex and face count and byte size, plus the total bytes written.
 
 Annotations. read-only no, destructive no, idempotent yes, open-world no.
 

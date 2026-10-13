@@ -3280,6 +3280,28 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
                 Emit(json, r, () => Render.ModelOptimize(r));
             }),
             modelOptimizePath, modelOptimizeOut, modelOptimizeRatio, modelOptimizeStrip, jsonOption);
+        var modelLodPath = new Argument<string>("model", "Path to a .mdx or .mdl file.");
+        var modelLodRatios = new Option<string>("--ratios", () => "1,0.5,0.25",
+            "Comma-separated target fractions of faces to keep, each between 0 and 1, for example "
+            + "1,0.5,0.25. One MDX is written per ratio, in the order given, so a descending list "
+            + "produces a descending chain.");
+        var modelLodOut = new Option<string>(new[] { "-o", "--out" },
+            "Output directory for the LOD chain. Created when missing. The input is never modified.")
+            { IsRequired = true };
+        var modelLod = new Command("lod",
+            "Generate a level-of-detail chain for a model, one decimated MDX per ratio, by running "
+            + "the optimiser once per ratio. Each level is the full model reduced to the fraction of "
+            + "faces its ratio names, with materials, textures, sequences, bones, emitters and cameras "
+            + "written back byte for byte. Ratio 1 is the original geometry, byte identical to the input. "
+            + "Reports the vertex and face count for each level and the total bytes written.")
+            { modelLodPath, modelLodRatios, modelLodOut, jsonOption };
+        modelLod.SetHandler(
+            (string modelPath, string ratios, string outDir, bool json) => RunSafely(() =>
+            {
+                var r = ModelLodCommand.ExecutePath(modelPath, ratios, outDir);
+                Emit(json, r, () => Render.ModelLod(r));
+            }),
+            modelLodPath, modelLodRatios, modelLodOut, jsonOption);
         var modelImportObj = new Argument<string>("obj",
             "Path to a foreign model, one of Wavefront OBJ (.obj), glTF 2.0 (.gltf or .glb), "
             + "STL (.stl, binary or ASCII), PLY (.ply, ASCII or binary little-endian) or FBX "
@@ -3312,6 +3334,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         model.AddCommand(modelExportObj);
         model.AddCommand(modelAudit);
         model.AddCommand(modelOptimize);
+        model.AddCommand(modelLod);
         model.AddCommand(modelImport);
         root.AddCommand(model);
 

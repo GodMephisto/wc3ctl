@@ -463,6 +463,14 @@ public static class Wc3Tools
             return ModelOptimizeCommand.ExecutePath(model, ratio, out_path, strip_effects);
         });
 
+    [McpServerTool(Name = "model_lod", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Generate a level-of-detail chain for a .mdx or .mdl model, writing one decimated MDX per ratio into out_dir by running the optimiser once per ratio. ratios is a comma-separated list of target fractions of faces to keep, each between 0 and 1, for example 1,0.5,0.25, processed in the order given so a descending list produces a descending chain. Each level keeps the model's materials, textures, sequences, bones, emitters and cameras byte for byte and shrinks only the geometry. Ratio 1 is the original geometry and its file is byte identical to the input. The input is never modified. Returns one level per ratio with its vertex and face count and byte size, plus the total bytes written.")]
+    public static ModelLodResult ModelLod(
+        [Description("Path to a .mdx or .mdl model file.")] string model,
+        [Description("Comma-separated target fractions of faces to keep, each between 0 and 1, for example 1,0.5,0.25.")] string ratios,
+        [Description("Output directory for the LOD chain. Created when missing. The input is never modified.")] string out_dir)
+        => Run(() => ModelLodCommand.ExecutePath(model, ratios, out_dir));
+
     [McpServerTool(Name = "texture_optimize", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Shrink a .blp, .dds or standard image texture to fit a maximum side, preserving aspect ratio, and write it at out_path in the same format. The input is never modified. Returns the before and after dimensions and byte sizes.")]
     public static TextureOptimizeResult TextureOptimize(

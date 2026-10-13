@@ -79,6 +79,22 @@ public sealed class McpSmokeModelAssetTests : McpSmokeBase
         Assert.True(Prop(r, "geosets").GetInt32() >= 1);
     }
 
+    [Fact, Covers("model_lod")]
+    public async Task Model_lod_writes_a_descending_chain()
+    {
+        var modelFile = NewOut("lodin", ".mdx");
+        File.WriteAllBytes(modelFile, SyntheticModel.GridMdx(9));
+        var outDir = Path.Combine(_f.Dir, $"lod-{Guid.NewGuid():N}");
+        var r = await Call("model_lod", Args(("model", modelFile), ("ratios", "1,0.5,0.25"), ("out_dir", outDir)));
+
+        var levels = Rows(Prop(r, "levels"));
+        Assert.Equal(3, levels.Count);
+        Assert.True(File.Exists(Prop(levels[0], "path").GetString()));
+        Assert.True(Prop(levels[0], "faces").GetInt32() > Prop(levels[1], "faces").GetInt32());
+        Assert.True(Prop(levels[1], "faces").GetInt32() > Prop(levels[2], "faces").GetInt32());
+        Assert.Equal(3, Directory.GetFiles(outDir, "*.mdx").Length);
+    }
+
     [Fact, Covers("texture_optimize")]
     public async Task Texture_optimize_shrinks_a_texture()
     {
