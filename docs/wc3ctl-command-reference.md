@@ -3100,6 +3100,7 @@ Subcommands
 
 - `fill`. Apply a tool over an inclusive rectangle of corners, instead of one brush dab at a time. Corners may be given in any order and an off-grid rectangle is clipped.
 - `stats`. Summarize terrain: tile count, height range and cliff range.
+- `audit`. Report the terrain's size and its measurable waste: grid and tile counts, distinct ground and cliff textures in use, cliff/ramp/water/blight totals, the war3map.w3e byte size, and any uniform, all-zero or out-of-range-tileset pattern found. Read-only.
 - `deform`. Raise/lower/set/flatten/smooth ground height over a brush.
 - `cliff`. Raise/lower/set the cliff (stepped-terrain) level over a brush.
 - `ramp`. Toggle the ramp (sloped cliff transition) flag over a brush.
@@ -3144,6 +3145,20 @@ Usage
 
 ```
 wc3ctl terrain stats <map>
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+
+### terrain audit
+
+Report the terrain's size and its measurable waste: grid and tile counts, distinct ground and cliff textures in use, cliff/ramp/water/blight totals, the war3map.w3e byte size, and any uniform, all-zero or out-of-range-tileset pattern found. Read-only.
+
+Usage
+
+```
+wc3ctl terrain audit <map>
 ```
 
 Arguments

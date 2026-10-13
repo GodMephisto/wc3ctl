@@ -1516,6 +1516,12 @@ public static class Wc3Tools
         [Description("Path to a .w3x/.w3m map file.")] string map)
         => Run(() => TerrainCommand.Stats(LoadMap(map)));
 
+    [McpServerTool(Name = "terrain_audit", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Audit a map's terrain (war3map.w3e) for its size and its measurable waste: grid and tile counts, distinct ground and cliff textures in use, cliff/ramp/water/blight totals, the war3map.w3e byte size, and any uniform, all-zero or out-of-range-tileset pattern found. Reports which checks it ran. Read-only.")]
+    public static TerrainAuditResult TerrainAudit(
+        [Description("Path to a .w3x/.w3m map file.")] string map)
+        => Run(() => TerrainAuditCommand.ExecutePath(map));
+
     [McpServerTool(Name = "terrain_deform", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Raise/lower/set/flatten/smooth ground height over a circular or square brush, saving the edited map to out_path. The input map is NEVER modified in place.")]
     public static TerrainToolResult TerrainDeform(

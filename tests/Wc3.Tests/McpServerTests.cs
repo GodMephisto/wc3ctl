@@ -70,7 +70,7 @@ public class McpServerTests
         "sound_optimize", "sound_remove", "sound_set", "strings_diff", "strings_find", "strings_list",
         "strings_missing", "strings_set", "strings_unused",
         "target_get", "target_list", "target_set",
-        "terrain_blight", "terrain_cliff", "terrain_corner_get", "terrain_corner_set",
+        "terrain_audit", "terrain_blight", "terrain_cliff", "terrain_corner_get", "terrain_corner_set",
         "terrain_deform", "terrain_export_heightmap", "terrain_fill", "terrain_import_heightmap",
         "terrain_info", "terrain_paint", "terrain_ramp", "terrain_smooth",
         "terrain_stats", "terrain_water", "texture_optimize", "trigger_add", "trigger_add_category",

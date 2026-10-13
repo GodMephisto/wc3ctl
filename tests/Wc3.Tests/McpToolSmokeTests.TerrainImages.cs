@@ -53,6 +53,17 @@ public sealed class McpSmokeTerrainImageTests : McpSmokeBase
         Assert.True(Prop(s, "groundHeight").GetSingle() < 40f);
     }
 
+    [Fact, Covers("terrain_audit")]
+    public async Task Terrain_audit_reports_the_fixture_grid()
+    {
+        var r = await Call("terrain_audit", Args(("map", Fixture)));
+        Assert.Equal(33, Prop(r, "gridWidth").GetInt32());
+        Assert.Equal(33, Prop(r, "gridHeight").GetInt32());
+        Assert.Equal(33 * 33, Prop(r, "tileCount").GetInt32());
+        Assert.True(Prop(r, "terrainFileBytes").GetInt64() > 0);
+        Assert.True(Prop(r, "distinctGroundTextures").GetInt32() >= 1);
+    }
+
     [Fact, Covers("pathing_export_png", "pathing_import_png")]
     public async Task Pathing_png_round_trips_through_mcp()
     {

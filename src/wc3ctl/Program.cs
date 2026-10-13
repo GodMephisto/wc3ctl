@@ -2643,6 +2643,18 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
                     : r.Message);
         }));
 
+        var terrainAudit = new Command("audit",
+            "Report the terrain's size and its measurable waste: grid and tile counts, distinct "
+            + "ground and cliff textures in use, cliff/ramp/water/blight totals, the war3map.w3e "
+            + "byte size, and any uniform, all-zero or out-of-range-tileset pattern found. Read-only.")
+            { mapArg, jsonOption };
+        terrainAudit.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = TerrainAuditCommand.ExecutePath(p.GetValueForArgument(mapArg));
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.TerrainAudit(r));
+        }));
+
         var tOpDeform = new Argument<TerrainCommand.HeightOp>("op", "raise|lower|set|flatten|smooth");
         var tAmountOpt = new Option<float>("--amount", () => 1f,
             "Step for raise/lower; target for set. Default: 1.");
@@ -2831,6 +2843,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
             + "work a radius at a time, 'fill' works a rectangle at a time.");
         terrain.AddCommand(terrainFill);
         terrain.AddCommand(terrainStats);
+        terrain.AddCommand(terrainAudit);
         terrain.AddCommand(terrainDeform);
         terrain.AddCommand(terrainCliff);
         terrain.AddCommand(terrainRamp);

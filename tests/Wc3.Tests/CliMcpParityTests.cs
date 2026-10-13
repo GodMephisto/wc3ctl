@@ -215,6 +215,7 @@ public class CliMcpParityTests
         ["region_validate"] = "region validate",
         ["new_map"] = "new",
         ["terrain_stats"] = "terrain stats",
+        ["terrain_audit"] = "terrain audit",
         ["terrain_deform"] = "terrain deform",
         ["terrain_export_heightmap"] = "terrain export-heightmap",
         ["terrain_import_heightmap"] = "terrain import-heightmap",
