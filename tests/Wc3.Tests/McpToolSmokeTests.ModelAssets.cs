@@ -138,6 +138,8 @@ public sealed class McpSmokeModelAssetTests : McpSmokeBase
             rgba[i * 4 + 3] = 255;
         }
         return TexturePng.Encode(new TextureImage(w, h, rgba));
+    }
+
     [Fact, Covers("map_optimize")]
     public async Task Map_optimize_writes_a_smaller_map()
     {

@@ -2,7 +2,7 @@
 
 Generated from the live tool surface by `wc3ctl docs mcp`. Do not edit by hand. Regenerate with `wc3ctl docs mcp --force`, and the CI guard fails when this file is stale.
 
-The server exposes 242 tool(s).
+The server exposes 244 tool(s).
 
 ## asset_audit
 

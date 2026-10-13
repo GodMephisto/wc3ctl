@@ -2,7 +2,7 @@
 
 Generated from the live command tree by `wc3ctl docs cli`. Do not edit by hand. Regenerate with `wc3ctl docs cli --force`, and the CI guard fails when this file is stale.
 
-The tree holds 65 top level verb(s) and 320 command path(s) in total.
+The tree holds 65 top level verb(s) and 322 command path(s) in total.
 
 ## Global options
 
@@ -425,7 +425,8 @@ Subcommands
 - `export-obj`. Export a map-imported model to Wavefront OBJ, with an MTL and any map-resolvable textures converted to PNG beside it.
 - `audit`. Audit a model for the resource waste and draw-nothing problems the optimiser can remove, and report what it holds, its geosets, vertices, faces, textures, sequences, nodes and effects. Effects are counted from the chunk list, particle emitters, particle emitters 2, ribbons and popcorns, and each particle emitter's node and texture references are checked, reporting one that names a node the model does not define or a texture outside its texture list.
 - `optimize`. Decimate a model's geometry with the quadric error metric, drop zero-area faces and duplicate textures, and write a smaller MDX, leaving the other chunks byte for byte. Optionally strip its effects when they are not wanted. Reports the before and after vertex and face counts.
-- `import`. Import a foreign model into a Warcraft III MDX. Accepts Wavefront OBJ, glTF 2.0 (.gltf and .glb), STL (binary and ASCII), PLY (ASCII and binary little-endian) and FBX ASCII. Builds one v800 geoset per source primitive with normals and UVs, triangulating an n-gon face as a fan, computing a per-face normal when the source carries none and zeroing UVs when it has none. Each glTF material's baseColorTexture is written as .blp beside the MDX and referenced from a texture entry, one per distinct texture. Reports the geoset, vertex, face, texture and material counts and the written texture files.
+- `lod`. Generate a level-of-detail chain for a model, one decimated MDX per ratio, by running the optimiser once per ratio. Each level is the full model reduced to the fraction of faces its ratio names, with materials, textures, sequences, bones, emitters and cameras written back byte for byte. Ratio 1 is the original geometry, byte identical to the input. Reports the vertex and face count for each level and the total bytes written.
+- `import`. Import a foreign model into a Warcraft III MDX. Accepts Wavefront OBJ, glTF 2.0 (.gltf and .glb), STL (binary and ASCII), PLY (ASCII and binary little-endian) and FBX ASCII. Builds one v800 geoset per source primitive with normals and UVs, triangulating an n-gon face as a fan, computing a per-face normal when the source carries none and zeroing UVs when it has none. Each glTF material's baseColorTexture is written as .blp beside the MDX and referenced from a texture entry, one per distinct texture. Each glTF animation is written as a named SEQS sequence whose frame interval is its time range at the fps (30 by default). Reports the geoset, vertex, face, texture and material counts, the sequence count and names, and the written texture files.
 
 ### model export-obj
 
@@ -480,9 +481,28 @@ Options
 - `--ratio <ratio>`. Target fraction of faces to keep, between 0 and 1. Default `0.5`.
 - `--strip-effects`. Drop the model's effect chunks, particle emitters (PREM), particle emitters 2 (PRE2), ribbons (RIBB) and corns (CORN), for a smaller MDX. This changes how the model looks, so it is off by default.
 
+### model lod
+
+Generate a level-of-detail chain for a model, one decimated MDX per ratio, by running the optimiser once per ratio. Each level is the full model reduced to the fraction of faces its ratio names, with materials, textures, sequences, bones, emitters and cameras written back byte for byte. Ratio 1 is the original geometry, byte identical to the input. Reports the vertex and face count for each level and the total bytes written.
+
+Usage
+
+```
+wc3ctl model lod <model> [options]
+```
+
+Arguments
+
+- `<model>` (required). Path to a .mdx or .mdl file.
+
+Options
+
+- `--ratios <ratios>`. Comma-separated target fractions of faces to keep, each between 0 and 1, for example 1,0.5,0.25. One MDX is written per ratio, in the order given, so a descending list produces a descending chain. Default `1,0.5,0.25`.
+- `-o, --out <out>` (required). Output directory for the LOD chain. Created when missing. The input is never modified.
+
 ### model import
 
-Import a foreign model into a Warcraft III MDX. Accepts Wavefront OBJ, glTF 2.0 (.gltf and .glb), STL (binary and ASCII), PLY (ASCII and binary little-endian) and FBX ASCII. Builds one v800 geoset per source primitive with normals and UVs, triangulating an n-gon face as a fan, computing a per-face normal when the source carries none and zeroing UVs when it has none. Each glTF material's baseColorTexture is written as .blp beside the MDX and referenced from a texture entry, one per distinct texture. Reports the geoset, vertex, face, texture and material counts and the written texture files.
+Import a foreign model into a Warcraft III MDX. Accepts Wavefront OBJ, glTF 2.0 (.gltf and .glb), STL (binary and ASCII), PLY (ASCII and binary little-endian) and FBX ASCII. Builds one v800 geoset per source primitive with normals and UVs, triangulating an n-gon face as a fan, computing a per-face normal when the source carries none and zeroing UVs when it has none. Each glTF material's baseColorTexture is written as .blp beside the MDX and referenced from a texture entry, one per distinct texture. Each glTF animation is written as a named SEQS sequence whose frame interval is its time range at the fps (30 by default). Reports the geoset, vertex, face, texture and material counts, the sequence count and names, and the written texture files.
 
 Usage
 
@@ -498,6 +518,7 @@ Options
 
 - `-o, --out <out>` (required). Output .mdx path. The input is never modified.
 - `--texture <texture>`. Texture path to embed, relative to the map, overriding every material. Default, the model's own materials, or war3mapImported\<name>.blp when it names none.
+- `--fps <fps>`. Frames per second used to convert a glTF animation's time range into a sequence frame interval. The Warcraft III default is 30. Default `30`.
 
 ## texture
 
@@ -512,6 +533,7 @@ wc3ctl texture
 Subcommands
 
 - `optimize`. Shrink a texture to fit a maximum side, preserving aspect ratio, and write it back in the same format. The other half of making a model compact.
+- `atlas`. Pack two or more textures into one power-of-two atlas and report each input's pixel rectangle. The atlas is written in the first input's format.
 
 ### texture optimize
 
@@ -531,6 +553,25 @@ Options
 
 - `-o, --out <out>` (required). Output path. The input is never modified.
 - `--max <max>`. Maximum side length in pixels. A texture larger than this on either side is scaled down. Default `256`.
+
+### texture atlas
+
+Pack two or more textures into one power-of-two atlas and report each input's pixel rectangle. The atlas is written in the first input's format.
+
+Usage
+
+```
+wc3ctl texture atlas <in...> [options]
+```
+
+Arguments
+
+- `<in...>` (required). Two or more input image paths.
+
+Options
+
+- `-o, --out <out>` (required). Output atlas path. The inputs are never modified.
+- `--max <max>`. Maximum atlas side in pixels. The atlas is the smallest power of two that fits and does not exceed this. Default `512`.
 
 ## map
 
@@ -3515,7 +3556,7 @@ Subcommands
 - `add`. Add a new sound definition and save the edited map.
 - `set`. Set a field on a sound and save the edited map.
 - `remove`. Remove a sound definition and save the edited map.
-- `optimize`. Decode a sound, resample it to a target rate and optionally downmix to mono, and write a smaller 16-bit .wav. Reports the before and after sample rate, channels and byte size.
+- `optimize`. Decode a sound, resample it to a target rate, optionally set the channel count, and encode it as WAV or MP3 chosen by the output extension. Reports the before and after format, sample rate, channels, bitrate and byte size. Falls back to WAV when no MP3 encoder is present.
 
 ### sound list
 
@@ -3593,7 +3634,7 @@ Options
 
 ### sound optimize
 
-Decode a sound, resample it to a target rate and optionally downmix to mono, and write a smaller 16-bit .wav. Reports the before and after sample rate, channels and byte size.
+Decode a sound, resample it to a target rate, optionally set the channel count, and encode it as WAV or MP3 chosen by the output extension. Reports the before and after format, sample rate, channels, bitrate and byte size. Falls back to WAV when no MP3 encoder is present.
 
 Usage
 
@@ -3607,9 +3648,10 @@ Arguments
 
 Options
 
-- `-o, --out <out>` (required). Output .wav path. The input is never modified.
+- `-o, --out <out>` (required). Output path. The extension selects the format, .mp3 for MP3, anything else for WAV. The input is never modified.
 - `--rate <rate>`. Target sample rate in Hz. Default 22050. Default `22050`.
-- `--mono`. Downmix to a single channel. Default keeps the source channel count.
+- `--channels <channels>`. Output channels, source, mono or stereo. Default source keeps the source channel count. Default `source`.
+- `--bitrate <bitrate>`. MP3 bitrate in kbps. Applies to .mp3 output only, ignored for WAV. Default 128. Default `128`.
 
 ## camera
 

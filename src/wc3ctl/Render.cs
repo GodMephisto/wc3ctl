@@ -757,6 +757,9 @@ public static class Render
             + $"{r.Bytes} byte(s), {r.Entries.Count} image(s)");
         foreach (var e in r.Entries)
             sb.AppendLine($"  {e.Name}  ({e.X}, {e.Y}) {e.Width}x{e.Height}");
+        return sb.ToString().TrimEnd();
+    }
+
     public static string MapOptimize(MapOptimizeResult r)
     {
         var sb = new StringBuilder();

@@ -498,6 +498,8 @@ public static class Wc3Tools
                     throw new McpException("out_path must not be one of the input textures");
             if (Path.GetDirectoryName(full) is { Length: > 0 } dir) Directory.CreateDirectory(dir);
             return TextureAtlasCommand.ExecutePaths(images, max, full);
+        });
+
     [McpServerTool(Name = "map_optimize", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Shrink every imported model and texture inside a map in one pass and write a new map to out_path with only those files replaced, everything else byte for byte. Each model is decimated at ratio (the target fraction of faces to keep) and each texture is scaled to fit max_texture on its longest side, reusing the model and texture optimisers. A file whose optimised bytes are not smaller is left untouched. Reports the per-file before and after sizes, the per-kind counts and the total byte saving. The input map is NEVER modified.")]
     public static MapOptimizeResult MapOptimize(
