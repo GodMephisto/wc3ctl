@@ -18,8 +18,8 @@ on the MCP (AI app) surface, all driven by the same logic in `Wc3.Commands`.
 | Model leak | `leak model` |
 
 Nothing edits a file in place. Every command writes a new file and leaves the input
-alone, the same rule the rest of the toolkit follows. The Studio does not yet have a
-panel for these, so the command line and the MCP surface are how they are reached today.
+alone, the same rule the rest of the toolkit follows. The Studio has an **Optimise** panel
+that drives them, so they are reachable from the command line, the MCP and Studio alike.
 
 ## 2. Model audit
 
@@ -154,10 +154,7 @@ These were designed and are not shipped.
   pixel difference, so a decimation that changed the look too much would fail. It is not
   implemented. The optimiser does not currently measure how much a decimation changes the
   look, so `--ratio` is the only control and there is no automatic guard.
-- **LOD chain generation.**
 - **In-place editing and animation retargeting.**
-- **A dedicated Studio panel.** The commands are on the command line and the MCP surface
-  only.
 
 ## 8. Design decisions, and how they shipped
 
@@ -169,11 +166,11 @@ These were designed and are not shipped.
 | Attribute-aware decimation preserving UVs, normals and skin weights | The decimator returns a remap applied to the normal, matrix-group and UV arrays |
 | Deterministic decimation | Weld by exact position, order by cost then index, no random tie-breaking |
 | Static model resource audit | `model audit` and the `leak model` join |
-| Foreign model import | `model import` for OBJ, glTF, glb, STL and PLY |
-| Texture downscale | `texture optimize` |
+| Foreign model import | `model import` for OBJ, glTF, glb, STL, PLY and ASCII FBX, with materials, textures and glTF animation sequences |
+| Texture downscale | `texture optimize` and `texture atlas` |
 | WC3 limit warnings | Not shipped, section 7 |
 | Appearance verification by silhouette | Not shipped, section 7 |
-| Runtime leak join against a live map | Separate track, the `leak` group's session joins |
+| Runtime leak join against a live map | Shipped, the `leak` join reads the session events and the `gc_probe` baseline |
 
 ## 9. Research grounding
 

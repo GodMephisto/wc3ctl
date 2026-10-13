@@ -233,7 +233,7 @@ The command groups, by job.
 |---|---|
 | Look inside a map | `info`, `ls`, `file`, `search`, `diff`, `roundtrip`, `extract`, `strings`, `imports`, `mpq-diff`, `mpq-hash` |
 | Object data | `object`, `asset`, `bundle`, `port`, `render-model`, `convert` |
-| Models and textures | `model` (audit, optimize, import, export-obj), `texture` (optimize) |
+| Models and textures | `model` (audit, optimize, lod, import, export-obj), `texture` (optimize, atlas), `map` (optimize) |
 | Placed units and doodads | `place`, `unit`, `doodad`, `region`, `palette` |
 | Terrain | `terrain` (including `audit` and `optimize`), `pathing`, `render` |
 | Map settings | `map-info`, `player`, `force`, `camera`, `sound` (including `optimize`), `new` |
@@ -350,11 +350,14 @@ the map (if you can share it), what you did and what it printed.
   the model does not have), then shrinks it. It decimates the geometry, drops
   zero-area faces and duplicate textures, and can strip particle and ribbon
   effects, writing a smaller MDX while every other chunk stays byte for byte.
-  Textures shrink to a maximum side, sounds resample and fold to mono, and the
-  terrain drops the ground and cliff tiles no corner uses. Foreign models come
-  in too, OBJ, glTF and glb, STL and PLY, turned into an MDX with the materials
-  and their base textures as BLP. `leak model` reports the models and textures
-  a map ships but never uses, a model whose texture the map does not hold, and
+  Textures shrink to a maximum side or pack into one atlas, sounds resample,
+  fold to mono and encode to MP3, and the terrain drops the ground and cliff
+  tiles no corner uses. Foreign models come in too, OBJ, glTF and glb, STL, PLY
+  and ASCII FBX, turned into an MDX with the materials and their base textures
+  as BLP, and glTF animation names become MDX sequences. `model lod` writes a
+  chain of levels of detail, `map optimize` shrinks every model and texture in
+  a map in one pass, and `leak model` reports the models and textures a map
+  ships but never uses, a model whose texture the map does not hold, and
   byte-identical duplicates.
 - **Copying between maps.** Finds everything an object needs (objects, buffs,
   summoned units, files and the script behind its spells) and copies it into
