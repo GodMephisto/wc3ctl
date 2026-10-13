@@ -479,6 +479,29 @@ public static class Render
         r.Hits.Count == 0 ? "(no hits)" : string.Join("\n", r.Hits.Select(h => $"{h.FileName}  [{h.Context}]"))
             + (r.Truncated ? $"\n(stopped at {SearchCommand.MaxHits} hits, narrow the query)" : "");
 
+    public static string TerrainAudit(TerrainAuditResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{Path.GetFileName(r.Path)}  terrain {r.GridWidth}x{r.GridHeight} corners, "
+            + $"{r.TileCount} tile(s), {r.TerrainFileBytes:N0} byte(s)");
+        sb.AppendLine($"  tilesets    {r.GroundTileTypes} ground / {r.CliffTileTypes} cliff declared, "
+            + $"{r.DistinctGroundTextures} ground / {r.DistinctCliffTextures} cliff in use");
+        sb.AppendLine($"  cells       cliff {r.CliffCells}  ramp {r.RampCells}  water {r.WaterCells}  "
+            + $"blight {r.BlightCells}  boundary {r.BoundaryCells}  edge {r.EdgeCells}");
+        sb.AppendLine($"  height      {r.MinHeight:0.###}..{r.MaxHeight:0.###} (mean {r.MeanHeight:0.###})  "
+            + $"cliff {r.MinCliff}..{r.MaxCliff}");
+        foreach (var d in r.Diagnostics) sb.AppendLine($"  ! {d}");
+        if (r.Issues.Count == 0)
+        {
+            sb.AppendLine("  no measured waste");
+            return sb.ToString().TrimEnd();
+        }
+        sb.AppendLine($"  {r.Issues.Count} finding(s)");
+        foreach (var issue in r.Issues)
+            sb.AppendLine($"    {issue.Kind,-26} {issue.Detail}");
+        return sb.ToString().TrimEnd();
+    }
+
     public static string TerrainCorner(TerrainEditCommand.CornerInfo c) => string.Join("\n", new[]
     {
         $"corner           ({c.Col}, {c.Row})",

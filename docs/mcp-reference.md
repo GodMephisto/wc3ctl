@@ -2,7 +2,7 @@
 
 Generated from the live tool surface by `wc3ctl docs mcp`. Do not edit by hand. Regenerate with `wc3ctl docs mcp --force`, and the CI guard fails when this file is stale.
 
-The server exposes 236 tool(s).
+The server exposes 237 tool(s).
 
 ## asset_audit
 
@@ -1185,6 +1185,12 @@ Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 Set the target build that compat and lint use when --target is omitted. Validates the build exists in the schemas folder.
 
 Annotations. read-only no, destructive unset, idempotent yes, open-world no.
+
+## terrain_audit
+
+Audit a map's terrain (war3map.w3e) for its size and its measurable waste: grid and tile counts, distinct ground and cliff textures in use, cliff/ramp/water/blight totals, the war3map.w3e byte size, and any uniform, all-zero or out-of-range-tileset pattern found. Reports which checks it ran. Read-only.
+
+Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 
 ## terrain_blight
 
