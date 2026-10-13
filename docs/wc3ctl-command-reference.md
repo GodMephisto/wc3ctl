@@ -2,7 +2,7 @@
 
 Generated from the live command tree by `wc3ctl docs cli`. Do not edit by hand. Regenerate with `wc3ctl docs cli --force`, and the CI guard fails when this file is stale.
 
-The tree holds 64 top level verb(s) and 314 command path(s) in total.
+The tree holds 64 top level verb(s) and 316 command path(s) in total.
 
 ## Global options
 
