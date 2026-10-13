@@ -4,34 +4,44 @@ All notable changes to wc3ctl. One file per release lives under
 [`changelog/`](changelog/), and this file shows the latest one. The format
 follows Keep a Changelog, and the project follows Conventional Commits.
 
-## 0.4.2 - 2026-10-14
+## 0.4.3 - 2026-10-14
 
-Seven more tool fixes, found by re-running every MCP tool against the fixed
-build and checking each output against its own description.
+Seven more tool fixes, from a third full pass that ran every MCP tool against
+a real map and read the output against the tool's own description.
 
 ### Fixed
 
-- `terrain import-heightmap` wrapped the very top of the height range. The top
-  16-bit sample decodes to 112.0, a hair past the 111.998 the raw field holds,
-  and the tile setter wrapped it to the -16 minimum, so the highest exported
-  height came back inverted. It clamps and quantises now.
-- `terrain corner set` and the other mutating tools refused an omitted
-  `out_path` even though it is documented optional with a sibling `.edited`
-  default. The default is honoured now.
-- `hero roster`, and the hero contract scan behind it, missed a roster whose
-  rawcodes are the Wurst hex form `$4830334C` rather than a quoted `'H03L'`, so
-  it found no roster at all on a Wurst-compiled map.
-- `model export-obj` wrote an OBJ whose `mtllib` named the model's basename
-  while the MTL on disk took the output path's name, so the two did not line up
-  and no renderer could find the materials.
-- `target get` promised the target's schema sections and never carried them.
-- `replay players` described team and race as reported when unknown, but the
-  parser does not read them, so both are omitted and the description says so.
-- The wc3-mcp build had no assembly stamp, so its `version info` reported
-  `nogit` and `unknown`. The mirror stamps the git hash and build time now.
+- `terrain optimize` refused every real map. The corner cliff-texture field
+  uses `0xF` to mean "no cliff", and every uncliffed corner carries it
+  (12429 of 25921 corners on the Gem TD map tested), so the range check read
+  it as a dangling index and the remap loop indexed past the end of the cliff
+  remap array. The sentinel is skipped now, and `terrain audit` no longer
+  reports those corners as out-of-range cliffs.
+- `script semantic-diff` reported a pure rename of a Lua chunk-level `local`
+  as a change. The canonicalizer only knew a function's own locals, so a use
+  inside a function read as a global reference. It normalizes chunk-level
+  locals now, with a function-local of the same name shadowing.
+- `script leaks` matched a periodic timer callback only in the inline
+  `function Name` form. Wurst compiles the callback as a code variable first,
+  `set GC = function Name`, so a Wurst map produced no periodic driver and the
+  hot-leak join attributed nothing. A code-variable argument resolves through
+  its binding now.
+- `port into-version` and the compat check reported call tokens and language
+  keywords as undeclared identifiers. The scanner split on whitespace and
+  stripped only trailing punctuation, so `call SetUnitX(u,` yielded
+  `SetUnitX(u`, and the keyword list carried no `set`, `elseif`, `and`, `or`,
+  `not` or Lua keyword. It takes the leading identifier run and skips the
+  keywords now.
+- `trigger lint` silently skipped custom-text triggers, so its summary
+  understated how many it had not examined. It reports the count beside the
+  disabled count.
+- `version info` baked git's `fatal: not a git repository` message as the
+  build hash on a source tree with no `.git`. The stamp falls back to `nogit`
+  unless the captured value is a real hash.
 
 ## All releases
 
+- [0.4.3 - 2026-10-14](changelog/0.4.3.md)
 - [0.4.2 - 2026-10-14](changelog/0.4.2.md)
 - [0.4.1 - 2026-10-14](changelog/0.4.1.md)
 - [0.4.0 - 2026-10-13](changelog/0.4.0.md)
