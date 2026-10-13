@@ -490,9 +490,9 @@ public static class Wc3Tools
         });
 
     [McpServerTool(Name = "model_import", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
-    [Description("Import a Wavefront OBJ file into a Warcraft III MDX at out_path. Builds one v800 geoset with normals and UVs, triangulating an n-gon face as a fan and computing a per-face normal when the OBJ carries none, plus one texture and one material. The input .obj is never modified. Returns the output path and the vertex, face and texture counts.")]
+    [Description("Import a foreign model file into a Warcraft III MDX at out_path. Accepts Wavefront OBJ (.obj), glTF 2.0 (.gltf and .glb), STL (.stl, binary and ASCII) and PLY (.ply, ASCII and binary little-endian). The format is detected from the file content, so a correct extension is not required. Builds one v800 geoset with normals and UVs, triangulating an n-gon face as a fan, computing a per-face normal when the source carries none and zeroing UVs when it has none, plus one texture and one material. The input is never modified. Returns the output path and the vertex, face and texture counts.")]
     public static ModelImportToolResult ModelImport(
-        [Description("Path to a Wavefront .obj file.")] string obj,
+        [Description("Path to a foreign model file, one of OBJ, glTF, GLB, STL or PLY.")] string obj,
         [Description("Output .mdx path. The input is never modified.")] string out_path,
         [Description("Texture path to embed, relative to the map. Omit for war3mapImported\\<name>.blp.")] string? texture = null)
         => Run(() =>

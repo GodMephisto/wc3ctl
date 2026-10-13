@@ -3244,15 +3244,20 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
                 Emit(json, r, () => Render.ModelOptimize(r));
             }),
             modelOptimizePath, modelOptimizeOut, modelOptimizeRatio, jsonOption);
-        var modelImportObj = new Argument<string>("obj", "Path to a Wavefront .obj file.");
+        var modelImportObj = new Argument<string>("obj",
+            "Path to a foreign model, one of Wavefront OBJ (.obj), glTF 2.0 (.gltf or .glb), "
+            + "STL (.stl, binary or ASCII) or PLY (.ply, ASCII or binary little-endian). The format "
+            + "is detected from the content, so the extension alone is not needed.");
         var modelImportOut = new Option<string>(new[] { "-o", "--out" },
             "Output .mdx path. The input is never modified.") { IsRequired = true };
         var modelImportTexture = new Option<string?>("--texture",
             "Texture path to embed, relative to the map. Default, war3mapImported\\<name>.blp.");
         var modelImport = new Command("import",
-            "Import a Wavefront OBJ into a Warcraft III MDX. Builds one v800 geoset with normals and "
-            + "UVs, triangulating an n-gon face as a fan and computing a per-face normal when the OBJ "
-            + "carries none, plus one texture and one material. Reports the vertex, face and texture counts.")
+            "Import a foreign model into a Warcraft III MDX. Accepts Wavefront OBJ, glTF 2.0 (.gltf "
+            + "and .glb), STL (binary and ASCII) and PLY (ASCII and binary little-endian). Builds one "
+            + "v800 geoset with normals and UVs, triangulating an n-gon face as a fan, computing a "
+            + "per-face normal when the source carries none and zeroing UVs when it has none, plus one "
+            + "texture and one material. Reports the vertex, face and texture counts.")
             { modelImportObj, modelImportOut, modelImportTexture, jsonOption };
         modelImport.SetHandler(
             (string objPath, string outPath, string? texture, bool json) => RunSafely(() =>
