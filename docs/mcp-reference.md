@@ -966,7 +966,7 @@ Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 
 ## replay_players
 
-Per-player table for one recorded game (.w3g). Reports name, slot, team, race, result, leave time and leave reason. Team and race are reported as unknown when the record does not carry them. Read-only.
+Per-player table for one recorded game (.w3g). Reports name, slot, result, leave time and leave reason. Team and race are not carried by this replay parser, so both are omitted rather than guessed. Read-only.
 
 Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 
