@@ -233,11 +233,12 @@ The command groups, by job.
 |---|---|
 | Look inside a map | `info`, `ls`, `file`, `search`, `diff`, `roundtrip`, `extract`, `strings`, `imports`, `mpq-diff`, `mpq-hash` |
 | Object data | `object`, `asset`, `bundle`, `port`, `render-model`, `convert` |
+| Models and textures | `model` (audit, optimize, import, export-obj), `texture` (optimize) |
 | Placed units and doodads | `place`, `unit`, `doodad`, `region`, `palette` |
-| Terrain | `terrain`, `pathing`, `render` |
-| Map settings | `map-info`, `player`, `force`, `camera`, `sound`, `new` |
+| Terrain | `terrain` (including `audit` and `optimize`), `pathing`, `render` |
+| Map settings | `map-info`, `player`, `force`, `camera`, `sound` (including `optimize`), `new` |
 | Triggers and script | `trigger`, `script`, `editor` |
-| Checks | `audit`, `lint`, `validate`, `test-load`, `contract`, `hero` |
+| Checks | `audit`, `lint`, `validate`, `test-load`, `contract`, `hero`, `leak` (including `leak model`) |
 | Repairs | `repair`, `repair-generated`, `deprotect`, `debug` |
 | Replays and patches | `replay`, `uabi-profile`, `gamedata` |
 | Versions and compatibility | `gamedata`, `compat`, `target`, `bench`, `ci` |
@@ -247,7 +248,7 @@ The command groups, by job.
 
 The installer has already set this up for every supported app it found. Quit the
 app fully (for Claude Desktop, right-click its icon by the clock and choose
-**Quit**) and start it again. The app now lists the wc3ctl tools, 233 of them.
+**Quit**) and start it again. The app now lists the wc3ctl tools, 241 of them.
 
 Then just ask, and give the map's full path. For example
 
@@ -343,6 +344,18 @@ the map (if you can share it), what you did and what it printed.
   load nothing, portrait problems and heroes whose abilities are not wired up,
   and repairs what can be repaired safely. `test-load` starts the game unattended
   and reports whether the map loads.
+- **Making a map smaller.** Checks a model for the things that waste space or
+  draw nothing (duplicate textures, empty or untextured geosets, zero-area
+  faces, bones no geoset uses, and emitters that point at a node or a texture
+  the model does not have), then shrinks it. It decimates the geometry, drops
+  zero-area faces and duplicate textures, and can strip particle and ribbon
+  effects, writing a smaller MDX while every other chunk stays byte for byte.
+  Textures shrink to a maximum side, sounds resample and fold to mono, and the
+  terrain drops the ground and cliff tiles no corner uses. Foreign models come
+  in too, OBJ, glTF and glb, STL and PLY, turned into an MDX with the materials
+  and their base textures as BLP. `leak model` reports the models and textures
+  a map ships but never uses, a model whose texture the map does not hold, and
+  byte-identical duplicates.
 - **Copying between maps.** Finds everything an object needs (objects, buffs,
   summoned units, files and the script behind its spells) and copies it into
   another map, renaming any ids that clash.

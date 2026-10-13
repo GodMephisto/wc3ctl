@@ -1,122 +1,211 @@
-# Model Optimization and Analysis — Design
+# Model, texture, sound and terrain optimization
 
-**Date:** 2026-10-13
-**Status:** Draft, self-reviewed. Awaiting the user's confirmation of the decisions in section 3.
-**Slice:** 1 of N — model make-small and model audit.
+**Date.** 2026-10-13.
+**Status.** Shipped. The remaining items are named in section 7.
 
----
+## 1. What this covers
 
-## 1. Context
+wc3ctl can make a Warcraft III map smaller without changing what the map is, and it can
+say what is safe to remove. The work spans five surfaces, each on the command line and
+on the MCP (AI app) surface, all driven by the same logic in `Wc3.Commands`.
 
-wc3ctl reads and writes Warcraft III maps. `Wc3.Modeling` already parses MDX and MDL models, their
-skeleton, geosets, materials, sequences and textures. Commands already lint a model, render it to a
-PNG and export it to OBJ. What wc3ctl cannot do is make a model smaller, or say whether a model is
-safe for the engine and cheap at runtime.
+| Surface | Commands |
+|---|---|
+| Model | `model audit`, `model optimize`, `model import` |
+| Texture | `texture optimize` |
+| Sound | `sound optimize` |
+| Terrain | `terrain audit`, `terrain optimize` |
+| Model leak | `leak model` |
 
-A WC3 map has a hard size budget, and the engine has known limits on textures, bones, geosets and
-emitters. A model taken from a modelling site is usually far heavier than the engine wants, and the
-World Editor offers no decimation at all. The ask is a model optimizer and analyser, reachable from
-the CLI, the MCP and Studio, that makes a model as small as it can be without changing how it looks,
-then reports what could still exceed a limit or leak.
+Nothing edits a file in place. Every command writes a new file and leaves the input
+alone, the same rule the rest of the toolkit follows. The Studio does not yet have a
+panel for these, so the command line and the MCP surface are how they are reached today.
 
-## 2. Research grounding
+## 2. Model audit
 
-Simplification is a settled family. The standard is greedy edge collapse under a quadric error metric
-(QEM), from Garland and Heckbert onward. The recent work, found through OpenAlex, is:
+`wc3ctl model audit <model>` reads an MDX or MDL and reports what it holds and what is
+wasteful. It never throws on a bad file, it reports the parse failure instead, so a bad
+file never reads as a clean one.
 
-- `2512.19959`, a comprehensive implementation guide to edge collapse, with QEM, Lindstrom-Turk and
-  attribute-aware variants, and the full operation sequence.
-- `2409.15458`, simplifying textured meshes in the wild, which handles non-manifold and
-  multi-component input and preserves appearance through mesh correspondence rather than naive UV
-  preservation.
-- `2104.03989`, appearance-driven simplification, which drives reduction by image-space difference
-  to a reference render rather than by geometry alone.
-- `2305.06410`, intrinsic error metrics, adding hard element-quality guarantees.
-- `2404.15661`, consolidating weak features.
+It counts geosets, vertices, faces, textures, sequences, nodes and the effect chunks
+(particle emitters, particle emitters 2, ribbons and corns), then reports each of these
+problems it finds.
 
-WC3 models are small, non-manifold and split into many geosets, which is exactly the in-the-wild
-case. The design therefore follows attribute-aware QEM, with image-space verification as the
-acceptance test rather than geometry error alone.
+- A texture path listed more than once in the texture list.
+- A geoset with no texture, which the game draws as nothing with no message.
+- A geoset with no triangles.
+- A triangle whose three corners are collinear, so it has no area.
+- A skeleton node no geoset skins to, a leftover bone or helper.
+- A vertex coordinate that is not finite, the tell for a corrupt or badly transformed file.
+- A particle emitter whose node id is outside the model's node list.
+- A particle emitter 2 whose texture id is outside the model's texture list.
 
-## 3. Decisions
+The two emitter checks read each emitter's payload. A model with no pivot list has no
+node list to check against, so the node check is skipped there rather than flagging every
+emitter. The audit is read-only and changes nothing.
 
-These are the design-tree decisions, each with the answer taken. The user is asked to confirm or
-correct them.
+## 3. Model optimize
 
-1. **Input format.** WC3 MDX and MDL only for slice 1. Foreign formats (OBJ, glTF, FBX) are a
-   separate track, because the project has no importer and the engine wants MDX.
-2. **What optimize means.** A set of independent, composable passes, applied in a fixed order, each
-   optional. Slice 1 ships three. Decimate (attribute-aware QEM edge collapse preserving UVs,
-   normals, vertex colours and skin weights). Prune (drop unreferenced geosets, materials, textures,
-   nodes and sequences). Compact (drop unused MDX chunks and zero-area faces, and renumber). Later
-   passes, texture downscale and LOD generation, are out of slice 1.
-3. **Output.** A new file, never in place, matching every other editing command, plus a machine
-   readable report. `--json` for the report.
-4. **Fidelity.** Structures no pass touches are written byte-identical. The report carries a
-   before and after count per structure (vertices, faces, geosets, textures, bytes) and an
-   appearance delta.
-5. **Appearance verification.** Render the model before and after to a PNG through the existing
-   renderer, and compare with a silhouette intersection-over-union and a mean pixel difference.
-   A decimation that drops the silhouette below a threshold fails. This is the "without sacrificing
-   how it looks" guard, and it is measurable, not a claim.
-6. **WC3 limits.** A checker for the engine's known constraints, reported as warnings, not errors,
-   because the tool does not know the map's intent. Texture dimensions and power-of-two, bone
-   count, geoset count, sequence count, team colour and team glow presence, particle emitter count,
-   and total model bytes against a map size budget.
-7. **Memory leak.** Two readings, and slice 1 ships the first. The **static** reading is a model
-   resource audit, duplicate textures, orphaned geosets, zero-area faces, unused nodes and
-   emitters that emit forever. The **runtime** reading, does a map that uses the model leak handles
-   at play time, is the existing `leak` workflow pointed at a map, and is a later slice. The user is
-   asked which they meant.
-8. **Placement.** Logic in `Wc3.Commands` (`ModelOptimizeCommand`, `ModelAuditCommand`,
-   `ModelLimitsCommand`), CLI under a new `model` group (`model optimize`, `model audit`,
-   `model limits`), MCP tools (`model_optimize`, `model_audit`, `model_limits`), and a Studio panel
-   that reuses the same commands. No parsing or optimisation in the front ends.
-9. **Determinism.** Decimation is deterministic, no random tie-breaking, so a test can pin a count.
-10. **First slice.** Audit, limits, and a conservative decimate that refuses when the appearance
-    delta would exceed the threshold. Texture downscale, LOD, foreign import and runtime leak join
-    are later slices.
+`wc3ctl model optimize <model> -o <out.mdx>` runs the model's chunks through four passes.
 
-## 4. In scope (slice 1)
+- **Decimate.** Greedy edge collapse under a quadric error metric (Garland and Heckbert),
+  following the implementation guide in arXiv 2512.19959. `--ratio` is the target
+  fraction of faces to keep and defaults to 0.5. Output is rounded and clamped, so a
+  ratio of 1 or above returns the input unchanged.
+- **Compact.** Drop zero-area triangles the game draws as nothing.
+- **Prune.** Remove duplicate texture paths and remap the material texture ids onto the
+  compacted list.
+- **Strip effects.** `--strip-effects` drops the effect chunks, particle emitters (PREM),
+  particle emitters 2 (PRE2), ribbons (RIBB) and corns (CORN). This changes how the model
+  looks, so it is off by default.
 
-- `model audit` and `model_audit`. Resource audit and WC3 limit warnings for one model or a folder.
-- `model optimize` and `model_optimize`. Decimate, prune and compact, with a before and after
-  report and an appearance check.
-- `model limits` and `model_limits`. The engine limits alone, for a quick check.
-- Deterministic QEM decimation preserving UVs, normals, vertex colours and skin weights.
-- Appearance verification by rendered silhouette and pixel difference.
-- Hermetic tests on a small synthetic MDX, with byte tests for untouched chunks.
+The decimator is deterministic. Vertices are welded by exact position and edges are
+ordered by cost then by index, with no random tie-breaking, so the same input always
+yields the same output and a test can pin a count. Chunks no pass touches are written back
+byte for byte, so materials, sequences, bones, cameras and the untouched vertex arrays
+survive exactly. A geoset with no vertex or index chunk, or one that does not reduce, is
+left untouched. The report carries the before and after vertex and face counts, the number
+of effect chunks removed and the byte sizes.
 
-## 5. Out of scope (slice 1)
+### Measured result
 
-- Foreign model import (OBJ, glTF, FBX) and conversion to MDX.
-- Texture downscale, recompression and atlas packing.
-- LOD chain generation.
-- Runtime leak join against a live map session.
-- Studio panel, deferred to keep the first slice small.
-- In-place editing and animation retargeting.
+On a 9 by 9 vertex grid, that is 81 vertices and 128 faces, a decimation at ratio 0.5
+produced 41 vertices and 63 faces. The output still parses and every index stays in range.
+The figure came from a measured run of the same grid `QemDecimatorTests` and
+`ModelOptimizeTests` build. Those tests assert the direction (the face and vertex counts
+fall, the output parses, the indices stay in range), not the exact 41 and 63, so the exact
+numbers are a measurement rather than a pinned assertion.
 
-## 6. Command surface (slice 1)
+## 4. Texture and sound
 
-```
-wc3ctl model audit   <model|folder> [--json]
-wc3ctl model limits  <model|folder> [--json]
-wc3ctl model optimize <model> -o <out.mdx> [--ratio 0.5] [--keep-animations] [--json]
-```
+`wc3ctl texture optimize <texture> --max 256 -o <out>` shrinks a texture to fit a maximum
+side, preserving aspect ratio, and writes it back in the same format. A `.blp` and a
+`.dds` are read through the same decoder the renderer uses, alongside the standard image
+formats. This is the other half of making a model compact, since a model only references
+its texture. The input is never modified.
 
-`--ratio` is the target fraction of faces to keep. `--keep-animations` refuses to prune sequences.
+`wc3ctl sound optimize <file> -o <out.wav>` decodes a `.wav` or `.mp3` through NAudio,
+resamples it to a target rate (`--rate`, default 22050) and optionally folds it to mono
+(`--mono`), then writes a smaller 16-bit PCM `.wav`. It reports the before and after
+sample rate, channel count and byte size.
 
-## 7. Verification
+### Measured result
 
-- `dotnet test` hermetic suite stays green, with new tests for the decimator, the audit and the
-  limits checker.
-- A round-trip test, optimize with ratio 1.0 changes nothing but the report.
-- A silhouette test, decimate a known model to half the faces and assert the silhouette IoU stays
-  above the threshold.
-- `ci` and the MCP reference guards updated for the new tools.
+A 64 by 64 BLP shrunk to a maximum side of 32 produced a 32 by 32 BLP, 8,725 bytes down
+to 7,432 in the BLP format. The dimension figure is the one the `texture optimize` path
+reports. The byte figure is the measured file size of that run and depends on the
+encoder, so treat the dimension as the durable number and the bytes as illustrative.
 
-## 8. Open questions for the user
+## 5. Terrain
 
-- Did "memory leak" mean the static resource audit, the runtime map leak, or both?
-- Is a foreign model importer in scope at all, or only WC3 MDX and MDL?
-- Should optimize ever edit in place, or always write a new file?
+`wc3ctl terrain audit <map>` reports the terrain's size and its measurable waste. It
+reports the grid and tile counts, how many distinct ground and cliff textures are actually
+in use, the cliff, ramp, water, blight, boundary and edge totals, the height and cliff
+ranges, and the `war3map.w3e` byte size. It flags a grid where every corner is identical
+(a placeholder or flattened map), an all-zero grid, and a corner whose texture index
+reaches at or past the map's declared tile count. Read-only.
+
+`wc3ctl terrain optimize <map> -o <out>` drops the declared ground and cliff tile types
+the terrain never references and remaps every corner's texture index onto the compacted
+list. A corner addresses a tile by its ordinal index, so dropping an unreferenced entry
+and shifting the greater indices down leaves every corner pointing at the same tile it did
+before, with no rendering or pathing change. The two declared tile lists and the per-corner
+index fields are the only bytes touched, and every other file is written back byte for
+byte. A dropped entry is exactly four bytes, so the decompressed `war3map.w3e` shrinks by
+four bytes per dropped entry and no more. The pass refuses a map whose corners already
+reference an index outside the declared list, because remapping a dangling index is
+guesswork.
+
+### Measured result
+
+A blank map declares five ground tiles and references one. On a 16 by 16 tile blank map
+the `war3map.w3e` entry shrank from 2,080 to 2,064 bytes, sixteen bytes, one dropped
+four-byte entry each for the four unused tiles. The default 32 by 32 blank map shrank from
+7,680 to 7,664 bytes. Both figures came from a measured run of `TerrainOptimizeCommand`
+against `BlankMap.Create`.
+
+## 6. Model leak
+
+`wc3ctl leak model <map>` joins the map's imported models and textures to what the map and
+those models reference. It reports four findings.
+
+- An imported model no object field and no script literal names, a leaked import the map
+  ships but never loads.
+- A model naming a concrete texture the map does not hold.
+- A model imported again under a different name with byte-identical content.
+- An imported texture no imported model names.
+
+It reuses the existing model parser and the map's own import and reference primitives, so
+it re-implements no chunk reader and no MPQ reader. A parse failure on an imported model
+is reported as a diagnostic, never as a clean run. Read-only.
+
+## 7. Still planned
+
+These were designed and are not shipped.
+
+- **Engine limit warnings as a `model limits` command.** The design proposed a standalone
+  checker for the engine's texture, bone, geoset, sequence and emitter ceilings. It does
+  not exist on this branch. The audit reports resource waste, not those limits.
+- **Appearance verification by rendered silhouette.** The design proposed rendering the
+  model before and after and comparing a silhouette intersection over union and a mean
+  pixel difference, so a decimation that changed the look too much would fail. It is not
+  implemented. The optimiser does not currently measure how much a decimation changes the
+  look, so `--ratio` is the only control and there is no automatic guard.
+- **LOD chain generation.**
+- **In-place editing and animation retargeting.**
+- **A dedicated Studio panel.** The commands are on the command line and the MCP surface
+  only.
+
+## 8. Design decisions, and how they shipped
+
+| Decision | Shipped as |
+|---|---|
+| Independent passes in a fixed order, each optional | Decimate, compact, prune, strip effects |
+| A new file, never in place | Every write command requires or defaults to an output path |
+| Structures no pass touches stay byte-identical | Chunks written back byte for byte, verified by tests |
+| Attribute-aware decimation preserving UVs, normals and skin weights | The decimator returns a remap applied to the normal, matrix-group and UV arrays |
+| Deterministic decimation | Weld by exact position, order by cost then index, no random tie-breaking |
+| Static model resource audit | `model audit` and the `leak model` join |
+| Foreign model import | `model import` for OBJ, glTF, glb, STL and PLY |
+| Texture downscale | `texture optimize` |
+| WC3 limit warnings | Not shipped, section 7 |
+| Appearance verification by silhouette | Not shipped, section 7 |
+| Runtime leak join against a live map | Separate track, the `leak` group's session joins |
+
+## 9. Research grounding
+
+Simplification is a settled family. The standard is greedy edge collapse under a quadric
+error metric (QEM), from Garland and Heckbert onward. The implementation follows
+`2512.19959`, a comprehensive guide to edge collapse with QEM, Lindstrom-Turk and
+attribute-aware variants. Other work found through OpenAlex shaped the design intent,
+`2409.15458` on simplifying textured meshes in the wild, `2104.03989` on appearance-driven
+simplification, `2305.06410` on intrinsic error metrics with element-quality guarantees,
+and `2404.15661` on consolidating weak features.
+
+WC3 models are small, non-manifold and split into many geosets, which is the in-the-wild
+case, so the decimator welds by position and collapses over a union-find rather than a
+half-edge walk. The attribute-aware and appearance-driven parts of the design are shipped
+only in part, as the table in section 8 shows.
+
+## 10. Verification
+
+- The hermetic suite covers the decimator, the model audit, the optimiser, the importer,
+  the texture optimiser, the sound optimiser, the terrain audit and optimiser, and the
+  model leak, on synthetic models, textures and blank maps, with no WC3 install and no
+  corpus.
+- A ratio of 1 returns the model byte for byte.
+- A zero-area face is compacted away, and stripping effects drops the effect chunk and the
+  output still parses.
+- A model with duplicate textures is pruned to one.
+- A blank terrain that uses every declared tile is left unchanged and survives the save
+  path byte for byte.
+- A map whose cells reference an out-of-range texture is refused.
+- An import of each format builds a parseable MDX, and a glTF material's base texture is
+  written as a BLP beside it.
+
+## 11. Open questions carried forward
+
+- Whether a `model limits` checker earns its own command, or should fold into `model audit`
+  as warnings.
+- Whether appearance verification is worth the render round-trip, given the decimator is
+  deterministic and a pinned ratio is reproducible.

@@ -26,6 +26,12 @@ Used directly
 | devoltz | devoltz, Arakunido | Public-domain guide to repairing SLK maps for 3.0.0 (src/Wc3.Commands/Reforged3RepairCommand.cs) |
 | Complete Command Line Arguments Guide | Hive Workshop community | Test runner launch flags (https://www.hiveworkshop.com/threads/complete-command-line-arguments-guide.288224/) |
 
+The optimise commands lean on two further sources. The sound optimiser decodes, resamples
+and downmixes through NAudio, the same route the Studio's audio player uses. The model
+importer reads Wavefront OBJ, glTF 2.0, STL and PLY through hand-written parsers written
+against those formats' public specifications, listed under References below. Every
+importer reads a file the user chose and ships no game file.
+
 The per-build schema dataset is derived from the user's own game files and from community archives that
 keep the older clients alive. No game file is redistributed, only the metadata read out of them.
 
@@ -90,6 +96,10 @@ Format specs and parsers
 | WC3MapTranslator | https://github.com/ChiefOfGxBxL/WC3MapTranslator |
 | War3MapTD | https://github.com/j8383888/War3MapTD |
 | war3MapInfoTranslator | https://github.com/zzop789/war3MapInfoTranslator |
+| glTF 2.0 specification | https://www.khronos.org/gltf/ |
+| Wavefront OBJ format | https://en.wikipedia.org/wiki/Wavefront_.obj_file |
+| STL format | https://www.loc.gov/preservation/digital/formats/fdd/fdd000504.shtml |
+| PLY (Stanford polygon) format | https://en.wikipedia.org/wiki/PLY_(file_format) |
 JASS and vJASS tooling
 
 | Project | Link |
