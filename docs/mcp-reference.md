@@ -2,7 +2,7 @@
 
 Generated from the live tool surface by `wc3ctl docs mcp`. Do not edit by hand. Regenerate with `wc3ctl docs mcp --force`, and the CI guard fails when this file is stale.
 
-The server exposes 241 tool(s).
+The server exposes 242 tool(s).
 
 ## asset_audit
 
@@ -1299,6 +1299,12 @@ Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 Set/raise/lower/remove water over a brush, saving the edited map to out_path. The input map is NEVER modified in place.
 
 Annotations. read-only no, destructive no, idempotent no, open-world no.
+
+## texture_atlas
+
+Pack two or more .blp, .dds or standard image textures into one power-of-two atlas and write it at out_path in the first input's format. Every input is decoded, placed deterministically by a shelf packer, and left unmodified. Returns the atlas size, its byte count and each input's pixel rectangle, so a caller can build the UV mapping.
+
+Annotations. read-only no, destructive no, idempotent yes, open-world no.
 
 ## texture_optimize
 

@@ -76,6 +76,28 @@ public static class TextureConvert
         return (image.Width, image.Height);
     }
 
+    /// <summary>
+    /// Decodes any supported source to raw RGBA8, for a caller that needs the pixels rather than a
+    /// re-encoded file (an atlas packer, most of all). The same decoder backs every other method, so
+    /// .blp and .dds are handled alongside the standard formats.
+    /// </summary>
+    public static TextureImage DecodeRgba(byte[] data, string fromExt)
+    {
+        ArgumentNullException.ThrowIfNull(data);
+        using var image = LoadRgba(data, fromExt);
+        var rgba = new byte[image.Width * image.Height * 4];
+        image.CopyPixelDataTo(rgba);
+        return new TextureImage(image.Width, image.Height, rgba);
+    }
+
+    /// <summary>Encodes a raw RGBA8 buffer to the named target format, the inverse of DecodeRgba.</summary>
+    public static byte[] EncodeRgba(TextureImage image, string toExt)
+    {
+        ArgumentNullException.ThrowIfNull(image);
+        using var img = Image.LoadPixelData<Rgba32>(image.Rgba, image.Width, image.Height);
+        return Save(img, toExt);
+    }
+
     private static Image<Rgba32> LoadRgba(byte[] data, string fromExt)
     {
         if (Normalize(fromExt) == ".blp")

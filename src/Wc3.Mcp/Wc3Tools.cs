@@ -476,6 +476,22 @@ public static class Wc3Tools
             return TextureOptimizeCommand.ExecutePath(texture, max, out_path);
         });
 
+    [McpServerTool(Name = "texture_atlas", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Pack two or more .blp, .dds or standard image textures into one power-of-two atlas and write it at out_path in the first input's format. Every input is decoded, placed deterministically by a shelf packer, and left unmodified. Returns the atlas size, its byte count and each input's pixel rectangle, so a caller can build the UV mapping.")]
+    public static TextureAtlasResult TextureAtlas(
+        [Description("Two or more paths to texture files.")] string[] images,
+        [Description("Output atlas path. The inputs are never modified.")] string out_path,
+        [Description("Maximum atlas side in pixels. The atlas is the smallest power of two that fits and does not exceed this.")] int max = 512)
+        => Run(() =>
+        {
+            string full = Path.GetFullPath(out_path);
+            foreach (var image in images)
+                if (string.Equals(full, Path.GetFullPath(image), StringComparison.OrdinalIgnoreCase))
+                    throw new McpException("out_path must not be one of the input textures");
+            if (Path.GetDirectoryName(full) is { Length: > 0 } dir) Directory.CreateDirectory(dir);
+            return TextureAtlasCommand.ExecutePaths(images, max, full);
+        });
+
     [McpServerTool(Name = "model_export_obj", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Export a map-imported model to Wavefront OBJ at out_path, writing an MTL and any map-resolvable textures converted to PNG beside it. The map itself is never modified. Returns the .obj path, the .mtl path and the texture file names.")]
     public static ModelExportObjToolResult ModelExportObj(

@@ -44,6 +44,7 @@ public class CliMcpParityTests
         ["model_audit"] = "model audit",
         ["model_optimize"] = "model optimize",
         ["texture_optimize"] = "texture optimize",
+        ["texture_atlas"] = "texture atlas",
         ["lint"] = "lint",
         ["lint_baseline"] = "lint baseline",
         ["validate"] = "validate",

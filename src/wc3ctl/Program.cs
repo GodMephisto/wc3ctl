@@ -3331,8 +3331,29 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
                 Emit(json, r, () => Render.TextureOptimize(r));
             }),
             textureOptimizePath, textureOptimizeOut, textureOptimizeMax, jsonOption);
+        var textureAtlasIn = new Argument<string[]>("in", "Two or more input image paths.")
+        { Arity = ArgumentArity.OneOrMore };
+        var textureAtlasOut = new Option<string>(new[] { "-o", "--out" },
+            "Output atlas path. The inputs are never modified.") { IsRequired = true };
+        var textureAtlasMax = new Option<int>("--max", () => 512,
+            "Maximum atlas side in pixels. The atlas is the smallest power of two that fits and does "
+            + "not exceed this.");
+        var textureAtlas = new Command("atlas",
+            "Pack two or more textures into one power-of-two atlas and report each input's pixel "
+            + "rectangle. The atlas is written in the first input's format.")
+            { textureAtlasIn, textureAtlasOut, textureAtlasMax, jsonOption };
+        textureAtlas.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = TextureAtlasCommand.ExecutePaths(
+                p.GetValueForArgument(textureAtlasIn),
+                p.GetValueForOption(textureAtlasMax),
+                p.GetValueForOption(textureAtlasOut)!);
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.TextureAtlas(r));
+        }));
         var texture = new Command("texture", "Texture asset operations.");
         texture.AddCommand(textureOptimize);
+        texture.AddCommand(textureAtlas);
         root.AddCommand(texture);
 
         // ---- strings / imports / trigger read: reachable from the GUI, previously not here ----

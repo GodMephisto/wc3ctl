@@ -736,6 +736,16 @@ public static class Render
         return sb.ToString().TrimEnd();
     }
 
+    public static string TextureAtlas(TextureAtlasResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"Wrote {Path.GetFileName(r.Output)}  {r.Format}  {r.AtlasWidth}x{r.AtlasHeight}, "
+            + $"{r.Bytes} byte(s), {r.Entries.Count} image(s)");
+        foreach (var e in r.Entries)
+            sb.AppendLine($"  {e.Name}  ({e.X}, {e.Y}) {e.Width}x{e.Height}");
+        return sb.ToString().TrimEnd();
+    }
+
     public static string SoundOptimize(SoundOptimizeResult r)
     {
         var sb = new StringBuilder();

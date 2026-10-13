@@ -3,6 +3,8 @@
 // files to a directory the caller names, and import-wire writes an edited map copy. Each write
 // is checked to leave its input map untouched.
 using NAudio.Wave;
+using Wc3.Modeling;
+using Wc3.Render;
 
 namespace Wc3.Tests;
 
@@ -88,6 +90,38 @@ public sealed class McpSmokeModelAssetTests : McpSmokeBase
         var r = await Call("texture_optimize", Args(("texture", blp), ("out_path", outBlp), ("max", 32)));
         Assert.True(File.Exists(outBlp));
         Assert.Equal(32, Prop(r, "widthAfter").GetInt32());
+    }
+
+    [Fact, Covers("texture_atlas")]
+    public async Task Texture_atlas_packs_textures_into_one_file()
+    {
+        string a = NewOut("atlas-a", ".png");
+        string b = NewOut("atlas-b", ".png");
+        string c = NewOut("atlas-c", ".png");
+        File.WriteAllBytes(a, SolidPng(8, 8, 255, 0, 0));
+        File.WriteAllBytes(b, SolidPng(16, 16, 0, 255, 0));
+        File.WriteAllBytes(c, SolidPng(8, 8, 0, 0, 255));
+
+        var outPath = NewOut("atlas", ".png");
+        var r = await Call("texture_atlas",
+            Args(("images", new[] { a, b, c }), ("out_path", outPath), ("max", 512)));
+
+        Assert.True(File.Exists(outPath));
+        Assert.Equal(3, Rows(Prop(r, "entries")).Count);
+        Assert.Equal("png", Prop(r, "format").GetString());
+    }
+
+    private static byte[] SolidPng(int w, int h, byte r, byte g, byte b)
+    {
+        var rgba = new byte[w * h * 4];
+        for (int i = 0; i < w * h; i++)
+        {
+            rgba[i * 4] = r;
+            rgba[i * 4 + 1] = g;
+            rgba[i * 4 + 2] = b;
+            rgba[i * 4 + 3] = 255;
+        }
+        return TexturePng.Encode(new TextureImage(w, h, rgba));
     }
 
     [Fact, Covers("sound_optimize")]
