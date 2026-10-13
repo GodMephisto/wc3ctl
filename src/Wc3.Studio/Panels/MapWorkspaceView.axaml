@@ -114,6 +114,9 @@
             <TabItem Header="Hero Audit" Name="HeroWiringTab">
                 <panels:HeroWiringView Name="HeroWiringPanel"/>
             </TabItem>
+            <TabItem Header="Optimise" Name="OptimizeTab">
+                <panels:OptimizeView Name="OptimizePanel"/>
+            </TabItem>
             <TabItem Header="Changelog" Name="ChangelogTab">
                 <panels:SchemaChangelogView Name="ChangelogPanel"/>
             </TabItem>

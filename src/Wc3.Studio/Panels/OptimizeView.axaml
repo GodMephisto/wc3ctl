@@ -1,0 +1,8 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="using:Wc3.Studio.Controls"
+             x:Class="Wc3.Studio.Panels.OptimizeView">
+    <c:CatalogEditorView Name="Catalog"
+                         Title="Optimise and audit"
+                         Subtitle="Shrink a model, a texture, a sound or the open map's terrain, and audit a model or the terrain for what wastes space or draws nothing. Each action runs the same command the CLI and the MCP server do, so the numbers match."/>
+</UserControl>
