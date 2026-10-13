@@ -13,7 +13,11 @@ namespace Wc3.Tests;
 /// Hermetic coverage for the object data commands added on the object2 branch: migrate,
 /// bulk-set, export, import and rename. Every map is built in memory through
 /// <see cref="SyntheticMap"/>, so nothing here needs a WC3 install.
+/// The rename and migrate cases drive the CLI and swap process-wide
+/// <see cref="System.Console.Out"/>, so this class joins the Serial collection that
+/// owns every Console writer.
 /// </summary>
+[Collection("Serial")]
 public class ObjectBulkCommandsTests
 {
     // ---- synthetic base game data (units only) ---------------------------

@@ -13,7 +13,10 @@ namespace Wc3.Tests;
 /// Hermetic coverage for the object toolkit commands added on the object branch:
 /// search, noop-fields, deprecated, rawcode-suggest and clone. Every map is built in
 /// memory through <see cref="SyntheticMap"/>, so nothing here needs a WC3 install.
+/// The clone case drives the CLI and swaps process-wide <see cref="System.Console.Out"/>,
+/// so this class joins the Serial collection that owns every Console writer.
 /// </summary>
+[Collection("Serial")]
 public class ObjectToolkitCommandTests
 {
     // ---- synthetic base game data (units only) ---------------------------
