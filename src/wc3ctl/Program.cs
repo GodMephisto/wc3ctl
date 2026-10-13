@@ -3282,8 +3282,9 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
             modelOptimizePath, modelOptimizeOut, modelOptimizeRatio, modelOptimizeStrip, jsonOption);
         var modelImportObj = new Argument<string>("obj",
             "Path to a foreign model, one of Wavefront OBJ (.obj), glTF 2.0 (.gltf or .glb), "
-            + "STL (.stl, binary or ASCII) or PLY (.ply, ASCII or binary little-endian). The format "
-            + "is detected from the content, so the extension alone is not needed.");
+            + "STL (.stl, binary or ASCII), PLY (.ply, ASCII or binary little-endian) or FBX "
+            + "ASCII (.fbx). The format is detected from the content, so the extension alone is not "
+            + "needed. Binary FBX is not supported.");
         var modelImportOut = new Option<string>(new[] { "-o", "--out" },
             "Output .mdx path. The input is never modified.") { IsRequired = true };
         var modelImportTexture = new Option<string?>("--texture",
@@ -3291,12 +3292,12 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
             + "model's own materials, or war3mapImported\\<name>.blp when it names none.");
         var modelImport = new Command("import",
             "Import a foreign model into a Warcraft III MDX. Accepts Wavefront OBJ, glTF 2.0 (.gltf "
-            + "and .glb), STL (binary and ASCII) and PLY (ASCII and binary little-endian). Builds one "
-            + "v800 geoset per glTF primitive with normals and UVs, triangulating an n-gon face as a "
-            + "fan, computing a per-face normal when the source carries none and zeroing UVs when it "
-            + "has none. Each glTF material's baseColorTexture is written as .blp beside the MDX and "
-            + "referenced from a texture entry, one per distinct texture. Reports the geoset, vertex, "
-            + "face, texture and material counts and the written texture files.")
+            + "and .glb), STL (binary and ASCII), PLY (ASCII and binary little-endian) and FBX ASCII. "
+            + "Builds one v800 geoset per source primitive with normals and UVs, triangulating an "
+            + "n-gon face as a fan, computing a per-face normal when the source carries none and "
+            + "zeroing UVs when it has none. Each glTF material's baseColorTexture is written as .blp "
+            + "beside the MDX and referenced from a texture entry, one per distinct texture. Reports "
+            + "the geoset, vertex, face, texture and material counts and the written texture files.")
             { modelImportObj, modelImportOut, modelImportTexture, jsonOption };
         modelImport.SetHandler(
             (string objPath, string outPath, string? texture, bool json) => RunSafely(() =>

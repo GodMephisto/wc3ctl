@@ -198,6 +198,132 @@ public sealed class ModelImportFormatTests : IDisposable
         Assert.Equal(1, faces);
     }
 
+    [Fact]
+    public void An_ascii_fbx_with_two_triangles_imports()
+    {
+        var path = Write("quads.fbx", FbxFixture());
+        var outPath = Path.Combine(_dir, "fbx.mdx");
+        var r = ModelImportCommand.ExecutePath(path, outPath);
+        Assert.Equal(6, r.Vertices);
+        Assert.Equal(2, r.Faces);
+
+        var geoset = ModelParser.Parse(File.ReadAllBytes(outPath), "fbx.mdx").Geosets[0];
+        Assert.Equal(6, geoset.Vertices.Length / 3);
+        Assert.Equal(6, geoset.Indices.Length);
+        Assert.Equal(18, geoset.Normals.Length);
+        Assert.Equal(12, geoset.Uvs.Length);
+    }
+
+    [Fact]
+    public void An_ascii_fbx_renamed_to_dat_is_detected_by_its_header()
+    {
+        var path = Write("lied.dat", FbxFixture());
+        var r = ModelImportCommand.ExecutePath(path, Path.Combine(_dir, "fbx-renamed.mdx"));
+        Assert.Equal(6, r.Vertices);
+        Assert.Equal(2, r.Faces);
+    }
+
+    [Fact]
+    public void An_ascii_fbx_model_translation_moves_the_vertices()
+    {
+        var path = Write("move.fbx", FbxFixture(
+            "            Properties70:  {\n"
+            + "                P: \"Lcl Translation\", \"Lcl Translation\", \"\", \"A\",10,20,30\n"
+            + "            }\n"));
+        var outPath = Path.Combine(_dir, "fbx-move.mdx");
+        ModelImportCommand.ExecutePath(path, outPath);
+
+        var vertices = ModelParser.Parse(File.ReadAllBytes(outPath), "fbx.mdx").Geosets[0].Vertices;
+        Assert.Equal(10f, vertices[0], 4);
+        Assert.Equal(20f, vertices[1], 4);
+        Assert.Equal(30f, vertices[2], 4);
+    }
+
+    [Fact]
+    public void An_ascii_fbx_model_rotation_turns_the_winding()
+    {
+        var path = Write("turn.fbx", FbxFixture(
+            "            Properties70:  {\n"
+            + "                P: \"Lcl Rotation\", \"Lcl Rotation\", \"\", \"A\",0,0,90\n"
+            + "            }\n"));
+        var outPath = Path.Combine(_dir, "fbx-turn.mdx");
+        ModelImportCommand.ExecutePath(path, outPath);
+
+        // Vertex 1 was (1,0,0), a 90 degree turn about Z sends it to (0,1,0).
+        var vertices = ModelParser.Parse(File.ReadAllBytes(outPath), "fbx.mdx").Geosets[0].Vertices;
+        Assert.Equal(0f, vertices[3], 4);
+        Assert.Equal(1f, vertices[4], 4);
+        Assert.Equal(0f, vertices[5], 4);
+    }
+
+    [Fact]
+    public void A_binary_fbx_reports_that_only_ascii_is_supported()
+    {
+        var bytes = new byte[64];
+        Encoding.ASCII.GetBytes("Kaydara FBX Binary  ").CopyTo(bytes, 0);
+        var path = Write("bin.fbx", bytes);
+        var ex = Assert.Throws<NotSupportedException>(
+            () => ModelImportCommand.ExecutePath(path, Path.Combine(_dir, "fbx-bin.mdx")));
+        Assert.Contains("ASCII", ex.Message);
+    }
+
+    /// <summary>
+    /// A tiny hermetic ASCII FBX, two triangles that share no vertices, with a per-corner normal
+    /// layer and a UV layer that indexes a pool. <paramref name="modelBody"/> is inserted inside the
+    /// Model node, so a test can add a Properties70 transform.
+    /// </summary>
+    private static string FbxFixture(string modelBody = "")
+    {
+        const string template = """
+            ; FBX 7.4.0 project file
+            ; Created by wc3ctl test
+            ;------------------------------------------------------------------
+
+            FBXHeaderExtension:  {
+                FBXHeaderVersion: 1003
+                FBXVersion: 7400
+            }
+
+            Objects:  {
+                Geometry: 1000, "Geometry::tri", "Mesh" {
+                    Vertices: *18 {
+                        a: 0,0,0,1,0,0,0,1,0,2,0,0,3,0,0,2,1,0
+                    }
+                    PolygonVertexIndex: *6 {
+                        a: 0,1,-3,3,4,-6
+                    }
+                    LayerElementNormal: 0 {
+                        MappingInformationType: "ByPolygonVertex"
+                        ReferenceInformationType: "Direct"
+                        Normals: *18 {
+                            a: 0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1
+                        }
+                    }
+                    LayerElementUV: 0 {
+                        MappingInformationType: "ByPolygonVertex"
+                        ReferenceInformationType: "IndexToDirect"
+                        UV: *8 {
+                            a: 0,0,1,0,0,1,1,1
+                        }
+                        UVIndex: *6 {
+                            a: 0,1,2,3,1,2
+                        }
+                    }
+                }
+                Model: 2000, "Model::tri", "Mesh" {
+                    Version: 232
+            __MODEL_BODY__
+                }
+            }
+
+            Connections:  {
+                C: "OO",1000,2000
+                C: "OO",2000,0
+            }
+            """;
+        return template.Replace("__MODEL_BODY__", modelBody);
+    }
+
     // Position (3 x VEC3 float), normal (3 x VEC3 float), uv (3 x VEC2 float), indices (3 x u16).
     private static byte[] TriangleBuffer()
     {

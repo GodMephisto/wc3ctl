@@ -35,7 +35,10 @@ public sealed record ModelImportResult(
 /// TEXCOORD_0 accessors and its indices, and resolves each primitive's material to its
 /// baseColorTexture image, which is written as .blp and referenced from a TEXS entry. STL reads the
 /// binary form (a triangle count at offset 80) and the ASCII form, and carries no UVs. PLY reads
-/// ASCII and binary little-endian vertex x/y/z, nx/ny/nz and s/t plus the face index list.
+/// ASCII and binary little-endian vertex x/y/z, nx/ny/nz and s/t plus the face index list. FBX
+/// reads its ASCII text form, the Geometry node's Vertices, PolygonVertexIndex, LayerElementNormal
+/// and LayerElementUV and the Model nodes' transforms. The binary FBX form needs a dependency and is
+/// refused with a clear message rather than guessed.
 ///
 /// The result is one v800 GEOS geoset per primitive, one TEXS entry per distinct texture and one
 /// MTLS material per primitive. A glTF with no materials, and a format with no texture of its own,
@@ -111,6 +114,13 @@ public static class ModelImportCommand
             case ModelFormat.Ply:
                 meshes = new[] { PlyImporter.Parse(bytes) };
                 break;
+            case ModelFormat.Fbx:
+                {
+                    var scene = FbxImporter.Parse(DecodeText(bytes), name);
+                    diagnostics.AddRange(scene.Diagnostics);
+                    meshes = scene.Meshes;
+                    break;
+                }
             default:
                 throw new NotSupportedException($"Unsupported model format for '{name}'");
         }
