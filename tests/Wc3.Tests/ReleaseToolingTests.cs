@@ -176,6 +176,23 @@ public class ReleaseToolingTests
         Assert.Contains("no wc3ctl source", r.Message);
     }
 
+    [Fact]
+    public void Export_verify_ignores_a_source_only_claude_md()
+    {
+        // CLAUDE.md is gitignored, so the export never copies it, but the filesystem walk sees it.
+        // It must not read as a phantom "added" file that makes a freshly exported mirror look out
+        // of step. Measured on the real repos, where it was the one difference right after an export.
+        using var tmp = new TempDir();
+        string source = Path.Combine(tmp.Dir, "source");
+        string target = Path.Combine(tmp.Dir, "target");
+        BuildSourceTree(source);
+        BuildTargetTree(target);
+        File.WriteAllText(Path.Combine(source, "src", "Wc3.Commands", "CLAUDE.md"), "notes");
+
+        var r = McpExportVerifyCommand.Execute(source, target);
+        Assert.True(r.InStep, string.Join("; ", r.Differences.Select(d => d.Status + " " + d.Path)));
+    }
+
     // ---- tree builders ----
 
     private const string CliProjectReference =
