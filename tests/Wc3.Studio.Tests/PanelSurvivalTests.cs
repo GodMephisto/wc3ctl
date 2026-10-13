@@ -44,6 +44,7 @@ public class PanelSurvivalTests
         yield return ("Palette", () => new PaletteView());
         yield return ("Dependencies", () => new DependencyGraphView());
         yield return ("HeroWiring", () => new HeroWiringView());
+        yield return ("Optimise", () => new OptimizeView());
     }
 
     // AvaloniaTheory with InlineData, and both halves were learned the hard way.

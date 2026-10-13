@@ -59,6 +59,7 @@ public partial class MapWorkspaceView : UserControl
         CamerasPanel.MapEdited += OnMapEdited;
         SoundsPanel.MapEdited += OnMapEdited;
         TriggersPanel.MapEdited += OnTriggerMapEdited;
+        OptimizePanel.MapEdited += OnMapEdited;
     }
 
     /// <summary>Dev/QA: select a top-level tab by its header text (drives the --tab startup
