@@ -1903,6 +1903,20 @@ public static class Wc3Tools
         [Description("Sound definition name to remove.")] string name)
         => Run(() => SaveSound(map, out_path, doc => SoundCommand.Remove(doc, name)));
 
+    [McpServerTool(Name = "sound_optimize", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Shrink a sound file by decoding it, resampling to a target rate (default 22050 Hz) and optionally folding it to mono, and write a smaller 16-bit PCM .wav at out_path. The input is never modified. Reads .wav natively and .mp3 through the Windows codecs. Returns the before and after sample rate, channel count and byte size.")]
+    public static SoundOptimizeResult SoundOptimize(
+        [Description("Path to a .wav or .mp3 sound file.")] string sound,
+        [Description("Output .wav path. The input is never modified.")] string out_path,
+        [Description("Target sample rate in Hz. Default 22050.")] int rate = SoundOptimizeCommand.DefaultRate,
+        [Description("Downmix to a single channel. Default false keeps the source channel count.")] bool mono = false)
+        => Run(() =>
+        {
+            if (string.Equals(Path.GetFullPath(out_path), Path.GetFullPath(sound), StringComparison.OrdinalIgnoreCase))
+                throw new McpException("out_path must not be the input sound");
+            return SoundOptimizeCommand.ExecutePath(sound, rate, mono, out_path);
+        });
+
     // ---- camera catalog (war3map.w3c) ------------------------------------
 
     // Compile-time mirror of CameraCommand.EditableFields (attribute args must be const).

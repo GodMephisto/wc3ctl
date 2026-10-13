@@ -1126,6 +1126,12 @@ List the map's sound catalog (war3map.w3s): each definition's name, file path, c
 
 Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 
+## sound_optimize
+
+Shrink a sound file by decoding it, resampling to a target rate (default 22050 Hz) and optionally folding it to mono, and write a smaller 16-bit PCM .wav at out_path. The input is never modified. Reads .wav natively and .mp3 through the Windows codecs. Returns the before and after sample rate, channel count and byte size.
+
+Annotations. read-only no, destructive no, idempotent yes, open-world no.
+
 ## sound_remove
 
 Remove a sound definition from the map's sound catalog and save the edited map to out_path. The input map is NEVER modified in place.

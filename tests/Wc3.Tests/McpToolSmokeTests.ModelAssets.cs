@@ -2,6 +2,8 @@
 // The model and batch asset tools. Model lint scans imported models, the batch tools write
 // files to a directory the caller names, and import-wire writes an edited map copy. Each write
 // is checked to leave its input map untouched.
+using NAudio.Wave;
+
 namespace Wc3.Tests;
 
 public sealed class McpSmokeModelAssetTests : McpSmokeBase
@@ -77,6 +79,26 @@ public sealed class McpSmokeModelAssetTests : McpSmokeBase
         var r = await Call("texture_optimize", Args(("texture", blp), ("out_path", outBlp), ("max", 32)));
         Assert.True(File.Exists(outBlp));
         Assert.Equal(32, Prop(r, "widthAfter").GetInt32());
+    }
+
+    [Fact, Covers("sound_optimize")]
+    public async Task Sound_optimize_resamples_a_wav()
+    {
+        var wav = NewOut("soundin", ".wav");
+        var format = new WaveFormat(44100, 16, 2);
+        using (var writer = new WaveFileWriter(wav, format))
+            for (int i = 0; i < 4410; i++)
+                for (int c = 0; c < 2; c++)
+                    writer.WriteSample(0.2f * MathF.Sin(2 * MathF.PI * 440 * i / 44100));
+
+        var outWav = NewOut("soundout", ".wav");
+        var r = await Call("sound_optimize", Args(
+            ("sound", wav), ("out_path", outWav), ("rate", 22050), ("mono", true)));
+
+        Assert.True(File.Exists(outWav));
+        Assert.Equal(22050, Prop(r, "sampleRateAfter").GetInt32());
+        Assert.Equal(1, Prop(r, "channelsAfter").GetInt32());
+        Assert.Equal(2, Prop(r, "channelsBefore").GetInt32());
     }
 
     [Fact, Covers("model_export_obj")]
