@@ -80,11 +80,23 @@ public static class MapOptimizeCommand
         var doc = MapDocument.Load(mapPath);
         var result = Execute(doc, ratio, maxTexture);
         doc.Save(outPath);
+        // The save can add its own notes, an archive patched in place instead of rebuilt being the
+        // one that matters here. A protected map's archive is mostly stuffing, so a rebuild would
+        // re-emit it as files and grow the block table, and the save patches the original bytes
+        // instead, which keeps every entry but appends the replaced payloads. The per-file
+        // BytesSaved is still the content saving, so say so when BytesAfter is the larger file.
+        var diagnostics = result.Diagnostics.Concat(doc.Diagnostics.Select(d => d.Message)).ToList();
+        if (new FileInfo(outPath).Length > new FileInfo(mapPath).Length)
+            diagnostics.Add("The archive could not be rebuilt, so it was patched in place. Every "
+                + "entry is kept and the replaced payloads are appended, so the file grew by "
+                + $"{new FileInfo(outPath).Length - new FileInfo(mapPath).Length:N0} bytes even "
+                + $"though {result.BytesSaved:N0} bytes of content were removed.");
         return result with
         {
             Path = outPath,
             BytesBefore = new FileInfo(mapPath).Length,
             BytesAfter = new FileInfo(outPath).Length,
+            Diagnostics = diagnostics,
         };
     }
 

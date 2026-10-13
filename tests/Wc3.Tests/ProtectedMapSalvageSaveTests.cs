@@ -167,6 +167,48 @@ public class ProtectedMapSalvageSaveTests
     }
 
     [Fact]
+    public void An_archive_that_is_mostly_stuffing_is_patched_not_rebuilt()
+    {
+        // More unnamed block rows than named ones is the shape a protected map has, and War3Net's
+        // builder enumerates one file per block row and re-emits each on save, which doubled the
+        // row count on the real Naruto map (1623 rows over 93 names became 3146). This archive
+        // builds cleanly, so the rebuild path would be taken, and the save must recognise the
+        // stuffing and patch in place instead, keeping the row count.
+        var builder = new MpqArchiveBuilder();
+        foreach (var (name, data) in SampleFiles)
+            builder.AddFile(MpqFile.New(new MemoryStream(data), name));
+        // Distinct names, written with no listfile, so they carry distinct hashes that no name
+        // resolves to on load. That is the shape of a protected map's stuffing, and it survives
+        // War3Net's name-keyed dedup, unlike MpqFile.New(stream), whose every file hashes to 0.
+        for (int i = 0; i < 8; i++)
+            builder.AddFile(MpqFile.New(
+                new MemoryStream(new byte[] { (byte)i, 0, 0, 0 }), $"stuff{i}.bin"));
+        using var mpq = new MemoryStream();
+        builder.SaveTo(mpq, new MpqArchiveCreateOptions
+        {
+            ListFileCreateMode = MpqFileCreateMode.None,
+            AttributesCreateMode = MpqFileCreateMode.None,
+        }, leaveOpen: true);
+        var fixture = mpq.ToArray();
+
+        var doc = MapDocument.Load(fixture);
+        int rowsBefore = doc.Files.Count;
+        int unnamedBefore = doc.Files.Count(f => f.FileName is null);
+        Assert.True(unnamedBefore > doc.Files.Count - unnamedBefore, "fixture must be mostly stuffing");
+
+        var edited = Encoding.UTF8.GetBytes("// edited through the stuffing route\n");
+        doc.AddOrReplaceRawFile("war3map.j", edited);
+        var saved = doc.SaveToBytes();
+
+        var reloaded = MapDocument.Load(saved);
+        Assert.Equal(rowsBefore, reloaded.Files.Count);   // no re-emitted stuffing
+        Assert.True(reloaded.GetFile("war3map.j")!.RawBytes.SequenceEqual(edited));
+        Assert.Equal(unnamedBefore, reloaded.Files.Count(f => f.FileName is null));
+        Assert.Contains(doc.Diagnostics,
+            d => d.FileName == "(archive)" && d.Severity == DiagnosticSeverity.Info);
+    }
+
+    [Fact]
     public void An_unserializable_dirty_model_keeps_its_own_error_on_a_corrupted_archive()
     {
         // SerializeEntry's loud refusal must survive the salvage path unchanged. Blaming

@@ -669,6 +669,21 @@ public sealed class MapDocument
         // original by the same hashed name when the builder adds the replacement.
         archive.AddFileNames(StandardMapFileNames.All);
 
+        // An archive that carries more unnamed block rows than named ones is mostly protection
+        // stuffing. War3Net's builder enumerates one file per block row and re-hashes each on the
+        // way out, so a rebuild re-emits the stuffing as real files and grows the table. Measured
+        // on Naruto Autobattle ENGv3ch11, 1530 unnamed rows against 93 named, whose save grew 1623
+        // rows to 3146 and dropped the stuffing bytes the game's hash probe chains walk to resolve
+        // the real files. The rebuild reads, but it is not the archive the author shipped and the
+        // reported savings are false, so take the in-place patch, which keeps every row.
+        int named = _files.Count(f => f.FileName is not null || f.RecoveredFileName is not null);
+        if (_files.Count - named > named)
+        {
+            return SalvageSaveToBytes(new InvalidOperationException(
+                $"the archive carries {_files.Count - named:N0} unnamed block row(s) against "
+                + $"{named:N0} named, so a rebuild would re-emit the stuffing as files"));
+        }
+
         MpqArchiveBuilder builder;
         try
         {
