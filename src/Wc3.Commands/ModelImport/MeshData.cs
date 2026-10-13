@@ -12,17 +12,35 @@ namespace Wc3.Commands;
 internal readonly record struct MeshCorner(int Position, int Normal, int Uv);
 
 /// <summary>
+/// One texture an importer resolved from the source. <see cref="Name"/> has no extension and names
+/// the file the import publishes, <see cref="Bytes"/> are the source image bytes and
+/// <see cref="Extension"/> is the source format so the converter picks the right decoder. Two
+/// primitives that share a source image share one instance, so the file is written once.
+/// </summary>
+internal sealed record MeshTexture(string Name, byte[] Bytes, string Extension);
+
+/// <summary>
+/// The material a mesh primitive uses. A null <see cref="Texture"/> means the source named a
+/// material but its image could not be read, so the material is kept with no texture and the
+/// geoset's layer references none.
+/// </summary>
+internal sealed record MeshMaterial(MeshTexture? Texture);
+
+/// <summary>
 /// A format-neutral mesh, the shape every importer returns and
 /// <see cref="MdxMeshBuilder.Build"/> consumes. <see cref="Positions"/> is required.
 /// <see cref="Normals"/> and <see cref="Uvs"/> may be empty when the source format carries none,
 /// and a corner referencing a missing attribute (index -1) gets a computed normal or a zero UV.
 /// <see cref="Faces"/> are vertex-index polygons in winding order, split into a triangle fan when
 /// longer than a triangle. <see cref="FlipV"/> is true only for formats whose V axis runs bottom-up
-/// like OBJ, so glTF (top-left origin) and STL (no UVs) leave V untouched.
+/// like OBJ, so glTF (top-left origin) and STL (no UVs) leave V untouched. <see cref="Material"/> is
+/// the primitive's resolved material, or null when the source carried none, which keeps the legacy
+/// single default texture.
 /// </summary>
 internal sealed record MeshData(
     IReadOnlyList<Vector3> Positions,
     IReadOnlyList<Vector3> Normals,
     IReadOnlyList<Vector2> Uvs,
     IReadOnlyList<MeshCorner[]> Faces,
-    bool FlipV);
+    bool FlipV,
+    MeshMaterial? Material = null);

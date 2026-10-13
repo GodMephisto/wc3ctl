@@ -3,13 +3,21 @@ using System.Buffers.Binary;
 using System.Numerics;
 using System.Text;
 using Wc3.Modeling;
+using Wc3.Render;
 
 namespace Wc3.Commands;
 
 /// <summary>
-/// The one path from a <see cref="MeshData"/> to a Warcraft III MDX. Every format importer, OBJ
-/// included, ends here, so the geoset layout (VRTX, NRMS, PTYP, PCNT, PVTX, GNDX, MTGC, MATS, the
-/// untagged tail and UVAS/UVBS), the TEXS texture and the MTLS material are written once.
+/// The one path from a list of <see cref="MeshData"/> to a Warcraft III MDX. Every format importer,
+/// OBJ included, ends here, so the geoset layout (VRTX, NRMS, PTYP, PCNT, PVTX, GNDX, MTGC, MATS,
+/// the untagged tail and UVAS/UVBS), the TEXS texture table, the MTLS material table and the GEOS
+/// chunk per primitive are written once.
+///
+/// One geoset is written per mesh, one material per mesh and one TEXS entry per distinct texture
+/// path. Each primitive's material resolves to its own texture when the importer supplied one, so a
+/// multi-material glTF keeps its materials instead of collapsing to the first. A primitive with no
+/// material, and every primitive of a model that names no material at all, keeps the legacy single
+/// default texture, which is the pre-materials behaviour.
 ///
 /// Corners are deduplicated into per-vertex position, normal and UV arrays plus a triangle index
 /// list. A corner with a real normal keys on it. A corner without one keys on its face, and the
@@ -20,32 +28,118 @@ internal static class MdxMeshBuilder
 {
     private const uint Version = 800u;
 
-    public static ModelImportResult Build(MeshData mesh, string name, string? texturePath, out byte[] output)
+    /// <summary>A decoded texture written beside the MDX. <see cref="FileName"/> is the file on
+    /// disk, <see cref="MapPath"/> is the TEXS path the game reads, and <see cref="Bytes"/> are the
+    /// .blp bytes to write.</summary>
+    internal sealed record BuiltTexture(string FileName, string MapPath, byte[] Bytes);
+
+    public static ModelImportResult Build(
+        IReadOnlyList<MeshData> meshes, string name, string? texturePath,
+        IReadOnlyList<string> diagnostics, out byte[] output, out IReadOnlyList<BuiltTexture> textures)
     {
-        var (vList, nList, uvList, indices) = BuildMesh(mesh);
-        int vertexCount = vList.Count / 3;
-        int triangleCount = indices.Count / 3;
+        ArgumentNullException.ThrowIfNull(meshes);
 
-        var texture = string.IsNullOrWhiteSpace(texturePath)
-            ? DefaultTexturePath(name)
-            : texturePath!;
+        var texturePaths = new List<string>(); // TEXS index -> map path
+        var files = new List<BuiltTexture>();
+        var idByKey = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var usedFileNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var diag = new List<string>(diagnostics);
 
-        var geosetBytes = BuildGeoset(vList, nList, uvList, indices).Write();
-        var geosPayload = new byte[4 + geosetBytes.Length];
-        BinaryPrimitives.WriteUInt32LittleEndian(geosPayload.AsSpan(0, 4), (uint)(geosetBytes.Length + 4));
-        geosetBytes.CopyTo(geosPayload, 4);
+        string legacyPath = string.IsNullOrWhiteSpace(texturePath) ? DefaultTexturePath(name) : texturePath!;
+        bool forceSingle = !string.IsNullOrWhiteSpace(texturePath);
 
-        var doc = MdxDocument.Create(new[]
+        int EnsurePath(string mapPath)
         {
-            new MdxDocument.Chunk("VERS", U32(Version)),
-            new MdxDocument.Chunk("TEXS", BuildTexs(texture)),
-            new MdxDocument.Chunk("MTLS", BuildMtls()),
-            new MdxDocument.Chunk("GEOS", geosPayload),
-        });
+            string key = "p:" + mapPath;
+            if (idByKey.TryGetValue(key, out int existing)) return existing;
+            int id = texturePaths.Count;
+            texturePaths.Add(mapPath);
+            idByKey[key] = id;
+            return id;
+        }
 
+        int EnsureImage(MeshTexture tex)
+        {
+            string key = "t:" + tex.Name;
+            if (idByKey.TryGetValue(key, out int existing)) return existing;
+
+            byte[] blp;
+            try
+            {
+                blp = TextureConvert.Convert(tex.Bytes, tex.Extension, ".blp");
+            }
+            catch (Exception ex)
+            {
+                // A texture that will not decode must not sink the whole import, the material stays
+                // and points at no texture.
+                diag.Add($"texture '{tex.Name}' could not be decoded ({ex.Message}), its material keeps no texture");
+                idByKey[key] = -1;
+                return -1;
+            }
+
+            string fileName = UniqueFileName(tex.Name);
+            string mapPath = "war3mapImported\\" + fileName;
+            files.Add(new BuiltTexture(fileName, mapPath, blp));
+            int id = texturePaths.Count;
+            texturePaths.Add(mapPath);
+            idByKey[key] = id;
+            return id;
+        }
+
+        int ResolveTextureId(MeshData mesh)
+        {
+            if (forceSingle) return EnsurePath(legacyPath);
+            if (mesh.Material is null) return EnsurePath(legacyPath);
+            return mesh.Material.Texture is { } tex ? EnsureImage(tex) : -1;
+        }
+
+        string UniqueFileName(string baseName)
+        {
+            foreach (char c in Path.GetInvalidFileNameChars()) baseName = baseName.Replace(c, '_');
+            if (string.IsNullOrWhiteSpace(baseName)) baseName = "texture";
+            string candidate = baseName + ".blp";
+            int suffix = 1;
+            while (!usedFileNames.Add(candidate)) candidate = baseName + "_" + suffix++ + ".blp";
+            return candidate;
+        }
+
+        var geoChunks = new List<MdxDocument.Chunk>();
+        var materialTextureIds = new List<int>();
+        int vertexTotal = 0, faceTotal = 0;
+
+        for (int i = 0; i < meshes.Count; i++)
+        {
+            var mesh = meshes[i];
+            var (vList, nList, uvList, indices) = BuildMesh(mesh);
+            int vertexCount = vList.Count / 3;
+            int triangleCount = indices.Count / 3;
+            vertexTotal += vertexCount;
+            faceTotal += triangleCount;
+
+            materialTextureIds.Add(ResolveTextureId(mesh));
+
+            var geosetBytes = BuildGeoset(vList, nList, uvList, indices, i).Write();
+            var payload = new byte[4 + geosetBytes.Length];
+            BinaryPrimitives.WriteUInt32LittleEndian(payload.AsSpan(0, 4), (uint)(geosetBytes.Length + 4));
+            geosetBytes.CopyTo(payload, 4);
+            geoChunks.Add(new MdxDocument.Chunk("GEOS", payload));
+        }
+
+        var chunks = new List<MdxDocument.Chunk>
+        {
+            new("VERS", U32(Version)),
+            new("TEXS", BuildTexs(texturePaths)),
+            new("MTLS", BuildMtls(materialTextureIds)),
+        };
+        chunks.AddRange(geoChunks);
+
+        var doc = MdxDocument.Create(chunks);
         output = doc.Write();
-        return new ModelImportResult(name, 1, vertexCount, triangleCount, 1, output.LongLength,
-            output, Array.Empty<string>());
+        textures = files;
+
+        return new ModelImportResult(
+            name, meshes.Count, vertexTotal, faceTotal, texturePaths.Count, meshes.Count,
+            output.LongLength, output, files.Select(f => f.FileName).ToList(), diag);
     }
 
     private static (List<float> Vertices, List<float> Normals, List<float> Uvs, List<int> Indices)
@@ -106,7 +200,7 @@ internal static class MdxMeshBuilder
     }
 
     private static MdxGeoset BuildGeoset(
-        List<float> vertices, List<float> normals, List<float> uvs, List<int> indices)
+        List<float> vertices, List<float> normals, List<float> uvs, List<int> indices, int materialId)
     {
         int vertexCount = vertices.Count / 3;
         int triangleCount = indices.Count / 3;
@@ -122,7 +216,7 @@ internal static class MdxMeshBuilder
             BytesSegment("GNDX", new byte[vertexCount]), // every vertex sits in matrix group 0
             U32Segment("MTGC", new[] { 1u }),
             U32Segment("MATS", new[] { 0u }),
-            Tail(radius, min, max),
+            Tail(radius, min, max, materialId),
             UvasSegment(uvs, vertexCount),
         }, Version);
     }
@@ -169,11 +263,11 @@ internal static class MdxMeshBuilder
     }
 
     /// <summary>The untagged tail, material id, selection fields, extent and per-sequence extents.</summary>
-    private static MdxGeoset.Segment Tail(float radius, Vector3 min, Vector3 max)
+    private static MdxGeoset.Segment Tail(float radius, Vector3 min, Vector3 max, int materialId)
     {
         using var ms = new MemoryStream();
         using var w = new BinaryWriter(ms);
-        w.Write(0u);            // materialId
+        w.Write((uint)materialId);  // materialId
         w.Write(0u);            // selectionGroup
         w.Write(0u);            // selectionFlags
         w.Write(radius);        // extent radius
@@ -214,34 +308,41 @@ internal static class MdxMeshBuilder
         return (radius, min, max);
     }
 
-    /// <summary>One 268-byte TEXS row, replaceableId 0 then a fixed 260-byte path then flags 0.</summary>
-    private static byte[] BuildTexs(string path)
+    /// <summary>One 268-byte TEXS row per path, replaceableId 0 then a fixed 260-byte path then flags 0.</summary>
+    private static byte[] BuildTexs(IReadOnlyList<string> paths)
     {
-        var entry = new byte[268];
-        var bytes = Encoding.ASCII.GetBytes(path);
-        Array.Copy(bytes, 0, entry, 4, Math.Min(bytes.Length, 260));
-        return entry;
+        var payload = new byte[paths.Count * 268];
+        for (int i = 0; i < paths.Count; i++)
+        {
+            var bytes = Encoding.ASCII.GetBytes(paths[i]);
+            Array.Copy(bytes, 0, payload, i * 268 + 4, Math.Min(bytes.Length, 260));
+        }
+        return payload;
     }
 
-    /// <summary>One material with one LAYS layer referencing texture 0.</summary>
-    private static byte[] BuildMtls()
+    /// <summary>One material per texture id, each a single LAYS layer whose textureId is that entry,
+    /// or 0xFFFFFFFF when the material has no texture.</summary>
+    private static byte[] BuildMtls(IReadOnlyList<int> textureIds)
     {
         const uint layerSize = 28u;
         uint matSize = 4 + 4 + 4 + 8 + layerSize; // inclusiveSize, priorityPlane, flags, LAYS+count, layer
         using var ms = new MemoryStream();
         using var w = new BinaryWriter(ms);
-        w.Write(matSize);
-        w.Write(0u);            // priorityPlane
-        w.Write(0u);            // flags
-        w.Write("LAYS"u8);
-        w.Write(1u);            // layer count
-        w.Write(layerSize);
-        w.Write(0u);            // filterMode, opaque
-        w.Write(0u);            // shadingFlags
-        w.Write(0u);            // textureId 0
-        w.Write(0xFFFFFFFFu);   // textureAnimationId
-        w.Write(0u);            // coordId
-        w.Write(1.0f);          // alpha
+        foreach (int textureId in textureIds)
+        {
+            w.Write(matSize);
+            w.Write(0u);            // priorityPlane
+            w.Write(0u);            // flags
+            w.Write("LAYS"u8);
+            w.Write(1u);            // layer count
+            w.Write(layerSize);
+            w.Write(0u);            // filterMode, opaque
+            w.Write(0u);            // shadingFlags
+            w.Write((uint)textureId); // textureId
+            w.Write(0xFFFFFFFFu);   // textureAnimationId
+            w.Write(0u);            // coordId
+            w.Write(1.0f);          // alpha
+        }
         w.Flush();
         return ms.ToArray();
     }

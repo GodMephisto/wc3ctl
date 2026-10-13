@@ -7,7 +7,9 @@ namespace Wc3.Commands;
 /// <summary>
 /// What a model import produced, with the counts the caller reports and the MDX bytes to write.
 /// <see cref="Mdx"/> is the assembled model, so a caller can write it wherever it likes, and
-/// <see cref="Bytes"/> is its length.
+/// <see cref="Bytes"/> is its length. <see cref="Geosets"/> is one per source primitive,
+/// <see cref="Materials"/> one per primitive and <see cref="Textures"/> the distinct TEXS entries.
+/// <see cref="TextureFiles"/> are the .blp file names written beside the MDX.
 /// </summary>
 public sealed record ModelImportResult(
     string Path,
@@ -15,8 +17,10 @@ public sealed record ModelImportResult(
     int Vertices,
     int Faces,
     int Textures,
+    int Materials,
     long Bytes,
     byte[] Mdx,
+    IReadOnlyList<string> TextureFiles,
     IReadOnlyList<string> Diagnostics);
 
 /// <summary>
@@ -27,21 +31,24 @@ public sealed record ModelImportResult(
 /// Wavefront OBJ reads position, texture and normal declarations and the v/vt/vn face forms, and its
 /// V axis is flipped back to WC3's top-down sense, so an <see cref="ObjExporter"/> export followed
 /// by an import round-trips the geometry. glTF 2.0 (.gltf JSON with external or embedded base64
-/// buffers, and the .glb binary container) reads the first mesh primitive's POSITION, NORMAL and
-/// TEXCOORD_0 accessors and its indices. STL reads the binary form (a triangle count at offset 80)
-/// and the ASCII form, and carries no UVs. PLY reads ASCII and binary little-endian vertex x/y/z,
-/// nx/ny/nz and s/t plus the face index list.
+/// buffers, and the .glb binary container) reads every mesh primitive's POSITION, NORMAL and
+/// TEXCOORD_0 accessors and its indices, and resolves each primitive's material to its
+/// baseColorTexture image, which is written as .blp and referenced from a TEXS entry. STL reads the
+/// binary form (a triangle count at offset 80) and the ASCII form, and carries no UVs. PLY reads
+/// ASCII and binary little-endian vertex x/y/z, nx/ny/nz and s/t plus the face index list.
 ///
-/// The result is one v800 GEOS geoset with normals and UVs, plus one TEXS texture and one MTLS
-/// material. An n-gon face is split into a triangle fan. When a format carries no normals a
-/// per-face normal is computed and used for that face's corners, so flat shading survives the
-/// import, and when it carries no UVs the corners get a zero UV.
+/// The result is one v800 GEOS geoset per primitive, one TEXS entry per distinct texture and one
+/// MTLS material per primitive. A glTF with no materials, and a format with no texture of its own,
+/// keeps the legacy single default texture. An n-gon face is split into a triangle fan. When a
+/// format carries no normals a per-face normal is computed and used for that face's corners, so flat
+/// shading survives the import, and when it carries no UVs the corners get a zero UV.
 /// </summary>
 public static class ModelImportCommand
 {
     /// <summary>
     /// Imports the model at <paramref name="modelPath"/> and writes the MDX to
-    /// <paramref name="outPath"/>. The format is detected from the file, not the extension alone.
+    /// <paramref name="outPath"/>, plus any .blp textures it referenced beside it. The format is
+    /// detected from the file, not the extension alone.
     /// </summary>
     public static ModelImportResult ExecutePath(string modelPath, string outPath, string? texturePath = null)
     {
@@ -51,11 +58,13 @@ public static class ModelImportCommand
 
         var bytes = File.ReadAllBytes(modelPath);
         string? baseDir = Path.GetDirectoryName(Path.GetFullPath(modelPath));
-        var result = Import(bytes, modelPath, baseDir, texturePath, out var output);
+        var result = Import(bytes, modelPath, baseDir, texturePath, out var output, out var textures);
 
         var dir = Path.GetDirectoryName(Path.GetFullPath(outPath));
         if (dir is { Length: > 0 }) Directory.CreateDirectory(dir);
         File.WriteAllBytes(outPath, output);
+        foreach (var texture in textures)
+            File.WriteAllBytes(Path.Combine(dir is { Length: > 0 } ? dir : ".", texture.FileName), texture.Bytes);
         return result with { Path = outPath };
     }
 
@@ -67,7 +76,7 @@ public static class ModelImportCommand
     public static ModelImportResult Execute(string modelText, string name, out byte[] output, string? texturePath = null)
     {
         ArgumentNullException.ThrowIfNull(modelText);
-        return Import(Encoding.UTF8.GetBytes(modelText), name, baseDir: null, texturePath, out output);
+        return Import(Encoding.UTF8.GetBytes(modelText), name, baseDir: null, texturePath, out output, out _);
     }
 
     /// <summary>Imports raw model bytes, for a caller that already read the file.</summary>
@@ -75,27 +84,56 @@ public static class ModelImportCommand
         string? texturePath = null, string? baseDir = null)
     {
         ArgumentNullException.ThrowIfNull(modelBytes);
-        return Import(modelBytes, name, baseDir, texturePath, out output);
+        return Import(modelBytes, name, baseDir, texturePath, out output, out _);
     }
 
-    private static ModelImportResult Import(byte[] bytes, string name, string? baseDir, string? texturePath, out byte[] output)
+    private static ModelImportResult Import(byte[] bytes, string name, string? baseDir, string? texturePath,
+        out byte[] output, out IReadOnlyList<MdxMeshBuilder.BuiltTexture> textures)
     {
         var format = ModelFormatDetector.Detect(name, bytes);
+        var diagnostics = new List<string>();
 
-        MeshData mesh = format switch
+        IReadOnlyList<MeshData> meshes;
+        switch (format)
         {
-            ModelFormat.Obj => ObjImporter.Parse(DecodeText(bytes), name),
-            ModelFormat.Gltf => GltfImporter.ParseGltf(DecodeText(bytes), name, baseDir),
-            ModelFormat.Glb => GltfImporter.ParseGlb(bytes, name),
-            ModelFormat.Stl => StlImporter.Parse(bytes),
-            ModelFormat.Ply => PlyImporter.Parse(bytes),
-            _ => throw new NotSupportedException($"Unsupported model format for '{name}'"),
-        };
+            case ModelFormat.Obj:
+                meshes = new[] { ObjImporter.Parse(DecodeText(bytes), name) };
+                break;
+            case ModelFormat.Gltf:
+                meshes = ParseGltf(DecodeText(bytes), name, baseDir, diagnostics);
+                break;
+            case ModelFormat.Glb:
+                meshes = ParseGlb(bytes, name, baseDir, diagnostics);
+                break;
+            case ModelFormat.Stl:
+                meshes = new[] { StlImporter.Parse(bytes) };
+                break;
+            case ModelFormat.Ply:
+                meshes = new[] { PlyImporter.Parse(bytes) };
+                break;
+            default:
+                throw new NotSupportedException($"Unsupported model format for '{name}'");
+        }
 
-        if (mesh.Positions.Count == 0 || mesh.Faces.Count == 0)
+        var usable = meshes.Where(m => m.Positions.Count > 0 && m.Faces.Count > 0).ToList();
+        if (usable.Count == 0)
             throw new ArgumentException($"'{name}' holds no drawable geometry");
 
-        return MdxMeshBuilder.Build(mesh, name, texturePath, out output);
+        return MdxMeshBuilder.Build(usable, name, texturePath, diagnostics, out output, out textures);
+    }
+
+    private static IReadOnlyList<MeshData> ParseGltf(string json, string name, string? baseDir, List<string> diagnostics)
+    {
+        var scene = GltfImporter.ParseGltf(json, name, baseDir);
+        diagnostics.AddRange(scene.Diagnostics);
+        return scene.Meshes;
+    }
+
+    private static IReadOnlyList<MeshData> ParseGlb(byte[] bytes, string name, string? baseDir, List<string> diagnostics)
+    {
+        var scene = GltfImporter.ParseGlb(bytes, name, baseDir);
+        diagnostics.AddRange(scene.Diagnostics);
+        return scene.Meshes;
     }
 
     private static string DecodeText(byte[] bytes)

@@ -712,7 +712,9 @@ public static class Render
     {
         var sb = new StringBuilder();
         sb.AppendLine($"Wrote {Path.GetFileName(r.Path)}");
-        sb.AppendLine($"  {r.Geosets} geoset(s), vertices {r.Vertices}, faces {r.Faces}, textures {r.Textures}");
+        sb.AppendLine($"  {r.Geosets} geoset(s), vertices {r.Vertices}, faces {r.Faces}, "
+            + $"textures {r.Textures}, materials {r.Materials}");
+        foreach (var t in r.TextureFiles) sb.AppendLine($"  wrote {t}");
         sb.AppendLine($"  {r.Bytes} byte(s)");
         foreach (var d in r.Diagnostics) sb.AppendLine($"  ! {d}");
         return sb.ToString().TrimEnd();

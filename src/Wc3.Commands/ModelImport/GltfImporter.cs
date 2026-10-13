@@ -7,25 +7,39 @@ using System.Text.Json;
 namespace Wc3.Commands;
 
 /// <summary>
-/// Parses a glTF 2.0 model into a <see cref="MeshData"/>, both the .gltf JSON form and the .glb
-/// binary container. Reads the first mesh primitive's POSITION, NORMAL and TEXCOORD_0 accessors and
-/// its indices, honouring the accessor componentType (float, unsigned byte, unsigned short, unsigned
-/// int, signed views), the normalized flag, and the bufferView byteOffset and byteStride. A buffer
-/// URI is either a data URI holding base64 or a path relative to the .gltf, and a .glb buffer with
-/// no URI is the binary chunk. Triangle lists are used directly, and a triangle strip or fan is
-/// converted. glTF texture coordinates already have a top-left origin, so V is left unflipped.
+/// A parsed glTF scene, the primitives it draws and any diagnostics raised while resolving their
+/// materials and textures. Each primitive becomes a <see cref="MeshData"/> and carries its resolved
+/// <see cref="MeshMaterial"/> when the glTF named one.
+/// </summary>
+internal sealed record GltfScene(IReadOnlyList<MeshData> Meshes, IReadOnlyList<string> Diagnostics);
+
+/// <summary>
+/// Parses a glTF 2.0 model into a list of <see cref="MeshData"/>, both the .gltf JSON form and the
+/// .glb binary container. Every mesh primitive's POSITION, NORMAL and TEXCOORD_0 accessors and its
+/// indices are read, honouring the accessor componentType (float, unsigned byte, unsigned short,
+/// unsigned int, signed views), the normalized flag, and the bufferView byteOffset and byteStride.
+/// A buffer URI is either a data URI holding base64 or a path relative to the .gltf, and a .glb
+/// buffer with no URI is the binary chunk. Triangle lists are used directly, and a triangle strip or
+/// fan is converted. glTF texture coordinates already have a top-left origin, so V is left unflipped.
+///
+/// Each primitive's material is resolved through its pbrMetallicRoughness.baseColorTexture (or the
+/// legacy top level baseColorTexture) to a texture, then the texture's source image, then the image
+/// bytes, from a bufferView for .glb or a data URI or sibling file for .gltf. The bytes are carried
+/// whole in the mesh's <see cref="MeshTexture"/>, so the MDX writer converts them to .blp. An image
+/// that cannot be read leaves its material with a null texture and raises a diagnostic, never fails
+/// the import.
 /// </summary>
 internal static class GltfImporter
 {
-    public static MeshData ParseGltf(string json, string name, string? baseDir)
+    public static GltfScene ParseGltf(string json, string name, string? baseDir)
     {
         ArgumentNullException.ThrowIfNull(json);
         using var doc = JsonDocument.Parse(json);
         var buffers = ResolveBuffers(doc.RootElement, baseDir, name, glbBin: null);
-        return Extract(doc.RootElement, buffers, name);
+        return Extract(doc.RootElement, buffers, name, baseDir);
     }
 
-    public static MeshData ParseGlb(byte[] bytes, string name)
+    public static GltfScene ParseGlb(byte[] bytes, string name, string? baseDir = null)
     {
         ArgumentNullException.ThrowIfNull(bytes);
         if (bytes.Length < 12 || bytes[0] != 'g' || bytes[1] != 'l' || bytes[2] != 'T' || bytes[3] != 'F')
@@ -48,8 +62,8 @@ internal static class GltfImporter
         if (json is null) throw new InvalidDataException("GLB has no JSON chunk");
 
         using var doc = JsonDocument.Parse(json);
-        var buffers = ResolveBuffers(doc.RootElement, baseDir: null, name, bin);
-        return Extract(doc.RootElement, buffers, name);
+        var buffers = ResolveBuffers(doc.RootElement, baseDir, name, bin);
+        return Extract(doc.RootElement, buffers, name, baseDir);
     }
 
     private static List<byte[]> ResolveBuffers(JsonElement root, string? baseDir, string name, byte[]? glbBin)
@@ -86,16 +100,37 @@ internal static class GltfImporter
         return File.ReadAllBytes(Path.Combine(baseDir, Uri.UnescapeDataString(uri).Replace('/', Path.DirectorySeparatorChar)));
     }
 
-    private static MeshData Extract(JsonElement root, List<byte[]> buffers, string name)
+    private static GltfScene Extract(JsonElement root, List<byte[]> buffers, string name, string? baseDir)
     {
         if (!root.TryGetProperty("meshes", out var meshes) || meshes.ValueKind != JsonValueKind.Array || meshes.GetArrayLength() == 0)
             throw new ArgumentException($"glTF '{name}' has no meshes");
 
-        var primitives = meshes[0].GetProperty("primitives");
-        if (primitives.GetArrayLength() == 0)
+        var diagnostics = new List<string>();
+        var images = new ImageResolver(root, buffers, name, baseDir, diagnostics);
+        JsonElement materials = root.TryGetProperty("materials", out var matEl) && matEl.ValueKind == JsonValueKind.Array
+            ? matEl
+            : default;
+
+        var result = new List<MeshData>();
+        foreach (var mesh in meshes.EnumerateArray())
+        {
+            if (!mesh.TryGetProperty("primitives", out var primitives) || primitives.ValueKind != JsonValueKind.Array)
+                continue;
+            foreach (var primitive in primitives.EnumerateArray())
+                result.Add(ExtractPrimitive(root, buffers, primitive, materials, images, name));
+        }
+        if (result.Count == 0)
             throw new ArgumentException($"glTF '{name}' has no primitives");
-        var primitive = primitives[0];
-        var attributes = primitive.GetProperty("attributes");
+
+        return new GltfScene(result, diagnostics);
+    }
+
+    private static MeshData ExtractPrimitive(
+        JsonElement root, List<byte[]> buffers, JsonElement primitive, JsonElement materials,
+        ImageResolver images, string name)
+    {
+        if (!primitive.TryGetProperty("attributes", out var attributes) || attributes.ValueKind != JsonValueKind.Object)
+            throw new ArgumentException($"glTF '{name}' primitive has no attributes");
 
         if (!attributes.TryGetProperty("POSITION", out var positionAccessor))
             throw new ArgumentException($"glTF '{name}' primitive has no POSITION attribute");
@@ -137,7 +172,221 @@ internal static class GltfImporter
             });
         }
 
-        return new MeshData(positions, normals, uvs, faces, FlipV: false);
+        var material = ResolveMaterial(primitive, materials, images);
+        return new MeshData(positions, normals, uvs, faces, FlipV: false, material);
+    }
+
+    private static MeshMaterial? ResolveMaterial(JsonElement primitive, JsonElement materials, ImageResolver images)
+    {
+        if (materials.ValueKind != JsonValueKind.Array)
+            return null;
+        if (!primitive.TryGetProperty("material", out var matEl) || matEl.ValueKind != JsonValueKind.Number)
+            return null;
+        int matIndex = matEl.GetInt32();
+        if (matIndex < 0 || matIndex >= materials.GetArrayLength())
+            return null;
+
+        int textureIndex = BaseColorTextureIndex(materials[matIndex]);
+        if (textureIndex < 0)
+            return new MeshMaterial(null);
+        return new MeshMaterial(images.Resolve(textureIndex));
+    }
+
+    private static int BaseColorTextureIndex(JsonElement material)
+    {
+        if (material.TryGetProperty("pbrMetallicRoughness", out var pbr)
+            && pbr.ValueKind == JsonValueKind.Object
+            && TryTextureIndex(pbr, "baseColorTexture", out int metallic))
+            return metallic;
+        // Older exporters put baseColorTexture at the material top level.
+        return TryTextureIndex(material, "baseColorTexture", out int legacy) ? legacy : -1;
+    }
+
+    private static bool TryTextureIndex(JsonElement owner, string key, out int index)
+    {
+        index = -1;
+        if (owner.ValueKind != JsonValueKind.Object || !owner.TryGetProperty(key, out var tex) || tex.ValueKind != JsonValueKind.Object)
+            return false;
+        if (!tex.TryGetProperty("index", out var idx) || idx.ValueKind != JsonValueKind.Number)
+            return false;
+        index = idx.GetInt32();
+        return index >= 0;
+    }
+
+    /// <summary>
+    /// Resolves a glTF texture index to a decodable image, caching per image index so two materials
+    /// that share an image share one <see cref="MeshTexture"/>. A failure is reported once and the
+    /// caller keeps its material with a null texture.
+    /// </summary>
+    private sealed class ImageResolver
+    {
+        private readonly JsonElement _root;
+        private readonly List<byte[]> _buffers;
+        private readonly string _modelName;
+        private readonly string? _baseDir;
+        private readonly List<string> _diagnostics;
+        private readonly Dictionary<int, MeshTexture?> _cache = new();
+        private readonly HashSet<string> _usedNames = new(StringComparer.OrdinalIgnoreCase);
+
+        public ImageResolver(JsonElement root, List<byte[]> buffers, string modelName, string? baseDir, List<string> diagnostics)
+        {
+            _root = root;
+            _buffers = buffers;
+            _modelName = modelName;
+            _baseDir = baseDir;
+            _diagnostics = diagnostics;
+        }
+
+        public MeshTexture? Resolve(int textureIndex)
+        {
+            if (!_root.TryGetProperty("textures", out var textures) || textures.ValueKind != JsonValueKind.Array
+                || textureIndex < 0 || textureIndex >= textures.GetArrayLength())
+            {
+                Report($"texture {textureIndex} is missing, its material keeps no texture");
+                return null;
+            }
+
+            int imageIndex = SourceImageIndex(textures[textureIndex]);
+            if (imageIndex < 0)
+            {
+                Report($"texture {textureIndex} names no source image, its material keeps no texture");
+                return null;
+            }
+            if (_cache.TryGetValue(imageIndex, out var cached)) return cached;
+            var resolved = LoadImage(imageIndex);
+            _cache[imageIndex] = resolved;
+            return resolved;
+        }
+
+        private static int SourceImageIndex(JsonElement texture)
+        {
+            if (texture.TryGetProperty("source", out var s) && s.ValueKind == JsonValueKind.Number)
+                return s.GetInt32();
+            if (texture.TryGetProperty("extensions", out var ext) && ext.ValueKind == JsonValueKind.Object
+                && ext.TryGetProperty("KHR_texture_basisu", out var basisu) && basisu.ValueKind == JsonValueKind.Object
+                && basisu.TryGetProperty("source", out var bs) && bs.ValueKind == JsonValueKind.Number)
+                return bs.GetInt32();
+            return -1;
+        }
+
+        private MeshTexture? LoadImage(int imageIndex)
+        {
+            if (!_root.TryGetProperty("images", out var images) || images.ValueKind != JsonValueKind.Array
+                || imageIndex < 0 || imageIndex >= images.GetArrayLength())
+            {
+                Report($"image {imageIndex} is missing, its material keeps no texture");
+                return null;
+            }
+
+            var image = images[imageIndex];
+            string? name = image.TryGetProperty("name", out var n) && n.ValueKind == JsonValueKind.String ? n.GetString() : null;
+            try
+            {
+                if (image.TryGetProperty("bufferView", out var bv) && bv.ValueKind == JsonValueKind.Number)
+                {
+                    var bytes = ReadBufferView(bv.GetInt32());
+                    string mime = image.TryGetProperty("mimeType", out var m) && m.ValueKind == JsonValueKind.String ? m.GetString()! : null!;
+                    string ext = ImageExtension(mime, uri: null);
+                    return new MeshTexture(UniqueName(name, imageIndex), bytes, ext);
+                }
+                if (image.TryGetProperty("uri", out var uriEl) && uriEl.ValueKind == JsonValueKind.String)
+                {
+                    string uri = uriEl.GetString()!;
+                    var bytes = LoadImageUri(uri);
+                    string ext = ImageExtension(mimeType: null, uri);
+                    return new MeshTexture(UniqueName(name, imageIndex), bytes, ext);
+                }
+                Report($"image '{name ?? imageIndex.ToString()}' carries neither a bufferView nor a URI, its material keeps no texture");
+                return null;
+            }
+            catch (Exception ex)
+            {
+                Report($"image '{name ?? imageIndex.ToString()}' could not be read ({ex.Message}), its material keeps no texture");
+                return null;
+            }
+        }
+
+        private byte[] ReadBufferView(int viewIndex)
+        {
+            var views = _root.GetProperty("bufferViews");
+            if (viewIndex < 0 || viewIndex >= views.GetArrayLength())
+                throw new InvalidDataException($"bufferView {viewIndex} is out of range");
+            var view = views[viewIndex];
+            int bufferIndex = view.GetProperty("buffer").GetInt32();
+            if (bufferIndex < 0 || bufferIndex >= _buffers.Count)
+                throw new InvalidDataException($"bufferView {viewIndex} names buffer {bufferIndex}, which is absent");
+            int offset = view.TryGetProperty("byteOffset", out var o) ? o.GetInt32() : 0;
+            int length = view.GetProperty("byteLength").GetInt32();
+            var buffer = _buffers[bufferIndex];
+            if (offset < 0 || length < 0 || offset + length > buffer.Length)
+                throw new InvalidDataException($"bufferView {viewIndex} overruns its buffer");
+            var bytes = new byte[length];
+            Array.Copy(buffer, offset, bytes, 0, length);
+            return bytes;
+        }
+
+        private byte[] LoadImageUri(string uri)
+        {
+            int comma = uri.IndexOf(',');
+            if (uri.StartsWith("data:", StringComparison.OrdinalIgnoreCase) && comma >= 0)
+            {
+                string payload = uri[(comma + 1)..];
+                return uri[..comma].Contains(";base64", StringComparison.OrdinalIgnoreCase)
+                    ? Convert.FromBase64String(payload)
+                    : Encoding.UTF8.GetBytes(Uri.UnescapeDataString(payload));
+            }
+            if (_baseDir is null)
+                throw new InvalidDataException($"references the external image '{uri}', which needs the file on disk");
+            return File.ReadAllBytes(Path.Combine(_baseDir, Uri.UnescapeDataString(uri).Replace('/', Path.DirectorySeparatorChar)));
+        }
+
+        private string UniqueName(string? name, int imageIndex)
+        {
+            string baseName = string.IsNullOrWhiteSpace(name) ? $"image{imageIndex}" : Path.GetFileNameWithoutExtension(name);
+            if (string.IsNullOrWhiteSpace(baseName)) baseName = $"image{imageIndex}";
+            foreach (char c in Path.GetInvalidFileNameChars())
+                baseName = baseName.Replace(c, '_');
+
+            string candidate = baseName;
+            int suffix = 1;
+            while (!_usedNames.Add(candidate))
+                candidate = baseName + "_" + suffix++;
+            return candidate;
+        }
+
+        private void Report(string detail) => _diagnostics.Add($"glTF '{_modelName}' {detail}");
+    }
+
+    private static string ImageExtension(string? mimeType, string? uri)
+    {
+        if (!string.IsNullOrWhiteSpace(mimeType))
+            return ExtFromSubtype(mimeType);
+        if (string.IsNullOrWhiteSpace(uri))
+            return ".png";
+        if (uri.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+        {
+            int end = uri.IndexOf(';');
+            int comma = uri.IndexOf(',');
+            if (end < 0 || (comma >= 0 && comma < end)) end = comma;
+            if (end > 5)
+            {
+                int slash = uri.IndexOf('/', 5);
+                if (slash > 5 && slash < end)
+                    return ExtFromSubtype("x/" + uri[(slash + 1)..end]);
+            }
+            return ".png";
+        }
+        string ext = Path.GetExtension(Uri.UnescapeDataString(uri)).ToLowerInvariant();
+        if (ext is ".jpeg") ext = ".jpg";
+        return string.IsNullOrEmpty(ext) ? ".png" : ext;
+    }
+
+    private static string ExtFromSubtype(string mime)
+    {
+        int slash = mime.IndexOf('/');
+        string sub = (slash >= 0 ? mime[(slash + 1)..] : mime).ToLowerInvariant();
+        if (sub is "jpeg") sub = "jpg";
+        return "." + sub;
     }
 
     private static int[] ToTriangles(int[] indices, int mode, string name)

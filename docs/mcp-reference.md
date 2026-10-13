@@ -534,7 +534,7 @@ Annotations. read-only no, destructive no, idempotent yes, open-world no.
 
 ## model_import
 
-Import a foreign model file into a Warcraft III MDX at out_path. Accepts Wavefront OBJ (.obj), glTF 2.0 (.gltf and .glb), STL (.stl, binary and ASCII) and PLY (.ply, ASCII and binary little-endian). The format is detected from the file content, so a correct extension is not required. Builds one v800 geoset with normals and UVs, triangulating an n-gon face as a fan, computing a per-face normal when the source carries none and zeroing UVs when it has none, plus one texture and one material. The input is never modified. Returns the output path and the vertex, face and texture counts.
+Import a foreign model file into a Warcraft III MDX at out_path. Accepts Wavefront OBJ (.obj), glTF 2.0 (.gltf and .glb), STL (.stl, binary and ASCII) and PLY (.ply, ASCII and binary little-endian). The format is detected from the file content, so a correct extension is not required. Builds one v800 geoset per glTF primitive with normals and UVs, triangulating an n-gon face as a fan, computing a per-face normal when the source carries none and zeroing UVs when it has none. Each glTF material's baseColorTexture image is converted to .blp beside the MDX and referenced by a texture entry, one entry per distinct texture, so a multi-material model keeps every material. A model that names no material keeps the single default texture. The input is never modified. Returns the output path, the geoset, vertex, face, texture and material counts, and the texture files written.
 
 Annotations. read-only no, destructive no, idempotent yes, open-world no.
 
