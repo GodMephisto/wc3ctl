@@ -425,7 +425,7 @@ Subcommands
 - `export-obj`. Export a map-imported model to Wavefront OBJ, with an MTL and any map-resolvable textures converted to PNG beside it.
 - `audit`. Audit a model for the resource waste and draw-nothing problems the optimiser can remove, and report what it holds, its geosets, vertices, faces, textures, sequences, nodes and effects. Effects are counted from the chunk list, particle emitters, particle emitters 2, ribbons and popcorns, and each particle emitter's node and texture references are checked, reporting one that names a node the model does not define or a texture outside its texture list.
 - `optimize`. Decimate a model's geometry with the quadric error metric, drop zero-area faces and duplicate textures, and write a smaller MDX, leaving the other chunks byte for byte. Optionally strip its effects when they are not wanted. Reports the before and after vertex and face counts.
-- `import`. Import a foreign model into a Warcraft III MDX. Accepts Wavefront OBJ, glTF 2.0 (.gltf and .glb), STL (binary and ASCII) and PLY (ASCII and binary little-endian). Builds one v800 geoset per glTF primitive with normals and UVs, triangulating an n-gon face as a fan, computing a per-face normal when the source carries none and zeroing UVs when it has none. Each glTF material's baseColorTexture is written as .blp beside the MDX and referenced from a texture entry, one per distinct texture. Reports the geoset, vertex, face, texture and material counts and the written texture files.
+- `import`. Import a foreign model into a Warcraft III MDX. Accepts Wavefront OBJ, glTF 2.0 (.gltf and .glb), STL (binary and ASCII), PLY (ASCII and binary little-endian) and FBX ASCII. Builds one v800 geoset per source primitive with normals and UVs, triangulating an n-gon face as a fan, computing a per-face normal when the source carries none and zeroing UVs when it has none. Each glTF material's baseColorTexture is written as .blp beside the MDX and referenced from a texture entry, one per distinct texture. Reports the geoset, vertex, face, texture and material counts and the written texture files.
 
 ### model export-obj
 
@@ -482,7 +482,7 @@ Options
 
 ### model import
 
-Import a foreign model into a Warcraft III MDX. Accepts Wavefront OBJ, glTF 2.0 (.gltf and .glb), STL (binary and ASCII) and PLY (ASCII and binary little-endian). Builds one v800 geoset per glTF primitive with normals and UVs, triangulating an n-gon face as a fan, computing a per-face normal when the source carries none and zeroing UVs when it has none. Each glTF material's baseColorTexture is written as .blp beside the MDX and referenced from a texture entry, one per distinct texture. Reports the geoset, vertex, face, texture and material counts and the written texture files.
+Import a foreign model into a Warcraft III MDX. Accepts Wavefront OBJ, glTF 2.0 (.gltf and .glb), STL (binary and ASCII), PLY (ASCII and binary little-endian) and FBX ASCII. Builds one v800 geoset per source primitive with normals and UVs, triangulating an n-gon face as a fan, computing a per-face normal when the source carries none and zeroing UVs when it has none. Each glTF material's baseColorTexture is written as .blp beside the MDX and referenced from a texture entry, one per distinct texture. Reports the geoset, vertex, face, texture and material counts and the written texture files.
 
 Usage
 
@@ -492,7 +492,7 @@ wc3ctl model import <obj> [options]
 
 Arguments
 
-- `<obj>` (required). Path to a foreign model, one of Wavefront OBJ (.obj), glTF 2.0 (.gltf or .glb), STL (.stl, binary or ASCII) or PLY (.ply, ASCII or binary little-endian). The format is detected from the content, so the extension alone is not needed.
+- `<obj>` (required). Path to a foreign model, one of Wavefront OBJ (.obj), glTF 2.0 (.gltf or .glb), STL (.stl, binary or ASCII), PLY (.ply, ASCII or binary little-endian) or FBX ASCII (.fbx). The format is detected from the content, so the extension alone is not needed. Binary FBX is not supported.
 
 Options
 

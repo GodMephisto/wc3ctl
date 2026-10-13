@@ -12,14 +12,16 @@ internal enum ModelFormat
     Glb,
     Stl,
     Ply,
+    Fbx,
 }
 
 /// <summary>
 /// Chooses a <see cref="ModelFormat"/> from the file name and the first bytes, so the extension is
 /// never trusted on its own. A GLB's "glTF" magic, a PLY's "ply" magic and a binary STL whose
 /// declared triangle count matches its exact length are each strong enough to override a wrong or
-/// missing extension. Otherwise the extension decides, and when it is unknown the content is sniffed
-/// as ASCII STL, glTF JSON or OBJ.
+/// missing extension. The FBX binary magic is recognized so a binary file is reported by the
+/// importer rather than mistaken for another format. Otherwise the extension decides, and when it
+/// is unknown the content is sniffed as ASCII STL, ASCII FBX, glTF JSON or OBJ.
 /// </summary>
 internal static class ModelFormatDetector
 {
@@ -31,6 +33,7 @@ internal static class ModelFormatDetector
         if (IsGlb(bytes)) return ModelFormat.Glb;
         if (IsPly(bytes)) return ModelFormat.Ply;
         if (StlImporter.StlIsBinary(bytes)) return ModelFormat.Stl;
+        if (IsBinaryFbx(bytes)) return ModelFormat.Fbx;
 
         switch (Path.GetExtension(path).ToLowerInvariant())
         {
@@ -39,14 +42,29 @@ internal static class ModelFormatDetector
             case ".glb": return ModelFormat.Glb;
             case ".stl": return ModelFormat.Stl;
             case ".ply": return ModelFormat.Ply;
+            case ".fbx": return ModelFormat.Fbx;
         }
 
         if (IsAsciiStl(bytes)) return ModelFormat.Stl;
+        if (IsAsciiFbx(bytes)) return ModelFormat.Fbx;
         if (LooksLikeJson(bytes)) return ModelFormat.Gltf;
         if (LooksLikeObj(bytes)) return ModelFormat.Obj;
 
         throw new NotSupportedException(
-            $"'{path}' is not a recognized model format (expected OBJ, glTF, GLB, STL or PLY)");
+            $"'{path}' is not a recognized model format (expected OBJ, glTF, GLB, STL, PLY or FBX)");
+    }
+
+    /// <summary>The binary FBX header, "Kaydara FBX Binary" then a NUL and two bytes of version.</summary>
+    private static bool IsBinaryFbx(byte[] b) =>
+        b.Length >= 18 && Encoding.ASCII.GetString(b, 0, 18) == "Kaydara FBX Binary";
+
+    private static bool IsAsciiFbx(byte[] b)
+    {
+        var head = Head(b, 4096);
+        if (head.Contains("FBXHeaderExtension", StringComparison.Ordinal)) return true;
+        var trimmed = head.TrimStart();
+        return trimmed.StartsWith("; FBX", StringComparison.Ordinal)
+            || trimmed.StartsWith(";FBX", StringComparison.Ordinal);
     }
 
     private static bool IsGlb(byte[] b) =>
