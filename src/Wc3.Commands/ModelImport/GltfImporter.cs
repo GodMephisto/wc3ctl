@@ -7,11 +7,15 @@ using System.Text.Json;
 namespace Wc3.Commands;
 
 /// <summary>
-/// A parsed glTF scene, the primitives it draws and any diagnostics raised while resolving their
-/// materials and textures. Each primitive becomes a <see cref="MeshData"/> and carries its resolved
-/// <see cref="MeshMaterial"/> when the glTF named one.
+/// A parsed glTF scene, the primitives it draws, the animations it names and any diagnostics raised
+/// while resolving their materials and textures. Each primitive becomes a <see cref="MeshData"/> and
+/// carries its resolved <see cref="MeshMaterial"/> when the glTF named one. Each animation becomes a
+/// <see cref="MeshAnimation"/> carrying only its name and time range, not its channels.
 /// </summary>
-internal sealed record GltfScene(IReadOnlyList<MeshData> Meshes, IReadOnlyList<string> Diagnostics);
+internal sealed record GltfScene(
+    IReadOnlyList<MeshData> Meshes,
+    IReadOnlyList<MeshAnimation> Animations,
+    IReadOnlyList<string> Diagnostics);
 
 /// <summary>
 /// Parses a glTF 2.0 model into a list of <see cref="MeshData"/>, both the .gltf JSON form and the
@@ -28,6 +32,10 @@ internal sealed record GltfScene(IReadOnlyList<MeshData> Meshes, IReadOnlyList<s
 /// whole in the mesh's <see cref="MeshTexture"/>, so the MDX writer converts them to .blp. An image
 /// that cannot be read leaves its material with a null texture and raises a diagnostic, never fails
 /// the import.
+///
+/// Every animation is read for its name and its overall time range, the union of its samplers' input
+/// accessors, and reported as a <see cref="MeshAnimation"/>. The channels and their keyframes are not
+/// read, so the one honest output is a named MDX sequence interval and not a false bone track.
 /// </summary>
 internal static class GltfImporter
 {
@@ -122,7 +130,95 @@ internal static class GltfImporter
         if (result.Count == 0)
             throw new ArgumentException($"glTF '{name}' has no primitives");
 
-        return new GltfScene(result, diagnostics);
+        var animations = ExtractAnimations(root, buffers);
+        return new GltfScene(result, animations, diagnostics);
+    }
+
+    /// <summary>
+    /// Reads every animation's name and its overall time range in seconds. The range is the union of
+    /// the input accessors of all the animation's samplers, taken from the accessor's own min/max when
+    /// the exporter wrote them and otherwise from the input floats themselves. An animation with no
+    /// sampler that yields a range is skipped rather than given a made-up interval, so the sequence
+    /// list only ever holds intervals the file actually supports.
+    /// </summary>
+    private static List<MeshAnimation> ExtractAnimations(JsonElement root, List<byte[]> buffers)
+    {
+        var result = new List<MeshAnimation>();
+        if (!root.TryGetProperty("animations", out var animations) || animations.ValueKind != JsonValueKind.Array)
+            return result;
+        if (!root.TryGetProperty("accessors", out var accessors) || accessors.ValueKind != JsonValueKind.Array)
+            return result;
+
+        int positional = 0;
+        foreach (var animation in animations.EnumerateArray())
+        {
+            string animName = animation.TryGetProperty("name", out var n) && n.ValueKind == JsonValueKind.String
+                ? n.GetString()!.Trim()
+                : string.Empty;
+            if (animName.Length == 0) animName = $"Anim{positional}";
+            positional++;
+
+            float? min = null, max = null;
+            if (animation.TryGetProperty("samplers", out var samplers) && samplers.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var sampler in samplers.EnumerateArray())
+                {
+                    if (!sampler.TryGetProperty("input", out var inputEl) || inputEl.ValueKind != JsonValueKind.Number)
+                        continue;
+                    int inputIndex = inputEl.GetInt32();
+                    if (inputIndex < 0 || inputIndex >= accessors.GetArrayLength()) continue;
+                    var (lo, hi) = AccessorTimeRange(root, buffers, accessors[inputIndex], inputIndex);
+                    if (lo is null || hi is null) continue;
+                    min = min is null ? lo : MathF.Min(min.Value, lo.Value);
+                    max = max is null ? hi : MathF.Max(max.Value, hi.Value);
+                }
+            }
+            if (min is null || max is null) continue;
+            result.Add(new MeshAnimation(animName, min.Value, max.Value));
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// One input accessor's time range. The glTF spec requires min and max on an animation input, so
+    /// they are used when present. When an exporter omits them the SCALAR floats are read and their
+    /// own extremes taken. A null pair means the accessor could not yield a range.
+    /// </summary>
+    private static (float? Min, float? Max) AccessorTimeRange(
+        JsonElement root, List<byte[]> buffers, JsonElement accessor, int index)
+    {
+        if (TryFirstNumber(accessor, "min", out float lo) && TryFirstNumber(accessor, "max", out float hi))
+            return (lo, hi);
+
+        float[] times;
+        try
+        {
+            times = ReadFloats(root, buffers, index, 1);
+        }
+        catch (Exception)
+        {
+            return (null, null);
+        }
+        if (times.Length == 0) return (null, null);
+
+        float min = times[0], max = times[0];
+        foreach (float t in times)
+        {
+            if (t < min) min = t;
+            if (t > max) max = t;
+        }
+        return (min, max);
+    }
+
+    private static bool TryFirstNumber(JsonElement owner, string key, out float value)
+    {
+        value = 0f;
+        if (!owner.TryGetProperty(key, out var arr) || arr.ValueKind != JsonValueKind.Array || arr.GetArrayLength() == 0)
+            return false;
+        if (arr[0].ValueKind != JsonValueKind.Number)
+            return false;
+        value = arr[0].GetSingle();
+        return true;
     }
 
     private static MeshData ExtractPrimitive(

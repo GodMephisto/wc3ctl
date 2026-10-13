@@ -3312,24 +3312,29 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         var modelImportTexture = new Option<string?>("--texture",
             "Texture path to embed, relative to the map, overriding every material. Default, the "
             + "model's own materials, or war3mapImported\\<name>.blp when it names none.");
+        var modelImportFps = new Option<double>("--fps", () => 30,
+            "Frames per second used to convert a glTF animation's time range into a sequence frame "
+            + "interval. The Warcraft III default is 30.");
         var modelImport = new Command("import",
             "Import a foreign model into a Warcraft III MDX. Accepts Wavefront OBJ, glTF 2.0 (.gltf "
             + "and .glb), STL (binary and ASCII), PLY (ASCII and binary little-endian) and FBX ASCII. "
             + "Builds one v800 geoset per source primitive with normals and UVs, triangulating an "
             + "n-gon face as a fan, computing a per-face normal when the source carries none and "
             + "zeroing UVs when it has none. Each glTF material's baseColorTexture is written as .blp "
-            + "beside the MDX and referenced from a texture entry, one per distinct texture. Reports "
-            + "the geoset, vertex, face, texture and material counts and the written texture files.")
-            { modelImportObj, modelImportOut, modelImportTexture, jsonOption };
+            + "beside the MDX and referenced from a texture entry, one per distinct texture. Each glTF "
+            + "animation is written as a named SEQS sequence whose frame interval is its time range at "
+            + "the fps (30 by default). Reports the geoset, vertex, face, texture and material counts, "
+            + "the sequence count and names, and the written texture files.")
+            { modelImportObj, modelImportOut, modelImportTexture, modelImportFps, jsonOption };
         modelImport.SetHandler(
-            (string objPath, string outPath, string? texture, bool json) => RunSafely(() =>
+            (string objPath, string outPath, string? texture, double fps, bool json) => RunSafely(() =>
             {
-                var r = ModelImportCommand.ExecutePath(objPath, outPath, texture);
+                var r = ModelImportCommand.ExecutePath(objPath, outPath, texture, fps);
                 Emit(json,
-                    new { r.Path, r.Geosets, r.Vertices, r.Faces, r.Textures, r.Materials, r.TextureFiles, r.Bytes, r.Diagnostics },
+                    new { r.Path, r.Geosets, r.Vertices, r.Faces, r.Textures, r.Materials, r.Sequences, r.SequenceNames, r.TextureFiles, r.Bytes, r.Diagnostics },
                     () => Render.ModelImport(r));
             }),
-            modelImportObj, modelImportOut, modelImportTexture, jsonOption);
+            modelImportObj, modelImportOut, modelImportTexture, modelImportFps, jsonOption);
         var model = new Command("model", "Model asset operations.");
         model.AddCommand(modelExportObj);
         model.AddCommand(modelAudit);

@@ -9,7 +9,8 @@ namespace Wc3.Commands;
 /// <see cref="Mdx"/> is the assembled model, so a caller can write it wherever it likes, and
 /// <see cref="Bytes"/> is its length. <see cref="Geosets"/> is one per source primitive,
 /// <see cref="Materials"/> one per primitive and <see cref="Textures"/> the distinct TEXS entries.
-/// <see cref="TextureFiles"/> are the .blp file names written beside the MDX.
+/// <see cref="TextureFiles"/> are the .blp file names written beside the MDX. <see cref="Sequences"/>
+/// is the number of named MDX sequences written and <see cref="SequenceNames"/> their names in order.
 /// </summary>
 public sealed record ModelImportResult(
     string Path,
@@ -21,7 +22,9 @@ public sealed record ModelImportResult(
     long Bytes,
     byte[] Mdx,
     IReadOnlyList<string> TextureFiles,
-    IReadOnlyList<string> Diagnostics);
+    IReadOnlyList<string> Diagnostics,
+    int Sequences = 0,
+    IReadOnlyList<string>? SequenceNames = null);
 
 /// <summary>
 /// Imports a foreign model into a Warcraft III MDX. The format is chosen by extension and then by
@@ -45,6 +48,11 @@ public sealed record ModelImportResult(
 /// keeps the legacy single default texture. An n-gon face is split into a triangle fan. When a
 /// format carries no normals a per-face normal is computed and used for that face's corners, so flat
 /// shading survives the import, and when it carries no UVs the corners get a zero UV.
+///
+/// Every glTF animation becomes a named MDX SEQS entry whose integer frame interval is the
+/// animation's seconds range scaled by <c>fps</c> (30 by default). Bone keyframe tracks are not
+/// written, so the sequence names the interval without inventing a track that would not match the
+/// source. The result reports the sequence count and names alongside the geometry counts.
 /// </summary>
 public static class ModelImportCommand
 {
@@ -53,7 +61,7 @@ public static class ModelImportCommand
     /// <paramref name="outPath"/>, plus any .blp textures it referenced beside it. The format is
     /// detected from the file, not the extension alone.
     /// </summary>
-    public static ModelImportResult ExecutePath(string modelPath, string outPath, string? texturePath = null)
+    public static ModelImportResult ExecutePath(string modelPath, string outPath, string? texturePath = null, double fps = 30)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelPath);
         if (!File.Exists(modelPath)) throw new FileNotFoundException($"Model not found: {modelPath}", modelPath);
@@ -61,7 +69,7 @@ public static class ModelImportCommand
 
         var bytes = File.ReadAllBytes(modelPath);
         string? baseDir = Path.GetDirectoryName(Path.GetFullPath(modelPath));
-        var result = Import(bytes, modelPath, baseDir, texturePath, out var output, out var textures);
+        var result = Import(bytes, modelPath, baseDir, texturePath, fps, out var output, out var textures);
 
         var dir = Path.GetDirectoryName(Path.GetFullPath(outPath));
         if (dir is { Length: > 0 }) Directory.CreateDirectory(dir);
@@ -76,38 +84,48 @@ public static class ModelImportCommand
     /// used for reporting, format detection and the default texture path. Throws
     /// <see cref="ArgumentException"/> on a model with no drawable geometry or an out-of-range index.
     /// </summary>
-    public static ModelImportResult Execute(string modelText, string name, out byte[] output, string? texturePath = null)
+    public static ModelImportResult Execute(string modelText, string name, out byte[] output,
+        string? texturePath = null, double fps = 30)
     {
         ArgumentNullException.ThrowIfNull(modelText);
-        return Import(Encoding.UTF8.GetBytes(modelText), name, baseDir: null, texturePath, out output, out _);
+        return Import(Encoding.UTF8.GetBytes(modelText), name, baseDir: null, texturePath, fps, out output, out _);
     }
 
     /// <summary>Imports raw model bytes, for a caller that already read the file.</summary>
     public static ModelImportResult Execute(byte[] modelBytes, string name, out byte[] output,
-        string? texturePath = null, string? baseDir = null)
+        string? texturePath = null, string? baseDir = null, double fps = 30)
     {
         ArgumentNullException.ThrowIfNull(modelBytes);
-        return Import(modelBytes, name, baseDir, texturePath, out output, out _);
+        return Import(modelBytes, name, baseDir, texturePath, fps, out output, out _);
     }
 
     private static ModelImportResult Import(byte[] bytes, string name, string? baseDir, string? texturePath,
-        out byte[] output, out IReadOnlyList<MdxMeshBuilder.BuiltTexture> textures)
+        double fps, out byte[] output, out IReadOnlyList<MdxMeshBuilder.BuiltTexture> textures)
     {
         var format = ModelFormatDetector.Detect(name, bytes);
         var diagnostics = new List<string>();
 
         IReadOnlyList<MeshData> meshes;
+        IReadOnlyList<MeshAnimation> animations = Array.Empty<MeshAnimation>();
         switch (format)
         {
             case ModelFormat.Obj:
                 meshes = new[] { ObjImporter.Parse(DecodeText(bytes), name) };
                 break;
             case ModelFormat.Gltf:
-                meshes = ParseGltf(DecodeText(bytes), name, baseDir, diagnostics);
-                break;
+                {
+                    var scene = ParseGltf(DecodeText(bytes), name, baseDir, diagnostics);
+                    meshes = scene.Meshes;
+                    animations = scene.Animations;
+                    break;
+                }
             case ModelFormat.Glb:
-                meshes = ParseGlb(bytes, name, baseDir, diagnostics);
-                break;
+                {
+                    var scene = ParseGlb(bytes, name, baseDir, diagnostics);
+                    meshes = scene.Meshes;
+                    animations = scene.Animations;
+                    break;
+                }
             case ModelFormat.Stl:
                 meshes = new[] { StlImporter.Parse(bytes) };
                 break;
@@ -129,21 +147,51 @@ public static class ModelImportCommand
         if (usable.Count == 0)
             throw new ArgumentException($"'{name}' holds no drawable geometry");
 
-        return MdxMeshBuilder.Build(usable, name, texturePath, diagnostics, out output, out textures);
+        var sequences = BuildSequences(animations, fps);
+        return MdxMeshBuilder.Build(usable, name, texturePath, sequences, diagnostics, out output, out textures);
     }
 
-    private static IReadOnlyList<MeshData> ParseGltf(string json, string name, string? baseDir, List<string> diagnostics)
+    /// <summary>
+    /// Turns an animation's seconds range into an MDX frame interval at <paramref name="fps"/>. The
+    /// start and end are the range scaled by the fps and rounded to the nearest frame, clamped at
+    /// zero, with the end never before the start. A non-positive fps falls back to the WC3 default
+    /// of 30, so a caller cannot ask for a nonsensical timeline.
+    /// </summary>
+    private static IReadOnlyList<MeshSequence> BuildSequences(IReadOnlyList<MeshAnimation> animations, double fps)
+    {
+        if (animations.Count == 0) return Array.Empty<MeshSequence>();
+        if (!(fps > 0)) fps = 30;
+
+        var sequences = new List<MeshSequence>(animations.Count);
+        foreach (var animation in animations)
+        {
+            int start = ToFrame(animation.StartSeconds, fps);
+            int end = ToFrame(animation.EndSeconds, fps);
+            if (end < start) end = start;
+            sequences.Add(new MeshSequence(animation.Name, start, end));
+        }
+        return sequences;
+    }
+
+    private static int ToFrame(float seconds, double fps)
+    {
+        double frame = Math.Round(seconds * fps, MidpointRounding.AwayFromZero);
+        if (frame < 0) return 0;
+        return frame > int.MaxValue ? int.MaxValue : (int)frame;
+    }
+
+    private static GltfScene ParseGltf(string json, string name, string? baseDir, List<string> diagnostics)
     {
         var scene = GltfImporter.ParseGltf(json, name, baseDir);
         diagnostics.AddRange(scene.Diagnostics);
-        return scene.Meshes;
+        return scene;
     }
 
-    private static IReadOnlyList<MeshData> ParseGlb(byte[] bytes, string name, string? baseDir, List<string> diagnostics)
+    private static GltfScene ParseGlb(byte[] bytes, string name, string? baseDir, List<string> diagnostics)
     {
         var scene = GltfImporter.ParseGlb(bytes, name, baseDir);
         diagnostics.AddRange(scene.Diagnostics);
-        return scene.Meshes;
+        return scene;
     }
 
     private static string DecodeText(byte[] bytes)
