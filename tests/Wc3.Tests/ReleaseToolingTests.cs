@@ -156,6 +156,26 @@ public class ReleaseToolingTests
         Assert.Contains("no directory", r.Message);
     }
 
+    [Fact]
+    public void Export_verify_refuses_a_source_root_that_holds_no_wc3ctl_source()
+    {
+        // A wrong source root (the home directory, say, when the wc3ctl checkout could not be
+        // located and the caller fell back to the process cwd) exists on disk but holds none of the
+        // exported projects. It used to compare against nothing and report every target file as
+        // "removed" (measured: 723 removed, 0 checked). It must refuse with a clear message.
+        using var tmp = new TempDir();
+        string emptySource = Path.Combine(tmp.Dir, "empty-source");
+        Directory.CreateDirectory(emptySource);
+        string target = Path.Combine(tmp.Dir, "target");
+        BuildTargetTree(target);
+
+        var r = McpExportVerifyCommand.Execute(emptySource, target);
+        Assert.False(r.InStep);
+        Assert.Empty(r.Differences);
+        Assert.Equal(0, r.CheckedFiles);
+        Assert.Contains("no wc3ctl source", r.Message);
+    }
+
     // ---- tree builders ----
 
     private const string CliProjectReference =
