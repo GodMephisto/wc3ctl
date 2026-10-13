@@ -736,6 +736,19 @@ public static class Render
         return sb.ToString().TrimEnd();
     }
 
+    public static string MapOptimize(MapOptimizeResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"Wrote {Path.GetFileName(r.Path)}");
+        sb.AppendLine($"  {r.ModelsOptimized} model(s), {r.TexturesOptimized} texture(s) changed, "
+            + $"{r.BytesSaved:N0} byte(s) saved across {r.Changed} file(s)");
+        sb.AppendLine($"  map {r.BytesBefore:N0} -> {r.BytesAfter:N0} byte(s)");
+        foreach (var f in r.Files)
+            sb.AppendLine($"  {f.Kind,-7} {f.Path}  {f.BytesBefore} -> {f.BytesAfter} byte(s)  ({f.Detail})");
+        foreach (var d in r.Diagnostics) sb.AppendLine($"  ! {d}");
+        return sb.ToString().TrimEnd();
+    }
+
     public static string SoundOptimize(SoundOptimizeResult r)
     {
         var sb = new StringBuilder();

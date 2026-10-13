@@ -2,7 +2,7 @@
 
 Generated from the live command tree by `wc3ctl docs cli`. Do not edit by hand. Regenerate with `wc3ctl docs cli --force`, and the CI guard fails when this file is stale.
 
-The tree holds 64 top level verb(s) and 318 command path(s) in total.
+The tree holds 65 top level verb(s) and 320 command path(s) in total.
 
 ## Global options
 
@@ -531,6 +531,40 @@ Options
 
 - `-o, --out <out>` (required). Output path. The input is never modified.
 - `--max <max>`. Maximum side length in pixels. A texture larger than this on either side is scaled down. Default `256`.
+
+## map
+
+Whole-map operations.
+
+Usage
+
+```
+wc3ctl map
+```
+
+Subcommands
+
+- `optimize`. Shrink every imported model and texture inside a map in one pass and write a new map with only those files replaced, everything else byte for byte. Each model is decimated at --ratio and each texture is scaled to --max-texture, reusing the model and texture optimisers. Reports per file what changed and the total byte saving.
+
+### map optimize
+
+Shrink every imported model and texture inside a map in one pass and write a new map with only those files replaced, everything else byte for byte. Each model is decimated at --ratio and each texture is scaled to --max-texture, reusing the model and texture optimisers. Reports per file what changed and the total byte saving.
+
+Usage
+
+```
+wc3ctl map optimize <map> [options]
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+
+Options
+
+- `-o, --out <out>` (required). Output map path. The input is never modified.
+- `--ratio <ratio>`. Target fraction of a model's faces to keep, between 0 and 1. Default `0.5`.
+- `--max-texture <max-texture>`. Maximum texture side in pixels. A texture larger than this on either side is scaled down. Default `256`.
 
 ## strings
 

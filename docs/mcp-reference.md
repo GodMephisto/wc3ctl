@@ -2,7 +2,7 @@
 
 Generated from the live tool surface by `wc3ctl docs mcp`. Do not edit by hand. Regenerate with `wc3ctl docs mcp --force`, and the CI guard fails when this file is stale.
 
-The server exposes 241 tool(s).
+The server exposes 242 tool(s).
 
 ## asset_audit
 
@@ -501,6 +501,12 @@ Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 Set a scenario field and save the edited map to out_path. The input map is NEVER modified in place. Editable fields: MapName|Author|Description|RecommendedPlayers|Tileset|LightEnvironment|GlobalWeather|SoundEnvironment|WaterTintColor|FogStyle|FogStartZ|FogEndZ|FogDensity|FogColor (and the map-option booleans).
 
 Annotations. read-only no, destructive no, idempotent no, open-world no.
+
+## map_optimize
+
+Shrink every imported model and texture inside a map in one pass and write a new map to out_path with only those files replaced, everything else byte for byte. Each model is decimated at ratio (the target fraction of faces to keep) and each texture is scaled to fit max_texture on its longest side, reusing the model and texture optimisers. A file whose optimised bytes are not smaller is left untouched. Reports the per-file before and after sizes, the per-kind counts and the total byte saving. The input map is NEVER modified.
+
+Annotations. read-only no, destructive no, idempotent yes, open-world no.
 
 ## map_overview
 

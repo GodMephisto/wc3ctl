@@ -3335,6 +3335,41 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         texture.AddCommand(textureOptimize);
         root.AddCommand(texture);
 
+        var mapOptimizeOut = new Option<string>(new[] { "-o", "--out" },
+            "Output map path. The input is never modified.") { IsRequired = true };
+        var mapOptimizeRatio = new Option<float>("--ratio", () => 0.5f,
+            "Target fraction of a model's faces to keep, between 0 and 1.");
+        var mapOptimizeMaxTexture = new Option<int>("--max-texture", () => 256,
+            "Maximum texture side in pixels. A texture larger than this on either side is scaled down.");
+        var mapOptimize = new Command("optimize",
+            "Shrink every imported model and texture inside a map in one pass and write a new map "
+            + "with only those files replaced, everything else byte for byte. Each model is decimated "
+            + "at --ratio and each texture is scaled to --max-texture, reusing the model and texture "
+            + "optimisers. Reports per file what changed and the total byte saving.")
+            { mapArg, mapOptimizeOut, mapOptimizeRatio, mapOptimizeMaxTexture, jsonOption };
+        mapOptimize.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string mapPath = p.GetValueForArgument(mapArg);
+            string outPath = p.GetValueForOption(mapOptimizeOut)!;
+            if (Path.GetFullPath(outPath).Equals(Path.GetFullPath(mapPath), StringComparison.OrdinalIgnoreCase))
+            {
+                const string inPlace =
+                    "refusing to overwrite the input map, pass -o <path> for a distinct output";
+                Emit(p.GetValueForOption(jsonOption),
+                    new { Ok = false, Message = inPlace, SavedTo = (string?)null },
+                    () => inPlace);
+                exitCode[0] = 1;
+                return;
+            }
+            var r = MapOptimizeCommand.ExecutePath(mapPath,
+                p.GetValueForOption(mapOptimizeRatio), p.GetValueForOption(mapOptimizeMaxTexture), outPath);
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.MapOptimize(r));
+        }));
+        var mapCmd = new Command("map", "Whole-map operations.");
+        mapCmd.AddCommand(mapOptimize);
+        root.AddCommand(mapCmd);
+
         // ---- strings / imports / trigger read: reachable from the GUI, previously not here ----
         var stringsList = new Command("list",
             "List the map's string table (war3map.wts). Every TRIGSTR_ reference resolves here.")

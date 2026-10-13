@@ -476,6 +476,19 @@ public static class Wc3Tools
             return TextureOptimizeCommand.ExecutePath(texture, max, out_path);
         });
 
+    [McpServerTool(Name = "map_optimize", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Shrink every imported model and texture inside a map in one pass and write a new map to out_path with only those files replaced, everything else byte for byte. Each model is decimated at ratio (the target fraction of faces to keep) and each texture is scaled to fit max_texture on its longest side, reusing the model and texture optimisers. A file whose optimised bytes are not smaller is left untouched. Reports the per-file before and after sizes, the per-kind counts and the total byte saving. The input map is NEVER modified.")]
+    public static MapOptimizeResult MapOptimize(
+        [Description("Path to a .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
+        [Description("Output map path. The input is never modified.")] string out_path,
+        [Description("Target fraction of a model's faces to keep, between 0 and 1. Default 0.5.")] float ratio = 0.5f,
+        [Description("Maximum texture side in pixels. A texture larger than this on either side is scaled down. Default 256.")] int max_texture = 256)
+        => Run(() =>
+        {
+            string full = ResolveOutPath(map, out_path);
+            return MapOptimizeCommand.ExecutePath(map, ratio, max_texture, full);
+        });
+
     [McpServerTool(Name = "model_export_obj", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Export a map-imported model to Wavefront OBJ at out_path, writing an MTL and any map-resolvable textures converted to PNG beside it. The map itself is never modified. Returns the .obj path, the .mtl path and the texture file names.")]
     public static ModelExportObjToolResult ModelExportObj(

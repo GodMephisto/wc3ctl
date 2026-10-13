@@ -90,6 +90,29 @@ public sealed class McpSmokeModelAssetTests : McpSmokeBase
         Assert.Equal(32, Prop(r, "widthAfter").GetInt32());
     }
 
+    [Fact, Covers("map_optimize")]
+    public async Task Map_optimize_writes_a_smaller_map()
+    {
+        var mapPath = NewOut("mapopt-in");
+        File.WriteAllBytes(mapPath, SyntheticMap.Build(new Dictionary<string, byte[]>
+        {
+            ["war3map.j"] = new byte[] { 1, 2, 3, 4 },
+            [@"war3mapImported\Grid.mdx"] = SyntheticModel.GridMdx(9),
+            [@"war3mapImported\Tex.blp"] = SyntheticModel.Blp(64, 64),
+        }));
+        var outPath = NewOut("mapopt-out");
+        var before = Sha(mapPath);
+
+        var r = await Call("map_optimize", Args(
+            ("map", mapPath), ("out_path", outPath), ("ratio", 0.5f), ("max_texture", 32)));
+
+        Assert.Equal(before, Sha(mapPath));
+        Assert.True(File.Exists(outPath));
+        Assert.Equal(1, Prop(r, "modelsOptimized").GetInt32());
+        Assert.Equal(1, Prop(r, "texturesOptimized").GetInt32());
+        Assert.True(Prop(r, "bytesSaved").GetInt64() > 0);
+    }
+
     [Fact, Covers("sound_optimize")]
     public async Task Sound_optimize_resamples_a_wav()
     {

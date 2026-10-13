@@ -24,6 +24,7 @@ public class CliMcpParityTests
         ["file_set"] = "file set",
         ["map_info"] = "info",
         ["map_overview"] = "overview",
+        ["map_optimize"] = "map optimize",
         ["mcp_audit_annotations"] = "mcp audit-annotations",
         ["list_files"] = "ls",
         ["object_form"] = "object form",
