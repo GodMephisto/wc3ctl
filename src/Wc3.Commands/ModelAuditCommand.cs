@@ -38,11 +38,18 @@ public sealed record ModelAuditResult(
     int Textures,
     int Sequences,
     int Nodes,
+    int ParticleEmitters,
+    int ParticleEmitters2,
+    int Ribbons,
+    int Corns,
     long Bytes,
     IReadOnlyList<ModelIssue> Issues,
     IReadOnlyList<string> Diagnostics)
 {
     public int IssueCount => Issues.Count;
+
+    /// <summary>Every effect chunk the model carries, particle emitters plus ribbons plus corns.</summary>
+    public int Effects => ParticleEmitters + ParticleEmitters2 + Ribbons + Corns;
 }
 
 /// <summary>
@@ -55,6 +62,11 @@ public sealed record ModelAuditResult(
 /// triangles. A degenerate triangle with no area. A skeleton node no geoset skins to, a leftover
 /// bone or helper. A non-finite vertex coordinate, the tell for a corrupt or badly transformed
 /// file. This is the analysis half of the optimiser, the half that says what can safely go.
+///
+/// It also counts the effects the model carries, particle emitters, particle emitters 2, ribbons
+/// and popcorns, from the binary chunk tags alone. The payloads are not parsed, so there is no
+/// per-emitter check here, an emitter's node reference and its lifespan are reported by count and
+/// not validated.
 /// </summary>
 public static class ModelAuditCommand
 {
@@ -79,12 +91,17 @@ public static class ModelAuditCommand
         }
         catch (Exception ex)
         {
-            return new ModelAuditResult(name, "unknown", 0, 0, 0, 0, 0, 0, bytes.LongLength,
+            return new ModelAuditResult(name, "unknown", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, bytes.LongLength,
                 Array.Empty<ModelIssue>(), new[] { $"could not parse '{name}': {ex.Message}" });
         }
 
         string format = bytes.Length >= 4 && bytes[0] == 'M' && bytes[1] == 'D'
             && bytes[2] == 'L' && bytes[3] == 'X' ? "mdx" : "mdl";
+
+        // Effects are counted from the binary chunk list, so an emitter, ribbon or popcorn is
+        // counted by its tag and its payload is left unread. A text MDL carries no chunks and
+        // reports zero here.
+        var effects = MdxDocument.HasMagic(bytes) ? MdxDocument.Parse(bytes).CountEffects() : EffectCounts.None;
 
         int vertices = 0, faces = 0;
         var issues = new List<ModelIssue>();
@@ -132,6 +149,7 @@ public static class ModelAuditCommand
             name, format,
             model.Geosets.Count, vertices, faces, model.Textures.Count,
             model.Skeleton?.Sequences.Count ?? 0, model.Skeleton?.Nodes.Count ?? 0,
+            effects.ParticleEmitters, effects.ParticleEmitters2, effects.Ribbons, effects.Corns,
             bytes.LongLength, issues, Array.Empty<string>());
     }
 

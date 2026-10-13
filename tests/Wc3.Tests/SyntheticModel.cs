@@ -27,7 +27,8 @@ internal static class SyntheticModel
         float[]? vertices = null,
         string texturePath = @"Textures\Test.blp",
         (string Name, int Start, int End)[]? sequences = null,
-        bool includeBone = false)
+        bool includeBone = false,
+        (string Tag, byte[] Payload)[]? extraChunks = null)
     {
         var verts = vertices ?? new float[] { 0, 0, 0, 1, 0, 0, 0, 1, 0 };
         int vertexCount = verts.Length / 3;
@@ -147,6 +148,16 @@ internal static class SyntheticModel
         w.Write((uint)(geoset.Length + 4));
         w.Write((uint)(geoset.Length + 4));
         w.Write(geoset);
+
+        // Extra chunks written verbatim, so a test can add an effect tag (PREM, PRE2, RIBB, CORN)
+        // that the parser skips by size and the audit counts by tag.
+        if (extraChunks is not null)
+            foreach (var (tag, payload) in extraChunks)
+            {
+                w.Write(Encoding.ASCII.GetBytes(tag));
+                w.Write((uint)payload.Length);
+                w.Write(payload);
+            }
         w.Flush();
         return ms.ToArray();
     }

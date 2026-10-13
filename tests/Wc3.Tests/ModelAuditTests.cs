@@ -62,4 +62,46 @@ public sealed class ModelAuditTests
         Assert.Empty(r.Issues);
         Assert.NotEmpty(r.Diagnostics);
     }
+
+    [Fact]
+    public void A_particle_emitter_chunk_is_counted_from_the_chunk_list()
+    {
+        var bytes = SyntheticModel.BuildMdx(
+            extraChunks: new[] { ("PREM", new byte[8]) });
+        var r = ModelAuditCommand.Execute(bytes, "fx.mdx");
+        Assert.Equal("mdx", r.Format);
+        Assert.Equal(1, r.ParticleEmitters);
+        Assert.Equal(0, r.ParticleEmitters2);
+        Assert.Equal(0, r.Ribbons);
+        Assert.Equal(0, r.Corns);
+        Assert.Equal(1, r.Effects);
+    }
+
+    [Fact]
+    public void Every_effect_tag_is_counted_and_summed()
+    {
+        var bytes = SyntheticModel.BuildMdx(extraChunks: new[]
+        {
+            ("PREM", new byte[8]),
+            ("PREM", new byte[16]),
+            ("PRE2", new byte[12]),
+            ("RIBB", new byte[4]),
+            ("CORN", new byte[4]),
+        });
+        var r = ModelAuditCommand.Execute(bytes, "fx.mdx");
+        Assert.Equal(2, r.ParticleEmitters);
+        Assert.Equal(1, r.ParticleEmitters2);
+        Assert.Equal(1, r.Ribbons);
+        Assert.Equal(1, r.Corns);
+        Assert.Equal(5, r.Effects);
+    }
+
+    [Fact]
+    public void A_model_without_effects_reports_zero()
+    {
+        var r = ModelAuditCommand.Execute(SyntheticModel.TinyMdx(), "plain.mdx");
+        Assert.Equal(0, r.Effects);
+        Assert.Equal(0, r.ParticleEmitters);
+        Assert.Equal(0, r.Corns);
+    }
 }

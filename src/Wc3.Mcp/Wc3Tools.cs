@@ -431,7 +431,7 @@ public static class Wc3Tools
         });
 
     [McpServerTool(Name = "model_audit", ReadOnly = true, Idempotent = true, OpenWorld = false)]
-    [Description("Audit a .mdx or .mdl model for the resource waste and draw-nothing problems an optimiser can remove, and report what it holds. Finds duplicate textures, geosets with no texture or no triangles, zero-area faces, unused skeleton nodes and non-finite vertices. Read-only.")]
+    [Description("Audit a .mdx or .mdl model for the resource waste and draw-nothing problems an optimiser can remove, and report what it holds. Finds duplicate textures, geosets with no texture or no triangles, zero-area faces, unused skeleton nodes and non-finite vertices. Also counts the effects an MDX carries, particle emitters, particle emitters 2, ribbons and popcorns, from the binary chunk list, without parsing their payloads. Read-only.")]
     public static ModelAuditResult ModelAudit(
         [Description("Path to a .mdx or .mdl model file.")] string model)
         => Run(() => ModelAuditCommand.ExecutePath(model));

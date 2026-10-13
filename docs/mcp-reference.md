@@ -516,7 +516,7 @@ Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 
 ## model_audit
 
-Audit a .mdx or .mdl model for the resource waste and draw-nothing problems an optimiser can remove, and report what it holds. Finds duplicate textures, geosets with no texture or no triangles, zero-area faces, unused skeleton nodes and non-finite vertices. Read-only.
+Audit a .mdx or .mdl model for the resource waste and draw-nothing problems an optimiser can remove, and report what it holds. Finds duplicate textures, geosets with no texture or no triangles, zero-area faces, unused skeleton nodes and non-finite vertices. Also counts the effects an MDX carries, particle emitters, particle emitters 2, ribbons and popcorns, from the binary chunk list, without parsing their payloads. Read-only.
 
 Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 

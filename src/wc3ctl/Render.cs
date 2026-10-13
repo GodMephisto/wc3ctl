@@ -625,6 +625,8 @@ public static class Render
         sb.AppendLine($"{Path.GetFileName(r.Path)}  {r.Format}  {r.Bytes} byte(s)");
         sb.AppendLine($"  geosets {r.Geosets}  vertices {r.Vertices}  faces {r.Faces}  "
             + $"textures {r.Textures}  sequences {r.Sequences}  nodes {r.Nodes}");
+        sb.AppendLine($"  effects {r.Effects}  particle emitters {r.ParticleEmitters}  "
+            + $"particle emitters 2 {r.ParticleEmitters2}  ribbons {r.Ribbons}  popcorns {r.Corns}");
         if (r.Diagnostics.Count > 0)
             foreach (var d in r.Diagnostics) sb.AppendLine($"  ! {d}");
         if (r.Issues.Count == 0)
