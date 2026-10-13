@@ -11,7 +11,8 @@ namespace Wc3.Commands;
 /// The one path from a list of <see cref="MeshData"/> to a Warcraft III MDX. Every format importer,
 /// OBJ included, ends here, so the geoset layout (VRTX, NRMS, PTYP, PCNT, PVTX, GNDX, MTGC, MATS,
 /// the untagged tail and UVAS/UVBS), the TEXS texture table, the MTLS material table and the GEOS
-/// chunk per primitive are written once.
+/// chunk per primitive are written once. A model carrying animations also gets a SEQS chunk, one
+/// named interval per sequence, written from the frame ranges the caller already converted.
 ///
 /// One geoset is written per mesh, one material per mesh and one TEXS entry per distinct texture
 /// path. Each primitive's material resolves to its own texture when the importer supplied one, so a
@@ -35,8 +36,10 @@ internal static class MdxMeshBuilder
 
     public static ModelImportResult Build(
         IReadOnlyList<MeshData> meshes, string name, string? texturePath,
-        IReadOnlyList<string> diagnostics, out byte[] output, out IReadOnlyList<BuiltTexture> textures)
+        IReadOnlyList<MeshSequence> sequences, IReadOnlyList<string> diagnostics,
+        out byte[] output, out IReadOnlyList<BuiltTexture> textures)
     {
+        ArgumentNullException.ThrowIfNull(sequences);
         ArgumentNullException.ThrowIfNull(meshes);
 
         var texturePaths = new List<string>(); // TEXS index -> map path
@@ -105,6 +108,7 @@ internal static class MdxMeshBuilder
 
         var geoChunks = new List<MdxDocument.Chunk>();
         var materialTextureIds = new List<int>();
+        var allVertices = new List<float>();
         int vertexTotal = 0, faceTotal = 0;
 
         for (int i = 0; i < meshes.Count; i++)
@@ -115,6 +119,7 @@ internal static class MdxMeshBuilder
             int triangleCount = indices.Count / 3;
             vertexTotal += vertexCount;
             faceTotal += triangleCount;
+            allVertices.AddRange(vList);
 
             materialTextureIds.Add(ResolveTextureId(mesh));
 
@@ -128,9 +133,17 @@ internal static class MdxMeshBuilder
         var chunks = new List<MdxDocument.Chunk>
         {
             new("VERS", U32(Version)),
-            new("TEXS", BuildTexs(texturePaths)),
-            new("MTLS", BuildMtls(materialTextureIds)),
         };
+        // A model with animations carries a SEQS chunk, its extent taken from the same model bounds
+        // the geosets carry so a sequence is not left with a zero radius. A model with none stays
+        // byte-identical to the pre-animation build, so existing imports and goldens do not move.
+        if (sequences.Count > 0)
+        {
+            var (radius, boundsMin, boundsMax) = Bounds(allVertices);
+            chunks.Add(new("SEQS", BuildSeqs(sequences, radius, boundsMin, boundsMax)));
+        }
+        chunks.Add(new("TEXS", BuildTexs(texturePaths)));
+        chunks.Add(new("MTLS", BuildMtls(materialTextureIds)));
         chunks.AddRange(geoChunks);
 
         var doc = MdxDocument.Create(chunks);
@@ -139,7 +152,8 @@ internal static class MdxMeshBuilder
 
         return new ModelImportResult(
             name, meshes.Count, vertexTotal, faceTotal, texturePaths.Count, meshes.Count,
-            output.LongLength, output, files.Select(f => f.FileName).ToList(), diag);
+            output.LongLength, output, files.Select(f => f.FileName).ToList(), diag,
+            sequences.Count, sequences.Select(s => s.Name).ToList());
     }
 
     private static (List<float> Vertices, List<float> Normals, List<float> Uvs, List<int> Indices)
@@ -316,6 +330,40 @@ internal static class MdxMeshBuilder
         {
             var bytes = Encoding.ASCII.GetBytes(paths[i]);
             Array.Copy(bytes, 0, payload, i * 268 + 4, Math.Min(bytes.Length, 260));
+        }
+        return payload;
+    }
+
+    /// <summary>
+    /// One 132-byte SEQS record per sequence, the layout the parser reads. char[80] name, u32 start,
+    /// u32 end, float moveSpeed, u32 nonLooping flags, float rarity, u32 syncPoint, then the extent as
+    /// a radius and a min/max corner. The extent is the whole model's bounds, so the sequence has a
+    /// real culling volume rather than a zero radius. Move speed, flags, rarity and sync point are
+    /// left at zero, the honest defaults for an interval the source did not describe.
+    /// </summary>
+    private static byte[] BuildSeqs(
+        IReadOnlyList<MeshSequence> sequences, float radius, Vector3 min, Vector3 max)
+    {
+        var payload = new byte[sequences.Count * 132];
+        for (int i = 0; i < sequences.Count; i++)
+        {
+            var sequence = sequences[i];
+            int o = i * 132;
+            var nameBytes = Encoding.UTF8.GetBytes(sequence.Name);
+            Array.Copy(nameBytes, 0, payload, o, Math.Min(nameBytes.Length, 80));
+            BinaryPrimitives.WriteUInt32LittleEndian(payload.AsSpan(o + 80, 4), (uint)Math.Max(0, sequence.StartFrame));
+            BinaryPrimitives.WriteUInt32LittleEndian(payload.AsSpan(o + 84, 4), (uint)Math.Max(0, sequence.EndFrame));
+            BinaryPrimitives.WriteSingleLittleEndian(payload.AsSpan(o + 88, 4), 0f);   // moveSpeed
+            BinaryPrimitives.WriteUInt32LittleEndian(payload.AsSpan(o + 92, 4), 0u);   // nonLooping flags
+            BinaryPrimitives.WriteSingleLittleEndian(payload.AsSpan(o + 96, 4), 0f);   // rarity
+            BinaryPrimitives.WriteUInt32LittleEndian(payload.AsSpan(o + 100, 4), 0u);  // syncPoint
+            BinaryPrimitives.WriteSingleLittleEndian(payload.AsSpan(o + 104, 4), radius);
+            BinaryPrimitives.WriteSingleLittleEndian(payload.AsSpan(o + 108, 4), min.X);
+            BinaryPrimitives.WriteSingleLittleEndian(payload.AsSpan(o + 112, 4), min.Y);
+            BinaryPrimitives.WriteSingleLittleEndian(payload.AsSpan(o + 116, 4), min.Z);
+            BinaryPrimitives.WriteSingleLittleEndian(payload.AsSpan(o + 120, 4), max.X);
+            BinaryPrimitives.WriteSingleLittleEndian(payload.AsSpan(o + 124, 4), max.Y);
+            BinaryPrimitives.WriteSingleLittleEndian(payload.AsSpan(o + 128, 4), max.Z);
         }
         return payload;
     }

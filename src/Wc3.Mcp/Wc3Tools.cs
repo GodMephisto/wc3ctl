@@ -504,18 +504,21 @@ public static class Wc3Tools
         });
 
     [McpServerTool(Name = "model_import", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
-    [Description("Import a foreign model file into a Warcraft III MDX at out_path. Accepts Wavefront OBJ (.obj), glTF 2.0 (.gltf and .glb), STL (.stl, binary and ASCII), PLY (.ply, ASCII and binary little-endian) and FBX ASCII (.fbx). Binary FBX is not supported. The format is detected from the file content, so a correct extension is not required. Builds one v800 geoset per source primitive with normals and UVs, triangulating an n-gon face as a fan, computing a per-face normal when the source carries none and zeroing UVs when it has none. Each glTF material's baseColorTexture image is converted to .blp beside the MDX and referenced by a texture entry, one entry per distinct texture, so a multi-material model keeps every material. A model that names no material keeps the single default texture. The input is never modified. Returns the output path, the geoset, vertex, face, texture and material counts, and the texture files written.")]
+    [Description("Import a foreign model file into a Warcraft III MDX at out_path. Accepts Wavefront OBJ (.obj), glTF 2.0 (.gltf and .glb), STL (.stl, binary and ASCII), PLY (.ply, ASCII and binary little-endian) and FBX ASCII (.fbx). Binary FBX is not supported. The format is detected from the file content, so a correct extension is not required. Builds one v800 geoset per source primitive with normals and UVs, triangulating an n-gon face as a fan, computing a per-face normal when the source carries none and zeroing UVs when it has none. Each glTF material's baseColorTexture image is converted to .blp beside the MDX and referenced by a texture entry, one entry per distinct texture, so a multi-material model keeps every material. A model that names no material keeps the single default texture. Every glTF animation becomes a named MDX SEQS sequence whose integer frame interval is its time range scaled by fps, 30 by default. Bone keyframe tracks are not written. The input is never modified. Returns the output path, the geoset, vertex, face, texture and material counts, the sequence count and names, and the texture files written.")]
     public static ModelImportToolResult ModelImport(
         [Description("Path to a foreign model file, one of OBJ, glTF, GLB, STL, PLY or ASCII FBX.")] string obj,
         [Description("Output .mdx path. The input is never modified.")] string out_path,
-        [Description("Optional texture path to embed, relative to the map, overriding every material. Omit to use the model's own materials, or war3mapImported\\<name>.blp when it names none.")] string? texture = null)
+        [Description("Optional texture path to embed, relative to the map, overriding every material. Omit to use the model's own materials, or war3mapImported\\<name>.blp when it names none.")] string? texture = null,
+        [Description("Frames per second used to convert a glTF animation's time range into a sequence frame interval. The Warcraft III default is 30.")] double fps = 30)
         => Run(() =>
         {
             string full = Path.GetFullPath(out_path);
             if (string.Equals(full, Path.GetFullPath(obj), StringComparison.OrdinalIgnoreCase))
                 throw new McpException("out_path must not be the input OBJ");
-            var r = ModelImportCommand.ExecutePath(obj, out_path, texture);
-            return new ModelImportToolResult(full, r.Geosets, r.Vertices, r.Faces, r.Textures, r.Materials, r.TextureFiles);
+            var r = ModelImportCommand.ExecutePath(obj, out_path, texture, fps);
+            return new ModelImportToolResult(
+                full, r.Geosets, r.Vertices, r.Faces, r.Textures, r.Materials,
+                r.Sequences, r.SequenceNames ?? Array.Empty<string>(), r.TextureFiles);
         });
 
     [McpServerTool(Name = "lint", ReadOnly = true, Idempotent = true, OpenWorld = false)]
@@ -3074,10 +3077,11 @@ public sealed record AssetImportWireToolResult(
 /// <summary>model_export_obj outcome: where the .obj landed, its .mtl path and the texture names.</summary>
 public sealed record ModelExportObjToolResult(string SavedTo, string Mtl, IReadOnlyList<string> Textures);
 
-/// <summary>model_import outcome: where the .mdx landed, the counts it holds and the texture files written.</summary>
+/// <summary>model_import outcome: where the .mdx landed, the counts it holds, the sequence count and
+/// names, and the texture files written.</summary>
 public sealed record ModelImportToolResult(
     string SavedTo, int Geosets, int Vertices, int Faces, int Textures, int Materials,
-    IReadOnlyList<string> TextureFiles);
+    int Sequences, IReadOnlyList<string> SequenceNames, IReadOnlyList<string> TextureFiles);
 
 /// <summary>port_unit outcome: where the new .ported map was written plus the full port report.</summary>
 public sealed record PortUnitToolResult(string SavedTo, PortResult Report);

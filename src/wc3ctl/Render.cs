@@ -721,6 +721,8 @@ public static class Render
         sb.AppendLine($"Wrote {Path.GetFileName(r.Path)}");
         sb.AppendLine($"  {r.Geosets} geoset(s), vertices {r.Vertices}, faces {r.Faces}, "
             + $"textures {r.Textures}, materials {r.Materials}");
+        if (r.Sequences > 0)
+            sb.AppendLine($"  {r.Sequences} sequence(s), {string.Join(", ", r.SequenceNames ?? Array.Empty<string>())}");
         foreach (var t in r.TextureFiles) sb.AppendLine($"  wrote {t}");
         sb.AppendLine($"  {r.Bytes} byte(s)");
         foreach (var d in r.Diagnostics) sb.AppendLine($"  ! {d}");

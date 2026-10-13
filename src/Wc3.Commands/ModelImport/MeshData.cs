@@ -27,6 +27,21 @@ internal sealed record MeshTexture(string Name, byte[] Bytes, string Extension);
 internal sealed record MeshMaterial(MeshTexture? Texture);
 
 /// <summary>
+/// One animation a source carried, its time range in seconds. glTF is the only importer that fills
+/// this today, reading each animation's sampler input accessors so the MDX builder can turn the
+/// range into a sequence frame interval at the model's fps. The keyframe tracks are deliberately
+/// not carried, only the named interval.
+/// </summary>
+internal sealed record MeshAnimation(string Name, float StartSeconds, float EndSeconds);
+
+/// <summary>
+/// A named MDX sequence after the frame conversion, one SEQS entry. <see cref="StartFrame"/> and
+/// <see cref="EndFrame"/> are integer frames on the model's global timeline, derived from an
+/// animation's time range at the chosen fps.
+/// </summary>
+internal sealed record MeshSequence(string Name, int StartFrame, int EndFrame);
+
+/// <summary>
 /// A format-neutral mesh, the shape every importer returns and
 /// <see cref="MdxMeshBuilder.Build"/> consumes. <see cref="Positions"/> is required.
 /// <see cref="Normals"/> and <see cref="Uvs"/> may be empty when the source format carries none,
