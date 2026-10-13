@@ -103,6 +103,32 @@ public class ObjectToolkitCommandTests
         { ["war3map.w3u"] = Ser(w => w.Write(w3u)) }));
     }
 
+    /// <summary>A map where one unit is split across war3map.w3u and war3mapSkin.w3u, the Reforged
+    /// shape where the map file holds some fields and the skin file the rest (name, model, icon).</summary>
+    private static MapDocument SplitUnitMap(string rawcode, string baseRawcode,
+        (string Code, int Value) mapField, (string Code, int Value) skinField)
+    {
+        var map = new UnitObjectData(ObjectDataFormatVersion.v2);
+        var m = new SimpleObjectModification
+        { OldId = baseRawcode.FromRawcode(), NewId = rawcode.FromRawcode() };
+        m.Modifications.Add(new SimpleObjectDataModification
+        { Id = mapField.Code.FromRawcode(), Type = ObjectDataType.Int, Value = mapField.Value });
+        map.NewUnits.Add(m);
+
+        var skin = new UnitObjectData(ObjectDataFormatVersion.v2);
+        var s = new SimpleObjectModification
+        { OldId = baseRawcode.FromRawcode(), NewId = rawcode.FromRawcode() };
+        s.Modifications.Add(new SimpleObjectDataModification
+        { Id = skinField.Code.FromRawcode(), Type = ObjectDataType.Int, Value = skinField.Value });
+        skin.NewUnits.Add(s);
+
+        return MapDocument.Load(SyntheticMap.Build(new Dictionary<string, byte[]>
+        {
+            ["war3map.w3u"] = Ser(w => w.Write(map)),
+            ["war3mapSkin.w3u"] = Ser(w => w.Write(skin)),
+        }));
+    }
+
     private static MapDocument AbilityMap()
     {
         var w3a = new AbilityObjectData(ObjectDataFormatVersion.v2);
@@ -290,6 +316,44 @@ public class ObjectToolkitCommandTests
         var mod = Assert.Single(clone.Modifications);
         Assert.Equal("uhpm".FromRawcode(), mod.Id);
         Assert.Equal(999, (int)mod.Value);
+    }
+
+    [Fact]
+    public void Clone_copies_the_skin_half_of_a_split_object()
+    {
+        // A Reforged map can split one object across war3map.w3u and war3mapSkin.w3u. Cloning only
+        // the map layer dropped the skin half (name, model, icon), so the clone inherited the base
+        // unit's instead. The clone must carry both halves, one group in each file.
+        var doc = SplitUnitMap("u000", "hfoo", ("uhpm", 999), ("umvs", 111));
+        var r = ObjectCloneCommand.Execute(doc, ObjectKind.Unit, "u000", "u001");
+        Assert.True(r.Ok, r.Message);
+        Assert.Equal(2, r.FieldsCopied);
+
+        var map = (UnitObjectData)doc.GetFile("war3map.w3u")!.Model!;
+        var mapClone = Assert.Single(map.NewUnits, g => g.NewId == "u001".FromRawcode());
+        Assert.Equal("uhpm".FromRawcode(), Assert.Single(mapClone.Modifications).Id);
+
+        var skin = (UnitObjectData)doc.GetFile("war3mapSkin.w3u")!.Model!;
+        var skinClone = Assert.Single(skin.NewUnits, g => g.NewId == "u001".FromRawcode());
+        Assert.Equal("umvs".FromRawcode(), Assert.Single(skinClone.Modifications).Id);
+    }
+
+    [Fact]
+    public void Rename_rekeys_both_halves_of_a_split_object()
+    {
+        // Renaming only the map layer left the skin group keyed to the old rawcode, so the old code
+        // still resolved and the renamed one was missing the skin half.
+        var doc = SplitUnitMap("u000", "hfoo", ("uhpm", 999), ("umvs", 111));
+        var r = ObjectRenameCommand.Execute(doc, ObjectKind.Unit, "u000", "u001", rewriteRefs: false);
+        Assert.True(r.Ok, r.Message);
+
+        var map = (UnitObjectData)doc.GetFile("war3map.w3u")!.Model!;
+        Assert.DoesNotContain(map.NewUnits, g => g.NewId == "u000".FromRawcode());
+        Assert.Single(map.NewUnits, g => g.NewId == "u001".FromRawcode());
+
+        var skin = (UnitObjectData)doc.GetFile("war3mapSkin.w3u")!.Model!;
+        Assert.DoesNotContain(skin.NewUnits, g => g.NewId == "u000".FromRawcode());
+        Assert.Single(skin.NewUnits, g => g.NewId == "u001".FromRawcode());
     }
 
     [Fact]
