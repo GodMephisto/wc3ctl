@@ -2,7 +2,7 @@
 
 Generated from the live command tree by `wc3ctl docs cli`. Do not edit by hand. Regenerate with `wc3ctl docs cli --force`, and the CI guard fails when this file is stale.
 
-The tree holds 64 top level verb(s) and 316 command path(s) in total.
+The tree holds 64 top level verb(s) and 317 command path(s) in total.
 
 ## Global options
 
@@ -3102,6 +3102,7 @@ Subcommands
 - `fill`. Apply a tool over an inclusive rectangle of corners, instead of one brush dab at a time. Corners may be given in any order and an off-grid rectangle is clipped.
 - `stats`. Summarize terrain: tile count, height range and cliff range.
 - `audit`. Report the terrain's size and its measurable waste: grid and tile counts, distinct ground and cliff textures in use, cliff/ramp/water/blight totals, the war3map.w3e byte size, and any uniform, all-zero or out-of-range-tileset pattern found. Read-only.
+- `optimize`. Shrink war3map.w3e by dropping the declared ground and cliff tile types the terrain never references and remapping every corner's texture index onto the compacted list. Every other file is written back byte for byte. Writes a new map (never the input).
 - `deform`. Raise/lower/set/flatten/smooth ground height over a brush.
 - `cliff`. Raise/lower/set the cliff (stepped-terrain) level over a brush.
 - `ramp`. Toggle the ramp (sloped cliff transition) flag over a brush.
@@ -3165,6 +3166,24 @@ wc3ctl terrain audit <map>
 Arguments
 
 - `<map>` (required). Path to a .w3x/.w3m map.
+
+### terrain optimize
+
+Shrink war3map.w3e by dropping the declared ground and cliff tile types the terrain never references and remapping every corner's texture index onto the compacted list. Every other file is written back byte for byte. Writes a new map (never the input).
+
+Usage
+
+```
+wc3ctl terrain optimize <map> [options]
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+
+Options
+
+- `-o, --out <out>`. Output map path. Default: '<map>.edited.<ext>' next to the input - the original is never overwritten.
 
 ### terrain deform
 

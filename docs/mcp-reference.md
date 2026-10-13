@@ -2,7 +2,7 @@
 
 Generated from the live tool surface by `wc3ctl docs mcp`. Do not edit by hand. Regenerate with `wc3ctl docs mcp --force`, and the CI guard fails when this file is stale.
 
-The server exposes 239 tool(s).
+The server exposes 240 tool(s).
 
 ## asset_audit
 
@@ -1257,6 +1257,12 @@ Annotations. read-only no, destructive no, idempotent no, open-world no.
 The terrain grid's extents in corners, plus the map's ground and cliff tile lists. Texture fields on a corner are indexes into those lists, so read this first to know what an index means.
 
 Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
+## terrain_optimize
+
+Shrink a map's war3map.w3e by dropping the declared ground and cliff tile types the terrain never references and remapping every corner's ground and cliff texture index onto the compacted list, saving the edited copy to out_path. Every other file is written back byte for byte. Reports the before and after declared tile counts and the war3map.w3e byte saving. The input map is never modified.
+
+Annotations. read-only no, destructive no, idempotent yes, open-world no.
 
 ## terrain_paint
 

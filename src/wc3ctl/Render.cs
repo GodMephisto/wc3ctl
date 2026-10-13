@@ -502,6 +502,19 @@ public static class Render
         return sb.ToString().TrimEnd();
     }
 
+    public static string TerrainOptimize(TerrainOptimizeResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{Path.GetFileName(r.Path)}  {r.Message}");
+        sb.AppendLine($"  tilesets    ground {r.GroundTypesBefore} -> {r.GroundTypesAfter} "
+            + $"(-{r.GroundTypesRemoved})  cliff {r.CliffTypesBefore} -> {r.CliffTypesAfter} "
+            + $"(-{r.CliffTypesRemoved})");
+        sb.AppendLine($"  war3map.w3e {r.BytesBefore:N0} -> {r.BytesAfter:N0} byte(s) "
+            + $"(-{r.BytesSaved:N0})  {r.CellsRemapped} corner(s) remapped");
+        foreach (var d in r.Diagnostics) sb.AppendLine($"  ! {d}");
+        return sb.ToString().TrimEnd();
+    }
+
     public static string TerrainCorner(TerrainEditCommand.CornerInfo c) => string.Join("\n", new[]
     {
         $"corner           ({c.Col}, {c.Row})",
