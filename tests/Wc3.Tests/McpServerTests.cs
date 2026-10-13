@@ -66,7 +66,7 @@ public class McpServerTests
         "script_lua_leaks", "script_lua_to_jass", "script_modernize", "script_null_locals",
         "script_reachable", "script_references", "script_semantic_diff", "script_to_lua",
         "script_unused_functions", "script_unused_globals", "search", "sound_add", "sound_list",
-        "sound_remove", "sound_set", "strings_diff", "strings_find", "strings_list",
+        "sound_optimize", "sound_remove", "sound_set", "strings_diff", "strings_find", "strings_list",
         "strings_missing", "strings_set", "strings_unused",
         "target_get", "target_list", "target_set",
         "terrain_blight", "terrain_cliff", "terrain_corner_get", "terrain_corner_set",

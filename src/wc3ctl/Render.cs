@@ -658,6 +658,15 @@ public static class Render
         return sb.ToString().TrimEnd();
     }
 
+    public static string SoundOptimize(SoundOptimizeResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"Wrote {Path.GetFileName(r.Path)}");
+        sb.AppendLine($"  {r.SampleRateBefore} Hz / {r.ChannelsBefore} ch / {r.BytesBefore} byte(s) -> "
+            + $"{r.SampleRateAfter} Hz / {r.ChannelsAfter} ch / {r.BytesAfter} byte(s)");
+        return sb.ToString().TrimEnd();
+    }
+
     public static string Imports(ImportsListResult r)
     {
         var sb = new StringBuilder();

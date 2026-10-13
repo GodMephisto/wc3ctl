@@ -227,6 +227,7 @@ public class CliMcpParityTests
         ["sound_add"] = "sound add",
         ["sound_set"] = "sound set",
         ["sound_remove"] = "sound remove",
+        ["sound_optimize"] = "sound optimize",
         ["trigger_catalog_list"] = "trigger catalog list",
         ["editor_catalog_list"] = "editor catalog list",
         ["editor_catalog_get"] = "editor catalog get",

@@ -3807,12 +3807,33 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
             FinishSound(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r);
         }));
 
+        var soundOptimizeFileArg = new Argument<string>("file", "Path to a .wav or .mp3 sound file.");
+        var soundOptimizeOut = new Option<string>(new[] { "-o", "--out" },
+            "Output .wav path. The input is never modified.") { IsRequired = true };
+        var soundOptimizeRate = new Option<int>("--rate", () => SoundOptimizeCommand.DefaultRate,
+            "Target sample rate in Hz. Default 22050.");
+        var soundOptimizeMono = new Option<bool>("--mono",
+            "Downmix to a single channel. Default keeps the source channel count.");
+        var soundOptimize = new Command("optimize",
+            "Decode a sound, resample it to a target rate and optionally downmix to mono, and write "
+            + "a smaller 16-bit .wav. Reports the before and after sample rate, channels and byte size.")
+            { soundOptimizeFileArg, soundOptimizeOut, soundOptimizeRate, soundOptimizeMono, jsonOption };
+        soundOptimize.SetHandler(
+            (string file, string outPath, int rate, bool mono, bool json) => RunSafely(() =>
+            {
+                var r = SoundOptimizeCommand.ExecutePath(file, rate, mono, outPath);
+                Emit(json, r, () => Render.SoundOptimize(r));
+            }),
+            soundOptimizeFileArg, soundOptimizeOut, soundOptimizeRate, soundOptimizeMono, jsonOption);
+
         var sound = new Command("sound",
-            "Sound catalog editing (war3map.w3s): list, add, set, remove.");
+            "Sound editing: the map's catalog (war3map.w3s) via list, add, set, remove, and a "
+            + "standalone file optimiser via optimize.");
         sound.AddCommand(soundList);
         sound.AddCommand(soundAdd);
         sound.AddCommand(soundSet);
         sound.AddCommand(soundRemove);
+        sound.AddCommand(soundOptimize);
 
         // ---- camera: edit the map's camera catalog (war3map.w3c) ----
         var camList = new Command("list", "List the map's cameras.") { mapArg };

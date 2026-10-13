@@ -2,7 +2,7 @@
 
 Generated from the live tool surface by `wc3ctl docs mcp`. Do not edit by hand. Regenerate with `wc3ctl docs mcp --force`, and the CI guard fails when this file is stale.
 
-The server exposes 236 tool(s).
+The server exposes 237 tool(s).
 
 ## asset_audit
 
@@ -1119,6 +1119,12 @@ Annotations. read-only no, destructive no, idempotent no, open-world no.
 List the map's sound catalog (war3map.w3s): each definition's name, file path, channel, flags, volume, pitch, priority and min/max distance.
 
 Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
+## sound_optimize
+
+Shrink a sound file by decoding it, resampling to a target rate (default 22050 Hz) and optionally folding it to mono, and write a smaller 16-bit PCM .wav at out_path. The input is never modified. Reads .wav natively and .mp3 through the Windows codecs. Returns the before and after sample rate, channel count and byte size.
+
+Annotations. read-only no, destructive no, idempotent yes, open-world no.
 
 ## sound_remove
 

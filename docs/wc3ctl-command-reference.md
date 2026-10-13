@@ -2,7 +2,7 @@
 
 Generated from the live command tree by `wc3ctl docs cli`. Do not edit by hand. Regenerate with `wc3ctl docs cli --force`, and the CI guard fails when this file is stale.
 
-The tree holds 64 top level verb(s) and 313 command path(s) in total.
+The tree holds 64 top level verb(s) and 314 command path(s) in total.
 
 ## Global options
 
@@ -3397,7 +3397,7 @@ Options
 
 ## sound
 
-Sound catalog editing (war3map.w3s): list, add, set, remove.
+Sound editing: the map's catalog (war3map.w3s) via list, add, set, remove, and a standalone file optimiser via optimize.
 
 Usage
 
@@ -3411,6 +3411,7 @@ Subcommands
 - `add`. Add a new sound definition and save the edited map.
 - `set`. Set a field on a sound and save the edited map.
 - `remove`. Remove a sound definition and save the edited map.
+- `optimize`. Decode a sound, resample it to a target rate and optionally downmix to mono, and write a smaller 16-bit .wav. Reports the before and after sample rate, channels and byte size.
 
 ### sound list
 
@@ -3485,6 +3486,26 @@ Arguments
 Options
 
 - `-o, --out <out>`. Output map path. Default: '<map>.edited.<ext>' next to the input - the original is never overwritten.
+
+### sound optimize
+
+Decode a sound, resample it to a target rate and optionally downmix to mono, and write a smaller 16-bit .wav. Reports the before and after sample rate, channels and byte size.
+
+Usage
+
+```
+wc3ctl sound optimize <file> [options]
+```
+
+Arguments
+
+- `<file>` (required). Path to a .wav or .mp3 sound file.
+
+Options
+
+- `-o, --out <out>` (required). Output .wav path. The input is never modified.
+- `--rate <rate>`. Target sample rate in Hz. Default 22050. Default `22050`.
+- `--mono`. Downmix to a single channel. Default keeps the source channel count.
 
 ## camera
 
