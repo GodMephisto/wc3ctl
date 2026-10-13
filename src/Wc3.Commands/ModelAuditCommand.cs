@@ -19,6 +19,10 @@ public enum ModelIssueKind
     UnusedNode,
     /// <summary>A vertex coordinate that is not finite.</summary>
     NonFiniteVertex,
+    /// <summary>A particle emitter whose node objectId is outside the model's node list.</summary>
+    DanglingEmitterNode,
+    /// <summary>A particle emitter 2 whose texture id is not a valid index into the texture list.</summary>
+    DanglingEmitterTexture,
 }
 
 /// <summary>One reported issue, with a short human detail.</summary>
@@ -64,9 +68,12 @@ public sealed record ModelAuditResult(
 /// file. This is the analysis half of the optimiser, the half that says what can safely go.
 ///
 /// It also counts the effects the model carries, particle emitters, particle emitters 2, ribbons
-/// and popcorns, from the binary chunk tags alone. The payloads are not parsed, so there is no
-/// per-emitter check here, an emitter's node reference and its lifespan are reported by count and
-/// not validated.
+/// and popcorns, from the binary chunk tags alone, and reads each particle emitter's payload to
+/// check the two references it makes. An emitter whose node objectId is not a node the model
+/// declares, checked against the PIVT node list, and a particle emitter 2 whose texture id is not a
+/// valid index into the model's texture list. Both are dangling references the game draws as
+/// nothing. A model with no PIVT chunk has no node list to check against, so the node check is
+/// skipped there rather than flagging every emitter.
 /// </summary>
 public static class ModelAuditCommand
 {
@@ -98,10 +105,11 @@ public static class ModelAuditCommand
         string format = bytes.Length >= 4 && bytes[0] == 'M' && bytes[1] == 'D'
             && bytes[2] == 'L' && bytes[3] == 'X' ? "mdx" : "mdl";
 
-        // Effects are counted from the binary chunk list, so an emitter, ribbon or popcorn is
-        // counted by its tag and its payload is left unread. A text MDL carries no chunks and
-        // reports zero here.
-        var effects = MdxDocument.HasMagic(bytes) ? MdxDocument.Parse(bytes).CountEffects() : EffectCounts.None;
+        // Effects are counted from the binary chunk list by tag. The emitter payloads are read only
+        // to check each emitter's node and texture references. A text MDL carries no chunks, so the
+        // document is null and both the counts and the emitter checks fall away.
+        var document = MdxDocument.HasMagic(bytes) ? MdxDocument.Parse(bytes) : null;
+        var effects = document?.CountEffects() ?? EffectCounts.None;
 
         int vertices = 0, faces = 0;
         var issues = new List<ModelIssue>();
@@ -143,6 +151,26 @@ public static class ModelAuditCommand
                 if (!referenced.Contains(node.ObjectId))
                     issues.Add(new ModelIssue(ModelIssueKind.UnusedNode,
                         $"node '{node.Name}' ({node.ObjectId}) is not skinned to any geoset"));
+        }
+
+        if (document is not null)
+        {
+            // The PIVT node list is what a node's objectId indexes. With no PIVT there is no list to
+            // check against, so the node check is skipped rather than flagging every emitter.
+            int nodeCount = document.NodeCount();
+            foreach (var emitter in MdxEmitterReader.Read(document))
+            {
+                if (nodeCount > 0 && (emitter.NodeId < 0 || emitter.NodeId >= nodeCount))
+                    issues.Add(new ModelIssue(ModelIssueKind.DanglingEmitterNode,
+                        $"{emitter.Tag} emitter in chunk {emitter.ChunkIndex} references node "
+                        + $"{emitter.NodeId}, outside the model's {nodeCount} node(s)"));
+
+                if (emitter.TextureId is { } textureId
+                    && (textureId < 0 || textureId >= model.Textures.Count))
+                    issues.Add(new ModelIssue(ModelIssueKind.DanglingEmitterTexture,
+                        $"{emitter.Tag} emitter in chunk {emitter.ChunkIndex} references texture "
+                        + $"{textureId}, outside the model's {model.Textures.Count} texture(s)"));
+            }
         }
 
         return new ModelAuditResult(

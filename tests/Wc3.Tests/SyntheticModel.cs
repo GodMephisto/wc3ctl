@@ -162,6 +162,55 @@ internal static class SyntheticModel
         return ms.ToArray();
     }
 
+    /// <summary>
+    /// One PREM (particle emitter 1) record, its node header only, which is all the emitter reader
+    /// reads. The record is a uint32 record size counted from the record start, then the node, which
+    /// is size prefixed itself, so the record is recordSize, nodeSize, char[80] name, int objectId,
+    /// int parentId, uint32 flags. The objectId sits at byte 88 and the node header ends at byte 4
+    /// plus nodeSize. Particle emitter 1 carries no texture id, only a spawn model path.
+    /// </summary>
+    public static byte[] ParticleEmitter1Record(int objectId, int parentId = -1, string name = "emitter1")
+    {
+        const int nodeSize = 96; // size field plus the 92 byte node header, no transforms
+        const int recordSize = 4 + nodeSize;
+        using var ms = new MemoryStream();
+        using var w = new BinaryWriter(ms);
+        w.Write((uint)recordSize);
+        w.Write((uint)nodeSize);
+        WriteFixed(w, name, 80);
+        w.Write((uint)objectId);
+        w.Write(unchecked((uint)parentId));
+        w.Write(0u);
+        return ms.ToArray();
+    }
+
+    /// <summary>
+    /// One PRE2 (particle emitter 2) record. The node header is as for a PREM, and the fixed emitter
+    /// fields follow it, with the texture id at byte 155 past the end of the node header. The fields
+    /// between are left zero, since the emitter reader does not read them.
+    /// </summary>
+    public static byte[] ParticleEmitter2Record(int objectId, int textureId, int parentId = -1, string name = "emitter2")
+    {
+        const int nodeSize = 96;
+        const int nodeEnd = 4 + nodeSize;   // the record offset where the fixed fields begin
+        const int textureOffset = 155;      // the texture id, past the end of the node header
+        const int recordSize = nodeEnd + textureOffset + 4;
+        using var ms = new MemoryStream();
+        using var w = new BinaryWriter(ms);
+        w.Write((uint)recordSize);
+        w.Write((uint)nodeSize);
+        WriteFixed(w, name, 80);
+        w.Write((uint)objectId);
+        w.Write(unchecked((uint)parentId));
+        w.Write(0u);
+        w.Write(new byte[textureOffset]);   // the PRE2 fixed fields up to the texture id
+        w.Write((uint)textureId);
+        return ms.ToArray();
+    }
+
+    /// <summary>A PIVT chunk payload of one zero pivot per node. Only the count is read.</summary>
+    public static byte[] Pivots(int count) => new byte[count * 12];
+
     /// <summary>A small BLP1 texture of one flat colour, encoded by the shared converter.</summary>
     public static byte[] Blp(int width = 32, int height = 32)
     {

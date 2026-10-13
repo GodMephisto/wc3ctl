@@ -699,7 +699,7 @@ public static class Render
         }
         sb.AppendLine($"  {r.Issues.Count} issue(s)");
         foreach (var issue in r.Issues)
-            sb.AppendLine($"    {issue.Kind,-18} {issue.Detail}");
+            sb.AppendLine($"    {issue.Kind,-24} {issue.Detail}");
         return sb.ToString().TrimEnd();
     }
 

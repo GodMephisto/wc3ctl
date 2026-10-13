@@ -104,4 +104,75 @@ public sealed class ModelAuditTests
         Assert.Equal(0, r.ParticleEmitters);
         Assert.Equal(0, r.Corns);
     }
+
+    [Fact]
+    public void An_emitter_node_outside_the_model_is_reported()
+    {
+        var bytes = SyntheticModel.BuildMdx(extraChunks: new[]
+        {
+            ("PIVT", SyntheticModel.Pivots(2)),
+            ("PREM", SyntheticModel.ParticleEmitter1Record(objectId: 7)),
+        });
+        var r = ModelAuditCommand.Execute(bytes, "fx.mdx");
+        Assert.Contains(r.Issues, i => i.Kind == ModelIssueKind.DanglingEmitterNode);
+    }
+
+    [Fact]
+    public void An_emitter_node_inside_the_model_is_clean()
+    {
+        var bytes = SyntheticModel.BuildMdx(extraChunks: new[]
+        {
+            ("PIVT", SyntheticModel.Pivots(2)),
+            ("PREM", SyntheticModel.ParticleEmitter1Record(objectId: 1)),
+        });
+        var r = ModelAuditCommand.Execute(bytes, "fx.mdx");
+        Assert.DoesNotContain(r.Issues, i => i.Kind == ModelIssueKind.DanglingEmitterNode);
+    }
+
+    [Fact]
+    public void A_model_without_a_node_list_skips_the_emitter_node_check()
+    {
+        // No PIVT, so there is no node list to check against and the check is skipped rather than
+        // flagging an emitter whose node id cannot be validated.
+        var bytes = SyntheticModel.BuildMdx(extraChunks: new[]
+        {
+            ("PREM", SyntheticModel.ParticleEmitter1Record(objectId: 7)),
+        });
+        var r = ModelAuditCommand.Execute(bytes, "fx.mdx");
+        Assert.DoesNotContain(r.Issues, i => i.Kind == ModelIssueKind.DanglingEmitterNode);
+    }
+
+    [Fact]
+    public void An_emitter_texture_outside_the_texture_list_is_reported()
+    {
+        var bytes = SyntheticModel.BuildMdx(extraChunks: new[]
+        {
+            ("PRE2", SyntheticModel.ParticleEmitter2Record(objectId: 0, textureId: 5)),
+        });
+        var r = ModelAuditCommand.Execute(bytes, "fx.mdx");
+        Assert.Contains(r.Issues, i => i.Kind == ModelIssueKind.DanglingEmitterTexture);
+    }
+
+    [Fact]
+    public void An_emitter_texture_inside_the_texture_list_is_clean()
+    {
+        var bytes = SyntheticModel.BuildMdx(extraChunks: new[]
+        {
+            ("PRE2", SyntheticModel.ParticleEmitter2Record(objectId: 0, textureId: 0)),
+        });
+        var r = ModelAuditCommand.Execute(bytes, "fx.mdx");
+        Assert.DoesNotContain(r.Issues, i => i.Kind == ModelIssueKind.DanglingEmitterTexture);
+    }
+
+    [Fact]
+    public void Every_emitter_in_a_multi_record_chunk_is_checked()
+    {
+        var payload = SyntheticModel.ParticleEmitter2Record(objectId: 0, textureId: 0)
+            .Concat(SyntheticModel.ParticleEmitter2Record(objectId: 1, textureId: 9))
+            .ToArray();
+        var bytes = SyntheticModel.BuildMdx(extraChunks: new[] { ("PRE2", payload) });
+        var r = ModelAuditCommand.Execute(bytes, "fx.mdx");
+        Assert.Equal(1, r.ParticleEmitters2);
+        Assert.Contains(r.Issues, i => i.Kind == ModelIssueKind.DanglingEmitterTexture);
+    }
 }
