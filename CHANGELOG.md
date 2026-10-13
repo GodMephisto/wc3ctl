@@ -3,7 +3,7 @@
 All notable changes to wc3ctl. The format follows Keep a Changelog, and the
 project follows Conventional Commits.
 
-## Unreleased
+## 0.4.1 - 2026-10-14
 
 Twelve bug fixes, found by sweeping every MCP tool with real inputs and then
 reviewing for the classes those bugs exposed.
