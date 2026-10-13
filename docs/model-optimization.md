@@ -84,10 +84,13 @@ side, preserving aspect ratio, and writes it back in the same format. A `.blp` a
 formats. This is the other half of making a model compact, since a model only references
 its texture. The input is never modified.
 
-`wc3ctl sound optimize <file> -o <out.wav>` decodes a `.wav` or `.mp3` through NAudio,
-resamples it to a target rate (`--rate`, default 22050) and optionally folds it to mono
-(`--mono`), then writes a smaller 16-bit PCM `.wav`. It reports the before and after
-sample rate, channel count and byte size.
+`wc3ctl sound optimize <file> -o <out>` decodes a `.wav` or `.mp3` through NAudio, resamples
+it to a target rate (`--rate`, default 22050), sets the channel count (`--channels`, source,
+mono or stereo, default source) and encodes it. The output extension selects the format, a
+`.mp3` writes MP3 through the Windows Media Foundation encoder at the `--bitrate` in kbps
+(default 128), and any other extension writes a 16-bit PCM `.wav`. When the machine has no
+MP3 encoder the run does not fail, it writes a `.wav` and reports the fallback. The report
+carries the before and after format, sample rate, channel count, bitrate and byte size.
 
 ### Measured result
 

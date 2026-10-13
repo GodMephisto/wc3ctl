@@ -107,6 +107,7 @@ public static class OptimizeReportBuilder
         var facts = new List<OptimizeFact>
         {
             new("output", Leaf(r.Path)),
+            new("format", r.BitrateKbps > 0 ? $"{r.Format}  {r.BitrateKbps} kbps" : r.Format),
             new("rate", $"{r.SampleRateBefore} Hz -> {r.SampleRateAfter} Hz"),
             new("channels", $"{r.ChannelsBefore} -> {r.ChannelsAfter}"),
             new("bytes", $"{r.BytesBefore:N0} -> {r.BytesAfter:N0}"),
@@ -114,8 +115,10 @@ public static class OptimizeReportBuilder
 
         var rows = new List<OptimizeRow>
         {
-            new(ReportTone.Ok, "wrote", $"the smaller 16-bit PCM wav to {Leaf(r.Path)}"),
+            new(ReportTone.Ok, "wrote", $"the smaller {r.Format} to {Leaf(r.Path)}"),
         };
+        if (!string.IsNullOrWhiteSpace(r.Note))
+            rows.Add(new OptimizeRow(ReportTone.Warn, "fallback", r.Note));
         return new OptimizeReport($"Sound optimise  {Leaf(r.Path)}",
             $"wrote {Leaf(r.Path)}, {r.BytesBefore:N0} -> {r.BytesAfter:N0} byte(s)", facts, rows);
     }

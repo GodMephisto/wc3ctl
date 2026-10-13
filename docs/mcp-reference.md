@@ -1134,7 +1134,7 @@ Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 
 ## sound_optimize
 
-Shrink a sound file by decoding it, resampling to a target rate (default 22050 Hz) and optionally folding it to mono, and write a smaller 16-bit PCM .wav at out_path. The input is never modified. Reads .wav natively and .mp3 through the Windows codecs. Returns the before and after sample rate, channel count and byte size.
+Shrink a sound file by decoding it, resampling to a target rate (default 22050 Hz), optionally setting the channel count and encoding it. The format comes from out_path's extension, .mp3 selects MP3 and anything else WAV. The input is never modified. Reads .wav natively and .mp3 through the Windows codecs. When no MP3 encoder is present the command writes WAV and reports a note rather than failing. Returns the before and after format, sample rate, channel count and byte size.
 
 Annotations. read-only no, destructive no, idempotent yes, open-world no.
 

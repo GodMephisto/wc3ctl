@@ -739,9 +739,12 @@ public static class Render
     public static string SoundOptimize(SoundOptimizeResult r)
     {
         var sb = new StringBuilder();
-        sb.AppendLine($"Wrote {Path.GetFileName(r.Path)}");
+        sb.AppendLine($"Wrote {Path.GetFileName(r.Path)}  {r.Format.ToUpperInvariant()}");
+        var bitrate = r.BitrateKbps > 0 ? $" / {r.BitrateKbps} kbps" : "";
         sb.AppendLine($"  {r.SampleRateBefore} Hz / {r.ChannelsBefore} ch / {r.BytesBefore} byte(s) -> "
-            + $"{r.SampleRateAfter} Hz / {r.ChannelsAfter} ch / {r.BytesAfter} byte(s)");
+            + $"{r.SampleRateAfter} Hz / {r.ChannelsAfter} ch{bitrate} / {r.BytesAfter} byte(s)");
+        if (!string.IsNullOrWhiteSpace(r.Note))
+            sb.AppendLine($"  ! {r.Note}");
         return sb.ToString().TrimEnd();
     }
 

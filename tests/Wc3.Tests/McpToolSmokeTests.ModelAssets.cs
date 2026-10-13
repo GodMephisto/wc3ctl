@@ -102,9 +102,10 @@ public sealed class McpSmokeModelAssetTests : McpSmokeBase
 
         var outWav = NewOut("soundout", ".wav");
         var r = await Call("sound_optimize", Args(
-            ("sound", wav), ("out_path", outWav), ("rate", 22050), ("mono", true)));
+            ("sound", wav), ("out_path", outWav), ("rate", 22050), ("channels", "mono")));
 
         Assert.True(File.Exists(outWav));
+        Assert.Equal("wav", Prop(r, "format").GetString());
         Assert.Equal(22050, Prop(r, "sampleRateAfter").GetInt32());
         Assert.Equal(1, Prop(r, "channelsAfter").GetInt32());
         Assert.Equal(2, Prop(r, "channelsBefore").GetInt32());

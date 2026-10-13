@@ -3481,7 +3481,7 @@ Subcommands
 - `add`. Add a new sound definition and save the edited map.
 - `set`. Set a field on a sound and save the edited map.
 - `remove`. Remove a sound definition and save the edited map.
-- `optimize`. Decode a sound, resample it to a target rate and optionally downmix to mono, and write a smaller 16-bit .wav. Reports the before and after sample rate, channels and byte size.
+- `optimize`. Decode a sound, resample it to a target rate, optionally set the channel count, and encode it as WAV or MP3 chosen by the output extension. Reports the before and after format, sample rate, channels, bitrate and byte size. Falls back to WAV when no MP3 encoder is present.
 
 ### sound list
 
@@ -3559,7 +3559,7 @@ Options
 
 ### sound optimize
 
-Decode a sound, resample it to a target rate and optionally downmix to mono, and write a smaller 16-bit .wav. Reports the before and after sample rate, channels and byte size.
+Decode a sound, resample it to a target rate, optionally set the channel count, and encode it as WAV or MP3 chosen by the output extension. Reports the before and after format, sample rate, channels, bitrate and byte size. Falls back to WAV when no MP3 encoder is present.
 
 Usage
 
@@ -3573,9 +3573,10 @@ Arguments
 
 Options
 
-- `-o, --out <out>` (required). Output .wav path. The input is never modified.
+- `-o, --out <out>` (required). Output path. The extension selects the format, .mp3 for MP3, anything else for WAV. The input is never modified.
 - `--rate <rate>`. Target sample rate in Hz. Default 22050. Default `22050`.
-- `--mono`. Downmix to a single channel. Default keeps the source channel count.
+- `--channels <channels>`. Output channels, source, mono or stereo. Default source keeps the source channel count. Default `source`.
+- `--bitrate <bitrate>`. MP3 bitrate in kbps. Applies to .mp3 output only, ignored for WAV. Default 128. Default `128`.
 
 ## camera
 
