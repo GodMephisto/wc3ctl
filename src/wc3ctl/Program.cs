@@ -3938,22 +3938,30 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
 
         var soundOptimizeFileArg = new Argument<string>("file", "Path to a .wav or .mp3 sound file.");
         var soundOptimizeOut = new Option<string>(new[] { "-o", "--out" },
-            "Output .wav path. The input is never modified.") { IsRequired = true };
+            "Output path. The extension selects the format, .mp3 for MP3, anything else for WAV. "
+            + "The input is never modified.") { IsRequired = true };
         var soundOptimizeRate = new Option<int>("--rate", () => SoundOptimizeCommand.DefaultRate,
             "Target sample rate in Hz. Default 22050.");
-        var soundOptimizeMono = new Option<bool>("--mono",
-            "Downmix to a single channel. Default keeps the source channel count.");
+        var soundOptimizeChannels = new Option<string>("--channels", () => "source",
+            "Output channels, source, mono or stereo. Default source keeps the source channel count.");
+        var soundOptimizeBitrate = new Option<int>("--bitrate", () => SoundOptimizeCommand.DefaultBitrateKbps,
+            "MP3 bitrate in kbps. Applies to .mp3 output only, ignored for WAV. Default 128.");
         var soundOptimize = new Command("optimize",
-            "Decode a sound, resample it to a target rate and optionally downmix to mono, and write "
-            + "a smaller 16-bit .wav. Reports the before and after sample rate, channels and byte size.")
-            { soundOptimizeFileArg, soundOptimizeOut, soundOptimizeRate, soundOptimizeMono, jsonOption };
+            "Decode a sound, resample it to a target rate, optionally set the channel count, and "
+            + "encode it as WAV or MP3 chosen by the output extension. Reports the before and after "
+            + "format, sample rate, channels, bitrate and byte size. Falls back to WAV when no MP3 "
+            + "encoder is present.")
+            { soundOptimizeFileArg, soundOptimizeOut, soundOptimizeRate, soundOptimizeChannels,
+              soundOptimizeBitrate, jsonOption };
         soundOptimize.SetHandler(
-            (string file, string outPath, int rate, bool mono, bool json) => RunSafely(() =>
+            (string file, string outPath, int rate, string channels, int bitrate, bool json) => RunSafely(() =>
             {
-                var r = SoundOptimizeCommand.ExecutePath(file, rate, mono, outPath);
+                var r = SoundOptimizeCommand.ExecutePath(
+                    file, rate, SoundOptimizeCommand.ParseChannels(channels), bitrate, outPath);
                 Emit(json, r, () => Render.SoundOptimize(r));
             }),
-            soundOptimizeFileArg, soundOptimizeOut, soundOptimizeRate, soundOptimizeMono, jsonOption);
+            soundOptimizeFileArg, soundOptimizeOut, soundOptimizeRate, soundOptimizeChannels,
+            soundOptimizeBitrate, jsonOption);
 
         var sound = new Command("sound",
             "Sound editing: the map's catalog (war3map.w3s) via list, add, set, remove, and a "

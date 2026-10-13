@@ -1958,17 +1958,19 @@ public static class Wc3Tools
         => Run(() => SaveSound(map, out_path, doc => SoundCommand.Remove(doc, name)));
 
     [McpServerTool(Name = "sound_optimize", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
-    [Description("Shrink a sound file by decoding it, resampling to a target rate (default 22050 Hz) and optionally folding it to mono, and write a smaller 16-bit PCM .wav at out_path. The input is never modified. Reads .wav natively and .mp3 through the Windows codecs. Returns the before and after sample rate, channel count and byte size.")]
+    [Description("Shrink a sound file by decoding it, resampling to a target rate (default 22050 Hz), optionally setting the channel count and encoding it. The format comes from out_path's extension, .mp3 selects MP3 and anything else WAV. The input is never modified. Reads .wav natively and .mp3 through the Windows codecs. When no MP3 encoder is present the command writes WAV and reports a note rather than failing. Returns the before and after format, sample rate, channel count and byte size.")]
     public static SoundOptimizeResult SoundOptimize(
         [Description("Path to a .wav or .mp3 sound file.")] string sound,
-        [Description("Output .wav path. The input is never modified.")] string out_path,
+        [Description("Output path. Its extension picks the format, .mp3 for MP3, anything else for WAV. The input is never modified.")] string out_path,
         [Description("Target sample rate in Hz. Default 22050.")] int rate = SoundOptimizeCommand.DefaultRate,
-        [Description("Downmix to a single channel. Default false keeps the source channel count.")] bool mono = false)
+        [Description("Output channels, source, mono or stereo. Default source keeps the source channel count.")] string channels = "source",
+        [Description("MP3 bitrate in kbps, default 128. Applies to .mp3 output only, ignored for WAV.")] int bitrate = SoundOptimizeCommand.DefaultBitrateKbps)
         => Run(() =>
         {
             if (string.Equals(Path.GetFullPath(out_path), Path.GetFullPath(sound), StringComparison.OrdinalIgnoreCase))
                 throw new McpException("out_path must not be the input sound");
-            return SoundOptimizeCommand.ExecutePath(sound, rate, mono, out_path);
+            return SoundOptimizeCommand.ExecutePath(
+                sound, rate, SoundOptimizeCommand.ParseChannels(channels), bitrate, out_path);
         });
 
     // ---- camera catalog (war3map.w3c) ------------------------------------
