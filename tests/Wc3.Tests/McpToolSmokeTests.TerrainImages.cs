@@ -64,6 +64,21 @@ public sealed class McpSmokeTerrainImageTests : McpSmokeBase
         Assert.True(Prop(r, "distinctGroundTextures").GetInt32() >= 1);
     }
 
+    [Fact, Covers("terrain_optimize")]
+    public async Task Terrain_optimize_compacts_the_fixture_palette()
+    {
+        // A blank map declares five Lordaeron Summer ground tiles but its flat grid
+        // references only the first, so the optimiser drops the other four.
+        var before = await Call("terrain_audit", Args(("map", Fixture)));
+        var optimized = await Write("terrain_optimize", Args());
+        var after = await Call("terrain_audit", Args(("map", optimized)));
+
+        Assert.True(Prop(before, "groundTileTypes").GetInt32() > 1);
+        Assert.Equal(1, Prop(after, "groundTileTypes").GetInt32());
+        Assert.True(Prop(after, "terrainFileBytes").GetInt64()
+            < Prop(before, "terrainFileBytes").GetInt64());
+    }
+
     [Fact, Covers("pathing_export_png", "pathing_import_png")]
     public async Task Pathing_png_round_trips_through_mcp()
     {

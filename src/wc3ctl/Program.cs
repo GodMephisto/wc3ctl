@@ -2655,6 +2655,34 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
             Emit(p.GetValueForOption(jsonOption), r, () => Render.TerrainAudit(r));
         }));
 
+        var terrainOptimize = new Command("optimize",
+            "Shrink war3map.w3e by dropping the declared ground and cliff tile types the terrain never "
+            + "references and remapping every corner's texture index onto the compacted list. Every "
+            + "other file is written back byte for byte. Writes a new map (never the input).")
+            { mapArg, jsonOption, setOut };
+        terrainOptimize.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            bool json = p.GetValueForOption(jsonOption);
+            if (RefusedInPlace(json, p.GetValueForOption(setOut), map)) return;
+
+            var doc = MapDocument.Load(map);
+            var r = TerrainOptimizeCommand.Execute(doc, map);
+            if (!r.Ok)
+            {
+                Emit(json, r, () => Render.TerrainOptimize(r));
+                exitCode[0] = 1;
+                return;
+            }
+            var dest = p.GetValueForOption(setOut) ?? Path.Combine(
+                Path.GetDirectoryName(map) ?? "",
+                Path.GetFileNameWithoutExtension(map) + ".edited" + Path.GetExtension(map));
+            doc.Save(dest);
+            r = r with { Path = dest };
+            Emit(json, r, () => Render.TerrainOptimize(r));
+        }));
+
         var tOpDeform = new Argument<TerrainCommand.HeightOp>("op", "raise|lower|set|flatten|smooth");
         var tAmountOpt = new Option<float>("--amount", () => 1f,
             "Step for raise/lower; target for set. Default: 1.");
@@ -2844,6 +2872,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         terrain.AddCommand(terrainFill);
         terrain.AddCommand(terrainStats);
         terrain.AddCommand(terrainAudit);
+        terrain.AddCommand(terrainOptimize);
         terrain.AddCommand(terrainDeform);
         terrain.AddCommand(terrainCliff);
         terrain.AddCommand(terrainRamp);
