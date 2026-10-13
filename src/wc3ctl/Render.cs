@@ -174,7 +174,9 @@ public static class Render
         var sb = new StringBuilder();
         sb.AppendLine(r.Message);
         if (!r.Ok) return sb.ToString();
-        sb.AppendLine($"span {r.Span}, {r.SampleCount} sample(s)");
+        sb.AppendLine($"span {r.Span}, {r.SampleCount} sample(s), {r.EventsJoined} event(s)");
+        if (r.GcProbe is { } gc)
+            sb.AppendLine($"gc_probe  {gc:HH:mm:ss}, slopes measured from it");
         sb.AppendLine($"handle slope  {Num(r.HandleSlopePerMin)} per minute (r {Num(r.HandleCorrelation)})");
         sb.AppendLine($"memory slope  {Num(r.MemorySlopePerMin)} MB per minute (r {Num(r.MemoryCorrelation)})");
         sb.AppendLine("drivers by predicted handle rate");
@@ -186,11 +188,14 @@ public static class Render
             sb.AppendLine($"  {d.Rank,2}. {d.Function,-24} {period,-9} {d.HotLeaks} hot leak(s)  "
                 + $"about {d.PredictedPerMin:0.#} a minute");
         }
-        sb.AppendLine("rising windows");
+        sb.AppendLine("rising windows, likely driver and nearby evidence");
         if (r.Windows.Count == 0) sb.AppendLine("  none");
         foreach (var w in r.Windows)
+        {
             sb.AppendLine($"  {w.Start} to {w.End}  {w.Samples} sample(s)  {w.HandlesPerMin:0.#} handles a minute"
                 + (w.Driver is null ? "" : $"  ({w.Driver})"));
+            sb.AppendLine($"      near {w.Near}");
+        }
         foreach (var d in r.Diagnostics) sb.AppendLine($"note  {d}");
         return sb.ToString();
     }
@@ -206,6 +211,8 @@ public static class Render
             sb.AppendLine($"    {s.Samples} sample(s), {s.Span}");
             sb.AppendLine($"    handles {Num(s.HandlesPerMin)} per minute (r {Num(s.HandleCorrelation)}), "
                 + $"memory {Num(s.MemoryPerMin)} MB per minute (r {Num(s.MemoryCorrelation)})");
+            if (s.Baseline is { } b)
+                sb.AppendLine($"    measured from gc_probe at {b:HH:mm:ss}");
         }
         if (r.LikelyDisabled is not null)
             sb.AppendLine($"likely disabled candidate, {r.LikelyDisabled} (inferred from the static list)");

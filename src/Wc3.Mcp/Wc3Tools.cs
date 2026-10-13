@@ -104,18 +104,21 @@ public static class Wc3Tools
         => Run(() => LeakHarnessCommand.Execute(LoadMap(map), lang, target, out_path));
 
     [McpServerTool(Name = "leak_join", ReadOnly = true, Idempotent = true, OpenWorld = false)]
-    [Description("Join a map's static leak list to a wc3watch session folder. Reads samples.csv, fits "
-        + "the handle slope and the memory slope, and aligns a rising slope with the periodic candidates "
-        + "from the static list. Read-only. A folder with no samples.csv is reported clearly.")]
+    [Description("Join a map's static leak list to a wc3watch session folder. Reads samples.csv and "
+        + "events.csv, fits the handle and memory slopes from the session's forced garbage collection "
+        + "when one was marked, and joins each rising window to the periodic candidates from the static "
+        + "list and the session events and game log lines near it. Names the likely leaking trigger. "
+        + "Read-only. A folder with no samples.csv is reported clearly.")]
     public static LeakJoinResult LeakJoin(
         [Description("Path to a .w3x/.w3m map file.")] string map,
-        [Description("A wc3watch session folder holding samples.csv.")] string session_folder)
+        [Description("A wc3watch session folder holding samples.csv and, optionally, events.csv.")] string session_folder)
         => Run(() => LeakJoinCommand.Execute(LoadMap(map), session_folder));
 
     [McpServerTool(Name = "leak_ab", ReadOnly = true, Idempotent = true, OpenWorld = false)]
-    [Description("Diff two wc3watch sessions and report whether the handle and memory slope fell, the "
-        + "usual shape being one session with a trigger live and one with it disabled. With a map, name "
-        + "the periodic candidate whose predicted rate is nearest the drop, labelled an inference. Read-only.")]
+    [Description("Diff two wc3watch sessions and report whether the handle and memory slope fell, each "
+        + "measured from its own forced garbage collection. The usual shape is one session with a "
+        + "trigger live and one with it disabled. With a map, name the periodic candidate whose "
+        + "predicted rate is nearest the drop, labelled an inference. Read-only.")]
     public static LeakAbResult LeakAb(
         [Description("First wc3watch session folder.")] string session_a,
         [Description("Second wc3watch session folder.")] string session_b,

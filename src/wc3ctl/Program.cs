@@ -5535,10 +5535,12 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         leak.AddCommand(leakHarnessCmd);
 
         var leakSession = new Argument<string>("session-folder",
-            "A wc3watch session folder holding samples.csv.");
+            "A wc3watch session folder holding samples.csv and, optionally, events.csv.");
         var leakJoinCmd = new Command("join",
-            "Read a wc3watch session's handle and memory slope and align a rising slope with the "
-            + "periodic candidates from the static list. Read-only.") { mapArg, leakSession };
+            "Read a wc3watch session's handle and memory slope, measured from its forced garbage "
+            + "collection when one was marked, and join each rising window to the periodic candidates "
+            + "from the static list and the session events and game log lines near it. Read-only.")
+        { mapArg, leakSession };
         leakJoinCmd.SetHandler(ctx => RunSafely(() =>
         {
             var p = ctx.ParseResult;
@@ -5553,8 +5555,9 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         var abB = new Argument<string>("sessionB", "Second wc3watch session folder.");
         var abMap = new Option<string?>("--map", "Map to attribute the drop to a periodic candidate.");
         var leakAbCmd = new Command("ab",
-            "Diff two wc3watch sessions and report whether the handle and memory slope fell. With "
-            + "--map, name the candidate whose predicted rate is nearest the drop. Read-only.")
+            "Diff two wc3watch sessions and report whether the handle and memory slope fell, each "
+            + "measured from its own forced garbage collection. With --map, name the candidate whose "
+            + "predicted rate is nearest the drop. Read-only.")
         { abA, abB, abMap };
         leakAbCmd.SetHandler(ctx => RunSafely(() =>
         {
