@@ -502,6 +502,12 @@ Set a scenario field and save the edited map to out_path. The input map is NEVER
 
 Annotations. read-only no, destructive no, idempotent no, open-world no.
 
+## map_optimize
+
+Shrink every imported model and texture inside a map in one pass and write a new map to out_path with only those files replaced, everything else byte for byte. Each model is decimated at ratio (the target fraction of faces to keep) and each texture is scaled to fit max_texture on its longest side, reusing the model and texture optimisers. A file whose optimised bytes are not smaller is left untouched. Reports the per-file before and after sizes, the per-kind counts and the total byte saving. The input map is NEVER modified.
+
+Annotations. read-only no, destructive no, idempotent yes, open-world no.
+
 ## map_overview
 
 One call per map: metadata (name, author, player count, dimensions), every archive file, the custom or modified object counts by Object Editor kind, and the load diagnostics. Use this when you need a map's overall shape instead of calling map_info, list_files and object_list separately.

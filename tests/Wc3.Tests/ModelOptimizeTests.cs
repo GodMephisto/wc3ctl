@@ -7,6 +7,9 @@ namespace Wc3.Tests;
 
 public sealed class ModelOptimizeTests
 {
+    /// <summary>A v800 MDX with one geoset holding an n by n grid, delegated to the shared builder.</summary>
+    private static byte[] GridMdx(int n, bool degenerate = false) => SyntheticModel.GridMdx(n, degenerate);
+
     /// <summary>A v800 MDX with two identical TEXS entries and one material referencing the second.</summary>
     private static byte[] DupTextureMdx()
     {

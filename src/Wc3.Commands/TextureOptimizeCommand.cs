@@ -26,15 +26,29 @@ public static class TextureOptimizeCommand
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         if (!File.Exists(path)) throw new FileNotFoundException($"texture not found: {path}", path);
-        var bytes = File.ReadAllBytes(path);
         var ext = Path.GetExtension(path).ToLowerInvariant();
+        var result = Execute(File.ReadAllBytes(path), outPath, ext, maxDimension, out var output);
+        File.WriteAllBytes(outPath, output);
+        return result;
+    }
+
+    /// <summary>
+    /// The in-memory half, used when the texture lives inside an archive rather than on disk. The
+    /// caller names the entry and its extension, because a map entry's bytes carry no path.
+    /// </summary>
+    public static TextureOptimizeResult Execute(
+        byte[] bytes, string name, string extension, int maxDimension, out byte[] output)
+    {
+        ArgumentNullException.ThrowIfNull(bytes);
+        var ext = string.IsNullOrEmpty(extension) || extension.StartsWith('.')
+            ? extension : "." + extension;
+        ext = ext.ToLowerInvariant();
 
         var (w0, h0) = TextureConvert.Dimensions(bytes, ext);
-        var output = TextureConvert.ConvertScaled(bytes, ext, ext, maxDimension);
-        File.WriteAllBytes(outPath, output);
+        output = TextureConvert.ConvertScaled(bytes, ext, ext, maxDimension);
         var (w1, h1) = TextureConvert.Dimensions(output, ext);
 
-        return new TextureOptimizeResult(outPath, ext.TrimStart('.'),
+        return new TextureOptimizeResult(name, ext.TrimStart('.'),
             w0, h0, w1, h1, bytes.LongLength, output.LongLength);
     }
 }

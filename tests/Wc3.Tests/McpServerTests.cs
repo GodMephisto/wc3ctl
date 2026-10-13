@@ -35,7 +35,7 @@ public class McpServerTests
         "leak_model",
         "library_audit", "library_compare", "library_report", "library_scan", "library_validate",
         "lint", "lint_baseline", "list_files", "map_compat", "map_info",
-        "map_info_get", "map_info_set", "map_overview",
+        "map_info_get", "map_info_set", "map_optimize", "map_overview",
         "mcp_audit_annotations",
         "mcp_export_verify",
         "model_audit",
