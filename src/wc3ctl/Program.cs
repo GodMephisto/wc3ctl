@@ -3226,8 +3226,9 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         {
             var p = ctx.ParseResult;
             var doc = MapDocument.Load(p.GetValueForArgument(mapArg));
-            var export = ModelExportObjCommand.Execute(doc, p.GetValueForArgument(modelPathArg));
             var dest = p.GetValueForOption(modelObjOutOpt) ?? "model.obj";
+            var export = ModelExportObjCommand.Execute(doc, p.GetValueForArgument(modelPathArg),
+                Path.GetFileNameWithoutExtension(dest));
             File.WriteAllText(dest, export.Obj);
             var mtlPath = Path.ChangeExtension(dest, ".mtl");
             File.WriteAllText(mtlPath, export.Mtl);
