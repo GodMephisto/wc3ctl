@@ -649,6 +649,16 @@ public static class Render
         return sb.ToString().TrimEnd();
     }
 
+    public static string ModelImport(ModelImportResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"Wrote {Path.GetFileName(r.Path)}");
+        sb.AppendLine($"  {r.Geosets} geoset(s), vertices {r.Vertices}, faces {r.Faces}, textures {r.Textures}");
+        sb.AppendLine($"  {r.Bytes} byte(s)");
+        foreach (var d in r.Diagnostics) sb.AppendLine($"  ! {d}");
+        return sb.ToString().TrimEnd();
+    }
+
     public static string TextureOptimize(TextureOptimizeResult r)
     {
         var sb = new StringBuilder();

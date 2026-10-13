@@ -2,7 +2,7 @@
 
 Generated from the live command tree by `wc3ctl docs cli`. Do not edit by hand. Regenerate with `wc3ctl docs cli --force`, and the CI guard fails when this file is stale.
 
-The tree holds 64 top level verb(s) and 313 command path(s) in total.
+The tree holds 64 top level verb(s) and 314 command path(s) in total.
 
 ## Global options
 
@@ -425,6 +425,7 @@ Subcommands
 - `export-obj`. Export a map-imported model to Wavefront OBJ, with an MTL and any map-resolvable textures converted to PNG beside it.
 - `audit`. Audit a model for the resource waste and draw-nothing problems the optimiser can remove, and report what it holds, its geosets, vertices, faces, textures, sequences and nodes.
 - `optimize`. Decimate a model's geometry with the quadric error metric, drop zero-area faces and duplicate textures, and write a smaller MDX, leaving the other chunks byte for byte. Reports the before and after vertex and face counts.
+- `import`. Import a Wavefront OBJ into a Warcraft III MDX. Builds one v800 geoset with normals and UVs, triangulating an n-gon face as a fan and computing a per-face normal when the OBJ carries none, plus one texture and one material. Reports the vertex, face and texture counts.
 
 ### model export-obj
 
@@ -477,6 +478,25 @@ Options
 
 - `-o, --out <out>` (required). Output model path. The input is never modified.
 - `--ratio <ratio>`. Target fraction of faces to keep, between 0 and 1. Default `0.5`.
+
+### model import
+
+Import a Wavefront OBJ into a Warcraft III MDX. Builds one v800 geoset with normals and UVs, triangulating an n-gon face as a fan and computing a per-face normal when the OBJ carries none, plus one texture and one material. Reports the vertex, face and texture counts.
+
+Usage
+
+```
+wc3ctl model import <obj> [options]
+```
+
+Arguments
+
+- `<obj>` (required). Path to a Wavefront .obj file.
+
+Options
+
+- `-o, --out <out>` (required). Output .mdx path. The input is never modified.
+- `--texture <texture>`. Texture path to embed, relative to the map. Default, war3mapImported\<name>.blp.
 
 ## texture
 

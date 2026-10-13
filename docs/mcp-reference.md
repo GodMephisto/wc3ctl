@@ -2,7 +2,7 @@
 
 Generated from the live tool surface by `wc3ctl docs mcp`. Do not edit by hand. Regenerate with `wc3ctl docs mcp --force`, and the CI guard fails when this file is stale.
 
-The server exposes 236 tool(s).
+The server exposes 237 tool(s).
 
 ## asset_audit
 
@@ -523,6 +523,12 @@ Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 ## model_export_obj
 
 Export a map-imported model to Wavefront OBJ at out_path, writing an MTL and any map-resolvable textures converted to PNG beside it. The map itself is never modified. Returns the .obj path, the .mtl path and the texture file names.
+
+Annotations. read-only no, destructive no, idempotent yes, open-world no.
+
+## model_import
+
+Import a Wavefront OBJ file into a Warcraft III MDX at out_path. Builds one v800 geoset with normals and UVs, triangulating an n-gon face as a fan and computing a per-face normal when the OBJ carries none, plus one texture and one material. The input .obj is never modified. Returns the output path and the vertex, face and texture counts.
 
 Annotations. read-only no, destructive no, idempotent yes, open-world no.
 

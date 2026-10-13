@@ -37,6 +37,17 @@ public sealed class MdxGeoset
     /// <summary>The sub-chunks in file order.</summary>
     public IReadOnlyList<Segment> Segments => _segments;
 
+    /// <summary>
+    /// Builds a geoset from an ordered segment list, for a model created from scratch rather than
+    /// parsed. Each payload carries its own count field, exactly as <see cref="Parse"/> expects, so
+    /// <see cref="Write"/> emits the same layout the game writes.
+    /// </summary>
+    public static MdxGeoset Create(IReadOnlyList<Segment> segments, uint version = 800)
+    {
+        ArgumentNullException.ThrowIfNull(segments);
+        return new MdxGeoset(new List<Segment>(segments), version);
+    }
+
     /// <summary>Parses one geoset, the bytes after its inclusiveSize field.</summary>
     public static MdxGeoset Parse(byte[] payload, uint version)
     {

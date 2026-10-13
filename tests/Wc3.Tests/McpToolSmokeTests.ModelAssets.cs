@@ -98,6 +98,21 @@ public sealed class McpSmokeModelAssetTests : McpSmokeBase
         Assert.Contains("newmtl", File.ReadAllText(mtlPath));
     }
 
+    [Fact, Covers("model_import")]
+    public async Task Model_import_writes_mdx_from_an_obj()
+    {
+        var objFile = NewOut("model", ".obj");
+        File.WriteAllText(objFile, "v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n");
+        var outFile = NewOut("imported", ".mdx");
+
+        var r = await Call("model_import", Args(("obj", objFile), ("out_path", outFile)));
+
+        Assert.True(File.Exists(outFile));
+        Assert.Equal(3, Prop(r, "vertices").GetInt32());
+        Assert.Equal(1, Prop(r, "faces").GetInt32());
+        Assert.Equal(1, Prop(r, "textures").GetInt32());
+    }
+
     [Fact, Covers("asset_import_wire")]
     public async Task Import_wire_adds_a_file_to_a_map_copy()
     {

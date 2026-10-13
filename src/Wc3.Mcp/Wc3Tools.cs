@@ -489,6 +489,21 @@ public static class Wc3Tools
             return new ModelExportObjToolResult(full, mtlPath, textures);
         });
 
+    [McpServerTool(Name = "model_import", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Import a Wavefront OBJ file into a Warcraft III MDX at out_path. Builds one v800 geoset with normals and UVs, triangulating an n-gon face as a fan and computing a per-face normal when the OBJ carries none, plus one texture and one material. The input .obj is never modified. Returns the output path and the vertex, face and texture counts.")]
+    public static ModelImportToolResult ModelImport(
+        [Description("Path to a Wavefront .obj file.")] string obj,
+        [Description("Output .mdx path. The input is never modified.")] string out_path,
+        [Description("Texture path to embed, relative to the map. Omit for war3mapImported\\<name>.blp.")] string? texture = null)
+        => Run(() =>
+        {
+            string full = Path.GetFullPath(out_path);
+            if (string.Equals(full, Path.GetFullPath(obj), StringComparison.OrdinalIgnoreCase))
+                throw new McpException("out_path must not be the input OBJ");
+            var r = ModelImportCommand.ExecutePath(obj, out_path, texture);
+            return new ModelImportToolResult(full, r.Vertices, r.Faces, r.Textures);
+        });
+
     [McpServerTool(Name = "lint", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Pre-flight the map: does its script compile, does war3map.imp agree with what the archive holds, do referenced asset paths resolve, and is every entry a loadable type. This is the 'is this map going to work' check and is the right thing to run before handing a map to anyone. A failure here usually means the map will not host or will hang on load with no error of its own.")]
     public static LintResult Lint(
@@ -3017,6 +3032,9 @@ public sealed record AssetImportWireToolResult(
 
 /// <summary>model_export_obj outcome: where the .obj landed, its .mtl path and the texture names.</summary>
 public sealed record ModelExportObjToolResult(string SavedTo, string Mtl, IReadOnlyList<string> Textures);
+
+/// <summary>model_import outcome: where the .mdx landed and the counts it holds.</summary>
+public sealed record ModelImportToolResult(string SavedTo, int Vertices, int Faces, int Textures);
 
 /// <summary>port_unit outcome: where the new .ported map was written plus the full port report.</summary>
 public sealed record PortUnitToolResult(string SavedTo, PortResult Report);

@@ -3229,10 +3229,30 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
                 Emit(json, r, () => Render.ModelOptimize(r));
             }),
             modelOptimizePath, modelOptimizeOut, modelOptimizeRatio, jsonOption);
+        var modelImportObj = new Argument<string>("obj", "Path to a Wavefront .obj file.");
+        var modelImportOut = new Option<string>(new[] { "-o", "--out" },
+            "Output .mdx path. The input is never modified.") { IsRequired = true };
+        var modelImportTexture = new Option<string?>("--texture",
+            "Texture path to embed, relative to the map. Default, war3mapImported\\<name>.blp.");
+        var modelImport = new Command("import",
+            "Import a Wavefront OBJ into a Warcraft III MDX. Builds one v800 geoset with normals and "
+            + "UVs, triangulating an n-gon face as a fan and computing a per-face normal when the OBJ "
+            + "carries none, plus one texture and one material. Reports the vertex, face and texture counts.")
+            { modelImportObj, modelImportOut, modelImportTexture, jsonOption };
+        modelImport.SetHandler(
+            (string objPath, string outPath, string? texture, bool json) => RunSafely(() =>
+            {
+                var r = ModelImportCommand.ExecutePath(objPath, outPath, texture);
+                Emit(json,
+                    new { r.Path, r.Geosets, r.Vertices, r.Faces, r.Textures, r.Bytes, r.Diagnostics },
+                    () => Render.ModelImport(r));
+            }),
+            modelImportObj, modelImportOut, modelImportTexture, jsonOption);
         var model = new Command("model", "Model asset operations.");
         model.AddCommand(modelExportObj);
         model.AddCommand(modelAudit);
         model.AddCommand(modelOptimize);
+        model.AddCommand(modelImport);
         root.AddCommand(model);
 
         var textureOptimizePath = new Argument<string>("texture", "Path to a .blp, .dds or standard image file.");

@@ -40,6 +40,7 @@ public class CliMcpParityTests
         ["asset_convert_batch"] = "asset convert-batch",
         ["asset_import_wire"] = "asset import-wire",
         ["model_export_obj"] = "model export-obj",
+        ["model_import"] = "model import",
         ["model_audit"] = "model audit",
         ["model_optimize"] = "model optimize",
         ["texture_optimize"] = "texture optimize",

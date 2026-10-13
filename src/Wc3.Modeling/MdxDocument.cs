@@ -61,6 +61,16 @@ public sealed class MdxDocument
         return new MdxDocument(chunks);
     }
 
+    /// <summary>
+    /// Builds a document from an ordered chunk list, for a model created from scratch rather than
+    /// parsed. <see cref="Write"/> then emits the MDLX magic and each tag and size.
+    /// </summary>
+    public static MdxDocument Create(IReadOnlyList<Chunk> chunks)
+    {
+        ArgumentNullException.ThrowIfNull(chunks);
+        return new MdxDocument(new List<Chunk>(chunks));
+    }
+
     /// <summary>Replaces the payload of the chunk at <paramref name="index"/>, for an edit.</summary>
     public void Replace(int index, byte[] payload)
     {
