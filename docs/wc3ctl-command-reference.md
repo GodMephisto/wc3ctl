@@ -424,7 +424,7 @@ Subcommands
 
 - `export-obj`. Export a map-imported model to Wavefront OBJ, with an MTL and any map-resolvable textures converted to PNG beside it.
 - `audit`. Audit a model for the resource waste and draw-nothing problems the optimiser can remove, and report what it holds, its geosets, vertices, faces, textures, sequences, nodes and effects. Effects are counted from the chunk list, particle emitters, particle emitters 2, ribbons and popcorns, and their payloads are not parsed.
-- `optimize`. Decimate a model's geometry with the quadric error metric, drop zero-area faces and duplicate textures, and write a smaller MDX, leaving the other chunks byte for byte. Reports the before and after vertex and face counts.
+- `optimize`. Decimate a model's geometry with the quadric error metric, drop zero-area faces and duplicate textures, and write a smaller MDX, leaving the other chunks byte for byte. Optionally strip its effects when they are not wanted. Reports the before and after vertex and face counts.
 - `import`. Import a foreign model into a Warcraft III MDX. Accepts Wavefront OBJ, glTF 2.0 (.gltf and .glb), STL (binary and ASCII) and PLY (ASCII and binary little-endian). Builds one v800 geoset with normals and UVs, triangulating an n-gon face as a fan, computing a per-face normal when the source carries none and zeroing UVs when it has none, plus one texture and one material. Reports the vertex, face and texture counts.
 
 ### model export-obj
@@ -462,7 +462,7 @@ Arguments
 
 ### model optimize
 
-Decimate a model's geometry with the quadric error metric, drop zero-area faces and duplicate textures, and write a smaller MDX, leaving the other chunks byte for byte. Reports the before and after vertex and face counts.
+Decimate a model's geometry with the quadric error metric, drop zero-area faces and duplicate textures, and write a smaller MDX, leaving the other chunks byte for byte. Optionally strip its effects when they are not wanted. Reports the before and after vertex and face counts.
 
 Usage
 
@@ -478,6 +478,7 @@ Options
 
 - `-o, --out <out>` (required). Output model path. The input is never modified.
 - `--ratio <ratio>`. Target fraction of faces to keep, between 0 and 1. Default `0.5`.
+- `--strip-effects`. Drop the model's effect chunks, particle emitters (PREM), particle emitters 2 (PRE2), ribbons (RIBB) and corns (CORN), for a smaller MDX. This changes how the model looks, so it is off by default.
 
 ### model import
 

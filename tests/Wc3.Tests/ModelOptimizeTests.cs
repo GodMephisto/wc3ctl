@@ -119,4 +119,34 @@ public sealed class ModelOptimizeTests
         var model = ModelParser.Parse(output, "grid.mdx");
         Assert.NotEmpty(model.Geosets);
     }
+
+    [Fact]
+    public void Effects_are_kept_when_stripping_is_off()
+    {
+        var bytes = SyntheticModel.BuildMdx(extraChunks: new[] { ("PREM", new byte[8]) });
+        var r = ModelOptimizeCommand.Execute(bytes, "fx.mdx", 1.0f, out var output, stripEffects: false);
+
+        Assert.Equal(0, r.EffectsRemoved);
+        var parsed = MdxDocument.Parse(output);
+        Assert.Equal(1, parsed.CountEffects().ParticleEmitters);
+        Assert.Equal(bytes, output); // nothing reduced, nothing dropped, byte for byte
+
+        var model = ModelParser.Parse(output, "fx.mdx");
+        Assert.NotEmpty(model.Geosets);
+    }
+
+    [Fact]
+    public void Effects_are_dropped_when_stripping_is_on_and_output_still_parses()
+    {
+        var bytes = SyntheticModel.BuildMdx(extraChunks: new[] { ("PREM", new byte[8]) });
+        var r = ModelOptimizeCommand.Execute(bytes, "fx.mdx", 1.0f, out var output, stripEffects: true);
+
+        Assert.Equal(1, r.EffectsRemoved);
+        Assert.True(output.Length < bytes.Length);
+        Assert.Equal(0, MdxDocument.Parse(output).CountEffects().ParticleEmitters);
+
+        var model = ModelParser.Parse(output, "fx.mdx");
+        Assert.NotEmpty(model.Geosets);
+        Assert.True(model.Geosets[0].Indices.Length > 0);
+    }
 }

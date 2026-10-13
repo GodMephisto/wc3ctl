@@ -13,6 +13,7 @@ public sealed record ModelOptimizeResult(
     int VerticesAfter,
     int FacesBefore,
     int FacesAfter,
+    int EffectsRemoved,
     long BytesBefore,
     long BytesAfter,
     IReadOnlyList<string> Diagnostics)
@@ -29,19 +30,24 @@ public sealed record ModelOptimizeResult(
 ///
 /// A geoset with no VRTX or PVTX, or one that does not reduce, is left untouched. The result carries
 /// a before and after count so the caller can report the saving.
+///
+/// With <c>stripEffects</c> on it also drops the effect chunks, particle emitters (PREM), particle
+/// emitters 2 (PRE2), ribbons (RIBB) and corns (CORN), so a model can be shrunk further when its
+/// effects are not wanted. This changes how the model looks, so it is off by default.
 /// </summary>
 public static class ModelOptimizeCommand
 {
-    public static ModelOptimizeResult ExecutePath(string path, float ratio, string outPath)
+    public static ModelOptimizeResult ExecutePath(string path, float ratio, string outPath, bool stripEffects = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         if (!File.Exists(path)) throw new FileNotFoundException($"model not found: {path}", path);
-        var result = Execute(File.ReadAllBytes(path), path, ratio, out var output);
+        var result = Execute(File.ReadAllBytes(path), path, ratio, out var output, stripEffects);
         File.WriteAllBytes(outPath, output);
         return result with { Path = outPath };
     }
 
-    public static ModelOptimizeResult Execute(byte[] bytes, string name, float ratio, out byte[] output)
+    public static ModelOptimizeResult Execute(byte[] bytes, string name, float ratio, out byte[] output,
+        bool stripEffects = false)
     {
         ArgumentNullException.ThrowIfNull(bytes);
         var diagnostics = new List<string>();
@@ -54,7 +60,7 @@ public static class ModelOptimizeCommand
         catch (Exception ex)
         {
             output = bytes;
-            return new ModelOptimizeResult(name, 0, 0, 0, 0, 0, bytes.LongLength, bytes.LongLength,
+            return new ModelOptimizeResult(name, 0, 0, 0, 0, 0, 0, bytes.LongLength, bytes.LongLength,
                 new[] { $"could not parse '{name}': {ex.Message}" });
         }
 
@@ -72,8 +78,15 @@ public static class ModelOptimizeCommand
             if (rebuilt is not null) doc.Replace(chunkIndex, rebuilt);
         }
 
+        int effectsRemoved = 0;
+        if (stripEffects)
+        {
+            effectsRemoved = doc.StripEffects();
+            if (effectsRemoved > 0) diagnostics.Add($"stripped {effectsRemoved} effect chunk(s)");
+        }
+
         output = doc.Write();
-        return new ModelOptimizeResult(name, geosets, vBefore, vAfter, fBefore, fAfter,
+        return new ModelOptimizeResult(name, geosets, vBefore, vAfter, fBefore, fAfter, effectsRemoved,
             bytes.LongLength, output.LongLength, diagnostics);
     }
 

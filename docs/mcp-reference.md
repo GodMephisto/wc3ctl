@@ -534,7 +534,7 @@ Annotations. read-only no, destructive no, idempotent yes, open-world no.
 
 ## model_optimize
 
-Decimate a .mdx or .mdl model's geometry with the quadric error metric, drop zero-area faces and duplicate textures, and write a smaller MDX at out_path, leaving the other chunks untouched. ratio is the target fraction of faces to keep. Returns the before and after vertex and face counts. The input is never modified.
+Decimate a .mdx or .mdl model's geometry with the quadric error metric, drop zero-area faces and duplicate textures, and write a smaller MDX at out_path, leaving the other chunks untouched. ratio is the target fraction of faces to keep. Set strip_effects to also drop the model's effect chunks, particle emitters (PREM), particle emitters 2 (PRE2), ribbons (RIBB) and corns (CORN), which changes how the model looks, so it defaults to false. Returns the before and after vertex and face counts and the number of effect chunks removed. The input is never modified.
 
 Annotations. read-only no, destructive no, idempotent yes, open-world no.
 

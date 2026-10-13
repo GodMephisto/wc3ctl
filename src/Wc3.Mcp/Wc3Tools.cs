@@ -437,16 +437,17 @@ public static class Wc3Tools
         => Run(() => ModelAuditCommand.ExecutePath(model));
 
     [McpServerTool(Name = "model_optimize", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
-    [Description("Decimate a .mdx or .mdl model's geometry with the quadric error metric, drop zero-area faces and duplicate textures, and write a smaller MDX at out_path, leaving the other chunks untouched. ratio is the target fraction of faces to keep. Returns the before and after vertex and face counts. The input is never modified.")]
+    [Description("Decimate a .mdx or .mdl model's geometry with the quadric error metric, drop zero-area faces and duplicate textures, and write a smaller MDX at out_path, leaving the other chunks untouched. ratio is the target fraction of faces to keep. Set strip_effects to also drop the model's effect chunks, particle emitters (PREM), particle emitters 2 (PRE2), ribbons (RIBB) and corns (CORN), which changes how the model looks, so it defaults to false. Returns the before and after vertex and face counts and the number of effect chunks removed. The input is never modified.")]
     public static ModelOptimizeResult ModelOptimize(
         [Description("Path to a .mdx or .mdl model file.")] string model,
         [Description("Output .mdx path. The input is never modified.")] string out_path,
-        [Description("Target fraction of faces to keep, between 0 and 1.")] float ratio = 0.5f)
+        [Description("Target fraction of faces to keep, between 0 and 1.")] float ratio = 0.5f,
+        [Description("Drop the model's effects (particle emitters, particle emitters 2, ribbons and corns) when true. Changes how the model looks. Default false.")] bool strip_effects = false)
         => Run(() =>
         {
             if (string.Equals(Path.GetFullPath(out_path), Path.GetFullPath(model), StringComparison.OrdinalIgnoreCase))
                 throw new McpException("out_path must not be the input model");
-            return ModelOptimizeCommand.ExecutePath(model, ratio, out_path);
+            return ModelOptimizeCommand.ExecutePath(model, ratio, out_path, strip_effects);
         });
 
     [McpServerTool(Name = "texture_optimize", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]

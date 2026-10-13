@@ -124,6 +124,27 @@ public sealed class MdxDocument
             }
         return new EffectCounts(emitters, emitters2, ribbons, corns);
     }
+
+    /// <summary>
+    /// Drops every effect chunk from the document, particle emitters (PREM), particle emitters 2
+    /// (PRE2), ribbons (RIBB) and corns (CORN), and returns how many chunks were removed. The
+    /// remaining chunks keep their order and their bytes, so a model written after this is the same
+    /// file minus its effects. The caller decides when to run it, this only does the removal.
+    /// </summary>
+    public int StripEffects()
+    {
+        int removed = 0;
+        for (int i = _chunks.Count - 1; i >= 0; i--)
+            if (IsEffectTag(_chunks[i].Tag))
+            {
+                _chunks.RemoveAt(i);
+                removed++;
+            }
+        return removed;
+    }
+
+    /// <summary>True for the four effect chunk tags, the ones an effects strip removes.</summary>
+    private static bool IsEffectTag(string tag) => tag is "PREM" or "PRE2" or "RIBB" or "CORN";
 }
 
 /// <summary>

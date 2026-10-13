@@ -669,6 +669,7 @@ public static class Render
         sb.AppendLine($"Wrote {Path.GetFileName(r.Path)}");
         sb.AppendLine($"  {r.Geosets} geoset(s), vertices {r.VerticesBefore} -> {r.VerticesAfter} "
             + $"(-{r.VerticesRemoved}), faces {r.FacesBefore} -> {r.FacesAfter} (-{r.FacesRemoved})");
+        if (r.EffectsRemoved > 0) sb.AppendLine($"  {r.EffectsRemoved} effect chunk(s) stripped");
         sb.AppendLine($"  {r.BytesBefore} -> {r.BytesAfter} byte(s)");
         foreach (var d in r.Diagnostics) sb.AppendLine($"  ! {d}");
         return sb.ToString().TrimEnd();

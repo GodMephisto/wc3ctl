@@ -3232,18 +3232,23 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
             "Output model path. The input is never modified.") { IsRequired = true };
         var modelOptimizeRatio = new Option<float>("--ratio", () => 0.5f,
             "Target fraction of faces to keep, between 0 and 1.");
+        var modelOptimizeStrip = new Option<bool>("--strip-effects", () => false,
+            "Drop the model's effect chunks, particle emitters (PREM), particle emitters 2 (PRE2), "
+            + "ribbons (RIBB) and corns (CORN), for a smaller MDX. This changes how the model looks, "
+            + "so it is off by default.");
         var modelOptimize = new Command("optimize",
             "Decimate a model's geometry with the quadric error metric, drop zero-area faces and "
             + "duplicate textures, and write a smaller MDX, leaving the other chunks byte for byte. "
-            + "Reports the before and after vertex and face counts.")
-            { modelOptimizePath, modelOptimizeOut, modelOptimizeRatio, jsonOption };
+            + "Optionally strip its effects when they are not wanted. Reports the before and after "
+            + "vertex and face counts.")
+            { modelOptimizePath, modelOptimizeOut, modelOptimizeRatio, modelOptimizeStrip, jsonOption };
         modelOptimize.SetHandler(
-            (string modelPath, string outPath, float ratio, bool json) => RunSafely(() =>
+            (string modelPath, string outPath, float ratio, bool stripEffects, bool json) => RunSafely(() =>
             {
-                var r = ModelOptimizeCommand.ExecutePath(modelPath, ratio, outPath);
+                var r = ModelOptimizeCommand.ExecutePath(modelPath, ratio, outPath, stripEffects);
                 Emit(json, r, () => Render.ModelOptimize(r));
             }),
-            modelOptimizePath, modelOptimizeOut, modelOptimizeRatio, jsonOption);
+            modelOptimizePath, modelOptimizeOut, modelOptimizeRatio, modelOptimizeStrip, jsonOption);
         var modelImportObj = new Argument<string>("obj",
             "Path to a foreign model, one of Wavefront OBJ (.obj), glTF 2.0 (.gltf or .glb), "
             + "STL (.stl, binary or ASCII) or PLY (.ply, ASCII or binary little-endian). The format "
