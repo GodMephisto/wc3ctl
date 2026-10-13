@@ -3203,7 +3203,9 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         var modelAuditPath = new Argument<string>("model", "Path to a .mdx or .mdl file.");
         var modelAudit = new Command("audit",
             "Audit a model for the resource waste and draw-nothing problems the optimiser can remove, "
-            + "and report what it holds, its geosets, vertices, faces, textures, sequences and nodes.")
+            + "and report what it holds, its geosets, vertices, faces, textures, sequences, nodes and "
+            + "effects. Effects are counted from the chunk list, particle emitters, particle emitters 2, "
+            + "ribbons and popcorns, and their payloads are not parsed.")
             { modelAuditPath, jsonOption };
         modelAudit.SetHandler(
             (string modelPath, bool json) => RunSafely(() =>

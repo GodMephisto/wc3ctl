@@ -423,7 +423,7 @@ wc3ctl model
 Subcommands
 
 - `export-obj`. Export a map-imported model to Wavefront OBJ, with an MTL and any map-resolvable textures converted to PNG beside it.
-- `audit`. Audit a model for the resource waste and draw-nothing problems the optimiser can remove, and report what it holds, its geosets, vertices, faces, textures, sequences and nodes.
+- `audit`. Audit a model for the resource waste and draw-nothing problems the optimiser can remove, and report what it holds, its geosets, vertices, faces, textures, sequences, nodes and effects. Effects are counted from the chunk list, particle emitters, particle emitters 2, ribbons and popcorns, and their payloads are not parsed.
 - `optimize`. Decimate a model's geometry with the quadric error metric, drop zero-area faces and duplicate textures, and write a smaller MDX, leaving the other chunks byte for byte. Reports the before and after vertex and face counts.
 - `import`. Import a Wavefront OBJ into a Warcraft III MDX. Builds one v800 geoset with normals and UVs, triangulating an n-gon face as a fan and computing a per-face normal when the OBJ carries none, plus one texture and one material. Reports the vertex, face and texture counts.
 
@@ -448,7 +448,7 @@ Options
 
 ### model audit
 
-Audit a model for the resource waste and draw-nothing problems the optimiser can remove, and report what it holds, its geosets, vertices, faces, textures, sequences and nodes.
+Audit a model for the resource waste and draw-nothing problems the optimiser can remove, and report what it holds, its geosets, vertices, faces, textures, sequences, nodes and effects. Effects are counted from the chunk list, particle emitters, particle emitters 2, ribbons and popcorns, and their payloads are not parsed.
 
 Usage
 

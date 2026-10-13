@@ -106,4 +106,33 @@ public sealed class MdxDocument
             if (_chunks[i].Tag == "GEOS") list.Add(i);
         return list;
     }
+
+    /// <summary>
+    /// The count of each effect chunk the model carries, taken from the chunk tags alone. The
+    /// payloads are not parsed, so this says how many effects exist, not what any one of them does.
+    /// </summary>
+    public EffectCounts CountEffects()
+    {
+        int emitters = 0, emitters2 = 0, ribbons = 0, corns = 0;
+        foreach (var c in _chunks)
+            switch (c.Tag)
+            {
+                case "PREM": emitters++; break;
+                case "PRE2": emitters2++; break;
+                case "RIBB": ribbons++; break;
+                case "CORN": corns++; break;
+            }
+        return new EffectCounts(emitters, emitters2, ribbons, corns);
+    }
+}
+
+/// <summary>
+/// The effect chunks an MDX carries, by tag. PREM is a particle emitter, PRE2 a particle emitter 2,
+/// RIBB a ribbon and CORN a popcorn.
+/// </summary>
+public readonly record struct EffectCounts(
+    int ParticleEmitters, int ParticleEmitters2, int Ribbons, int Corns)
+{
+    /// <summary>The empty count, for a model with no effects or an unreadable file.</summary>
+    public static EffectCounts None => default;
 }
