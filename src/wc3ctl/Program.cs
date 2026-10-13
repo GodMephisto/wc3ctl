@@ -5544,6 +5544,18 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         }));
         leak.AddCommand(leakBenchmarkCmd);
 
+        var leakModelCmd = new Command("model",
+            "Model-level leak report. Joins the map's imported models and textures to what the map "
+            + "and those models reference, and reports a leaked import, a missing texture, a "
+            + "duplicate import and an unused texture. Read-only.") { mapArg };
+        leakModelCmd.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = LeakModelCommand.Execute(MapDocument.Load(p.GetValueForArgument(mapArg)));
+            Emit(p.GetValueForOption(jsonOption), r, () => Render.LeakModel(r));
+        }));
+        leak.AddCommand(leakModelCmd);
+
         root.AddCommand(file);
         root.AddCommand(leak);
         root.AddCommand(info); root.AddCommand(ls); root.AddCommand(overview); root.AddCommand(rt);

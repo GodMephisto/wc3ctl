@@ -129,6 +129,16 @@ public static class Wc3Tools
     public static LeakBenchmarkResult LeakBenchmark()
         => Run(() => LeakBenchmarkCommand.Execute());
 
+    [McpServerTool(Name = "leak_model", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Report the model-level leaks and waste across a map's imported models and textures, "
+        + "the join between the model audit and the import table. Finds an imported model no field or "
+        + "script names, a model naming a texture the map does not hold, a model imported more than once "
+        + "under different names with identical bytes, and an imported texture no imported model names. "
+        + "Reuses the existing model parser and import primitives. Read-only.")]
+    public static LeakModelResult LeakModel(
+        [Description("Path to a .w3x/.w3m map file.")] string map)
+        => Run(() => LeakModelCommand.Execute(LoadMap(map)));
+
     [McpServerTool(Name = "script_unused_globals", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Find the globals a map's war3map.j declares and never reads, the variable half of "
         + "dead code. A global that is only ever assigned and never appears on the right of anything "

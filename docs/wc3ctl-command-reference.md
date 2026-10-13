@@ -2,7 +2,7 @@
 
 Generated from the live command tree by `wc3ctl docs cli`. Do not edit by hand. Regenerate with `wc3ctl docs cli --force`, and the CI guard fails when this file is stale.
 
-The tree holds 64 top level verb(s) and 316 command path(s) in total.
+The tree holds 64 top level verb(s) and 317 command path(s) in total.
 
 ## Global options
 
@@ -1344,6 +1344,7 @@ Subcommands
 - `join`. Read a wc3watch session's handle and memory slope and align a rising slope with the periodic candidates from the static list. Read-only.
 - `ab`. Diff two wc3watch sessions and report whether the handle and memory slope fell. With --map, name the candidate whose predicted rate is nearest the drop. Read-only.
 - `benchmark`. Run the detector over synthetic maps with a known injected leak, one per creator kind, and report true positive and false positive counts. Read-only.
+- `model`. Model-level leak report. Joins the map's imported models and textures to what the map and those models reference, and reports a leaked import, a missing texture, a duplicate import and an unused texture. Read-only.
 
 ### leak list
 
@@ -1422,6 +1423,20 @@ Usage
 ```
 wc3ctl leak benchmark
 ```
+
+### leak model
+
+Model-level leak report. Joins the map's imported models and textures to what the map and those models reference, and reports a leaked import, a missing texture, a duplicate import and an unused texture. Read-only.
+
+Usage
+
+```
+wc3ctl leak model <map>
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
 
 ## info
 

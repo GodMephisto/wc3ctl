@@ -2,7 +2,7 @@
 
 Generated from the live tool surface by `wc3ctl docs mcp`. Do not edit by hand. Regenerate with `wc3ctl docs mcp --force`, and the CI guard fails when this file is stale.
 
-The server exposes 239 tool(s).
+The server exposes 240 tool(s).
 
 ## asset_audit
 
@@ -421,6 +421,12 @@ Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 ## leak_list
 
 The ranked static handle-leak list for a map's script plus the periodic timers and triggers that feed it, and every hot leak target by function. Read-only, a presentation over script_leaks for the leak workflow.
+
+Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
+## leak_model
+
+Report the model-level leaks and waste across a map's imported models and textures, the join between the model audit and the import table. Finds an imported model no field or script names, a model naming a texture the map does not hold, a model imported more than once under different names with identical bytes, and an imported texture no imported model names. Reuses the existing model parser and import primitives. Read-only.
 
 Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 
