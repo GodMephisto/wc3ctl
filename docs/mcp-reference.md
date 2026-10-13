@@ -396,7 +396,7 @@ Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 
 ## leak_ab
 
-Diff two wc3watch sessions and report whether the handle and memory slope fell, the usual shape being one session with a trigger live and one with it disabled. With a map, name the periodic candidate whose predicted rate is nearest the drop, labelled an inference. Read-only.
+Diff two wc3watch sessions and report whether the handle and memory slope fell, each measured from its own forced garbage collection. The usual shape is one session with a trigger live and one with it disabled. With a map, name the periodic candidate whose predicted rate is nearest the drop, labelled an inference. Read-only.
 
 Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 
@@ -414,7 +414,7 @@ Annotations. read-only no, destructive no, idempotent no, open-world no.
 
 ## leak_join
 
-Join a map's static leak list to a wc3watch session folder. Reads samples.csv, fits the handle slope and the memory slope, and aligns a rising slope with the periodic candidates from the static list. Read-only. A folder with no samples.csv is reported clearly.
+Join a map's static leak list to a wc3watch session folder. Reads samples.csv and events.csv, fits the handle and memory slopes from the session's forced garbage collection when one was marked, and joins each rising window to the periodic candidates from the static list and the session events and game log lines near it. Names the likely leaking trigger. Read-only. A folder with no samples.csv is reported clearly.
 
 Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 

@@ -20,13 +20,17 @@ from the analyser alone.
 4. `wc3watch` samples the running game once a second. It records memory, handles, CPU, disk and the
    frames, outside the game process and with no anti-cheat risk. Run it elevated and press `G` after
    a forced collection, as below.
-5. `leak join <session-folder>` fits the handle and memory slopes of one session and aligns a rising
-   handle slope with the periodic drivers from the static list. Every slope is a measurement of the
-   samples given, and each driver ranking is an inference from the static list, so the two are kept
-   apart in the output.
-6. `leak ab <a> <b>` diffs two sessions, usually one with the suspect trigger enabled and one with it
-   disabled. A fall on the handle slope is the leak being removed, and the nearest static candidate
-   is named as the likely disabled one, labelled an inference.
+5. `leak join <map> <session-folder>` reads `samples.csv` and `events.csv` and fits the handle and
+   memory slopes, measured from the session's forced garbage collection when the recorder marked one,
+   the same baseline `analyze.py` uses. Each rising window is joined to the periodic driver whose
+   predicted rate is nearest and to the session events and game log lines within three seconds of it,
+   which is what names the likely leaking trigger. The nearby events are recorded facts, the slopes
+   are measurements of the samples given, and the driver ranking is an inference from the static list,
+   so the three are kept apart in the output.
+6. `leak ab <a> <b> [--map]` diffs two sessions, usually one with the suspect trigger enabled and one
+   with it disabled, each measured from its own forced garbage collection. A fall on the handle slope
+   is the leak being removed, and with `--map` the nearest static candidate is named as the likely
+   disabled one, labelled an inference.
 
 ## The Lua forced-collection caveat
 
