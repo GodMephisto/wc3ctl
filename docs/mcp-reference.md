@@ -424,6 +424,12 @@ The ranked static handle-leak list for a map's script plus the periodic timers a
 
 Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 
+## leak_model
+
+Report the model-level leaks and waste across a map's imported models and textures, the join between the model audit and the import table. Finds an imported model no field or script names, a model naming a texture the map does not hold, a model imported more than once under different names with identical bytes, and an imported texture no imported model names. Reuses the existing model parser and import primitives. Read-only.
+
+Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
 ## library_audit
 
 Run the behavioural audit over every map in a folder and report the findings per map and the totals per check, so a whole library is ranked by how much it needs fixing. Opens one map at a time. Read-only.

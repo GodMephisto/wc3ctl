@@ -147,6 +147,7 @@ public class CliMcpParityTests
         ["leak_join"] = "leak join",
         ["leak_ab"] = "leak ab",
         ["leak_benchmark"] = "leak benchmark",
+        ["leak_model"] = "leak model",
         ["port_unit"] = "port unit",
         ["port_deps"] = "port deps",
         ["port_preview"] = "port preview",

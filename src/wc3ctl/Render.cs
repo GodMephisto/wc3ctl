@@ -225,6 +225,26 @@ public static class Render
         return sb.ToString();
     }
 
+    public static string LeakModel(LeakModelResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.ModelsScanned} model(s), {r.TexturesScanned} texture(s), "
+            + $"{r.FindingCount} finding(s)");
+        sb.AppendLine($"  leaked imports {r.LeakedImports}, missing textures {r.MissingTextures}, "
+            + $"duplicate imports {r.DuplicateImports}, unused textures {r.UnusedTextures}");
+        foreach (var g in r.Findings.GroupBy(f => f.Kind))
+        {
+            sb.AppendLine($"{g.Key} ({g.Count()})");
+            foreach (var f in g)
+            {
+                sb.AppendLine($"  {f.Path}");
+                sb.AppendLine($"      {f.Reason}");
+            }
+        }
+        foreach (var d in r.Diagnostics) sb.AppendLine($"note  {d}");
+        return sb.ToString();
+    }
+
     public static string Replays(ReplayReport r)
     {
         var sb = new StringBuilder();

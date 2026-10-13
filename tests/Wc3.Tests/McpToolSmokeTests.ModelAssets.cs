@@ -19,6 +19,15 @@ public sealed class McpSmokeModelAssetTests : McpSmokeBase
         Assert.Empty(Prop(result, "findings").EnumerateArray());
     }
 
+    [Fact, Covers("leak_model")]
+    public async Task Leak_model_answers_on_a_blank_map()
+    {
+        var result = await Call("leak_model", Args(("map", Fixture)));
+
+        Assert.Equal(0, Prop(result, "modelsScanned").GetInt32());
+        Assert.Empty(Prop(result, "findings").EnumerateArray());
+    }
+
     [Fact, Covers("asset_thumbnails")]
     public async Task Thumbnails_writes_a_png_for_a_model_folder()
     {
