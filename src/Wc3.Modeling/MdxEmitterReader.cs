@@ -18,8 +18,10 @@ public readonly record struct MdxEmitter(int ChunkIndex, string Tag, int NodeId,
 /// references rather than only counting the effect chunks. The renderer parser skips PREM and PRE2
 /// by chunk size, so this walks their payloads directly.
 ///
-/// The layout is confirmed against the FastMDX reader that War3Net uses and against real exported
-/// models. A PREM or PRE2 chunk payload is a sequence of emitter records. Each record begins with a
+/// The layout is confirmed against the FastMDX reader that War3Net uses, and the PREM objectId
+/// offset of 88 is confirmed against a real populated PREM record, the single emitter SuperSpray04
+/// at objectId 17 in an imported fireblast.mdx, where nodes 0 to 16 are its bones and helpers.
+/// A PREM or PRE2 chunk payload is a sequence of emitter records. Each record begins with a
 /// uint32 record size counted from the record start, then the node, which is itself size prefixed,
 /// so a record is
 /// recordSize, nodeSize, char[80] name, int objectId, int parentId, uint32 flags, node transforms.
