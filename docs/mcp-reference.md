@@ -2,7 +2,7 @@
 
 Generated from the live tool surface by `wc3ctl docs mcp`. Do not edit by hand. Regenerate with `wc3ctl docs mcp --force`, and the CI guard fails when this file is stale.
 
-The server exposes 244 tool(s).
+The server exposes 245 tool(s).
 
 ## asset_audit
 
@@ -1015,6 +1015,12 @@ Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 ## script_complexity
 
 Measure each function's cyclomatic complexity as the number of if, loop, and and or branch keywords in its body, ranked worst first with the line. Answers where the complexity is on a large script. Read-only.
+
+Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
+## script_conversion_notes
+
+The rules the JASS to Lua converter applies and where it diverges, one row per construct, with the JASS form, the Lua it emits and whether that runs the same. Read it before editing a converted script or trusting a conversion, since two rules are approximated, real arithmetic precision and hashtables, and the first is fixed by passing strict_reals to script_to_lua. No map needed. Read-only.
 
 Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 

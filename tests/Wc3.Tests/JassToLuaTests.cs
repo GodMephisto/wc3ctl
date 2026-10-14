@@ -59,6 +59,21 @@ public class JassToLuaTests
     }
 
     [Fact]
+    public void Conversion_notes_name_the_approximations()
+    {
+        // The rule set is the data a caller reasons from, so the two approximated rules and the
+        // opt-in that fixes one of them have to be in it, each with its detail.
+        var r = ConversionNotes.Rules();
+
+        Assert.Contains(r.Rules, x => x.Area == "integer arithmetic" && x.Status == ConversionNotes.Faithful);
+        Assert.Contains(r.Rules, x => x.Area == "real precision" && x.Status == ConversionNotes.OptIn);
+        Assert.Contains(r.Rules, x => x.Area == "hashtables" && x.Status == ConversionNotes.Approximated);
+        Assert.Contains(r.Rules, x => x.Area == "Lua back to JASS" && x.Status == ConversionNotes.Approximated);
+        Assert.All(r.Rules, x => Assert.False(string.IsNullOrWhiteSpace(x.Detail)));
+        Assert.Contains("faithful", r.Summary);
+    }
+
+    [Fact]
     public void Without_strict_reals_real_arithmetic_stays_plain()
     {
         var r = Convert(Fn("real x = 1.0\nreal y = 2.0", "set x = x + y\nset x = x / y"));

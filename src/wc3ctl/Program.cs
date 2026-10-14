@@ -1451,6 +1451,19 @@ public static class Program
         }));
         script.AddCommand(scriptToLua);
 
+        var scriptConversionNotes = new Command("conversion-notes",
+            "The rules the JASS to Lua converter applies and where it diverges, one row per construct, "
+            + "with the JASS form, the Lua it emits and whether that runs the same.");
+        scriptConversionNotes.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = ConversionNotes.Rules();
+            Emit(p.GetValueForOption(jsonOption), r, () =>
+                r.Summary + string.Concat(r.Rules.Select(x =>
+                    $"\n\n  [{x.Status}] {x.Area}\n    JASS {x.Jass}\n    Lua  {x.Lua}\n    {x.Detail}")));
+        }));
+        script.AddCommand(scriptConversionNotes);
+
         var decompileOut = new Option<string?>(new[] { "-o", "--out" },
             "Output map path. Default '<map>.decompiled.<ext>' next to the input. An existing file is never overwritten.");
         var scriptDecompile = new Command("decompile",

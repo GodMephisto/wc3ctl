@@ -68,6 +68,7 @@ public class CliMcpParityTests
         ["script_modernize"] = "script modernize",
         ["script_format"] = "script format",
         ["script_to_lua"] = "script to-lua",
+        ["script_conversion_notes"] = "script conversion-notes",
         ["script_decompile"] = "script decompile",
         ["repair_generated"] = "repair-generated",
         ["hero_lint"] = "hero lint",

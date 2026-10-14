@@ -2,7 +2,7 @@
 
 Generated from the live command tree by `wc3ctl docs cli`. Do not edit by hand. Regenerate with `wc3ctl docs cli --force`, and the CI guard fails when this file is stale.
 
-The tree holds 65 top level verb(s) and 322 command path(s) in total.
+The tree holds 65 top level verb(s) and 323 command path(s) in total.
 
 ## Global options
 
@@ -2043,6 +2043,7 @@ Subcommands
 - `check`. Check the map script for errors that stop it loading. A Lua script is checked against Lua 5.3 exactly as luac would, a JASS script by the built-in JASS checks. Exits 1 on an error.
 - `format`. Reprint a Lua map script, pretty or canonical. The result compiles to the same Lua instructions as the original. JASS maps are refused.
 - `to-lua`. Convert a JASS map to a Lua map. The script becomes war3map.lua with the JASS integer, division and null string rules kept, and the w3i script language is set to Lua.
+- `conversion-notes`. The rules the JASS to Lua converter applies and where it diverges, one row per construct, with the JASS form, the Lua it emits and whether that runs the same.
 - `decompile`. Turn Lua entries shipped as Lua 5.3 bytecode back into Lua source that runs the same. Nothing is written when the map holds no bytecode.
 - `lua-leaks`. Find handle leaks in a Lua map script: a creator dropped as a statement, a creator on a period that is never released, and a handle kept in a table the script never clears. Read-only.
 - `lua-globals`. List the globals a Lua map defines, where each is read and written, and any global that is written but never read. Read-only.
@@ -2372,6 +2373,16 @@ Options
 
 - `-o, --out <out>`. Output map path. Default '<map>.lua.<ext>' next to the input. An existing file is never overwritten.
 - `--strict-reals`. Round real (floating point) arithmetic to the 32 bit float JASS uses, so a converted expression does not drift from the original. Off by default, which reproduces the upstream converter byte for byte.
+
+### script conversion-notes
+
+The rules the JASS to Lua converter applies and where it diverges, one row per construct, with the JASS form, the Lua it emits and whether that runs the same.
+
+Usage
+
+```
+wc3ctl script conversion-notes
+```
 
 ### script decompile
 

@@ -712,6 +712,10 @@ public static class Wc3Tools
             return new { r.ScriptFile, r.FunctionsConverted, r.FunctionsSkipped, r.GlobalsConverted, r.Unconverted, r.Diagnostics, SavedTo = full };
         });
 
+    [McpServerTool(Name = "script_conversion_notes", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("The rules the JASS to Lua converter applies and where it diverges, one row per construct, with the JASS form, the Lua it emits and whether that runs the same. Read it before editing a converted script or trusting a conversion, since two rules are approximated, real arithmetic precision and hashtables, and the first is fixed by passing strict_reals to script_to_lua. No map needed. Read-only.")]
+    public static ConversionNotesResult ScriptConversionNotes() => ConversionNotes.Rules();
+
     [McpServerTool(Name = "script_reachable", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("List the functions reachable from the map script's entry points, main and the InitTrig functions, and the dead functions nothing reaches, each with its declaration line. A function reached only through a string (ExecuteFunc) is reported dead here, which is the honest answer to what main reaches. Read-only.")]
     public static ScriptReachableResult ScriptReachable(
