@@ -2,6 +2,7 @@
 using System.Text;
 using War3Net.Build.Extensions;
 using War3Net.Build.Object;
+using War3Net.Build.Script;
 using War3Net.Common.Extensions;
 using Wc3.Commands;
 using Wc3.GameData;
@@ -354,6 +355,48 @@ public class ObjectToolkitCommandTests
         var skin = (UnitObjectData)doc.GetFile("war3mapSkin.w3u")!.Model!;
         Assert.DoesNotContain(skin.NewUnits, g => g.NewId == "u000".FromRawcode());
         Assert.Single(skin.NewUnits, g => g.NewId == "u001".FromRawcode());
+    }
+
+    [Fact]
+    public void Rename_rewrites_the_trigger_tree_beside_the_script()
+    {
+        // The wct custom-text bodies name rawcodes and hero_roster takes its attribution from them.
+        // A rename used to leave them naming the old code while the script and the object fields
+        // named the new one, so a renamed hero's trigger attribution fell from 1 to 0. Measured on
+        // GGGA. The wct is rewritten at the byte level, because its decoder loses bytes that a
+        // re-serialize would drop.
+        var wct = new MapCustomTextTriggers(MapCustomTextTriggersFormatVersion.v1, null)
+        {
+            GlobalCustomScriptComment = string.Empty,
+            GlobalCustomScriptCode = new CustomTextTrigger { Code = string.Empty },
+        };
+        wct.CustomTextTriggers.Add(new CustomTextTrigger
+        {
+            Code = "function Trig_A takes nothing returns nothing\n"
+                 + "    call RPB_AddHero('u000')\nendfunction\n",
+        });
+
+        var unit = new UnitObjectData(ObjectDataFormatVersion.v2);
+        var u = new SimpleObjectModification
+        { OldId = "hfoo".FromRawcode(), NewId = "u000".FromRawcode() };
+        u.Modifications.Add(new SimpleObjectDataModification
+        { Id = "uhpm".FromRawcode(), Type = ObjectDataType.Int, Value = 5 });
+        unit.NewUnits.Add(u);
+
+        var doc = MapDocument.Load(SyntheticMap.Build(new Dictionary<string, byte[]>
+        {
+            ["war3map.w3u"] = Ser(w => w.Write(unit)),
+            ["war3map.wct"] = Ser(w => w.Write(wct)),
+            ["war3map.j"] = Encoding.UTF8.GetBytes(
+                "function main takes nothing returns nothing\nendfunction\n"),
+        }));
+
+        var r = ObjectRenameCommand.Execute(doc, ObjectKind.Unit, "u000", "u001", rewriteRefs: true);
+
+        Assert.True(r.Ok, r.Message);
+        var body = Encoding.Latin1.GetString(doc.GetFile("war3map.wct")!.CurrentBytes);
+        Assert.Contains("u001", body);
+        Assert.DoesNotContain("u000", body);
     }
 
     [Fact]
