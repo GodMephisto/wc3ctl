@@ -501,7 +501,7 @@ public static class Wc3Tools
         });
 
     [McpServerTool(Name = "map_optimize", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
-    [Description("Shrink every imported model and texture inside a map in one pass and write a new map to out_path with only those files replaced, everything else byte for byte. Each model is decimated at ratio (the target fraction of faces to keep) and each texture is scaled to fit max_texture on its longest side, reusing the model and texture optimisers. A file whose optimised bytes are not smaller is left untouched. Reports the per-file before and after sizes, the per-kind counts and the total byte saving. The input map is NEVER modified.")]
+    [Description("Shrink every imported model and texture inside a map in one pass and write a new map to out_path with only those files replaced, everything else byte for byte. Each model is decimated at ratio (the target fraction of faces to keep) and each texture is scaled to fit max_texture on its longest side, reusing the model and texture optimisers. A file whose optimised bytes are not smaller is left untouched. Reports the per-file before and after sizes, the per-kind counts, bytesSaved (the output size subtracted from the input's) and contentBytesSaved (the per-file sum, which is larger when the archive was patched in place rather than rebuilt). The input map is NEVER modified.")]
     public static MapOptimizeResult MapOptimize(
         [Description("Path to a .w3x/.w3m map file. Read-only; the edited copy is written to out_path.")] string map,
         [Description("Output map path. The input is never modified.")] string out_path,

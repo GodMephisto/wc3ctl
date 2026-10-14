@@ -33,9 +33,17 @@ public sealed record MapOptimizeResult(
     /// <summary>How many imported files were replaced.</summary>
     public int Changed => Files.Count;
 
-    /// <summary>The bytes recovered across every replaced file, the honest saving the per-file
-    /// numbers add up to.</summary>
-    public long BytesSaved => Files.Sum(f => f.BytesSaved);
+    /// <summary>The bytes recovered across every replaced file, the content saving before the
+    /// container is accounted for.</summary>
+    public long ContentBytesSaved => Files.Sum(f => f.BytesSaved);
+
+    /// <summary>The bytes recovered on disk, the output file's size subtracted from the input's.
+    /// This is the number the description calls the total saving. It can be smaller than
+    /// <see cref="ContentBytesSaved"/>, and negative, on a map whose archive could not be rebuilt
+    /// and was patched in place, where the replaced payloads are appended rather than compacted
+    /// and the file grows. Measured on Naruto Autobattle, 1,872,729 content bytes removed and a
+    /// file 1,539,957 bytes larger. Zero when the pass ran in memory with no path measured.</summary>
+    public long BytesSaved => BytesBefore - BytesAfter;
 }
 
 /// <summary>
@@ -90,7 +98,7 @@ public static class MapOptimizeCommand
             diagnostics.Add("The archive could not be rebuilt, so it was patched in place. Every "
                 + "entry is kept and the replaced payloads are appended, so the file grew by "
                 + $"{new FileInfo(outPath).Length - new FileInfo(mapPath).Length:N0} bytes even "
-                + $"though {result.BytesSaved:N0} bytes of content were removed.");
+                + $"though {result.ContentBytesSaved:N0} bytes of content were removed.");
         return result with
         {
             Path = outPath,

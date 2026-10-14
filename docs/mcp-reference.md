@@ -504,7 +504,7 @@ Annotations. read-only no, destructive no, idempotent no, open-world no.
 
 ## map_optimize
 
-Shrink every imported model and texture inside a map in one pass and write a new map to out_path with only those files replaced, everything else byte for byte. Each model is decimated at ratio (the target fraction of faces to keep) and each texture is scaled to fit max_texture on its longest side, reusing the model and texture optimisers. A file whose optimised bytes are not smaller is left untouched. Reports the per-file before and after sizes, the per-kind counts and the total byte saving. The input map is NEVER modified.
+Shrink every imported model and texture inside a map in one pass and write a new map to out_path with only those files replaced, everything else byte for byte. Each model is decimated at ratio (the target fraction of faces to keep) and each texture is scaled to fit max_texture on its longest side, reusing the model and texture optimisers. A file whose optimised bytes are not smaller is left untouched. Reports the per-file before and after sizes, the per-kind counts, bytesSaved (the output size subtracted from the input's) and contentBytesSaved (the per-file sum, which is larger when the archive was patched in place rather than rebuilt). The input map is NEVER modified.
 
 Annotations. read-only no, destructive no, idempotent yes, open-world no.
 
