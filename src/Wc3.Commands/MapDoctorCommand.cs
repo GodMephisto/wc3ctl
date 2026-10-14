@@ -159,7 +159,9 @@ public static class MapDoctorCommand
         Func<string, string?>? env = null, string? localAppData = null)
     {
         env ??= Environment.GetEnvironmentVariable;
-        localAppData ??= Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        // GetFolderPath returns null on a platform with no such folder, macOS for LocalApplicationData,
+        // and Path.Combine then throws ArgumentNullException instead of reporting a clean absence.
+        localAppData ??= Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData) ?? "";
 
         string? exe = env("WC3_DOCTOR");
         if (string.IsNullOrEmpty(exe))
