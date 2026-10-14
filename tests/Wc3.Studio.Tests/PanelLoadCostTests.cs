@@ -17,6 +17,11 @@ namespace Wc3.Studio.Tests;
 /// This is a measurement harness as much as a test. It prints a per-panel table so a regression is
 /// visible as a number, and it fails only on a budget generous enough to catch an order of
 /// magnitude rather than to police a machine's mood.
+///
+/// Run this project alone. `dotnet test --filter Category=Corpus` starts the Wc3.Tests corpus suite
+/// and this one together, and the 13 minute map sweep starves these panels, since the budget is
+/// wall clock on a shared machine. Measured, the same panels pass at 85ms and 780ms with the
+/// project to itself and blow past every budget while the other suite runs.
 /// </summary>
 public class PanelLoadCostTests
 {
