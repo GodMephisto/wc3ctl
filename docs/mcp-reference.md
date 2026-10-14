@@ -228,9 +228,9 @@ Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 
 ## deprotect_map
 
-Recover the file names a protected map stripped. A protected map ships no (listfile), so most entries have no name and cannot be looked up by name at all. Measured on one real map, 793 of 851 entries were nameless and recovery reached 832. Names come from the map's own object data, its script literals, the texture paths its models declare, any listfiles supplied, and an asset-name sweep of every block. Read-only. Pass out_path to write a copy whose listfile carries the recovered names.
+Recover the file names a protected map stripped. A protected map ships no (listfile), so most entries have no name and cannot be looked up by name at all. Measured on one real map, 793 of 851 entries were nameless and recovery reached 832. Names come from the map's own object data, its script literals, the texture paths its models declare, any listfiles supplied, and an asset-name sweep of every block. Without out_path nothing is written. With it, the recovered names go into a copy at out_path and the input map is never modified in place.
 
-Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+Annotations. read-only no, destructive no, idempotent yes, open-world no.
 
 ## diff
 

@@ -1731,13 +1731,16 @@ public static class Wc3Tools
             return (r.Ok, r.Message, r.TilesChanged);
         }));
 
-    [McpServerTool(Name = "deprotect_map", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    // Not ReadOnly, because passing out_path writes a copy. The annotation is per tool, not per
+    // call, so a tool that can write must not claim to be read-only.
+    [McpServerTool(Name = "deprotect_map", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Recover the file names a protected map stripped. A protected map ships no "
         + "(listfile), so most entries have no name and cannot be looked up by name at all. "
         + "Measured on one real map, 793 of 851 entries were nameless and recovery reached 832. "
         + "Names come from the map's own object data, its script literals, the texture paths its "
         + "models declare, any listfiles supplied, and an asset-name sweep of every block. "
-        + "Read-only. Pass out_path to write a copy whose listfile carries the recovered names.")]
+        + "Without out_path nothing is written. With it, the recovered names go into a copy at "
+        + "out_path and the input map is never modified in place.")]
     public static NameRecoveryResult DeprotectMap(
         [Description("Path to a .w3x/.w3m map file.")] string map,
         [Description("Optional output map path. When given, the recovered names are written into a copy; the input map is NEVER modified in place. Named entries are recompressed, every other entry stays byte-faithful.")] string? out_path = null,
