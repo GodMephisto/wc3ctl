@@ -19,7 +19,9 @@ public sealed record JassToLuaSummary(
     int BytesBefore,
     int BytesAfter,
     bool UsedGameHeaders,
-    IReadOnlyList<string> Warnings);
+    IReadOnlyList<string> Warnings,
+    bool StrictReals = false,
+    int HashtablesRewritten = 0);
 
 /// <summary>
 /// Converts a JASS map to a Lua map in memory. The caller saves the document to a new path.
@@ -95,9 +97,14 @@ public static class JassToLuaCommand
         var w3i = doc.AddOrReplaceRawFile("war3map.w3i", MapInfoCommand.Serialize(info));
         w3i.Model = info;
 
+        if (hashtables && r.HashtablesRewritten > 0)
+            warnings.Add($"{r.HashtablesRewritten} local hashtable(s) became a Lua table. A hashtable that "
+                         + "escapes its function stayed a native, since a native still has to receive one.");
+
         return new JassToLuaSummary(
             file, r.FuncNames.Count, r.ExsLiterals.Count, r.LuaChunks.Count,
-            ScriptCommand.ScriptEncoding.GetByteCount(source), luaBytes.Length, usedHeaders, warnings);
+            ScriptCommand.ScriptEncoding.GetByteCount(source), luaBytes.Length, usedHeaders, warnings,
+            strictReals, r.HashtablesRewritten);
     }
 
     /// <summary>
