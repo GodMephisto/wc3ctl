@@ -12,7 +12,7 @@ namespace Wc3.Mcp;
 /// <summary>
 /// The MCP tool surface: one thin wrapper per Wc3.Commands handler. Each tool
 /// loads the map(s), calls the shared command layer and returns its result POCO
-/// (the SDK serializes it to JSON) — no map parsing or logic lives here.
+/// (the SDK serializes it to JSON), no map parsing or logic lives here.
 /// </summary>
 [McpServerToolType]
 public static class Wc3Tools

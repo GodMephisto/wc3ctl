@@ -12,14 +12,14 @@ namespace Wc3.Tests;
 
 /// <summary>
 /// The dry-run guarantee: PreviewPort reports EXACTLY what PortUnit would do (same
-/// remap plan, objects, copy/skip decisions, string inlining and script summary —
+/// remap plan, objects, copy/skip decisions, string inlining and script summary , 
 /// one code path, so they cannot drift) while writing nothing into the target.
 /// </summary>
 [Collection("Serial")]
 public class PortPreviewTests
 {
     // Source: custom hero H000 (custom ability A000, imported icon, TRIGSTR name) plus a
-    // JASS spell handler + InitTrig referencing A000 via a global alias — the full Tier-1
+    // JASS spell handler + InitTrig referencing A000 via a global alias, the full Tier-1
     // + script surface, so the preview is compared against the real port on every axis.
     private const string SourceScript = @"globals
     integer udg_RaidenQ_ID= 'A000'
@@ -36,7 +36,7 @@ endfunction
 ";
 
     // Target: defines its own H000 and A000 (forces remaps), has a colliding function
-    // name and an InitCustomTriggers to hook — everything the script port can exercise.
+    // name and an InitCustomTriggers to hook, everything the script port can exercise.
     private const string TargetScript = @"globals
     integer udg_Foo= 1
 endglobals

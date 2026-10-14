@@ -1219,7 +1219,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         // The grid shows resolved text for wts references; the editor holds the raw token,
         // so flag it rather than let the user think the box "lost" the readable value.
         if (row.Value.Contains("TRIGSTR_", StringComparison.Ordinal))
-            EditNote.Text = "String-table reference (war3map.wts) — the grid shows the resolved "
+            EditNote.Text = "String-table reference (war3map.wts), the grid shows the resolved "
                 + "text; editing here replaces the reference with a literal value.";
     }
 
@@ -1557,9 +1557,9 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         EditNote.Text = _editorMode switch
         {
             EditorMode.Numeric => _numericEditNote,
-            EditorMode.Combo => $"Enumerated field (type '{opt.Type}') — pick a value the base game already uses.",
-            EditorMode.Multi => $"List field (type '{opt.Type}') — check tokens to include; saved comma-separated.",
-            EditorMode.RefList => $"Object-reference list (type '{opt.Type}') — add, remove and reorder entries; "
+            EditorMode.Combo => $"Enumerated field (type '{opt.Type}'), pick a value the base game already uses.",
+            EditorMode.Multi => $"List field (type '{opt.Type}'), check tokens to include; saved comma-separated.",
+            EditorMode.RefList => $"Object-reference list (type '{opt.Type}'), add, remove and reorder entries; "
                 + "Apply saves the rawcodes comma-separated in list order.",
             _ when AssetPickerCombo.IsVisible =>
                 $"Asset path field (type '{opt.Type}'), pick an existing map or game path above, or type one.",
@@ -2010,7 +2010,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
 
         public string Code { get; }
         public string Name { get; }
-        /// <summary>Raw stored value (TRIGSTR_ refs intact) — what the editor edits and writes back.</summary>
+        /// <summary>Raw stored value (TRIGSTR_ refs intact), what the editor edits and writes back.</summary>
         public string Value { get; }
         /// <summary>TRIGSTR_-resolved value shown in the grid; equals Value when not a reference.</summary>
         public string DisplayValue { get; }

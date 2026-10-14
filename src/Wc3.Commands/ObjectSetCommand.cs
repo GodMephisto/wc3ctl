@@ -46,7 +46,7 @@ public static class ObjectSetCommand
     {
         session ??= new Session(doc, kind);
         if (rawcode.Length != 4)
-            return new(false, $"invalid rawcode '{rawcode}' — expected 4 characters");
+            return new(false, $"invalid rawcode '{rawcode}', expected 4 characters");
 
         var (code, level, fieldError) = ParseFieldToken(field);
         if (fieldError is not null)
@@ -127,7 +127,7 @@ public static class ObjectSetCommand
             // shape, which is not authoritative. Int vs Real are not byte-compatible, so
             // a wrong guess stores a wrong in-game value (structure stays valid).
             warning = $"field {field} was newly added with inferred type {type} (guessed from the value); "
-                    + "verify that matches the field's real type — an Int written where the game expects Real "
+                    + "verify that matches the field's real type, an Int written where the game expects Real "
                     + "(or vice-versa) stores a wrong value.";
         }
 
@@ -225,12 +225,12 @@ public static class ObjectSetCommand
         if (colon < 0)
             return field.Length == 4
                 ? (field, null, null)
-                : (field, null, $"invalid field code '{field}' — expected 4 characters");
+                : (field, null, $"invalid field code '{field}', expected 4 characters");
         var code = field[..colon];
         return code.Length == 4
             && int.TryParse(field[(colon + 1)..], NumberStyles.None, CultureInfo.InvariantCulture, out var n)
             ? (code, n, null)
-            : (code, null, $"invalid field '{field}' — expected a 4-character code or code:N");
+            : (code, null, $"invalid field '{field}', expected a 4-character code or code:N");
     }
 
     private static bool TryParseAs(string value, ObjectDataType type, out object typed)

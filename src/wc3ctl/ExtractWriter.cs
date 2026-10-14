@@ -1,4 +1,4 @@
-// src/wc3ctl/ExtractWriter.cs — file writing lives in the CLI layer only;
+// src/wc3ctl/ExtractWriter.cs, file writing lives in the CLI layer only;
 // Wc3.Commands selects entries, this class puts their bytes on disk.
 using Wc3.Commands;
 using Wc3.Model;

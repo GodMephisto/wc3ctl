@@ -25,9 +25,9 @@ public sealed class PaletteRow : INotifyPropertyChanged
     private bool _iconRequested;
 
     /// <summary>
-    /// The row's decoded icon, or null (no/undecodable icon — the tile simply stays an
-    /// empty box). Lazy: the first read — which happens when the grid realizes the tile
-    /// and binds it — kicks off an off-thread decode; the binding refreshes via
+    /// The row's decoded icon, or null (no/undecodable icon, the tile simply stays an
+    /// empty box). Lazy: the first read, which happens when the grid realizes the tile
+    /// and binds it, kicks off an off-thread decode; the binding refreshes via
     /// PropertyChanged when it lands. Never blocks the UI thread, never throws.
     /// </summary>
     public Bitmap? Icon
@@ -55,7 +55,7 @@ public sealed class PaletteRow : INotifyPropertyChanged
     }
 
     private bool _isSelected;
-    /// <summary>Whether this tile is the armed placement — drives the selection highlight
+    /// <summary>Whether this tile is the armed placement, drives the selection highlight
     /// via a <c>Classes.selected</c> binding. Set by <see cref="PaletteView"/>.</summary>
     public bool IsSelected
     {
@@ -97,7 +97,7 @@ public sealed class PaletteRow : INotifyPropertyChanged
     }
 
     /// <summary>Whether this type has icon art at all. Most doodads (and hero/custom unit
-    /// variants) have none — WC3 lists those by name, not icon — so those tiles show
+    /// variants) have none, WC3 lists those by name, not icon, so those tiles show
     /// <see cref="TileText"/> instead of an empty box.</summary>
     public bool HasIconArt => !string.IsNullOrWhiteSpace(IconPath);
     /// <summary>Fallback tile caption when there's no icon: the name, or the rawcode.</summary>
@@ -107,7 +107,7 @@ public sealed class PaletteRow : INotifyPropertyChanged
 /// <summary>
 /// Decodes palette icon art to Avalonia bitmaps off the UI thread, cached per path.
 /// Resolution and decoding are the command layer's (<see cref="PaletteCommand.IconPng"/>:
-/// map imports first, then base-game CASC, BLP/DDS/TGA sniffed) — this class only adds
+/// map imports first, then base-game CASC, BLP/DDS/TGA sniffed), this class only adds
 /// caching, request coalescing, and thread marshalling. Both dictionaries are touched on
 /// the UI thread only (requests originate from bindings; completions are posted back),
 /// so no locking is needed. One instance per catalog load: replacing it wholesale when
@@ -149,7 +149,7 @@ internal sealed class PaletteIconLoader
                     bmp = new Bitmap(ms);
                 }
             }
-            catch { /* no icon — the tile stays an empty box */ }
+            catch { /* no icon, the tile stays an empty box */ }
             Dispatcher.UIThread.Post(() =>
             {
                 _done[iconPath] = bmp;
@@ -162,7 +162,7 @@ internal sealed class PaletteIconLoader
 
 /// <summary>One palette group: a visible collapsible header (kind · source) plus its
 /// icon tiles. Rendered in PaletteView.axaml as a full-width <c>SectionHeader</c> stacked
-/// over a <c>WrapPanel</c> of tiles — the header is a normal vertical child, so it is
+/// over a <c>WrapPanel</c> of tiles, the header is a normal vertical child, so it is
 /// ALWAYS visible (unlike the old mixed-item WrapPanel hack where it vanished).</summary>
 public sealed class PaletteGroup
 {
@@ -194,7 +194,7 @@ public partial class PaletteView : UserControl, IMapPanel
     private int _generation;
     /// <summary>True from ShowMap until its load lands; filter events wait for real data.</summary>
     private bool _loading;
-    /// <summary>Group keys (kind·source) the user has collapsed — their tiles are hidden until
+    /// <summary>Group keys (kind·source) the user has collapsed, their tiles are hidden until
     /// re-expanded. The base catalog is collapsed by default (it's the ~thousands-tile bulk).</summary>
     private readonly HashSet<string> _collapsed = new(StringComparer.Ordinal)
         { "Unit·base", "Doodad·base", "Item·base", "Destructable·base" };
@@ -444,7 +444,7 @@ public partial class PaletteView : UserControl, IMapPanel
         if (row is not null)
         {
             row.IsSelected = true;
-            StatusText.Text = $"Selected: {row.Display} — {row.Detail}  ·  click the terrain to place";
+            StatusText.Text = $"Selected: {row.Display}, {row.Detail}  ·  click the terrain to place";
         }
         PlacementChanged?.Invoke(this, row);
     }

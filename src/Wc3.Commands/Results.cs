@@ -91,7 +91,7 @@ public sealed record PortResult(
     // them are not the root's own, so a report can count them instead of listing them.
     IReadOnlyList<string>? CarriedFiles = null);
 // Combined outcome of porting several units into one target: per-unit results in input
-// order (their Script is always null — the batch splices the merged closure once), the
+// order (their Script is always null, the batch splices the merged closure once), the
 // single merged script summary, and batch-level warnings.
 public sealed record BatchPortResult(
     IReadOnlyList<PortResult> Units,

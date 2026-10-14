@@ -97,7 +97,7 @@ public partial class MapWorkspaceView : UserControl
     private void OnMapEdited(object? sender, EventArgs e)
     {
         SaveButton.IsEnabled = true;
-        StatusText.Text = "Placed object (unsaved) — click Save to write it to the map.";
+        StatusText.Text = "Placed object (unsaved), click Save to write it to the map.";
     }
 
     /// <summary>Viewport selection change (click/marquee/Shift-toggle/clear) → route the
@@ -362,14 +362,14 @@ public partial class MapWorkspaceView : UserControl
         var tip = display is not null
             ? $"Port {display} and everything it uses into the Target map."
             : nonUnit
-                ? $"Porting is for units — {selLabel} is a {kindWord}."
+                ? $"Porting is for units, {selLabel} is a {kindWord}."
                 : "Pick a unit in the Objects or Dependencies tab, then port it into the Target map.";
         ToolTip.SetTip(PortButtonHost, tip);
         ToolTip.SetTip(PortButton, tip);
         ToolTip.SetTip(PreviewPortButton, display is not null
             ? $"Dry run: show exactly what porting {display} would change without writing anything."
             : nonUnit
-                ? $"Porting is for units — {selLabel} is a {kindWord}."
+                ? $"Porting is for units, {selLabel} is a {kindWord}."
                 : "Dry run: show exactly what the port would change without writing anything.");
     }
 
@@ -496,7 +496,7 @@ public partial class MapWorkspaceView : UserControl
             return;
         }
 
-        // A blank/new map has no path yet — prompt for one (Save As).
+        // A blank/new map has no path yet, prompt for one (Save As).
         var path = Session.MapPath;
         if (path is null)
         {
@@ -580,7 +580,7 @@ public partial class MapWorkspaceView : UserControl
             // Start-location markers so a new map opens a real host lobby (see BlankMap.IncludeStartLocations).
             var doc = BlankMap.Create(new BlankMapOptions { IncludeStartLocations = true });
             Session.Current = doc;
-            Session.MapPath = null; // no file on disk yet — Save will prompt for one
+            Session.MapPath = null; // no file on disk yet, Save will prompt for one
             SaveButton.IsEnabled = true;
             TestButton.IsEnabled = true;
             _loadedPanels.Clear();
@@ -591,7 +591,7 @@ public partial class MapWorkspaceView : UserControl
             UpdatePortButtons();
             LoadSelectedPanel();
             MapChanged?.Invoke(this, EventArgs.Empty);
-            StatusText.Text = "New blank map created (in memory) — edit it, then Save to write it to disk.";
+            StatusText.Text = "New blank map created (in memory), edit it, then Save to write it to disk.";
             RefreshMinBuildStatus();
         }
         catch (Exception ex)

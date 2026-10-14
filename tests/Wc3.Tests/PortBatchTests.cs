@@ -176,7 +176,7 @@ endfunction
         var reloaded = MapDocument.Load(target.SaveToBytes());
         var j = Encoding.UTF8.GetString(reloaded.GetFile("war3map.j")!.RawBytes);
 
-        // Carried exactly once — no renamed _p1 duplicate from a second splice.
+        // Carried exactly once, no renamed _p1 duplicate from a second splice.
         Assert.Single(Regex.Matches(j, @"function Trig_Dispatch_Actions takes"));
         Assert.Single(Regex.Matches(j, @"call InitTrig_Dispatch\(\)"));
 

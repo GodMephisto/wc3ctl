@@ -21,11 +21,11 @@ public static class Render
     {
         var sb = new StringBuilder();
         foreach (var i in r.Issues)
-            sb.AppendLine($"{i.Severity}: [{i.Category}] {i.FileName} — {i.Message}");
+            sb.AppendLine($"{i.Severity}: [{i.Category}] {i.FileName}, {i.Message}");
         if (r.Issues.Count > 0) sb.AppendLine();
         sb.Append(r.Valid
-            ? $"OK — valid ({r.Errors} error(s), {r.Warnings} warning(s))"
-            : $"INVALID — {r.Errors} error(s), {r.Warnings} warning(s)");
+            ? $"OK, valid ({r.Errors} error(s), {r.Warnings} warning(s))"
+            : $"INVALID, {r.Errors} error(s), {r.Warnings} warning(s)");
         return sb.ToString();
     }
 
@@ -1078,7 +1078,7 @@ public static class Render
     public static string DoodadPalette(DoodadPaletteResult r)
     {
         // A base doodad the map edits in place carries BaseRawcode == its own code; suppress
-        // the "(base: self)" noise there — the [source] tag already says "map-modified".
+        // the "(base: self)" noise there, the [source] tag already says "map-modified".
         var lines = r.Entries.Select(e =>
             Headline(e.Rawcode, e.Name, e.BaseRawcode == e.Rawcode ? null : e.BaseRawcode) + $"  [{e.Source}]");
         var notes = r.Diagnostics.Select(d => $"note: {d}");

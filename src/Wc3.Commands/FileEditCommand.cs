@@ -31,7 +31,7 @@ public sealed record FileState(
 /// <list type="bullet">
 /// <item><see cref="AddOrReplace"/> with an existing name REPLACES the payload (mirroring
 /// <c>MapDocument.AddOrReplaceRawFile</c>); the result reports which case occurred.</item>
-/// <item>Hard-removing an entry is not supported by the model — see <see cref="Remove"/>.</item>
+/// <item>Hard-removing an entry is not supported by the model, see <see cref="Remove"/>.</item>
 /// <item>Text: default encoding is UTF-8. <see cref="WriteText"/> never emits a BOM and
 /// <see cref="ReadText"/> strips a leading BOM, so WriteText→ReadText is the identity and
 /// reading a BOM'd original yields clean text.</item>
@@ -61,7 +61,7 @@ public static class FileEditCommand
     /// <summary>
     /// Hard-removing a file is NOT supported by the model, so this fails loudly.
     /// <c>MapDocument</c> exposes no way to delete an entry (<c>Files</c> is read-only), and
-    /// <c>SaveToBytes</c> rebuilds from the original archive by only ADDING dirty entries —
+    /// <c>SaveToBytes</c> rebuilds from the original archive by only ADDING dirty entries , 
     /// removal is deliberately unwired because <c>MpqArchiveBuilder.RemoveFile</c> +
     /// <c>AddFile</c> of the same name silently drops the file. The nearest supported
     /// operation is <see cref="AddOrReplace"/> with an empty payload, which blanks the
@@ -74,7 +74,7 @@ public static class FileEditCommand
             "only adds/shadows dirty entries when rebuilding the original archive. " +
             "Use AddOrReplace with an empty payload to blank the content instead.");
 
-    /// <summary>Current bytes of a file — the pending in-memory replacement when one exists,
+    /// <summary>Current bytes of a file, the pending in-memory replacement when one exists,
     /// else the original bytes. Returns a defensive copy so callers can't mutate the
     /// document's buffers (RawBytes is the immutable original).</summary>
     public static byte[] ReadBytes(MapDocument doc, string name)
@@ -92,7 +92,7 @@ public static class FileEditCommand
         return ToState(RequireEntry(doc, name));
     }
 
-    /// <summary>Lists every archive entry with its CURRENT size — unlike the raw listing,
+    /// <summary>Lists every archive entry with its CURRENT size, unlike the raw listing,
     /// a replaced file reports the pending payload's size, not the stale original's.</summary>
     public static IReadOnlyList<FileState> ListFiles(MapDocument doc)
     {

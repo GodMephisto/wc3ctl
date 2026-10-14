@@ -32,8 +32,8 @@ public partial class StringImportView : UserControl, IMapPanel
             var size = Entry.SizeBytes is { } b ? $"  ({b:N0} bytes)" : "";
             var note = Entry switch
             {
-                { InArchive: false } => "  — in manifest, missing from archive",
-                { InManifest: false } => "  — in archive, not in manifest",
+                { InArchive: false } => " , in manifest, missing from archive",
+                { InManifest: false } => " , in archive, not in manifest",
                 _ => "",
             };
             return $"{Entry.Path}{size}{note}";
@@ -142,7 +142,7 @@ public partial class StringImportView : UserControl, IMapPanel
         {
             StringsCommand.Set(doc, item.Entry.Id, EditorBox.Text ?? string.Empty);
             RefreshStrings(keepSelectionId: item.Entry.Id);   // re-parse so the row + editor show what was stored
-            StatusText.Text = $"STRING {item.Entry.Id} updated in memory — Save Map… writes a .edited copy.";
+            StatusText.Text = $"STRING {item.Entry.Id} updated in memory, Save Map… writes a .edited copy.";
         }
         catch (Exception ex)
         {

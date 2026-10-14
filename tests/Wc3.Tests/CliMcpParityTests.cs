@@ -2,7 +2,7 @@
 // Guards that wc3ctl's two surfaces stay in lockstep: everything an agent can do
 // through the MCP server, a human can do through the CLI, and no CLI verb appears
 // without a conscious parity decision. Both surfaces are thin wrappers over
-// Wc3.Commands, so this catches "wired one side, forgot the other" drift — the exact
+// Wc3.Commands, so this catches "wired one side, forgot the other" drift, the exact
 // failure mode that let terrain/place_unit/object_set land on MCP before the CLI.
 using System.CommandLine;
 using System.Reflection;

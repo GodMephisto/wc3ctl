@@ -130,7 +130,7 @@ public static partial class TerrainCommand
         int loX = Math.Max(0, x0), hiX = Math.Min(w - 1, x1);
         int loY = Math.Max(0, y0), hiY = Math.Min(h - 1, y1);
         if (loX > hiX || loY > hiY)
-            return new(true, $"{describe} — 0 tiles changed (region off-grid)", 0);
+            return new(true, $"{describe}, 0 tiles changed (region off-grid)", 0);
 
         int changed = 0;
         for (int y = loY; y <= hiY; y++)
@@ -167,7 +167,7 @@ public static partial class TerrainCommand
 
         if (changed > 0)
             doc.AddOrReplaceModelFile(TerrainFile, env);
-        return new(true, $"{describe} — {changed} tiles changed", changed);
+        return new(true, $"{describe}, {changed} tiles changed", changed);
     }
 
     // ---- Blight -------------------------------------------------------------
@@ -237,7 +237,7 @@ public static partial class TerrainCommand
         int loX = Math.Max(0, x0), hiX = Math.Min(w - 1, x1);
         int loY = Math.Max(0, y0), hiY = Math.Min(h - 1, y1);
         if (loX > hiX || loY > hiY)
-            return new(true, $"{describe} — 0 tiles changed (region off-grid)", 0);
+            return new(true, $"{describe}, 0 tiles changed (region off-grid)", 0);
 
         int changed = 0;
         for (int y = loY; y <= hiY; y++)
@@ -253,6 +253,6 @@ public static partial class TerrainCommand
 
         if (changed > 0)
             doc.AddOrReplaceModelFile(TerrainFile, env);
-        return new(true, $"{describe} — {changed} tiles changed", changed);
+        return new(true, $"{describe}, {changed} tiles changed", changed);
     }
 }

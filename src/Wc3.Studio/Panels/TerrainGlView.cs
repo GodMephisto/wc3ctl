@@ -75,7 +75,7 @@ public sealed class TerrainGlView : OpenGlControlBase
     // Creation numbers of the selected units (set by a viewport click/marquee or by a
     // panel via SetSelectedUnits); matching instances draw highlighted. Empty = no
     // selection. The reference is swapped whole (never mutated) so the render pass can
-    // read it without locking — the same idiom as _scene.
+    // read it without locking, the same idiom as _scene.
     private HashSet<int> _selectedUnits = new();
 
     // Creation number of the selected doodad (single-select only), or null for none.
@@ -325,8 +325,8 @@ public sealed class TerrainGlView : OpenGlControlBase
     /// <summary>
     /// Picks every placed unit whose screen position falls inside the marquee rectangle
     /// (viewport logical coordinates; any two opposite corners). Each unit instance's
-    /// representative point — its mesh-AABB centre carried through the instance
-    /// transform, or the raw world translation for meshes not in the scene — is
+    /// representative point, its mesh-AABB centre carried through the instance
+    /// transform, or the raw world translation for meshes not in the scene, is
     /// projected with the exact camera the last frame rendered with; units behind the
     /// camera never match. Doodads are excluded, the marquee is a unit multi-select
     /// (a doodad is picked one at a time via <see cref="PickPlacement"/>).
@@ -363,7 +363,7 @@ public sealed class TerrainGlView : OpenGlControlBase
 
     /// <summary>
     /// The view*projection the render pass uses, rebuilt from the current camera state
-    /// for the given viewport size (logical units are fine — the aspect ratio matches
+    /// for the given viewport size (logical units are fine, the aspect ratio matches
     /// the pixel viewport). Mirrors OnOpenGlRender exactly so picking agrees with what
     /// is on screen.
     /// </summary>
@@ -621,12 +621,12 @@ public sealed class TerrainGlView : OpenGlControlBase
             // Placement program: unique meshes (real textured models / fallback boxes)
             // drawn once per instance with a world-transform uniform. Textured sections
             // sample the geoset's texture UV-mapped, alpha-cutting ONLY when the
-            // material's filter mode is Transparent (WC3 foliage/hair) — opaque modes
+            // material's filter mode is Transparent (WC3 foliage/hair), opaque modes
             // must not discard or unit bodies get holes; Additive sections blend onto
             // the frame (handled by GL blend state in the draw loop). Team-colour
             // sections paint the owning player's colour; other untextured sections use
             // the flat vertex color; the selected unit draws brightened with a warm
-            // tint. Lighting is two-sided lambert (|dot|) like the CPU ModelRenderer —
+            // tint. Lighting is two-sided lambert (|dot|) like the CPU ModelRenderer , 
             // WC3 materials are frequently two-sided and culling is off.
             string pvsSrc = header +
                 "layout(location=0) in vec3 aPos;\n" +
@@ -831,7 +831,7 @@ public sealed class TerrainGlView : OpenGlControlBase
                         }
 
                         // Non-opaque sections (glows, capes, soft foliage, shadows) must blend,
-                        // not overwrite — otherwise they render as a hard "weird polygon". Each
+                        // not overwrite, otherwise they render as a hard "weird polygon". Each
                         // WC3 filter mode maps to its GL blend func; all are depth-tested but not
                         // depth-written so geometry behind them still draws. None(0)/Transparent(1)
                         // stay opaque (Transparent alpha-tests in the shader).
@@ -1060,7 +1060,7 @@ public sealed class TerrainGlView : OpenGlControlBase
         _gl.BindVertexArray(0);
 
         // The mesh's decoded textures, one GL texture each (mipmapped; Repeat matches
-        // the CPU renderer's `u -= floor(u)` wrap; rows upload as-is — WC3 v=0 is row 0).
+        // the CPU renderer's `u -= floor(u)` wrap; rows upload as-is, WC3 v=0 is row 0).
         var textures = new uint[mesh.Textures.Count];
         for (int i = 0; i < textures.Length; i++)
         {
@@ -1161,7 +1161,7 @@ public sealed class TerrainGlView : OpenGlControlBase
             _waterVbo = _waterEbo = _waterVao = _waterProgram = 0;
             _waterIndexCount = 0;
             _placeProgram = 0;
-            _gpuMeshes.Clear();     // GL names die with the context — never reuse them
+            _gpuMeshes.Clear();     // GL names die with the context, never reuse them
             _instanceGroups.Clear();
             _anisotropy = -1f;      // re-query on the next context
             _initialized = false;

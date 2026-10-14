@@ -273,7 +273,7 @@ public sealed class MapDocument
 
         // Source 1: string literals in the script. Whichever of the two script languages, and
         // whichever spelling the archive stores it under (see StandardMapFileNames), only the
-        // text matters here — deliberately unscoped (every literal, not one hero's reachable
+        // text matters here, deliberately unscoped (every literal, not one hero's reachable
         // code, the way Wc3.Commands.BundleCommand's closure-scoped scan must be to avoid
         // mis-attributing an asset to the wrong hero). Over-collecting a candidate here costs
         // nothing worse than a failed hash lookup below.
@@ -318,7 +318,7 @@ public sealed class MapDocument
         archive.AddFileNames(StandardMapFileNames.All); // keep this archive's naming in step with Load's
         archive.AddFileNames(candidates);
 
-        // Fold newly resolved names back by BlockIndex (not position — a caller may have added
+        // Fold newly resolved names back by BlockIndex (not position, a caller may have added
         // entries beyond the archive's own since Load, those carry no BlockIndex this archive
         // enumerates and are correctly left alone).
         var byBlock = _files.Where(f => f.BlockIndex < archive.Count).ToDictionary(f => f.BlockIndex);
@@ -737,7 +737,7 @@ public sealed class MapDocument
         var grown = GrownHashTableSize(OriginalHashTableSize(), _files.Count);
 
         using var mpq = new MemoryStream();
-        // SaveTo disposes the target stream unless leaveOpen — we still need to read it back.
+        // SaveTo disposes the target stream unless leaveOpen, we still need to read it back.
         // The two overloads do NOT agree on their bookkeeping defaults: passing an options
         // object changes the emitted (listfile)/(attributes) even when only HashTableSize
         // is set on it. So take the plain overload untouched whenever the inherited table
@@ -1115,7 +1115,7 @@ public sealed class MapDocument
     /// <summary>
     /// Adds a file backed by a typed model, or replaces an existing file's model.
     /// Serialized on Save via <see cref="SerializeEntry"/> (only byte-faithful formats
-    /// are supported — see that method). Used to inject/replace object-data files, etc.
+    /// are supported, see that method). Used to inject/replace object-data files, etc.
     /// </summary>
     public MapFileEntry AddOrReplaceModelFile(string fileName, object model)
     {
@@ -1144,7 +1144,7 @@ public sealed class MapDocument
 
     // Serialization by model type. A raw OverrideBytes payload always wins; otherwise
     // the model's War3Net writer is used. Only formats with a byte-faithful writer are
-    // handled — anything else must stay non-dirty (raw) so Save preserves original bytes.
+    // handled, anything else must stay non-dirty (raw) so Save preserves original bytes.
     // Internal rather than private so SerializerFidelitySweep can measure the REAL save
     // path across the map library. A test holding its own copy of this dispatch would
     // drift from it, and the drift would look like the maps changing.
@@ -1243,7 +1243,7 @@ public sealed class MapDocument
         }
 
         // A dirty entry with no override and no supported model would silently lose
-        // the caller's intent if we passed the original bytes through — fail loudly.
+        // the caller's intent if we passed the original bytes through, fail loudly.
         // Formats without a byte-faithful model writer (e.g. war3map.wts) must be
         // written via AddOrReplaceRawFile instead.
         throw new NotSupportedException(

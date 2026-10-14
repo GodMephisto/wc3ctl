@@ -59,8 +59,8 @@ public sealed class AudioPlayer : IDisposable
     /// <summary>
     /// Opens an initialized output device for <paramref name="reader"/>. Tries the legacy
     /// WaveOut mapper first (WAVE_MAPPER = the current default device; lowest overhead and
-    /// works on most boxes). If winmm rejects it — which happens on machines whose default
-    /// endpoint the mapper can't resolve, surfacing as "BadDeviceId calling waveOutOpen" —
+    /// works on most boxes). If winmm rejects it, which happens on machines whose default
+    /// endpoint the mapper can't resolve, surfacing as "BadDeviceId calling waveOutOpen" , 
     /// it consults the modern Core Audio stack and plays via WASAPI on the default render
     /// endpoint instead. Only when Core Audio reports no active render endpoint at all
     /// (headless/remote session, or audio disabled) does it throw a clear, diagnosable
@@ -120,7 +120,7 @@ public sealed class AudioPlayer : IDisposable
         {
             // A manual Stop/Play unsubscribes before stopping, so reaching here means a
             // natural finish. If it isn't the current output, a newer clip has already
-            // taken over — ignore this stale callback so we don't tear the new clip down.
+            // taken over, ignore this stale callback so we don't tear the new clip down.
             if (!ReferenceEquals(sender, _output))
                 return;
             Teardown();

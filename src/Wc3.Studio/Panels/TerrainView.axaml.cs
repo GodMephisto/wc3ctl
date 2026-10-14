@@ -49,7 +49,7 @@ public partial class TerrainView : UserControl, IMapPanel
     /// <summary>Raised after a click-to-place (or an undo/redo) mutates the in-memory map.</summary>
     public event EventHandler? MapEdited;
 
-    /// <summary>Raised whenever a GL viewport gesture changes the unit selection — a
+    /// <summary>Raised whenever a GL viewport gesture changes the unit selection, a
     /// plain click (a 1-element list), a Shift-click toggle, a marquee drag, or a clear
     /// (an empty list). The list is a snapshot of the FULL current selection.
     /// Programmatic selection via <see cref="SelectUnits"/> does NOT re-raise this, so
@@ -70,7 +70,7 @@ public partial class TerrainView : UserControl, IMapPanel
     public event Action<int>? DoodadSelected;
 
     /// <summary>Raised when the placement brush is cleared (Esc or right-click in the GL
-    /// view) so the host can clear the Palette's selection and stay in sync — returning the
+    /// view) so the host can clear the Palette's selection and stay in sync, returning the
     /// user to "pointer mode" where a left click selects a unit instead of placing.</summary>
     public event EventHandler? PlacementBrushCleared;
 
@@ -219,8 +219,8 @@ public partial class TerrainView : UserControl, IMapPanel
     /// Builds the GL viewport's per-type model resolver: model path from the merged
     /// object data (map deltas win; Reforged skin-profile fallback), geometry + decoded
     /// textures via <see cref="RenderModelCommand.Prepare(Wc3.Model.MapDocument, string, Wc3.GameData.GameDataContext?)"/>
-    /// (map imports first, then base game via CASC), posed at "Stand" — the viewport
-    /// UV-maps each geoset with its real texture. Results — including failures, as null —
+    /// (map imports first, then base game via CASC), posed at "Stand", the viewport
+    /// UV-maps each geoset with its real texture. Results, including failures, as null , 
     /// are cached per type, so each distinct rawcode is resolved at most once per map.
     /// </summary>
     private static Func<string, bool, Wc3.Render.PlacementModel?> BuildModelResolver(MapSession session)
@@ -270,14 +270,14 @@ public partial class TerrainView : UserControl, IMapPanel
         _brush = row;
         StopPlacingButton.IsEnabled = row is not null; // lights up only while a tool is armed
         BrushText.Text = row is null
-            ? "▶ Pointer mode — click or drag a box to select units (Shift adds, Delete removes)"
-            : $"● Placing: {row.Display} — click to place · ✋ Stop placing (or Esc / right-click) to cancel";
+            ? "▶ Pointer mode, click or drag a box to select units (Shift adds, Delete removes)"
+            : $"● Placing: {row.Display}, click to place · ✋ Stop placing (or Esc / right-click) to cancel";
     }
 
     /// <summary>Toolbar "Stop placing": disarm the brush → pointer mode. Works in both the
     /// 2D and GL views (unlike Esc/right-click which are GL-only), so it's the reliable exit.</summary>
     private void OnStopPlacingClick(object? sender, RoutedEventArgs e) =>
-        ClearPlacementBrush("Pointer mode — click a unit to select.");
+        ClearPlacementBrush("Pointer mode, click a unit to select.");
 
     /// <summary>Disarms the placement brush (back to pointer mode) and tells the host so the
     /// Palette selection clears too. Used by right-click / Esc in the GL view.</summary>
@@ -1188,7 +1188,7 @@ public partial class TerrainView : UserControl, IMapPanel
                 // First Esc cancels the placement tool (or sculpt mode). With neither
                 // active it clears the unit selection.
                 if (_brush is not null)
-                    ClearPlacementBrush("Placement cancelled · pointer mode — click a unit to select.");
+                    ClearPlacementBrush("Placement cancelled · pointer mode, click a unit to select.");
                 else if (_sculpt)
                     ExitSculpt("Sculpt off · pointer mode, click a unit to select.");
                 else

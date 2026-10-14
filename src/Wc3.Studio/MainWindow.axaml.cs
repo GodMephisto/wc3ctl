@@ -166,7 +166,7 @@ public partial class MainWindow : Window
 
     /// <summary>
     /// Dry-run preview: computes the identical report through PortCommand.PreviewPort
-    /// (same code path as the real port) and shows it — nothing is written anywhere.
+    /// (same code path as the real port) and shows it, nothing is written anywhere.
     /// </summary>
     private async void OnPortPreviewRequested(object? sender, MapWorkspaceView.PortRequest request)
     {
@@ -184,7 +184,7 @@ public partial class MainWindow : Window
 
         // A saved target reloads from disk (keeps the open session pristine, writes a sibling
         // .ported). A blank/unsaved target has no file, so we port into its live in-memory doc
-        // and let the user Save afterward — otherwise porting into a New Blank Map is impossible.
+        // and let the user Save afterward, otherwise porting into a New Blank Map is impossible.
         var targetPath = TargetWorkspace.Session.MapPath;
         var gameDir = SourceWorkspace.Session.GameDir;
         var targetLabel = targetPath is not null ? Path.GetFileName(targetPath) : "the target map";
