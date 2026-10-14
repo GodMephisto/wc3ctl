@@ -18,10 +18,12 @@ namespace Wc3.Studio.Tests;
 /// visible as a number, and it fails only on a budget generous enough to catch an order of
 /// magnitude rather than to police a machine's mood.
 ///
-/// Run this project alone. `dotnet test --filter Category=Corpus` starts the Wc3.Tests corpus suite
-/// and this one together, and the 13 minute map sweep starves these panels, since the budget is
-/// wall clock on a shared machine. Measured, the same panels pass at 85ms and 780ms with the
-/// project to itself and blow past every budget while the other suite runs.
+/// Run this project alone, on an idle machine. `dotnet test --filter Category=Corpus` starts the
+/// Wc3.Tests corpus suite and this one together, and the 13 minute map sweep starves these panels,
+/// since the budget is wall clock on a shared machine. A heavy suite that finished moments earlier
+/// does the same, measured on FilesPanelNamelessCostTests, which blew its typing budget after a
+/// GameData run and passed in a second alone. The same panels pass at 85ms and 780ms with the
+/// project to itself.
 /// </summary>
 public class PanelLoadCostTests
 {
