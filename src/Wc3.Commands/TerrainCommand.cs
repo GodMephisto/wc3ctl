@@ -195,9 +195,18 @@ public static partial class TerrainCommand
     private static string FmtAmount(HeightOp op, float amount) => op switch
     {
         HeightOp.Raise or HeightOp.Lower => $"{amount:0.###} ",
-        HeightOp.Set => $"{amount:0.###} ",
+        // Report the height the tile will actually hold. A set past the 16-bit field's ceiling is
+        // clamped, and the message used to claim the requested value while terrain_corner_set
+        // reported the effective one.
+        HeightOp.Set => $"{TerrainEditCommand.ClampGroundHeight(amount):0.###} ",
         _ => "",
     };
+
+    /// <summary>The cliff level the brush will actually write. A set past the 0 to 15 the field
+    /// holds is clamped, and the message used to echo the requested value while
+    /// terrain_corner_set reported the effective one.</summary>
+    private static int EffectiveCliffLevel(CliffOp op, int level) =>
+        op == CliffOp.Set ? TerrainEditCommand.ClampCliffLevel(level) : level;
 
     private static DeformResult Apply(
         MapDocument doc,
@@ -383,7 +392,7 @@ public static partial class TerrainCommand
                 return dx * dx + dy * dy <= r2;
             },
             op, level,
-            describe: $"cliff {op.ToString().ToLowerInvariant()} {level} over {shape.ToString().ToLowerInvariant()} r{radius} at ({centerX},{centerY})");
+            describe: $"cliff {op.ToString().ToLowerInvariant()} {EffectiveCliffLevel(op, level)} over {shape.ToString().ToLowerInvariant()} r{radius} at ({centerX},{centerY})");
     }
 
     /// <summary>
@@ -403,7 +412,7 @@ public static partial class TerrainCommand
             x0: minX, y0: minY, x1: maxX, y1: maxY,
             keep: static (_, _) => true,
             op, level,
-            describe: $"cliff {op.ToString().ToLowerInvariant()} {level} over rect ({minX},{minY})-({maxX},{maxY})");
+            describe: $"cliff {op.ToString().ToLowerInvariant()} {EffectiveCliffLevel(op, level)} over rect ({minX},{minY})-({maxX},{maxY})");
     }
 
     /// <summary>

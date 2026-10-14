@@ -100,8 +100,14 @@ public static partial class TerrainCommand
             describe: $"water {DescribeWater(op, amount)} over rect [{lx},{ly}]-[{hx},{hy}]");
     }
 
-    private static string DescribeWater(WaterOp op, float amount) =>
-        op == WaterOp.Remove ? "remove" : $"{op.ToString().ToLowerInvariant()} {amount:0.###}";
+    private static string DescribeWater(WaterOp op, float amount) => op switch
+    {
+        WaterOp.Remove => "remove",
+        // The level the tile will hold, not the requested one. A set past the 16-bit field's
+        // ceiling is clamped, and the message used to claim the requested value.
+        WaterOp.Set => $"set {TerrainEditCommand.ClampWaterHeight(amount):0.###}",
+        _ => $"{op.ToString().ToLowerInvariant()} {amount:0.###}",
+    };
 
     private static DeformResult ApplyWater(
         MapDocument doc,
