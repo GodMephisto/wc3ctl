@@ -25,7 +25,8 @@ public sealed record JassToLuaResult(
     IReadOnlyList<string> FuncNames,
     IReadOnlyList<string> OverridesWithoutTarget,
     IReadOnlyList<string> Warnings,
-    IReadOnlyDictionary<string, (IReadOnlyList<string> Params, string Ret)> MapNatives);
+    IReadOnlyDictionary<string, (IReadOnlyList<string> Params, string Ret)> MapNatives,
+    bool StrictReals = false);
 
 /// <summary>
 /// Converts a JASS map script to Lua for Warcraft III 1.31 and later, keeping the JASS rules Lua
@@ -71,8 +72,9 @@ public static class JassToLua
         string commonJ, string blizzardJ, string mapSource,
         IReadOnlyDictionary<string, string>? overrides = null,
         IEnumerable<string>? dropFunctions = null,
-        IReadOnlyDictionary<string, string>? translate = null)
-        => new Transpiler(commonJ, blizzardJ, mapSource, overrides, dropFunctions, translate).Run();
+        IReadOnlyDictionary<string, string>? translate = null,
+        bool strictReals = false)
+        => new Transpiler(commonJ, blizzardJ, mapSource, overrides, dropFunctions, translate, strictReals).Run();
 
     /// <summary>
     /// The runtime the converted functions call into. The helpers keep the JASS rules, and the
@@ -141,6 +143,28 @@ public static class JassToLua
         """;
 
     /// <summary>
+    /// The helpers a strict-real conversion adds. JASS reals are 32-bit floats and Lua numbers are
+    /// 64-bit doubles, so a converted <c>a + b</c> on reals drifts where the original did not.
+    /// Each helper rounds its result back through an IEEE single, which is what the JASS runtime
+    /// holds. Only appended when the conversion asked for it, so the default output stays byte
+    /// identical to the upstream port.
+    /// </summary>
+    public const string RealPrelude = """
+        local __pack, __unpack = string.pack, string.unpack
+        local function __f32(x)
+          if type(x) ~= "number" then return x end
+          return (__unpack("f", __pack("f", x)))
+        end
+        function __fadd(a, b) return __f32((a or 0.0) + (b or 0.0)) end
+        function __fsub(a, b) return __f32((a or 0.0) - (b or 0.0)) end
+        function __fmul(a, b) return __f32((a or 0.0) * (b or 0.0)) end
+        function __fdiv(a, b)
+          if b == 0 or b == nil or a == nil then return 0.0 end
+          return __f32(a / b)
+        end
+        """;
+
+    /// <summary>
     /// The whole war3map.lua for a conversion. The prelude, the EXExecuteScript and lua_load texts,
     /// the functions, then the globals in a function main and config run before themselves, since
     /// JASS sets its globals before either runs and a native called while the file loads may not
@@ -151,6 +175,7 @@ public static class JassToLua
         var sb = new StringBuilder();
         sb.Append("-- war3map.lua, converted from war3map.j by wc3ctl script to-lua\n");
         sb.Append(Prelude.Replace("\r\n", "\n")).Append('\n');
+        if (r.StrictReals) sb.Append(RealPrelude.Replace("\r\n", "\n")).Append('\n');
         AppendTable(sb, "__exs_src", r.ExsLiterals);
         AppendTable(sb, "__luachunk_src", r.LuaChunks);
         sb.Append(r.LuaFunctions).Append('\n');
@@ -852,10 +877,12 @@ public static class JassToLua
         string commonSrc, string blizzardSrc, string mapSrc,
         IReadOnlyDictionary<string, string>? overrides,
         IEnumerable<string>? dropFunctions,
-        IReadOnlyDictionary<string, string>? translate)
+        IReadOnlyDictionary<string, string>? translate,
+        bool strictReals)
     {
         private const int CatMax = 50;
 
+        private readonly bool _strictReals = strictReals;
         private readonly IReadOnlyDictionary<string, string> _overrides = overrides ?? new Dictionary<string, string>();
         private readonly IReadOnlyDictionary<string, string> _translate = translate ?? new Dictionary<string, string>();
         private readonly HashSet<string> _drop = new(dropFunctions ?? [], StringComparer.Ordinal);
@@ -913,7 +940,8 @@ public static class JassToLua
                 string.Join("\n", funcsOut), globalsOut, _luachunks, _exsLiterals, handleGlobals,
                 _funcNames, missing, _warnings,
                 _mapNatives.ToDictionary(kv => kv.Key,
-                    kv => ((IReadOnlyList<string>)ParamTypes(kv.Value), kv.Value.Ret), StringComparer.Ordinal));
+                    kv => ((IReadOnlyList<string>)ParamTypes(kv.Value), kv.Value.Ret), StringComparer.Ordinal),
+                _strictReals);
         }
 
         private (string Type, bool IsArray) VarType(string name)
@@ -1041,6 +1069,7 @@ public static class JassToLua
                     string ta = EType(e.BN), tb = EType(e.CN);
                     if (ta == "integer" && tb == "integer" && !(SmallLit(e.BN) || SmallLit(e.CN)))
                         return Two("__iadd({0}, {1})", e);
+                    if (_strictReals && RealOperand(ta, tb)) return Two("__fadd({0}, {1})", e);
                     return Two("({0} + {1})", e);
                 }
                 case "-":
@@ -1048,17 +1077,23 @@ public static class JassToLua
                     string ta = EType(e.BN), tb = EType(e.CN);
                     if (ta == "integer" && tb == "integer" && !(SmallLit(e.BN) || SmallLit(e.CN)))
                         return Two("__isub({0}, {1})", e);
+                    if (_strictReals && RealOperand(ta, tb)) return Two("__fsub({0}, {1})", e);
                     return Two("({0} - {1})", e);
                 }
                 case "*":
                 {
                     string ta = EType(e.BN), tb = EType(e.CN);
-                    return ta == "integer" && tb == "integer" ? Two("__imul({0}, {1})", e) : Two("({0} * {1})", e);
+                    if (ta == "integer" && tb == "integer") return Two("__imul({0}, {1})", e);
+                    if (_strictReals && RealOperand(ta, tb)) return Two("__fmul({0}, {1})", e);
+                    return Two("({0} * {1})", e);
                 }
                 case "/":
                 {
                     string ta = EType(e.BN), tb = EType(e.CN);
                     if (ta == "integer" && tb == "integer") return Two("__idiv({0}, {1})", e);
+                    // Before the nonzero-literal shortcut, because that shortcut skips the rounding
+                    // a strict-real conversion needs on the result.
+                    if (_strictReals && RealOperand(ta, tb)) return Two("__fdiv({0}, {1})", e);
                     if (e.CN.K is "INT" or "REAL" && NumberValue(e.CN) != 0.0) return Two("({0} / {1})", e);
                     return Two("__div({0}, {1})", e);
                 }
@@ -1106,6 +1141,12 @@ public static class JassToLua
         }
 
         private static bool SmallLit(Node e) => e.K == "INT" && (long)e.A! is > -1048576 and < 1048576;
+
+        /// <summary>Whether the operands make this a real (floating point) operation. JASS promotes
+        /// an integer operand to real, so one real operand is enough. Only consulted under
+        /// strict reals, where the result is rounded back to the 32-bit float the JASS runtime
+        /// would have produced.</summary>
+        private static bool RealOperand(string ta, string tb) => ta == "real" || tb == "real";
 
         private static string NullFor(string type) => type switch
         {

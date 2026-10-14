@@ -1423,10 +1423,14 @@ public static class Program
 
         var toLuaOut = new Option<string?>(new[] { "-o", "--out" },
             "Output map path. Default '<map>.lua.<ext>' next to the input. An existing file is never overwritten.");
+        var strictRealsOption = new Option<bool>("--strict-reals",
+            "Round real (floating point) arithmetic to the 32 bit float JASS uses, so a converted "
+            + "expression does not drift from the original. Off by default, which reproduces the "
+            + "upstream converter byte for byte.");
         var scriptToLua = new Command("to-lua",
             "Convert a JASS map to a Lua map. The script becomes war3map.lua with the JASS integer, division "
             + "and null string rules kept, and the w3i script language is set to Lua.")
-        { mapArg, toLuaOut };
+        { mapArg, toLuaOut, strictRealsOption };
         scriptToLua.SetHandler(ctx => RunSafely(() =>
         {
             var p = ctx.ParseResult;
@@ -1438,7 +1442,7 @@ public static class Program
             if (File.Exists(dest) || Directory.Exists(dest))
                 throw new IOException($"{dest} already exists, choose another path with -o.");
             var doc = MapDocument.Load(map);
-            var r = JassToLuaCommand.Convert(doc);
+            var r = JassToLuaCommand.Convert(doc, strictReals: p.GetValueForOption(strictRealsOption));
             doc.Save(dest);
             Emit(p.GetValueForOption(jsonOption), new { r.ScriptFile, r.Functions, r.ExsLiterals, r.LuaChunks, r.BytesBefore, r.BytesAfter, r.UsedGameHeaders, r.Warnings, SavedTo = dest }, () =>
                 $"{r.ScriptFile} converted to war3map.lua, {r.Functions} function(s), {r.BytesBefore} to {r.BytesAfter} bytes\nsaved: {dest}"

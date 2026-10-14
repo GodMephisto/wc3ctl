@@ -20,7 +20,8 @@ public class JassToLuaTests
         native SetPlayerState takes integer whichPlayer, integer amount, real r returns nothing
         """;
 
-    private static JassToLuaResult Convert(string body) => JassToLua.Transpile(Natives, "", body);
+    private static JassToLuaResult Convert(string body, bool strictReals = false) =>
+        JassToLua.Transpile(Natives, "", body, strictReals: strictReals);
 
     private static string Fn(string decls, string stmts) =>
         $"globals\n{decls}\nendglobals\nfunction F takes nothing returns nothing\n{stmts}\nendfunction\n";
@@ -34,6 +35,37 @@ public class JassToLuaTests
         Assert.Contains("  x = __div(x, y)", r.LuaFunctions);
         Assert.Contains("  x = (x / 2.0)", r.LuaFunctions);
         Assert.Contains("  x = __div(x, 0.0)", r.LuaFunctions);
+    }
+
+    [Fact]
+    public void Strict_reals_round_every_real_operation_to_a_float()
+    {
+        // JASS reals are 32 bit floats and Lua numbers are 64 bit doubles, so a converted real
+        // expression drifts from the original. The helpers round through an IEEE single, which is
+        // what the JASS runtime holds. Off by default, so the port stays byte identical.
+        var r = Convert(Fn("real x = 1.0\nreal y = 2.0",
+            "set x = x + y\nset x = x - y\nset x = x * y\nset x = x / y"),
+            strictReals: true);
+
+        Assert.Contains("  x = __fadd(x, y)", r.LuaFunctions);
+        Assert.Contains("  x = __fsub(x, y)", r.LuaFunctions);
+        Assert.Contains("  x = __fmul(x, y)", r.LuaFunctions);
+        Assert.Contains("  x = __fdiv(x, y)", r.LuaFunctions);
+        Assert.True(r.StrictReals);
+        // The whole script, helpers included, must parse as Lua 5.3.
+        string script = JassToLua.BuildScript(r);
+        Assert.Contains("function __fadd", script);
+        Assert.Null(LuaParser.Check(script));
+    }
+
+    [Fact]
+    public void Without_strict_reals_real_arithmetic_stays_plain()
+    {
+        var r = Convert(Fn("real x = 1.0\nreal y = 2.0", "set x = x + y\nset x = x / y"));
+
+        Assert.Contains("  x = (x + y)", r.LuaFunctions);
+        Assert.Contains("  x = __div(x, y)", r.LuaFunctions);
+        Assert.DoesNotContain("__fadd", JassToLua.BuildScript(r));
     }
 
     [Fact]

@@ -40,7 +40,8 @@ public static class JassToLuaCommand
     /// since the map's own declarations type most expressions, but a call into a native is untyped
     /// and an integer operation on its result loses the 32 bit wrap.
     /// </remarks>
-    public static JassToLuaSummary Convert(MapDocument doc, string? commonJ = null, string? blizzardJ = null, string? gameDirOverride = null)
+    public static JassToLuaSummary Convert(MapDocument doc, string? commonJ = null, string? blizzardJ = null,
+        string? gameDirOverride = null, bool strictReals = false)
     {
         var (file, source) = ScriptCommand.Read(doc);
         if (ScriptCommand.IsLua(file))
@@ -68,7 +69,8 @@ public static class JassToLuaCommand
         JassToLuaResult r;
         try
         {
-            r = JassToLua.Transpile(commonJ ?? "", blizzardJ ?? "", NormalizeLineEnds(source));
+            r = JassToLua.Transpile(commonJ ?? "", blizzardJ ?? "", NormalizeLineEnds(source),
+                strictReals: strictReals);
         }
         catch (JassToLuaError e)
         {
