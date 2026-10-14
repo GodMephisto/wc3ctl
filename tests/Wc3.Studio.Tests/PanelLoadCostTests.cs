@@ -111,12 +111,11 @@ public class PanelLoadCostTests
             window.UpdateLayout();
 
             _out.WriteLine($"{name,-12} {blocked,7}ms {settled,7}ms {again,7}ms");
-            // Terrain's 2D preview render runs on the UI thread by design and is bounded by the
-            // map's size, measured 740 to 855ms across three runs on Anime_WOS2_0.33a_old2, the
-            // heaviest map here, so it carries its own ceiling. Moving it off the thread is a
-            // known follow-up. Every other panel stays at 500ms, which is what catches an
-            // order-of-magnitude regression.
-            long budget = name == "Terrain" ? 1000 : 500;
+            // Every panel is at 500ms now. Terrain carried its own 1000ms ceiling because its 2D
+            // preview render ran on the UI thread, measured 740 to 855ms on Anime_WOS2_0.33a_old2,
+            // the heaviest map here. That render is off the thread, so Terrain is held to the same
+            // budget as the rest, which is what catches an order-of-magnitude regression.
+            long budget = 500;
             if (blocked > budget) slow.Add($"{name} blocks {blocked}ms");
         }
 
