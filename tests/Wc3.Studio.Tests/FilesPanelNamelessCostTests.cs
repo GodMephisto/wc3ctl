@@ -89,7 +89,13 @@ public class FilesPanelNamelessCostTests
             // against the linear cost of typing 65,000 entries, which is why it sits above that
             // measured total rather than at the sniff alone. The blocked budget above is the one
             // that catches the symptom a user feels.
-            Assert.True(typed < 45_000,
+            //
+            // Two minutes, not forty-five seconds. At 45s this policed the machine's load rather
+            // than an order of magnitude, and it failed twice: measured 33.4s alone, then 116s
+            // when run right after the 25 minute Wc3.Tests corpus sweep, which triples the sniff.
+            // A quadratic pass over 65,000 entries is minutes or worse, so two minutes still
+            // catches the regression this exists for.
+            Assert.True(typed < 120_000,
                 $"nameless entries were still untyped after {typed}ms on {Path.GetFileName(path)}");
         }
         finally
