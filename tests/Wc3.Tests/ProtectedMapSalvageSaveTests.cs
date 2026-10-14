@@ -226,7 +226,9 @@ public class ProtectedMapSalvageSaveTests
 
         var saved = doc.SaveToBytes();
 
-        Assert.Equal(rowsBefore, MapDocument.Load(saved).Files.Count);
+        // One row more, the (listfile) carrying the recovered names, not the twelve stuffing rows
+        // re-emitted again.
+        Assert.Equal(rowsBefore + 1, MapDocument.Load(saved).Files.Count);
     }
 
     /// <summary>An archive written with no listfile, so every non-standard name loads unnamed.</summary>

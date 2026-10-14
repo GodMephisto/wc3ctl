@@ -870,6 +870,27 @@ public sealed class MapDocument
                 dirty.Add((f.BlockIndex, f.RecoveredFileName, null));
         }
 
+        // A recovered name lives in (listfile), not in the hash table, so a deprotect pass that
+        // wrote only the entry hashes changed nothing for a reader that needs the name. The rebuild
+        // path regenerates the listfile from the names it knows, and this path cannot, so write one
+        // carrying every name we hold. A map that already has a listfile has it replaced, which is
+        // what deprotect means. Measured on PumpkinTD, 1529 names recovered and an output that
+        // still resolved only the 26 standard ones.
+        var recovered = _files.Where(f => f.RecoveredFileName is not null)
+            .Select(f => f.RecoveredFileName!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (recovered.Count > 0)
+        {
+            var names = _files.Select(f => f.RecoveredFileName ?? f.FileName)
+                .Where(n => n is not null)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(n => n, StringComparer.OrdinalIgnoreCase);
+            dirty.Add((-1, "(listfile)",
+                System.Text.Encoding.UTF8.GetBytes(string.Join("\r\n", names) + "\r\n")));
+        }
+
         MpqSalvagePatcher.Result result;
         try
         {
