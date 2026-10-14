@@ -4,38 +4,66 @@ All notable changes to wc3ctl. One file per release lives under
 [`changelog/`](changelog/), and this file shows the latest one. The format
 follows Keep a Changelog, and the project follows Conventional Commits.
 
-## 0.4.6 - 2026-10-14
+## 0.4.7 - 2026-10-15
 
-A performance pass over the schema-backed tools. Every command re-read and re-parsed the whole
-schema set on each call, 159 folders and 203 MB of JSON, which made one tool take twenty seconds.
-Measured on the MCP tool sweep against a real map, 181 read-only tools, the total went from
-73,248 ms to 41,507 ms.
+Two threads in one release. The suite was run on macOS for the first time, which found three real
+cross-platform bugs and a test category that was running when it should not. Then a second
+performance pass, on the schema load, the doctor and the Studio's terrain and files panels.
+
+### Fixed
+
+- Archive paths broke off Windows. `Path.GetFileName` treats only the forward slash as a separator
+  when it is not running on Windows, so `Path.GetFileName` on
+  `ReplaceableTextures\CommandButtons\BTNFoo.blp` returns the whole string on macOS and Linux and
+  every operation built on it quietly did nothing. An icon sibling was never generated, a sound
+  label kept the whole path, a sibling `.mdl` was never looked for, a model export name was wrong.
+  `Wc3Path` does those operations with both separators, and real filesystem paths still use
+  `System.IO.Path`. Six of the fifteen macOS failures traced here.
+- `replay_find_map` matched the recorded map path against the candidate directly, and the recorded
+  path keeps a `Maps/` segment the candidate does not, so the exact match never hit and resolution
+  fell through to the first enumerated candidate. That was the right one on Windows by directory
+  order and the wrong one on macOS. The recorded path is matched on its tail now, longest first.
+- `sound optimize` checked the mp3 bitrate after the no-encoder fallback and only when the resolved
+  format was still mp3, so on a machine with no encoder a bad bitrate became a WAV instead of
+  being rejected. It is checked against the format that was asked for, before the fallback.
+- `ContentTypeSniffer.Sniff` read an entry's leading bytes before consulting its cache, so the
+  cache only avoided the comparison and never the read. Every pass re-read all 64,738 nameless
+  entries on `ORDR_S2_2.323[R]_english.w3x`. Reopening the Studio Files panel on that map went
+  from 42,385 ms to 0, and the first pass from 39,370 ms to 22,620.
 
 ### Changed
 
-- `compat_explain` 19,923 ms to 3,800 ms, and 9 ms warm. It parses the whole schema set, and now
-  the result is cached under a key of the build folders and their manifest timestamps, so it
-  cannot serve a stale set. `map_compat`, `lua_api` and `map_min_build` share the same scan, and
-  `map_compat` built it a second time without it, 5,703 ms to 2,451 ms.
-- The union scan parses each build's `script.json` only, not the objects, triggers and enums it
-  never reads, and the folders parse in parallel. Cold, 16,511 ms to 2,753 ms.
-- The build names are parsed once. The version comparer called `Gbn.Parse`, which runs a regex, on
-  both sides of every comparison, millions of regex passes over 157 builds and 5,393 identifiers.
-- A schema load takes a section mask now, and each command asks for what it reads. `gamedata_sources`
-  3,694 ms to 387 ms, `ci_schema` 3,588 ms to 513 ms, `gamedata_field_lookup` 2,468 ms and
-  `bench_schema_coverage` 2,146 ms off the slow list.
+- `compat_explain` 5.5 s to 3.1 on the Release CLI, `gamedata_sources` 2.1 s to 0.5,
+  `gamedata_coverage` 3.6 s to 3.1. `TargetBuildSettings.List` loaded every build's four sections
+  to read its name and section list, 400 MB, and a fresh CLI process paid it once.
+  `LoadSchema`, `BuildNames` and the default-build loop loaded every full schema to read a name.
+  The union scan is written to a cache file, and it holds name sets rather than declarations,
+  which nothing read. In process the scan is 2,782 ms cold, 918 ms from the cache, 12 ms warm.
+- `doctor_check`, `doctor_inspect` and `doctor_compare` remember a read-only answer for the life of
+  the process, keyed by the command, its arguments and the timestamp and size of any file among
+  them. The doctor is a separate process at about five seconds a call and was 16 seconds of the
+  MCP tool sweep.
+- The Studio Terrain panel renders its minimap off the UI thread. It blocked for 740 to 855 ms on
+  the heaviest map against a 1,000 ms budget and blocks for 16 ms now, so it carries the same
+  500 ms budget as every other panel.
 
 ### Tests
 
-- The MCP tool sweep times each call and prints the twenty slowest with the total and median,
-  which is what turned the 19.9 seconds inside `compat_explain` from invisible into a finding.
+- The hermetic filter excluded Corpus and GameData but not Doctor, though CI and the release
+  workflow exclude all three and the Doctor tests are documented as opt-in. On a machine without
+  the pinned doctor binary they ran and failed.
+- Three `SetupTests` assert the Windows user PATH and skip off Windows. The terrain probe needs the
+  game install as well as the maps, so it gates on the install. `MapDoctorCommand.Locate` no longer
+  throws `ArgumentNullException` when `GetFolderPath` returns null, which it does for
+  `LocalApplicationData` on macOS.
+- `AddOrReplace_SurvivesSaveAndReload` failed once and did not reproduce across thirty targeted and
+  five full runs. It asserts the in-memory read before the save now and names what the reloaded map
+  holds, so the next failure localises itself.
 - The nameless-entry typing budget is two minutes, not forty-five seconds. At 45 s it policed the
-  machine's load rather than an order of magnitude, and failed twice, 33.4 s alone and 116 s after
-  a corpus sweep.
+  machine's load rather than an order of magnitude.
 
 ### Known
 
-- The three `doctor_*` tools are 16 seconds of the remainder and are not ours. They spawn the
-  pinned third party doctor binary, so the cost is that process starting.
-- Caching the loaded schemas themselves would take every `gamedata_*` tool to milliseconds and
-  hold 276 MB resident, measured. It is left out for the memory, not the difficulty.
+- The first typing pass over a protected map is still 22.6 seconds for 64,738 entries, one bounded
+  read each, serialized on the document's archive lock. Parallelizing it needs a per-thread archive
+  handle.
