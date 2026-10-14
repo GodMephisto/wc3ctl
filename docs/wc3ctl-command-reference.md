@@ -2373,6 +2373,7 @@ Options
 
 - `-o, --out <out>`. Output map path. Default '<map>.lua.<ext>' next to the input. An existing file is never overwritten.
 - `--strict-reals`. Round real (floating point) arithmetic to the 32 bit float JASS uses, so a converted expression does not drift from the original. Off by default, which reproduces the upstream converter byte for byte.
+- `--hashtables`. Rewrite a hashtable that is local to one function and used only through the hashtable natives into a plain Lua table. A hashtable passed to another function or a native stays a real hashtable. Off by default.
 
 ### script conversion-notes
 

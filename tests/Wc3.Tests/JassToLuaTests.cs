@@ -20,8 +20,19 @@ public class JassToLuaTests
         native SetPlayerState takes integer whichPlayer, integer amount, real r returns nothing
         """;
 
+    private const string HashtableNatives = """
+        native CreateHashtable takes nothing returns hashtable
+        native SaveInteger takes hashtable table, integer parentKey, integer childKey, integer value returns nothing
+        native LoadInteger takes hashtable table, integer parentKey, integer childKey returns integer
+        native FlushChildHashtable takes hashtable table, integer parentKey returns nothing
+        native Store takes hashtable table returns nothing
+        """;
+
     private static JassToLuaResult Convert(string body, bool strictReals = false) =>
         JassToLua.Transpile(Natives, "", body, strictReals: strictReals);
+
+    private static JassToLuaResult ConvertHashtables(string body) =>
+        JassToLua.Transpile(Natives + "\n" + HashtableNatives, "", body, hashtables: true);
 
     private static string Fn(string decls, string stmts) =>
         $"globals\n{decls}\nendglobals\nfunction F takes nothing returns nothing\n{stmts}\nendfunction\n";
@@ -56,6 +67,52 @@ public class JassToLuaTests
         string script = JassToLua.BuildScript(r);
         Assert.Contains("function __fadd", script);
         Assert.Null(LuaParser.Check(script));
+    }
+
+    [Fact]
+    public void A_local_hashtable_used_only_through_the_natives_becomes_a_table()
+    {
+        // A JASS hashtable used only through its natives is a Lua table waiting to happen. The
+        // rewrite is opt-in and conservative, so only a handle that stays local qualifies.
+        var r = ConvertHashtables(Fn("integer x = 0",
+            "local hashtable h = CreateHashtable()\n"
+            + "call SaveInteger(h, 1, 2, 3)\n"
+            + "set x = LoadInteger(h, 1, 2)\n"
+            + "call FlushChildHashtable(h, 1)"));
+
+        Assert.Contains("local h = {}", r.LuaFunctions);
+        Assert.Contains("__hs_save(h, 1, 2, 3)", r.LuaFunctions);
+        Assert.Contains("__hs_load(h, 1, 2, 0)", r.LuaFunctions);
+        Assert.Contains("__hs_flush_child(h, 1)", r.LuaFunctions);
+        Assert.Equal(1, r.HashtablesRewritten);
+        Assert.Contains("function __hs_save", JassToLua.BuildScript(r));
+        Assert.Null(LuaParser.Check(JassToLua.BuildScript(r)));
+    }
+
+    [Fact]
+    public void A_hashtable_that_escapes_the_function_stays_a_native()
+    {
+        // Passing the handle anywhere else means a native has to receive a real hashtable, so the
+        // rewrite leaves it alone rather than producing a table where a hashtable is required.
+        var r = ConvertHashtables(Fn("",
+            "local hashtable h = CreateHashtable()\n"
+            + "call SaveInteger(h, 1, 2, 3)\n"
+            + "call Store(h)"));
+
+        Assert.Contains("CreateHashtable()", r.LuaFunctions);
+        Assert.DoesNotContain("__hs_save", r.LuaFunctions);
+        Assert.Equal(0, r.HashtablesRewritten);
+    }
+
+    [Fact]
+    public void Without_the_flag_a_hashtable_is_left_alone()
+    {
+        var r = Convert(Fn("integer x = 0",
+            "local hashtable h = CreateHashtable()\n"
+            + "call SaveInteger(h, 1, 2, 3)"));
+
+        Assert.Contains("CreateHashtable()", r.LuaFunctions);
+        Assert.Equal(0, r.HashtablesRewritten);
     }
 
     [Fact]

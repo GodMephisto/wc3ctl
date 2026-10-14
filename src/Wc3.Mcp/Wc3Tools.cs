@@ -647,12 +647,13 @@ public static class Wc3Tools
     public static JassToLuaSummary ScriptToLua(
         [Description("Path to a .w3x/.w3m map file or map folder.")] string map,
         [Description("Where to save the converted map.")] string out_path,
-        [Description("Round real (floating point) arithmetic to the 32 bit float JASS uses, so a converted expression does not drift from the original. Off by default, which reproduces the upstream converter byte for byte.")] bool strict_reals = false)
+        [Description("Round real (floating point) arithmetic to the 32 bit float JASS uses, so a converted expression does not drift from the original. Off by default, which reproduces the upstream converter byte for byte.")] bool strict_reals = false,
+        [Description("Rewrite a hashtable that is local to one function and used only through the hashtable natives into a plain Lua table, which is what Lua should use. A hashtable passed to another function or a native stays a real hashtable, since a native still has to receive one. Off by default.")] bool hashtables = false)
         => Run(() =>
         {
             var full = ResolveOutPath(map, out_path);
             var doc = LoadMap(map);
-            var r = JassToLuaCommand.Convert(doc, strictReals: strict_reals);
+            var r = JassToLuaCommand.Convert(doc, strictReals: strict_reals, hashtables: hashtables);
             doc.Save(full);
             return r;
         });

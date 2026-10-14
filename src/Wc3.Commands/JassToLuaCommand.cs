@@ -41,7 +41,7 @@ public static class JassToLuaCommand
     /// and an integer operation on its result loses the 32 bit wrap.
     /// </remarks>
     public static JassToLuaSummary Convert(MapDocument doc, string? commonJ = null, string? blizzardJ = null,
-        string? gameDirOverride = null, bool strictReals = false)
+        string? gameDirOverride = null, bool strictReals = false, bool hashtables = false)
     {
         var (file, source) = ScriptCommand.Read(doc);
         if (ScriptCommand.IsLua(file))
@@ -70,7 +70,7 @@ public static class JassToLuaCommand
         try
         {
             r = JassToLua.Transpile(commonJ ?? "", blizzardJ ?? "", NormalizeLineEnds(source),
-                strictReals: strictReals);
+                strictReals: strictReals, hashtables: hashtables);
         }
         catch (JassToLuaError e)
         {

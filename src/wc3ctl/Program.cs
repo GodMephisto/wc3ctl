@@ -1427,10 +1427,14 @@ public static class Program
             "Round real (floating point) arithmetic to the 32 bit float JASS uses, so a converted "
             + "expression does not drift from the original. Off by default, which reproduces the "
             + "upstream converter byte for byte.");
+        var hashtablesOption = new Option<bool>("--hashtables",
+            "Rewrite a hashtable that is local to one function and used only through the hashtable "
+            + "natives into a plain Lua table. A hashtable passed to another function or a native "
+            + "stays a real hashtable. Off by default.");
         var scriptToLua = new Command("to-lua",
             "Convert a JASS map to a Lua map. The script becomes war3map.lua with the JASS integer, division "
             + "and null string rules kept, and the w3i script language is set to Lua.")
-        { mapArg, toLuaOut, strictRealsOption };
+        { mapArg, toLuaOut, strictRealsOption, hashtablesOption };
         scriptToLua.SetHandler(ctx => RunSafely(() =>
         {
             var p = ctx.ParseResult;
@@ -1442,7 +1446,9 @@ public static class Program
             if (File.Exists(dest) || Directory.Exists(dest))
                 throw new IOException($"{dest} already exists, choose another path with -o.");
             var doc = MapDocument.Load(map);
-            var r = JassToLuaCommand.Convert(doc, strictReals: p.GetValueForOption(strictRealsOption));
+            var r = JassToLuaCommand.Convert(doc,
+                strictReals: p.GetValueForOption(strictRealsOption),
+                hashtables: p.GetValueForOption(hashtablesOption));
             doc.Save(dest);
             Emit(p.GetValueForOption(jsonOption), new { r.ScriptFile, r.Functions, r.ExsLiterals, r.LuaChunks, r.BytesBefore, r.BytesAfter, r.UsedGameHeaders, r.Warnings, SavedTo = dest }, () =>
                 $"{r.ScriptFile} converted to war3map.lua, {r.Functions} function(s), {r.BytesBefore} to {r.BytesAfter} bytes\nsaved: {dest}"
