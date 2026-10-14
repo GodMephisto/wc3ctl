@@ -684,6 +684,13 @@ public sealed class MapDocument
                 + $"{named:N0} named, so a rebuild would re-emit the stuffing as files"));
         }
 
+        // How many rows the rebuild can legitimately add. Only a dirty entry with a name counts,
+        // because a deprotect pass recovers a name FROM the row's hash, so the recovered file
+        // shadows that row rather than adding one. A faithful rebuild stays within the original
+        // count plus this plus the bookkeeping files, so growth beyond it is the stuffing coming
+        // back, which the named-vs-unnamed check above misses once deprotect has named the files.
+        int builderAdds = _files.Count(f => f.IsDirty && f.FileName is not null);
+
         MpqArchiveBuilder builder;
         try
         {
@@ -754,6 +761,18 @@ public sealed class MapDocument
                 + "Unprotect a copy first (doctor_fix, or wc3ctl doctor fix), then edit that copy.", ex);
         }
 
+        // A rebuild that grew the table by more than its own edits explain has re-emitted the
+        // stuffing as files, which War3Net does one block row at a time. Measured on Naruto
+        // Autobattle after a deprotect pass named the real files, 1623 rows became 1853 on a save
+        // that added 1293 names and changed nothing else. Take the in-place patch instead.
+        if (BlockTableSize(mpq.GetBuffer(), (int)mpq.Length) is int rebuilt
+            && rebuilt > _archive.Count + builderAdds + 4)
+        {
+            return SalvageSaveToBytes(new InvalidOperationException(
+                $"the rebuild grew the block table from {_archive.Count:N0} row(s) to {rebuilt:N0}, "
+                + $"more than the {builderAdds:N0} edited file(s) explain"));
+        }
+
         using var outStream = new MemoryStream();
         outStream.Write(PreArchiveData, 0, PreArchiveData.Length);
         mpq.Position = 0;
@@ -811,6 +830,19 @@ public sealed class MapDocument
     }
 
     /// <summary>
+    /// The block-table row count an archive declares in its own MPQ header, or -1 when the header
+    /// cannot be read. The block-table size is a uint32 at 0x1C past the magic. Used to tell a
+    /// faithful rebuild from one that re-emitted the archive's stuffing, which War3Net's builder
+    /// does one block row at a time.
+    /// </summary>
+    private static int BlockTableSize(byte[] bytes, int length)
+    {
+        int at = MpqHeader.FindArchiveOffset(bytes);
+        if (at < 0 || at + 0x20 > length) return -1;
+        return (int)BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(at + 0x1C, 4));
+    }
+
+    /// <summary>
     /// The fallback save for an archive the rebuild cannot even open. The original bytes
     /// are kept whole, protection stuffing included, and only the edited entries' block
     /// rows change, with their payloads appended after the archive's current end. Nothing
@@ -823,9 +855,20 @@ public sealed class MapDocument
         // Serialize first, outside the patch try. A dirty entry without a byte-faithful
         // writer must fail with SerializeEntry's own message on this map exactly as it
         // does on a healthy one, not be re-attributed to protection.
-        var dirty = _files.Where(f => f.IsDirty)
-            .Select(f => (f.BlockIndex, f.FileName, SerializeEntry(f)))
-            .ToList();
+        //
+        // A recovered name is carried too, with a null payload, because the patch names an
+        // existing block row rather than appending anything. Without this a deprotect pass on a
+        // stuffed archive, which takes this path, wrote a byte-identical copy and dropped every
+        // name it had recovered. Measured on PumpkinTD, 1529 recovered names and an output with
+        // the same 26 names as the input.
+        var dirty = new List<(int BlockIndex, string? FileName, byte[]? Payload)>();
+        foreach (var f in _files)
+        {
+            if (f.IsDirty)
+                dirty.Add((f.BlockIndex, f.RecoveredFileName ?? f.FileName, SerializeEntry(f)));
+            else if (f.RecoveredFileName is not null)
+                dirty.Add((f.BlockIndex, f.RecoveredFileName, null));
+        }
 
         MpqSalvagePatcher.Result result;
         try
@@ -843,7 +886,7 @@ public sealed class MapDocument
                 $"The archive could not be rebuilt ({rebuildFailure.Message}), so it was saved "
                 + $"by patching the original bytes in place. All {_files.Count:N0} entries were "
                 + $"kept, {result.ReplacedEntries:N0} replaced, {result.AddedEntries:N0} added, "
-                + $"{result.AppendedBytes:N0} bytes appended."));
+                + $"{result.NamedEntries:N0} named, {result.AppendedBytes:N0} bytes appended."));
 
         return result.Bytes;
     }
