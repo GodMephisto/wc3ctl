@@ -12,7 +12,13 @@ public sealed record FileEditResult(string Name, bool Replaced, int SizeBytes);
 /// <summary>Current state of one archive entry. <see cref="SizeBytes"/> reflects the pending
 /// in-memory replacement when one exists (<c>OverrideBytes</c>), never the stale original.
 /// <see cref="Name"/> is null for unnamed entries (protected maps).</summary>
-public sealed record FileState(string? Name, int SizeBytes, bool IsDirty, bool HasOverride);
+/// <summary>One archive entry's state. The name is null for an unnamed entry, and the attribute
+/// forces that null to be written rather than omitted, because the tool descriptions promise a null
+/// name and a client reading <c>name</c> off an omitted key gets undefined.</summary>
+public sealed record FileState(
+    [property: System.Text.Json.Serialization.JsonIgnore(
+        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.Never)] string? Name,
+    int SizeBytes, bool IsDirty, bool HasOverride);
 
 /// <summary>
 /// Raw and text file editing on a <see cref="MapDocument"/>, byte-faithful by construction:
