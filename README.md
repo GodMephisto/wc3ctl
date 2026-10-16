@@ -248,7 +248,7 @@ The command groups, by job.
 
 The installer has already set this up for every supported app it found. Quit the
 app fully (for Claude Desktop, right-click its icon by the clock and choose
-**Quit**) and start it again. The app now lists the wc3ctl tools, 245 of them.
+**Quit**) and start it again. The app now lists the wc3ctl tools, 251 of them.
 
 Then just ask, and give the map's full path. For example
 
