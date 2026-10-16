@@ -302,6 +302,22 @@ public sealed class SetupTests : IDisposable
     }
 
     [Fact]
+    public void Npx_option_registers_the_auto_updating_npx_launcher()
+    {
+        Directory.CreateDirectory(Path.Combine(Home, ".cursor"));
+        var sw = new StringWriter();
+
+        int code = SetupCli.Run(new[] { "install", "cursor", "--npx" }, Env, sw, Product, entryOverride: null);
+
+        Assert.Equal(0, code);
+        var server = JsonNode.Parse(File.ReadAllText(Path.Combine(Home, ".cursor", "mcp.json")))!["mcpServers"]![N]!;
+        Assert.Equal("npx", (string?)server["command"]);
+        Assert.Equal(new[] { "-y", "wc3-mcp@latest" }, server["args"]!.AsArray().Select(a => (string?)a).ToArray());
+        // The npx command has no folder of its own, so install must not touch the user PATH.
+        Assert.Equal(@"C:\Existing;C:\Other", _userPath);
+    }
+
+    [Fact]
     public void Help_and_version_name_the_command_that_was_typed()
     {
         var (code, help) = Cli(SetupProduct.Wc3ctl, "help");
