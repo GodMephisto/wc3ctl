@@ -2,6 +2,7 @@
 using System.CommandLine;
 using System.CommandLine.Parsing;
 using Wc3.Commands;
+using Wc3.Commands.Rag;
 using Wc3.Model;
 
 namespace Wc3Ctl;
@@ -6521,6 +6522,42 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         }));
         export.AddCommand(exportVerify);
         root.AddCommand(export);
+
+        // ---- rag: a local retrieval index over the bundled documents ----
+        var rag = new Command("rag",
+            "Local semantic retrieval over the bundled Warcraft III documents. 'install' fetches "
+            + "the embedding model and builds the index once, and the MCP 'docs_search' then uses "
+            + "that index automatically.");
+        var ragCorpusOption = new Option<string?>("--corpus",
+            "Folder of .md documents to index. Default: the context folder beside the exe.");
+        var ragThreads = new Option<int?>("--threads",
+            "CPU threads for embedding. Default min(cores/2, 4), the low CPU setting. Raise it to build faster.");
+        var ragBatch = new Option<int?>("--batch", "Chunks per inference, default 16. Larger batches finish sooner and use more memory.");
+        var ragInstall = new Command("install", "Fetch the model and build the index.") { ragCorpusOption, ragThreads, ragBatch };
+        ragInstall.SetHandler((string? corpus, int? threads, int? batch, bool json) => RunSafely(() =>
+        {
+            var r = RagCommand.Install(corpus, threads, batch, m => Console.Error.WriteLine(m));
+            Emit(json, r, () =>
+                $"rag installed under {r.Root}\ncorpus  {r.Corpus}\nchunks  {r.Chunks}\nmodel   {r.ModelRepo}");
+        }), ragCorpusOption, ragThreads, ragBatch, jsonOption);
+        var ragStatus = new Command("status", "Report the model and index state.");
+        ragStatus.SetHandler((bool json) => RunSafely(() =>
+        {
+            var s = RagCommand.Status();
+            Emit(json, s, () =>
+                $"root   {s.Root}\nmodel  {(s.ModelPresent ? "present" : "missing")} ({s.ModelRepo})\n"
+                + $"index  {(s.IndexPresent ? s.Chunks + " chunks, " + s.IndexBytes + " bytes" : "missing")}\ncorpus {s.Corpus}");
+        }), jsonOption);
+        var ragQueryArg = new Argument<string>("query", "What to search for.");
+        var ragTopOption = new Option<int>("--top", () => 8, "Passages to return.");
+        var ragSearch = new Command("search", "Query the index.") { ragQueryArg, ragTopOption, ragThreads };
+        ragSearch.SetHandler((string query, int top, int? threads, bool json) => RunSafely(() =>
+        {
+            var r = RagCommand.Search(query, top, threads);
+            Emit(json, r, () => string.Join("\n", r.Results.Select(h => $"{h.Score,6:0.000}  {h.Document}  {h.Section}")));
+        }), ragQueryArg, ragTopOption, ragThreads, jsonOption);
+        rag.AddCommand(ragInstall); rag.AddCommand(ragStatus); rag.AddCommand(ragSearch);
+        root.AddCommand(rag);
 
         root.AddCommand(DocsCommand.Build());
         return root;
