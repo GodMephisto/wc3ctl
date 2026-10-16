@@ -33,9 +33,10 @@ public partial class TerrainView : UserControl, IMapPanel
 
     // Sculpt mode: the terrain brush that reshapes war3map.w3e through the
     // TerrainCommand area ops. Mutually exclusive with the placement brush and with
-    // pointer selection, all three own the left click. NOTE: sculpt strokes bypass
-    // EditHistory (the placement undo journal), so they cannot be undone in-session
-    // yet. Journaled terrain undo is a follow-up.
+    // pointer selection, all three own the left click. A sculpt stroke is journaled in
+    // BOTH the 2D minimap and the 3D GL viewport: BeginSculptStroke snapshots the grid
+    // on press, the stroke applies live, and CommitSculptStroke diffs on release into
+    // ONE TerrainSculptEdit on _history, so Ctrl+Z reverts a whole stroke at once.
     private bool _sculpt;
     private bool _sculptDrag2D;                 // a left-drag stroke is live on the 2D minimap
     private (int Col, int Row)? _sculptLastCorner; // drag throttle: re-apply only on a new corner
@@ -312,9 +313,10 @@ public partial class TerrainView : UserControl, IMapPanel
 
     // --- terrain sculpting brush ----------------------------------------------
     // The Sculpt toggle turns the left click into a TerrainCommand area brush over
-    // war3map.w3e, in both the 2D minimap and the GL viewport. Strokes mutate the doc
-    // directly (no EditHistory journal yet, so no Ctrl+Z, that is a follow-up) and
-    // refresh whichever terrain view is showing.
+    // war3map.w3e, in both the 2D minimap and the GL viewport. Each stroke mutates the
+    // doc live, then EndSculptStroke-style diffing (CommitSculptStroke) records it as one
+    // TerrainSculptEdit, so Ctrl+Z and Ctrl+Y undo and redo a whole stroke. The stroke
+    // refreshes whichever terrain view is showing.
 
     /// <summary>Sculpt tools, in the exact order of SculptToolBox's items in the XAML.</summary>
     private enum SculptTool { Raise, Lower, Flatten, Paint, CliffUp, CliffDown, Water }
@@ -448,8 +450,8 @@ public partial class TerrainView : UserControl, IMapPanel
     /// Applies the active sculpt tool at world (wx, wy): converts to the nearest
     /// terrain corner and runs the matching TerrainCommand area brush with the chosen
     /// radius/amount/tile, then refreshes whichever terrain view is showing and flags
-    /// the map dirty (MapEdited enables Save in the host). Strokes bypass EditHistory,
-    /// so terrain-sculpt undo is a follow-up.
+    /// the map dirty (MapEdited enables Save in the host). The stroke is applied live,
+    /// and CommitSculptStroke records the whole stroke on _history at release.
     /// </summary>
     private void ApplySculptAt(Wc3.Model.MapDocument doc, float wx, float wy)
     {
@@ -1131,9 +1133,12 @@ public partial class TerrainView : UserControl, IMapPanel
     }
 
     /// <summary>Capture can vanish mid-drag (alt-tab, window deactivation); drop the drag
-    /// so the next pointer move doesn't keep orbiting without a button held.</summary>
+    /// so the next pointer move doesn't keep orbiting without a button held. A live sculpt
+    /// stroke is committed first, so a capture loss still records one undo entry.</summary>
     private void OnGlInputCaptureLost(object? sender, PointerCaptureLostEventArgs e)
     {
+        if (_glDrag == GlDrag.Sculpt && _session?.Current is { } doc)
+            CommitSculptStroke(doc);
         _glDrag = GlDrag.None;
         ClearMarquee();
     }

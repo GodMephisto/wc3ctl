@@ -4,6 +4,8 @@
         x:Class="Wc3.Studio.MainWindow"
         Title="wc3ctl Studio"
         Width="1600" Height="900">
+    <!-- Keyboard shortcuts (Ctrl+O, Ctrl+Shift+O, Ctrl+S) are wired in the code-behind, because a
+         KeyBindings entry sits outside the visual tree and cannot resolve an ElementName binding. -->
     <DockPanel>
 
         <!-- Top menu -->
@@ -11,6 +13,8 @@
             <MenuItem Header="_File">
                 <MenuItem Header="Open _Source Map…" Click="OnOpenSourceMapClick"/>
                 <MenuItem Header="Open _Target Map…" Click="OnOpenTargetMapClick"/>
+                <Separator/>
+                <MenuItem Header="_Connect AI Apps…" Click="OnConnectAiAppsClick"/>
                 <Separator/>
                 <MenuItem Header="_Settings…" Click="OnSettingsClick"/>
                 <Separator/>

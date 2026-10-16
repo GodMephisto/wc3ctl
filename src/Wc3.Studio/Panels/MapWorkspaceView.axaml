@@ -1,6 +1,8 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:panels="using:Wc3.Studio.Panels"
+             xmlns:controls="using:Wc3.Studio.Controls"
+             DragDrop.AllowDrop="True"
              x:Class="Wc3.Studio.Panels.MapWorkspaceView">
     <DockPanel>
 
@@ -45,8 +47,12 @@
             </StackPanel>
         </Border>
 
-        <!-- This workspace's own panel instances; loaded lazily per tab. -->
-        <TabControl Name="PanelTabs" SelectionChanged="OnPanelTabsSelectionChanged">
+        <!-- The panel tabs and the welcome landing surface share this area. PanelTabs stays in
+             the visual tree (hidden while no map is open) so tab selection keeps working, and the
+             WelcomePanel sits on top until a map loads (see RefreshWelcome). -->
+        <Grid>
+        <TabControl Name="PanelTabs" IsVisible="False"
+                    SelectionChanged="OnPanelTabsSelectionChanged">
             <!-- Terrain hosts the 3D viewport PLUS a World-Editor-style side
                  dock (Palette / Unit / Players sub-tabs). The viewport column
                  is elastic; the dock starts at 360px and stays user-resizable
@@ -121,6 +127,8 @@
                 <panels:SchemaChangelogView Name="ChangelogPanel"/>
             </TabItem>
         </TabControl>
+        <controls:WelcomeView Name="WelcomePanel"/>
+        </Grid>
 
     </DockPanel>
 </UserControl>
