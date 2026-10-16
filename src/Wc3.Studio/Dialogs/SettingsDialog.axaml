@@ -28,6 +28,15 @@
                        Text="Open Map and the other file dialogs start here, so you do not have to browse to the same place every time."/>
         </StackPanel>
 
+        <controls:SectionHeader Text="Windows Explorer"/>
+
+        <StackPanel Spacing="4">
+            <CheckBox Name="AssociateCheck"
+                      Content="Add 'Edit in wc3ctl Studio' to the .w3x and .w3m right-click menu"/>
+            <TextBlock Foreground="#8FA3B8" FontSize="11" TextWrapping="Wrap"
+                       Text="Right-click a map in File Explorer to open it here. This writes under your own user account and needs no admin rights."/>
+        </StackPanel>
+
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
             <Button Content="Cancel" Click="OnCancel" Padding="18,4"/>
             <Button Content="Save" Click="OnSave" Padding="18,4" Classes="accent"
