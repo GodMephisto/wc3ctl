@@ -48,7 +48,7 @@ You can use it three ways, and one install gives you all three.
 
 3. Click inside the PowerShell window, right-click once to paste it, and press
    **Enter**.
-4. Wait about a minute. You will see lines such as `wc3ctl v0.4.7`,
+4. Wait about a minute. You will see lines such as `wc3ctl v0.4.8`,
    `checksum ok`, `installed to ...`, `added wc3ctl Studio to the Start menu` and
    `added to your PATH`, then a short report from `wc3ctl mcp doctor` listing your
    AI apps and the Warcraft III folder it found.
