@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Wc3.Commands;
@@ -35,10 +36,19 @@ public partial class MapWorkspaceView : UserControl
     /// what the Doodad tab shows when opened. Single-pick, exclusive with the unit
     /// selection. Cleared on map change like <see cref="_currentUnits"/>.</summary>
     private int? _currentDoodad;
+    /// <summary>Persisted settings, shared by MainWindow or loaded once for standalone use.</summary>
+    private StudioSettings _settings = StudioSettings.Load();
 
     public MapWorkspaceView()
     {
         InitializeComponent();
+        WelcomePanel.OpenMapRequested += OnWelcomeOpenMap;
+        WelcomePanel.NewBlankMapRequested += (_, _) => CreateBlankMap();
+        WelcomePanel.MapActivated += (_, path) => OpenMap(path);
+        WelcomePanel.ConnectAiAppsRequested += (_, _) => ConnectAiAppsRequested?.Invoke(this, EventArgs.Empty);
+        AddHandler(DragDrop.DragOverEvent, OnDragOver);
+        AddHandler(DragDrop.DropEvent, OnDrop);
+        RefreshWelcome();
         DependenciesPanel.SelectionChanged += OnPortSelectionChanged;
         ObjectsPanel.ObjectSelected += OnObjectSelected;
         ObjectsPanel.DependenciesRequested += OnDependenciesRequested;
@@ -246,11 +256,26 @@ public partial class MapWorkspaceView : UserControl
             RoleText.Text = value;
             PortButtonHost.IsVisible = value == "Source";
             NewBlankMapButton.IsVisible = value == "Target";
+            if (WelcomePanel is not null)
+                WelcomePanel.ShowNewBlankMap = value == "Target";
         }
+    }
+
+    /// <summary>The persisted app settings (recent maps, folders). MainWindow shares its single
+    /// instance with both workspaces so a recent-map update and a Settings edit never clobber
+    /// each other. Standalone construction (tests) gets its own load.</summary>
+    public StudioSettings Settings
+    {
+        get => _settings;
+        set { _settings = value; RefreshWelcome(); }
     }
 
     /// <summary>This workspace's map state, passed to its panels - never shared.</summary>
     public MapSession Session { get; } = new();
+
+    /// <summary>Raised when the welcome screen's "Connect AI Apps" action is used, so the shell
+    /// can open the setup dialog. The menu item routes to the same dialog separately.</summary>
+    public event EventHandler? ConnectAiAppsRequested;
 
     /// <summary>This workspace's 3D terrain tab - exposed so shell code can re-render
     /// placements and drive the selection highlight after unit edits.</summary>
@@ -470,6 +495,10 @@ public partial class MapWorkspaceView : UserControl
             _currentDoodad = null;
             _portSelection = null;
             UpdatePortButtons();
+            UpdateWelcomeVisibility();
+            _settings.AddRecentMap(path);
+            _settings.Save();
+            RefreshWelcome();
             LoadSelectedPanel();
 
             MapChanged?.Invoke(this, EventArgs.Empty);
@@ -488,7 +517,12 @@ public partial class MapWorkspaceView : UserControl
     /// file it was opened from. MapDocument.Save re-serializes through the byte-faithful
     /// writer, so an untouched map round-trips unchanged.
     /// </summary>
-    private async void OnSaveClick(object? sender, RoutedEventArgs e)
+    private async void OnSaveClick(object? sender, RoutedEventArgs e) =>
+        await SaveActiveMapAsync();
+
+    /// <summary>Writes the open map to disk, prompting for a location when it has no path yet.
+    /// Public so the shell's Ctrl+S can save whichever workspace is active.</summary>
+    public async Task SaveActiveMapAsync()
     {
         if (Session.Current is not { } doc)
         {
@@ -568,12 +602,15 @@ public partial class MapWorkspaceView : UserControl
         }
     }
 
+    private void OnNewBlankMapClick(object? sender, RoutedEventArgs e) => CreateBlankMap();
+
     /// <summary>
     /// Creates a fresh blank map in memory (via <see cref="BlankMap"/>, which synthesizes
     /// a valid w3i + w3e archive) and loads it into this workspace. It has no file yet, so
-    /// Save prompts for a location (see <see cref="OnSaveClick"/>).
+    /// Save prompts for a location (see <see cref="SaveActiveMapAsync"/>). Public so the
+    /// welcome screen's New Blank Map action and the shell reach the same code path.
     /// </summary>
-    private void OnNewBlankMapClick(object? sender, RoutedEventArgs e)
+    public void CreateBlankMap()
     {
         try
         {
@@ -589,6 +626,7 @@ public partial class MapWorkspaceView : UserControl
             _currentDoodad = null;
             _portSelection = null;
             UpdatePortButtons();
+            UpdateWelcomeVisibility();
             LoadSelectedPanel();
             MapChanged?.Invoke(this, EventArgs.Empty);
             StatusText.Text = "New blank map created (in memory), edit it, then Save to write it to disk.";
@@ -613,6 +651,7 @@ public partial class MapWorkspaceView : UserControl
         _currentObject = null;   // ported rawcodes are new; drop the stale selection
         _currentUnits = Array.Empty<int>(); // creation numbers may have shifted with the edit
         _currentDoodad = null;
+        UpdateWelcomeVisibility();
         LoadSelectedPanel();
         MapChanged?.Invoke(this, EventArgs.Empty);
         RefreshMinBuildStatus();
@@ -700,4 +739,63 @@ public partial class MapWorkspaceView : UserControl
             DoodadPropsPanel.ShowMap(Session);
         }
     }
+
+    /// <summary>The welcome screen's Open Map action routes through the OS picker.</summary>
+    private async void OnWelcomeOpenMap(object? sender, EventArgs e) =>
+        await PickAndOpenMapAsync();
+
+    /// <summary>Pushes the persisted lists into the welcome screen: the recent map paths and the
+    /// maps discovered under the chosen folder plus the default Warcraft III Maps folder.</summary>
+    private void RefreshWelcome()
+    {
+        if (WelcomePanel is null)
+            return; // a property set can arrive before InitializeComponent names the panel
+        WelcomePanel.RecentMaps = _settings.RecentMaps.ToList();
+        WelcomePanel.DiscoveredMaps = Controls.WelcomeView.DiscoverMaps(_settings.MapsDir);
+    }
+
+    /// <summary>Shows the welcome landing surface while no map is open, and the panel tabs once
+    /// one is. PanelTabs stays in the visual tree either way so tab selection keeps working.</summary>
+    private void UpdateWelcomeVisibility()
+    {
+        bool hasMap = Session.Current is not null;
+        WelcomePanel.IsVisible = !hasMap;
+        PanelTabs.IsVisible = hasMap;
+    }
+
+    /// <summary>Drag over the workspace: accept the drop (Copy) only when the payload carries a
+    /// .w3x or .w3m file, so dragging arbitrary content shows the no-drop cursor.</summary>
+    private void OnDragOver(object? sender, DragEventArgs e)
+    {
+        e.DragEffects = DroppedMapPath(e) is not null ? DragDropEffects.Copy : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    /// <summary>Drop onto the workspace: open the first dropped .w3x or .w3m file.</summary>
+    private void OnDrop(object? sender, DragEventArgs e)
+    {
+        if (DroppedMapPath(e) is { } path)
+        {
+            OpenMap(path);
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>The local path of the first dropped .w3x or .w3m file, or null when the payload
+    /// carries no such file (folders and other extensions are ignored).</summary>
+    private static string? DroppedMapPath(DragEventArgs e)
+    {
+        if (e.Data.Get(DataFormats.Files) is not IEnumerable<IStorageItem> items)
+            return null;
+        foreach (var item in items)
+        {
+            if (item.TryGetLocalPath() is { } path && IsMapPath(path))
+                return path;
+        }
+        return null;
+    }
+
+    private static bool IsMapPath(string path) =>
+        path.EndsWith(".w3x", StringComparison.OrdinalIgnoreCase)
+        || path.EndsWith(".w3m", StringComparison.OrdinalIgnoreCase);
 }

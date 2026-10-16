@@ -23,6 +23,9 @@
     <ProjectReference Include="..\Wc3.MapDocument\Wc3.MapDocument.csproj" />
     <ProjectReference Include="..\Wc3.Render\Wc3.Render.csproj" />
     <ProjectReference Include="..\Wc3.GameData\Wc3.GameData.csproj" />
+    <!-- So the Connect AI Apps dialog can call the shared setup layer (ClientTargets,
+         SetupEnvironment, SetupCli) directly, instead of shelling out to the CLI. -->
+    <ProjectReference Include="..\Wc3.Mcp\Wc3.Mcp.csproj" />
   </ItemGroup>
 
   <!-- The build stamp (git short hash + UTC build time into assembly metadata, for the title bar)

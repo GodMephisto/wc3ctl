@@ -1,8 +1,11 @@
 using System.Reflection;
 using System.Text;
+using System.Windows.Input;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
+using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using Wc3.Commands;
 using Wc3.Model;
@@ -18,14 +21,33 @@ public partial class MainWindow : Window
     /// workspaces and the shared file picker (see <see cref="ApplySettings"/>).</summary>
     private StudioSettings _settings = StudioSettings.Load();
 
+    /// <summary>Ctrl+O, open a Source map.</summary>
+    public ICommand OpenSourceCommand { get; }
+
+    /// <summary>Ctrl+Shift+O, open a Target map.</summary>
+    public ICommand OpenTargetCommand { get; }
+
+    /// <summary>Ctrl+S, save the active map.</summary>
+    public ICommand SaveActiveCommand { get; }
+
     public MainWindow()
     {
         InitializeComponent();
+        OpenSourceCommand = new ActionCommand(() => _ = SourceWorkspace.PickAndOpenMapAsync());
+        OpenTargetCommand = new ActionCommand(() => _ = OpenTargetAsync());
+        SaveActiveCommand = new ActionCommand(() => _ = SaveActiveAsync());
+        // Registered in code, because a KeyBindings entry is not in the visual tree and so cannot
+        // resolve an ElementName binding back to this window.
+        KeyBindings.Add(new KeyBinding { Gesture = KeyGesture.Parse("Ctrl+O"), Command = OpenSourceCommand });
+        KeyBindings.Add(new KeyBinding { Gesture = KeyGesture.Parse("Ctrl+Shift+O"), Command = OpenTargetCommand });
+        KeyBindings.Add(new KeyBinding { Gesture = KeyGesture.Parse("Ctrl+S"), Command = SaveActiveCommand });
         Title = $"wc3ctl Studio · {BuildStamp()}";
         SourceWorkspace.MapChanged += OnWorkspaceMapChanged;
         TargetWorkspace.MapChanged += OnWorkspaceMapChanged;
         SourceWorkspace.PortRequested += OnPortRequested;
         SourceWorkspace.PortPreviewRequested += OnPortPreviewRequested;
+        SourceWorkspace.ConnectAiAppsRequested += OnConnectAiAppsRequested;
+        TargetWorkspace.ConnectAiAppsRequested += OnConnectAiAppsRequested;
         ApplySettings();
         Opened += OnOpenedAutoLoad;
     }
@@ -37,6 +59,10 @@ public partial class MainWindow : Window
     {
         SourceWorkspace.Session.GameDir = _settings.GameDir;
         TargetWorkspace.Session.GameDir = _settings.GameDir;
+        // Both workspaces share this one StudioSettings instance, so a recent-map update and a
+        // Settings edit write through the same object rather than clobbering each other.
+        SourceWorkspace.Settings = _settings;
+        TargetWorkspace.Settings = _settings;
         FilePicker.SeedLastDirectory(_settings.MapsDir);
         // Open the base game data now, off the UI thread, rather than making whichever panel
         // needs it first block for a second and a half. See GameDataWarmup for the measurement.
@@ -110,10 +136,52 @@ public partial class MainWindow : Window
     private async void OnOpenSourceMapClick(object? sender, RoutedEventArgs e) =>
         await SourceWorkspace.PickAndOpenMapAsync();
 
-    private async void OnOpenTargetMapClick(object? sender, RoutedEventArgs e)
+    private async void OnOpenTargetMapClick(object? sender, RoutedEventArgs e) =>
+        await OpenTargetAsync();
+
+    /// <summary>Reveals the Target pane and opens a map into it. Shared by the menu item and the
+    /// Ctrl+Shift+O gesture.</summary>
+    private async Task OpenTargetAsync()
     {
         RevealTargetPane();
         await TargetWorkspace.PickAndOpenMapAsync();
+    }
+
+    /// <summary>Saves the active map: the workspace that holds keyboard focus, or the visible
+    /// Target pane when both are open, falling back to whichever workspace has a map.</summary>
+    private async Task SaveActiveAsync()
+    {
+        await ActiveWorkspace().SaveActiveMapAsync();
+    }
+
+    /// <summary>Which workspace a plain "Save" applies to. Focus wins, then the visible Target
+    /// pane (a port session touches both), then any workspace that has a map.</summary>
+    private MapWorkspaceView ActiveWorkspace()
+    {
+        if (FocusManager?.GetFocusedElement() is Control focused)
+        {
+            if (SourceWorkspace.IsLogicalAncestorOf(focused))
+                return SourceWorkspace;
+            if (TargetWorkspace.IsLogicalAncestorOf(focused))
+                return TargetWorkspace;
+        }
+        if (TargetWorkspace.IsVisible && TargetWorkspace.HasMap)
+            return TargetWorkspace;
+        return SourceWorkspace.HasMap ? SourceWorkspace : TargetWorkspace;
+    }
+
+    private void OnConnectAiAppsClick(object? sender, RoutedEventArgs e) =>
+        _ = OpenAiSetupAsync();
+
+    private void OnConnectAiAppsRequested(object? sender, EventArgs e) =>
+        _ = OpenAiSetupAsync();
+
+    /// <summary>Opens the Connect AI Apps dialog, seeded with the open Source map so the starter
+    /// prompt names it.</summary>
+    private async Task OpenAiSetupAsync()
+    {
+        var dialog = new Dialogs.AiSetupDialog(SourceWorkspace.Session.MapPath);
+        await dialog.ShowDialog(this);
     }
 
     /// <summary>Reveals the Target pane (and the splitter) the first time it is needed - opening
