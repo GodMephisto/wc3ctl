@@ -2,7 +2,7 @@
 
 Generated from the live command tree by `wc3ctl docs cli`. Do not edit by hand. Regenerate with `wc3ctl docs cli --force`, and the CI guard fails when this file is stale.
 
-The tree holds 65 top level verb(s) and 323 command path(s) in total.
+The tree holds 67 top level verb(s) and 325 command path(s) in total.
 
 ## Global options
 
@@ -5703,6 +5703,34 @@ Options
 - `--from <from>`. Git ref to start after. Default, the most recent tag reachable from the end ref.
 - `--to <to>`. Git ref to end at. Default, HEAD.
 - `-o, --out <out>` (required). Path to write the release notes markdown to.
+
+## update
+
+Update wc3ctl and the Studio from the latest GitHub release, replacing files in place. A file the running app holds open is renamed to *.old and replaced, so nothing has to be closed first.
+
+Usage
+
+```
+wc3ctl update [options]
+```
+
+Options
+
+- `--check`. Only report whether a newer release exists, download nothing.
+
+## associate
+
+Add 'Edit in wc3ctl Studio' to the Windows Explorer right-click menu for .w3x and .w3m files, under the current user. With --unregister, remove it. Windows only.
+
+Usage
+
+```
+wc3ctl associate [options]
+```
+
+Options
+
+- `--unregister`. Remove the Explorer right-click entry instead of adding it.
 
 ## export
 

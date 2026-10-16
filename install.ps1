@@ -36,6 +36,34 @@ function Test-Checksum([string]$zipPath, [string]$sumPath) {
     Write-Host "checksum ok, $([IO.Path]::GetFileName($zipPath))"
 }
 
+# Deletes leftover *.old files under a folder. A file still held open by a running process is
+# skipped, because that is the expected case and not an error.
+function Remove-OldFiles([string]$dir) {
+    if (-not (Test-Path $dir)) { return }
+    Get-ChildItem -Path $dir -Recurse -File -Filter '*.old' -ErrorAction SilentlyContinue | ForEach-Object {
+        try { Remove-Item -Path $_.FullName -Force -ErrorAction Stop } catch { }
+    }
+}
+
+# Copies a tree file by file. When a target file is locked by a running process, the old copy is
+# renamed to *.old and the new one takes its place, so an update never has to abort for a lock.
+function Copy-TreeLockSafe([string]$source, [string]$dest) {
+    New-Item -ItemType Directory -Path $dest -Force | Out-Null
+    Get-ChildItem -Path $source -Recurse -File | ForEach-Object {
+        $rel = [IO.Path]::GetRelativePath($source, $_.FullName)
+        $target = Join-Path $dest $rel
+        $targetDir = Split-Path -Parent $target
+        if ($targetDir -and -not (Test-Path $targetDir)) { New-Item -ItemType Directory -Path $targetDir -Force | Out-Null }
+        try {
+            Copy-Item -Path $_.FullName -Destination $target -Force -ErrorAction Stop
+        } catch {
+            $old = "$target.$([guid]::NewGuid().ToString('N').Substring(0,6)).old"
+            try { Move-Item -Path $target -Destination $old -Force -ErrorAction Stop } catch { }
+            Copy-Item -Path $_.FullName -Destination $target -Force
+        }
+    }
+}
+
 # Downloads one asset and its checksum, verifies it, and unpacks it into $dest, replacing what is there.
 function Install-Asset($release, [string]$pattern, [string]$dest, [string]$exeName, [string]$work) {
     $zip = $release.assets | Where-Object { $_.name -like $pattern } | Select-Object -First 1
@@ -53,17 +81,11 @@ function Install-Asset($release, [string]$pattern, [string]$dest, [string]$exeNa
     Expand-Archive -Path $zipPath -DestinationPath $unpacked
     if (-not (Test-Path (Join-Path $unpacked $exeName))) { throw "$($zip.name) does not contain $exeName." }
 
-    # Replace the old copy, keeping the studio and schemas subfolders when this is the CLI folder.
-    if (Test-Path $dest) {
-        try {
-            Get-ChildItem -Path $dest -Force | Where-Object { $_.Name -notin @('studio', 'schemas') } | Remove-Item -Recurse -Force
-        } catch {
-            throw "Could not replace $dest. Close Studio and any AI app running wc3ctl, then run this again."
-        }
-    } else {
-        New-Item -ItemType Directory -Path $dest -Force | Out-Null
-    }
-    Copy-Item -Path (Join-Path $unpacked '*') -Destination $dest -Recurse -Force
+    # Replace the old copy. The studio and schemas subfolders of the CLI folder are separate
+    # installs, so copying over only files the zip carries leaves them alone. Remove-OldFiles
+    # clears last run's renamed copies, by which time their holder has exited.
+    Remove-OldFiles $dest
+    Copy-TreeLockSafe $unpacked $dest
 }
 
 $api = if ($Version -eq 'latest') { "https://api.github.com/repos/$repo/releases/latest" }

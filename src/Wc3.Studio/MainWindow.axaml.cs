@@ -88,6 +88,18 @@ public partial class MainWindow : Window
     {
         Opened -= OnOpenedAutoLoad;
         var args = Environment.GetCommandLineArgs();
+
+        // A map path handed straight on the command line, which is how the Explorer right-click
+        // entry starts the app ("Wc3.Studio.exe" "%1"), opens as the Source map. A leading dash
+        // means an option rather than a path, so it is left to the flags below.
+        if (args.Length >= 2
+            && !args[1].StartsWith('-')
+            && (args[1].EndsWith(".w3x", StringComparison.OrdinalIgnoreCase)
+                || args[1].EndsWith(".w3m", StringComparison.OrdinalIgnoreCase)))
+        {
+            TryOpen(SourceWorkspace, args[1]);
+        }
+
         for (int i = 1; i < args.Length - 1; i++)
         {
             if (string.Equals(args[i], "--open", StringComparison.OrdinalIgnoreCase))

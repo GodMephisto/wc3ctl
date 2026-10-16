@@ -356,6 +356,12 @@ public class CliMcpParityTests
         // rather than about a map, the same reason 'mcp tools' is here. The guard test regenerates
         // both documents in memory instead, so the agent surface needs no docs tool.
         "docs",
+        // Replaces the running program's own files from a GitHub release. It is about the install
+        // rather than about a map, and it overwrites the exe itself, so an agent never drives it.
+        "update",
+        // Writes the current user's registry to add an Explorer right-click entry. A local machine
+        // setting, not a map operation, and Windows only.
+        "associate",
     };
 
     // The real MCP tool names, read straight from the [McpServerTool] attributes the

@@ -6303,6 +6303,81 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         }));
         root.AddCommand(changelog);
 
+        // ---- update: replace this build in place from the latest GitHub release ----
+        var updateCheck = new Option<bool>("--check",
+            "Only report whether a newer release exists, download nothing.");
+        var updateRepo = new Option<string>("--repo", () => SelfUpdateCommand.DefaultRepo,
+            "GitHub repository, owner/name.") { IsHidden = true };
+        var update = new Command("update",
+            "Update wc3ctl and the Studio from the latest GitHub release, replacing files in place. "
+            + "A file the running app holds open is renamed to *.old and replaced, so nothing has to "
+            + "be closed first.")
+        { updateCheck, updateRepo };
+        update.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            bool json = p.GetValueForOption(jsonOption);
+            string repo = p.GetValueForOption(updateRepo)!;
+            string version = typeof(Program).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+            var preserve = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "studio", "schemas" };
+            if (p.GetValueForOption(updateCheck))
+            {
+                var r = SelfUpdateCommand.CheckAsync(repo, version, "wc3ctl-v").GetAwaiter().GetResult();
+                Emit(json, r, () => r.Message + (r.ReleaseUrl is null ? "" : "\n" + r.ReleaseUrl));
+                if (!r.Ok) exitCode[0] = 1;
+                return;
+            }
+            var u = SelfUpdateCommand.UpdateFromReleaseAsync(
+                repo, version, AppContext.BaseDirectory, "wc3ctl-v", preserve).GetAwaiter().GetResult();
+            Emit(json, u, () => u.Message);
+            if (!u.Ok) exitCode[0] = 1;
+        }));
+        root.AddCommand(update);
+
+        // ---- associate: the Windows Explorer right-click entry that opens a map in the Studio ----
+        var associateUnregister = new Option<bool>("--unregister",
+            "Remove the Explorer right-click entry instead of adding it.");
+        var associateStudio = new Option<string?>("--studio",
+            "Path to Wc3.Studio.exe. Default, the Studio installed beside this exe.") { IsHidden = true };
+        var associate = new Command("associate",
+            "Add 'Edit in wc3ctl Studio' to the Windows Explorer right-click menu for .w3x and .w3m "
+            + "files, under the current user. With --unregister, remove it. Windows only.")
+        { associateUnregister, associateStudio };
+        associate.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            bool json = p.GetValueForOption(jsonOption);
+            if (!FileAssociationCommand.IsSupported)
+            {
+                const string only = "File associations are Windows only.";
+                Emit(json, new { Ok = false, Message = only }, () => only);
+                exitCode[0] = 1;
+                return;
+            }
+            if (p.GetValueForOption(associateUnregister))
+            {
+                var removed = FileAssociationCommand.Unregister();
+                Emit(json, removed, () => removed.Message);
+                if (!removed.Ok) exitCode[0] = 1;
+                return;
+            }
+            string studio = p.GetValueForOption(associateStudio)
+                ?? Path.Combine(AppContext.BaseDirectory, "studio", "Wc3.Studio.exe");
+            if (!File.Exists(studio))
+                studio = Path.Combine(AppContext.BaseDirectory, "Wc3.Studio.exe");
+            if (!File.Exists(studio))
+            {
+                const string missing = "no Wc3.Studio.exe found, pass --studio <path>";
+                Emit(json, new { Ok = false, Message = missing }, () => missing);
+                exitCode[0] = 1;
+                return;
+            }
+            var added = FileAssociationCommand.Register(studio);
+            Emit(json, added, () => added.Message);
+            if (!added.Ok) exitCode[0] = 1;
+        }));
+        root.AddCommand(associate);
+
         // ---- export: keep the public wc3-mcp checkout in step with this repository ----
         var exportTarget = new Argument<string>("path", "Path to the wc3-mcp checkout to check.");
         var exportSource = new Option<string?>("--source",

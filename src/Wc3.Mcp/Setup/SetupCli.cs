@@ -1,4 +1,5 @@
 // src/Wc3.Mcp/Setup/SetupCli.cs
+using Wc3.Commands;
 using Wc3.GameData;
 
 namespace Wc3.Mcp.Setup;
@@ -12,6 +13,7 @@ public static class SetupCli
     public static readonly IReadOnlySet<string> Verbs = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
         "install", "uninstall", "config", "doctor", "clients", "help", "--help", "-h", "/?", "version", "--version",
+        "update",
     };
 
     /// <summary>Runs a setup command. Exit 0 succeeded, 1 something was refused or failed, 2 bad usage.</summary>
@@ -41,6 +43,8 @@ public static class SetupCli
                 return Clients(env, output, name);
             case "doctor":
                 return Doctor(env, output, name, product);
+            case "update":
+                return Update(rest, output, product);
         }
 
         if (rest.Any(r => r.StartsWith('-')))
@@ -258,6 +262,39 @@ public static class SetupCli
         return problems == 0 ? 0 : 1;
     }
 
+    /// <summary>
+    /// Replaces the running program from its GitHub release. The standalone server reads the
+    /// wc3-mcp repository, and the same command reached through 'wc3ctl mcp update' reads the
+    /// wc3ctl one, so each program updates the project it came from. With --check it only reports.
+    /// </summary>
+    private static int Update(List<string> rest, TextWriter output, SetupProduct product)
+    {
+        bool check = rest.Remove("--check");
+        // An empty ServeArgs means the standalone server, which ships from the wc3-mcp repository.
+        bool standalone = product.ServeArgs.Count == 0;
+        string repo = standalone ? "GodMephisto/wc3-mcp" : SelfUpdateCommand.DefaultRepo;
+        string prefix = standalone ? "wc3-mcp" : "wc3ctl-v";
+        try
+        {
+            if (check)
+            {
+                var r = SelfUpdateCommand.CheckAsync(repo, product.Version, prefix).GetAwaiter().GetResult();
+                output.WriteLine(r.Message);
+                if (r.ReleaseUrl is not null) output.WriteLine(r.ReleaseUrl);
+                return r.Ok ? 0 : 1;
+            }
+            var u = SelfUpdateCommand.UpdateFromReleaseAsync(
+                repo, product.Version, AppContext.BaseDirectory, prefix).GetAwaiter().GetResult();
+            output.WriteLine(u.Message);
+            return u.Ok ? 0 : 1;
+        }
+        catch (Exception ex)
+        {
+            output.WriteLine($"update failed, {ex.Message}");
+            return 1;
+        }
+    }
+
     private static bool IsRegistered(ClientTarget t, SetupEnvironment env, string name) => t.Style switch
     {
         ConfigStyle.CodexToml => t.PresentFiles(env).Any(f => CodexToml.Contains(f, name)),
@@ -308,6 +345,7 @@ public static class SetupCli
           {p.Command} config <app>             print the settings to paste by hand
           {p.Command} clients                  list supported apps and whether each is set up
           {p.Command} doctor                   check the install, the game folder and the apps
+          {p.Command} update                   update to the latest release, add --check to only report
 
         Options
           --game-dir <folder>   the Warcraft III folder, when it is not found automatically
