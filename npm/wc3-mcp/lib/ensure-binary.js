@@ -29,6 +29,12 @@ function cacheRoot() {
 }
 
 function versionDir(version) {
+  // The version is joined into a cache path, so a value that carried a separator or a `..`
+  // could escape the versions folder. It is always package.json's own version today, but the
+  // check is cheap and keeps the boundary honest if a caller ever passes one in.
+  if (typeof version !== 'string' || !/^[0-9A-Za-z][0-9A-Za-z.\-]*$/.test(version)) {
+    throw new Error(`refusing an invalid version string: ${String(version)}`);
+  }
   return path.join(cacheRoot(), `v${version}`);
 }
 
