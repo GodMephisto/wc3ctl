@@ -2,7 +2,7 @@
 
 Generated from the live tool surface by `wc3ctl docs mcp`. Do not edit by hand. Regenerate with `wc3ctl docs mcp --force`, and the CI guard fails when this file is stale.
 
-The server exposes 245 tool(s).
+The server exposes 251 tool(s).
 
 ## asset_audit
 
@@ -910,6 +910,12 @@ Port a unit (its custom-object closure + imported assets + strings, and best-eff
 
 Annotations. read-only no, destructive no, idempotent yes, open-world no.
 
+## quickstart
+
+Route a broad request to the right workflow. Returns the ten core workflows a map task usually falls into (inspect, port-hero, reforged-3-fix, black-portraits, shrink-map, hunt-leaks, edit-objects, terrain-and-placement, lua-conversion, patch-compat), each naming the MCP tools and the wc3ctl commands that carry it out. Pass a goal (a substring such as 'portrait', 'leak' or 'shrink') to narrow the list. With more than two hundred tools on this server, call this first when the caller states an outcome rather than a tool. Read-only, it touches no map.
+
+Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
 ## region_create
 
 Create a rectangular region from its south-west corner (x, y) plus a width w and height h, and save the edited map to out_path. The input map is NEVER modified in place. Rejects a blank or duplicate name and a non-positive size. Set weather to attach the default weather effect. Returns the assigned creation number.
@@ -1408,6 +1414,12 @@ Rename a trigger item (a category, a trigger or a deleted stub) in the GUI trigg
 
 Annotations. read-only no, destructive no, idempotent yes, open-world no.
 
+## trigger_set_code
+
+Set the custom-text JASS body of a custom-text trigger and save the edited map to out_path. The body is written into war3map.wct at the byte level, replacing only that trigger's slot so every other slot's bytes survive verbatim. This is a deliberate change of direction from the rest of the trigger surface, which never rewrites war3map.wct, and it is safe here because only the one slot is spliced rather than the whole file re-encoded. A GUI trigger is refused. IMPORTANT: this edits the World Editor's trigger source, not the compiled war3map.j the game runs, so the body is inert in game until the map is opened and saved in the World Editor. The input map is NEVER modified in place.
+
+Annotations. read-only no, destructive no, idempotent yes, open-world no.
+
 ## trigger_set_eca_enabled
 
 Enable or disable ONE event, condition or action within a trigger, the World Editor's per-line toggle rather than the whole-trigger one, and save the edited map to out_path. The input map is NEVER modified in place.
@@ -1437,6 +1449,30 @@ Annotations. read-only no, destructive no, idempotent yes, open-world no.
 Render the map's GUI trigger tree (war3map.wtg) to JASS-style text, the way the World Editor's 'convert to custom text' presents one trigger. Read-only, it never edits the map. Preset parameter values are resolved to their script form through the World-Editor catalog when the installed game provides one, and otherwise keep their raw names. This is a rendering for reading rather than a replacement for the compiled script (war3map.j), so it is not guaranteed to compile.
 
 Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
+## trigger_var_add
+
+Add a global variable to the map's wtg and save the edited map to out_path. Provides a name, a type (for example integer, real, string, boolean, unit, group, trigger) and, for an array, the array flag and size. An initial value marks the variable initialized. Refuses a blank name or type and a name that already exists, because the wtg keys variables by name. IMPORTANT: this edits war3map.wtg, the World Editor's trigger SOURCE, not war3map.j, so a variable it defines is visible in the World Editor and inert in game until that editor saves the map. The input map is NEVER modified in place.
+
+Annotations. read-only no, destructive no, idempotent no, open-world no.
+
+## trigger_var_list
+
+List the map's global variables (the .wtg Variables list), each with its name, type, array flag, declared size and initial value. Read-only.
+
+Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
+## trigger_var_remove
+
+Remove a global variable from the map's wtg by name and save the edited map to out_path. Any trigger that referenced the variable is left pointing at nothing, so check references afterwards. The input map is NEVER modified in place.
+
+Annotations. read-only no, destructive yes, idempotent no, open-world no.
+
+## trigger_var_set
+
+Update an existing global variable in the map's wtg by name and save the edited map to out_path. Any argument left off keeps its current value, so one field can change without restating the rest. This does not rewrite references to the variable inside trigger bodies. The input map is NEVER modified in place.
+
+Annotations. read-only no, destructive no, idempotent yes, open-world no.
 
 ## triggers_read
 

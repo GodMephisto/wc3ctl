@@ -2,7 +2,7 @@
 
 Generated from the live command tree by `wc3ctl docs cli`. Do not edit by hand. Regenerate with `wc3ctl docs cli --force`, and the CI guard fails when this file is stale.
 
-The tree holds 67 top level verb(s) and 325 command path(s) in total.
+The tree holds 68 top level verb(s) and 332 command path(s) in total.
 
 ## Global options
 
@@ -4480,6 +4480,8 @@ Subcommands
 - `add-eca`. Add an event, condition or action to a GUI trigger and save the edited map. Parameters you leave off are filled from the World-Editor table's own defaults, because a function written with the wrong number of parameters produces a map nothing can read. This edits the World Editor's trigger source (war3map.wtg), not the compiled script the game runs (war3map.j), so the trigger takes effect only after the map is opened and saved in the World Editor.
 - `remove-eca`. Remove one event, condition or action from a GUI trigger by its position.
 - `set-eca-enabled`. Enable or disable ONE event, condition or action within a trigger, which is the World Editor's per-line toggle rather than the whole-trigger one.
+- `var`. The map's global variables (list, add, set, remove). This is the .wtg Variables list, distinct from the trigger tree.
+- `set-code`. Set the custom-text JASS body of a custom-text trigger and save the edited map. The body goes into war3map.wct at the byte level, replacing only that trigger's slot. This edits the World Editor's trigger source, not the compiled war3map.j, so the body takes effect only after a World Editor save.
 
 ### trigger catalog
 
@@ -4832,6 +4834,122 @@ Arguments
 - `<id>` (required). Trigger item id, as shown by 'trigger read'.
 - `<index>` (required). Zero-based position of the function within the trigger, as 'trigger read' lists it.
 - `[<on>]` (optional). true or false.
+
+Options
+
+- `-o, --out <out>`. Output map path. Default: '<map>.edited.<ext>' next to the input - the original is never overwritten.
+
+### trigger var
+
+The map's global variables (list, add, set, remove). This is the .wtg Variables list, distinct from the trigger tree.
+
+Usage
+
+```
+wc3ctl trigger var
+```
+
+Subcommands
+
+- `list`. List the map's global variables.
+- `add`. Add a global variable to the map and save the edited map. This edits the World Editor's trigger source, not the compiled war3map.j, so the variable takes effect only after a World Editor save.
+- `set`. Update a global variable by name and save the edited map. Arguments left off keep their current value.
+- `remove`. Remove a global variable by name and save the edited map. Any trigger that referenced it is left pointing at nothing.
+
+#### trigger var list
+
+List the map's global variables.
+
+Usage
+
+```
+wc3ctl trigger var list <map>
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+
+#### trigger var add
+
+Add a global variable to the map and save the edited map. This edits the World Editor's trigger source, not the compiled war3map.j, so the variable takes effect only after a World Editor save.
+
+Usage
+
+```
+wc3ctl trigger var add <map> <name> <type> [options]
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+- `<name>` (required). Variable name.
+- `<type>` (required). Variable type, for example integer, real, string, boolean, unit, group.
+
+Options
+
+- `--array`. Declare it as an array.
+- `--size <size>`. Array size. Default `1`.
+- `--initial <initial>`. Initial value, which also marks the variable initialized. Omit to leave it uninitialized.
+- `-o, --out <out>`. Output map path. Default: '<map>.edited.<ext>' next to the input - the original is never overwritten.
+
+#### trigger var set
+
+Update a global variable by name and save the edited map. Arguments left off keep their current value.
+
+Usage
+
+```
+wc3ctl trigger var set <map> <name> [options]
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+- `<name>` (required). Variable name.
+
+Options
+
+- `--type <type>`. New type. Omit to keep the current one.
+- `--array <array>`. New array flag. Omit to keep the current one.
+- `--size <size>`. New array size. Omit to keep the current one.
+- `--initial <initial>`. New initial value, which also marks the variable initialized. Omit to keep the current one.
+- `-o, --out <out>`. Output map path. Default: '<map>.edited.<ext>' next to the input - the original is never overwritten.
+
+#### trigger var remove
+
+Remove a global variable by name and save the edited map. Any trigger that referenced it is left pointing at nothing.
+
+Usage
+
+```
+wc3ctl trigger var remove <map> <name> [options]
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+- `<name>` (required). Variable name.
+
+Options
+
+- `-o, --out <out>`. Output map path. Default: '<map>.edited.<ext>' next to the input - the original is never overwritten.
+
+### trigger set-code
+
+Set the custom-text JASS body of a custom-text trigger and save the edited map. The body goes into war3map.wct at the byte level, replacing only that trigger's slot. This edits the World Editor's trigger source, not the compiled war3map.j, so the body takes effect only after a World Editor save.
+
+Usage
+
+```
+wc3ctl trigger set-code <map> <id> <code> [options]
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+- `<id>` (required). Trigger item id, as shown by 'trigger read'.
+- `<code>` (required). The JASS body to store in this custom-text trigger's war3map.wct slot.
 
 Options
 
@@ -5731,6 +5849,20 @@ wc3ctl associate [options]
 Options
 
 - `--unregister`. Remove the Explorer right-click entry instead of adding it.
+
+## quickstart
+
+List the core workflows and the wc3ctl commands and MCP tools that carry each one out. Pass --goal to narrow the list. Read-only, it touches no map.
+
+Usage
+
+```
+wc3ctl quickstart [options]
+```
+
+Options
+
+- `--goal <goal>`. A goal substring used to narrow the workflows, for example 'portrait', 'leak' or 'shrink'.
 
 ## export
 
