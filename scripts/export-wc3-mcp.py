@@ -20,6 +20,8 @@ What it does
     manifest, registry entry, licenses and Directory.Build.props (the wc3-mcp identity) are its own.
   * Refuses to write anything that contains a Windows user profile path, or the git user name or
     email configured here, so a machine path or a private identity cannot reach the public repo.
+    The repository's own public owner slug is exempt, so a string such as GodMephisto/wc3ctl does
+    not read as a leak when the git user name happens to equal the owner.
 """
 import io
 import pathlib
@@ -45,6 +47,17 @@ SOURCE = pathlib.Path(__file__).resolve().parent.parent
 
 def git(*args, cwd=SOURCE):
     return subprocess.run(["git", *args], cwd=cwd, capture_output=True, check=True).stdout
+
+
+def origin_owner():
+    """The public owner of this checkout, for example GodMephisto. The identity guard exempts it,
+    because an owner slug inside a repository URL is public and is not a private identity leak."""
+    try:
+        url = git("remote", "get-url", "origin").decode().strip()
+    except subprocess.CalledProcessError:
+        return None
+    match = re.search(r"[/:]([^/:]+)/[^/]+?(?:\.git)?$", url)
+    return match.group(1) if match else None
 
 
 def head_files(paths):
@@ -87,11 +100,13 @@ def main():
     name = git("config", "user.name").decode().strip()
     email = git("config", "user.email").decode().strip()
     private = [s for s in (name, email) if len(s) >= 3]
+    owner = origin_owner()
     leaks = []
     for p, b in files.items():
         text = b.decode("utf-8", "replace")
         for i, line in enumerate(text.splitlines(), 1):
-            if PROFILE_PATH.search(line) or any(s.lower() in line.lower() for s in private):
+            scan = re.sub(re.escape(owner), "", line, flags=re.IGNORECASE) if owner else line
+            if PROFILE_PATH.search(line) or any(s.lower() in scan.lower() for s in private):
                 leaks.append(f"  {p}:{i}")
     if leaks:
         print("Refusing to export. These lines carry a user profile path or the local git identity:")
