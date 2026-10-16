@@ -24,6 +24,9 @@ public static class SetupCli
         string? gameDir = TakeOption(rest, "--game-dir");
         bool all = rest.Remove("--all");
         bool noPath = rest.Remove("--no-path");
+        // Set by the npm launcher so 'npx -y wc3-mcp@latest install --all' registers the
+        // auto-updating npx command in every client, which upgrades on every launch.
+        bool useNpx = rest.Remove("--npx") || Environment.GetEnvironmentVariable("WC3_MCP_NPX") == "1";
         if (gameDir is not null) gameDir = Path.GetFullPath(gameDir);
 
         switch (verb)
@@ -46,9 +49,11 @@ public static class SetupCli
             return 2;
         }
 
-        var entry = entryOverride is null
-            ? ServerEntry.ForThisProcess(name, gameDir, product.ServeArgs)
-            : entryOverride with { Name = name, GameDir = gameDir ?? entryOverride.GameDir };
+        var entry = entryOverride is not null
+            ? entryOverride with { Name = name, GameDir = gameDir ?? entryOverride.GameDir }
+            : useNpx
+                ? new ServerEntry(name, "npx", new[] { "-y", "wc3-mcp@latest" }, gameDir)
+                : ServerEntry.ForThisProcess(name, gameDir, product.ServeArgs);
 
         List<ClientTarget> targets;
         if (all)
@@ -103,11 +108,17 @@ public static class SetupCli
         return failures == 0 ? 0 : 1;
     }
 
-    /// <summary>The folder to put on PATH, or null when this runs under dotnet rather than as the exe.</summary>
-    private static string? ExeFolder(ServerEntry entry) =>
-        Path.GetFileNameWithoutExtension(entry.Command).Equals("dotnet", StringComparison.OrdinalIgnoreCase)
-            ? null
-            : Path.GetDirectoryName(entry.Command);
+    /// <summary>
+    /// The folder to put on PATH, or null when this runs under dotnet rather than as the exe,
+    /// and null for a bare command like the npm launcher's npx, which has no folder of its own.
+    /// </summary>
+    private static string? ExeFolder(ServerEntry entry)
+    {
+        if (Path.GetFileNameWithoutExtension(entry.Command).Equals("dotnet", StringComparison.OrdinalIgnoreCase))
+            return null;
+        var folder = Path.GetDirectoryName(entry.Command);
+        return string.IsNullOrEmpty(folder) ? null : folder;
+    }
 
     private static void AddToPath(ServerEntry entry, SetupEnvironment env, TextWriter output, SetupProduct product)
     {
