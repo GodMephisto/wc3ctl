@@ -48,7 +48,7 @@ You can use it three ways, and one install gives you all three.
 
 3. Click inside the PowerShell window, right-click once to paste it, and press
    **Enter**.
-4. Wait about a minute. You will see lines such as `wc3ctl v0.2.1`,
+4. Wait about a minute. You will see lines such as `wc3ctl v0.4.7`,
    `checksum ok`, `installed to ...`, `added wc3ctl Studio to the Start menu` and
    `added to your PATH`, then a short report from `wc3ctl mcp doctor` listing your
    AI apps and the Warcraft III folder it found.
@@ -248,7 +248,7 @@ The command groups, by job.
 
 The installer has already set this up for every supported app it found. Quit the
 app fully (for Claude Desktop, right-click its icon by the clock and choose
-**Quit**) and start it again. The app now lists the wc3ctl tools, 241 of them.
+**Quit**) and start it again. The app now lists the wc3ctl tools, 245 of them.
 
 Then just ask, and give the map's full path. For example
 

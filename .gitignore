@@ -39,3 +39,7 @@ tmp/
 # Test run artifacts
 TestResults/
 *.trx
+
+# Scratch and stale publish folders
+%TEMP%/
+*.old/
