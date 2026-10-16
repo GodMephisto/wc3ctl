@@ -18,6 +18,31 @@ public sealed class StudioSettings
     /// <summary>The folder Open Map starts in, or null.</summary>
     public string? MapsDir { get; set; }
 
+    /// <summary>
+    /// The most recently opened map files, newest first, shown as one-click buttons on the
+    /// welcome screen. Capped by <see cref="AddRecentMap"/> so the list cannot grow without
+    /// bound across a long session.
+    /// </summary>
+    public List<string> RecentMaps { get; set; } = new();
+
+    /// <summary>The most recent maps kept in <see cref="RecentMaps"/>.</summary>
+    public const int MaxRecentMaps = 10;
+
+    /// <summary>
+    /// Records a map as the most recent one. The path moves to the front, duplicates are
+    /// matched case-insensitively (Windows paths differ only in case), and the list is trimmed
+    /// to <see cref="MaxRecentMaps"/> so it stays short.
+    /// </summary>
+    public void AddRecentMap(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return;
+        RecentMaps.RemoveAll(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
+        RecentMaps.Insert(0, path);
+        if (RecentMaps.Count > MaxRecentMaps)
+            RecentMaps.RemoveRange(MaxRecentMaps, RecentMaps.Count - MaxRecentMaps);
+    }
+
     private static string FilePath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "wc3ctl", "studio-settings.json");
@@ -27,8 +52,12 @@ public sealed class StudioSettings
         try
         {
             if (File.Exists(FilePath))
-                return JsonSerializer.Deserialize<StudioSettings>(File.ReadAllText(FilePath))
+            {
+                var loaded = JsonSerializer.Deserialize<StudioSettings>(File.ReadAllText(FilePath))
                     ?? new StudioSettings();
+                loaded.RecentMaps ??= new List<string>(); // a hand-edited file may set it to null
+                return loaded;
+            }
         }
         catch { /* corrupt or unreadable, fall back to defaults */ }
         return new StudioSettings();

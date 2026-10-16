@@ -1,0 +1,33 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Wc3.Studio.Dialogs.AiSetupDialog"
+        Title="Connect AI Apps"
+        Width="660" Height="580"
+        MinWidth="520" MinHeight="420"
+        WindowStartupLocation="CenterOwner">
+    <DockPanel Margin="18">
+
+        <StackPanel DockPanel.Dock="Top" Spacing="6">
+            <TextBlock Text="Connect AI Apps" FontSize="18" FontWeight="Bold"/>
+            <TextBlock TextWrapping="Wrap" Foreground="#8FA3B8"
+                       Text="Register the wc3ctl MCP server with the AI apps on this PC, so an assistant can read, audit and edit Warcraft III maps."/>
+        </StackPanel>
+
+        <StackPanel DockPanel.Dock="Bottom" Spacing="10" Margin="0,12,0,0">
+            <TextBlock Name="LogText" TextWrapping="Wrap" FontSize="11" Foreground="#8FA3B8"/>
+            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                <Button Name="CopyPromptButton" Content="Copy Starter Prompt" Click="OnCopyPromptClick"
+                        ToolTip.Tip="Copy an example prompt that names the map currently open in the Source pane."/>
+                <Button Name="ConnectButton" Content="Connect All Detected AI Apps" Classes="accent"
+                        Click="OnConnectClick"
+                        ToolTip.Tip="Add the wc3ctl MCP server to every supported AI app found on this PC."/>
+                <Button Name="CloseButton" Content="Close" Click="OnCloseClick"/>
+            </StackPanel>
+        </StackPanel>
+
+        <ScrollViewer Margin="0,12,0,0">
+            <StackPanel Name="ClientList" Spacing="6"/>
+        </ScrollViewer>
+
+    </DockPanel>
+</Window>

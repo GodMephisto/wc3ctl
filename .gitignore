@@ -1,6 +1,9 @@
 # Build output
 bin/
 obj/
+# The npm launcher keeps its entry point in a bin folder, which is source here.
+!npm/wc3-mcp/bin/
+!npm/wc3-mcp/bin/**
 artifacts/
 [Bb]uild/
 *.user
@@ -39,3 +42,7 @@ tmp/
 # Test run artifacts
 TestResults/
 *.trx
+
+# Scratch and stale publish folders
+%TEMP%/
+*.old/

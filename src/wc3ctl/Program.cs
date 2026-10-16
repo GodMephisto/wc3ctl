@@ -3796,6 +3796,107 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
             FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message);
         }));
 
+        // ---- trigger variables (the .wtg global list) and a custom-text body ----
+        var trigVarName = new Argument<string>("name", "Variable name.");
+        var trigVarTypeArg = new Argument<string>("type",
+            "Variable type, for example integer, real, string, boolean, unit, group.");
+        var trigVarTypeOpt = new Option<string?>("--type", "New type. Omit to keep the current one.");
+        var trigVarArrayOpt = new Option<bool>("--array", () => false, "Declare it as an array.");
+        var trigVarArraySetOpt = new Option<bool?>("--array", () => null,
+            "New array flag. Omit to keep the current one.");
+        var trigVarSizeOpt = new Option<int>("--size", () => 1, "Array size.");
+        var trigVarSizeSetOpt = new Option<int?>("--size", () => null,
+            "New array size. Omit to keep the current one.");
+        var trigVarInitialOpt = new Option<string?>("--initial",
+            "Initial value, which also marks the variable initialized. Omit to leave it uninitialized.");
+        var trigVarInitialSetOpt = new Option<string?>("--initial",
+            "New initial value, which also marks the variable initialized. Omit to keep the current one.");
+
+        var trigVarList = new Command("list", "List the map's global variables.") { mapArg, jsonOption };
+        trigVarList.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var vars = TriggerCommand.ListVariables(MapDocument.Load(p.GetValueForArgument(mapArg)));
+            Emit(p.GetValueForOption(jsonOption), vars,
+                () => vars.Count == 0
+                    ? "(no map variables)"
+                    : string.Join("\n", vars.Select(v =>
+                        $"{v.Name,-28} {v.Type,-12}"
+                        + (v.IsArray ? $"[{v.ArraySize}]" : "")
+                        + (v.IsInitialized ? $"  = {v.InitialValue}" : ""))));
+        }));
+
+        var trigVarAdd = new Command("add",
+            "Add a global variable to the map and save the edited map. This edits the World "
+            + "Editor's trigger source, not the compiled war3map.j, so the variable takes effect "
+            + "only after a World Editor save.")
+        { mapArg, trigVarName, trigVarTypeArg, trigVarArrayOpt, trigVarSizeOpt, trigVarInitialOpt, setOut };
+        trigVarAdd.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = TriggerCommand.AddVariable(doc,
+                p.GetValueForArgument(trigVarName), p.GetValueForArgument(trigVarTypeArg),
+                p.GetValueForOption(trigVarArrayOpt), p.GetValueForOption(trigVarSizeOpt),
+                p.GetValueForOption(trigVarInitialOpt));
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message);
+        }));
+
+        var trigVarSet = new Command("set",
+            "Update a global variable by name and save the edited map. Arguments left off keep "
+            + "their current value.")
+        { mapArg, trigVarName, trigVarTypeOpt, trigVarArraySetOpt, trigVarSizeSetOpt, trigVarInitialSetOpt, setOut };
+        trigVarSet.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = TriggerCommand.SetVariable(doc, p.GetValueForArgument(trigVarName),
+                p.GetValueForOption(trigVarTypeOpt), p.GetValueForOption(trigVarArraySetOpt),
+                p.GetValueForOption(trigVarSizeSetOpt), p.GetValueForOption(trigVarInitialSetOpt));
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message);
+        }));
+
+        var trigVarRemove = new Command("remove",
+            "Remove a global variable by name and save the edited map. Any trigger that "
+            + "referenced it is left pointing at nothing.")
+        { mapArg, trigVarName, setOut };
+        trigVarRemove.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = TriggerCommand.RemoveVariable(doc, p.GetValueForArgument(trigVarName));
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message);
+        }));
+
+        var trigVar = new Command("var",
+            "The map's global variables (list, add, set, remove). This is the .wtg Variables "
+            + "list, distinct from the trigger tree.");
+        trigVar.AddCommand(trigVarList);
+        trigVar.AddCommand(trigVarAdd);
+        trigVar.AddCommand(trigVarSet);
+        trigVar.AddCommand(trigVarRemove);
+
+        var trigCodeArg = new Argument<string>("code",
+            "The JASS body to store in this custom-text trigger's war3map.wct slot.");
+        var trigSetCode = new Command("set-code",
+            "Set the custom-text JASS body of a custom-text trigger and save the edited map. The "
+            + "body goes into war3map.wct at the byte level, replacing only that trigger's slot. "
+            + "This edits the World Editor's trigger source, not the compiled war3map.j, so the "
+            + "body takes effect only after a World Editor save.")
+        { mapArg, trigIdArg, trigCodeArg, setOut };
+        trigSetCode.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = TriggerCommand.SetCustomText(doc, p.GetValueForArgument(trigIdArg),
+                p.GetValueForArgument(trigCodeArg));
+            FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message);
+        }));
+
         // ---- unit / doodad: the units and doodads ALREADY PLACED on the map ----
         // 'place' adds one. These read, edit and remove what is there, which is most of what an
         // editor is for and was previously reachable only from the GUI.
@@ -5734,6 +5835,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         trigger.AddCommand(trigRemove);
         trigger.AddCommand(ecaAdd); trigger.AddCommand(ecaRemove);
         trigger.AddCommand(ecaEnabled);
+        trigger.AddCommand(trigVar); trigger.AddCommand(trigSetCode);
         root.AddCommand(repairHeroes); root.AddCommand(repair);
         root.AddCommand(trigger);
         root.AddCommand(editor); root.AddCommand(gamedata);
@@ -6302,6 +6404,102 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
             Emit(p.GetValueForOption(jsonOption), r, () => Render.Changelog(r, outPath));
         }));
         root.AddCommand(changelog);
+
+        // ---- update: replace this build in place from the latest GitHub release ----
+        var updateCheck = new Option<bool>("--check",
+            "Only report whether a newer release exists, download nothing.");
+        var updateRepo = new Option<string>("--repo", () => SelfUpdateCommand.DefaultRepo,
+            "GitHub repository, owner/name.") { IsHidden = true };
+        var update = new Command("update",
+            "Update wc3ctl and the Studio from the latest GitHub release, replacing files in place. "
+            + "A file the running app holds open is renamed to *.old and replaced, so nothing has to "
+            + "be closed first.")
+        { updateCheck, updateRepo };
+        update.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            bool json = p.GetValueForOption(jsonOption);
+            string repo = p.GetValueForOption(updateRepo)!;
+            string version = typeof(Program).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+            var preserve = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "studio", "schemas" };
+            if (p.GetValueForOption(updateCheck))
+            {
+                var r = SelfUpdateCommand.CheckAsync(repo, version, "wc3ctl-v").GetAwaiter().GetResult();
+                Emit(json, r, () => r.Message + (r.ReleaseUrl is null ? "" : "\n" + r.ReleaseUrl));
+                if (!r.Ok) exitCode[0] = 1;
+                return;
+            }
+            var u = SelfUpdateCommand.UpdateFromReleaseAsync(
+                repo, version, AppContext.BaseDirectory, "wc3ctl-v", preserve).GetAwaiter().GetResult();
+            Emit(json, u, () => u.Message);
+            if (!u.Ok) exitCode[0] = 1;
+        }));
+        root.AddCommand(update);
+
+        // ---- associate: the Windows Explorer right-click entry that opens a map in the Studio ----
+        var associateUnregister = new Option<bool>("--unregister",
+            "Remove the Explorer right-click entry instead of adding it.");
+        var associateStudio = new Option<string?>("--studio",
+            "Path to Wc3.Studio.exe. Default, the Studio installed beside this exe.") { IsHidden = true };
+        var associate = new Command("associate",
+            "Add 'Edit in wc3ctl Studio' to the Windows Explorer right-click menu for .w3x and .w3m "
+            + "files, under the current user. With --unregister, remove it. Windows only.")
+        { associateUnregister, associateStudio };
+        associate.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            bool json = p.GetValueForOption(jsonOption);
+            if (!FileAssociationCommand.IsSupported)
+            {
+                const string only = "File associations are Windows only.";
+                Emit(json, new { Ok = false, Message = only }, () => only);
+                exitCode[0] = 1;
+                return;
+            }
+            if (p.GetValueForOption(associateUnregister))
+            {
+                var removed = FileAssociationCommand.Unregister();
+                Emit(json, removed, () => removed.Message);
+                if (!removed.Ok) exitCode[0] = 1;
+                return;
+            }
+            string studio = p.GetValueForOption(associateStudio)
+                ?? Path.Combine(AppContext.BaseDirectory, "studio", "Wc3.Studio.exe");
+            if (!File.Exists(studio))
+                studio = Path.Combine(AppContext.BaseDirectory, "Wc3.Studio.exe");
+            if (!File.Exists(studio))
+            {
+                const string missing = "no Wc3.Studio.exe found, pass --studio <path>";
+                Emit(json, new { Ok = false, Message = missing }, () => missing);
+                exitCode[0] = 1;
+                return;
+            }
+            var added = FileAssociationCommand.Register(studio);
+            Emit(json, added, () => added.Message);
+            if (!added.Ok) exitCode[0] = 1;
+        }));
+        root.AddCommand(associate);
+
+        // ---- quickstart: route a broad request to the right workflow ----
+        // A human or an agent that knows the outcome but not the tool reads this first. It names
+        // the core workflows and the commands and MCP tools behind each one, and it touches no map.
+        var quickstartGoal = new Option<string?>("--goal",
+            "A goal substring used to narrow the workflows, for example 'portrait', 'leak' or 'shrink'.");
+        var quickstart = new Command("quickstart",
+            "List the core workflows and the wc3ctl commands and MCP tools that carry each one out. "
+            + "Pass --goal to narrow the list. Read-only, it touches no map.")
+        { quickstartGoal };
+        quickstart.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var workflows = QuickstartCommand.Execute(p.GetValueForOption(quickstartGoal));
+            Emit(p.GetValueForOption(jsonOption), workflows, () => string.Join("\n\n", workflows.Select(w =>
+                w.Id + "  " + w.Title
+                + "\n  When. " + w.WhenToUse
+                + "\n  MCP tools. " + string.Join(", ", w.McpTools)
+                + "\n  CLI. " + string.Join(", ", w.CliCommands))));
+        }));
+        root.AddCommand(quickstart);
 
         // ---- export: keep the public wc3-mcp checkout in step with this repository ----
         var exportTarget = new Argument<string>("path", "Path to the wc3-mcp checkout to check.");

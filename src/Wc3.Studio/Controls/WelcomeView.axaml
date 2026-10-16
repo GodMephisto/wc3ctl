@@ -1,0 +1,48 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="using:Wc3.Studio.Controls"
+             x:Class="Wc3.Studio.Controls.WelcomeView">
+    <!-- The no-map landing surface, shown inside a workspace until a map is open. It is a plain
+         reusable control: the workspace feeds it the recent and discovered map lists and hears
+         back through events, so it holds no map logic of its own. -->
+    <ScrollViewer>
+        <StackPanel Margin="24" Spacing="14" MaxWidth="720" HorizontalAlignment="Center">
+
+            <TextBlock Text="wc3ctl Studio" FontSize="24" FontWeight="Bold"
+                       HorizontalAlignment="Center"/>
+            <TextBlock Text="Edit Warcraft III maps byte-faithfully."
+                       Foreground="#8FA3B8" HorizontalAlignment="Center"/>
+
+            <controls:Card Name="DropzoneCard">
+                <StackPanel Spacing="10">
+                    <TextBlock Text="Drop a .w3x or .w3m map file here, or click Open Map…"
+                               TextWrapping="Wrap" HorizontalAlignment="Center"/>
+                    <Button Name="OpenMapButton" Content="Open Map…" Classes="accent"
+                            HorizontalAlignment="Center" Click="OnOpenMapClick"/>
+                </StackPanel>
+            </controls:Card>
+
+            <StackPanel Name="RecentSection" Spacing="6">
+                <TextBlock Text="Recent maps" FontWeight="SemiBold" FontSize="13"/>
+                <StackPanel Name="RecentList" Spacing="4"/>
+                <TextBlock Name="NoRecentText" Text="No recent maps yet." Foreground="#8FA3B8"
+                           FontSize="11"/>
+            </StackPanel>
+
+            <StackPanel Name="DiscoveredSection" Spacing="6">
+                <TextBlock Text="Maps in your Warcraft III folder" FontWeight="SemiBold" FontSize="13"/>
+                <StackPanel Name="DiscoveredList" Spacing="4"/>
+                <TextBlock Name="NoDiscoveredText" Text="No maps found in your Warcraft III folder."
+                           Foreground="#8FA3B8" FontSize="11"/>
+            </StackPanel>
+
+            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
+                <Button Name="NewBlankButton" Content="New Blank Map" Click="OnNewBlankClick"
+                        ToolTip.Tip="Create a fresh empty map in the Target workspace."/>
+                <Button Name="ConnectAiButton" Content="Connect AI Apps…" Click="OnConnectAiClick"
+                        ToolTip.Tip="Register the wc3ctl MCP server with the AI apps found on this PC."/>
+            </StackPanel>
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

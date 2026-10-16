@@ -86,6 +86,11 @@ public class CliMcpParityTests
         ["trigger_set_enabled"] = "trigger set-enabled",
         ["trigger_set_initially_on"] = "trigger set-initially-on",
         ["trigger_set_run_on_map_init"] = "trigger set-run-on-map-init",
+        ["trigger_set_code"] = "trigger set-code",
+        ["trigger_var_list"] = "trigger var list",
+        ["trigger_var_add"] = "trigger var add",
+        ["trigger_var_set"] = "trigger var set",
+        ["trigger_var_remove"] = "trigger var remove",
         ["script_references"] = "script refs",
         ["terrain_info"] = "terrain info",
         ["terrain_corner_get"] = "terrain corner get",
@@ -153,6 +158,7 @@ public class CliMcpParityTests
         ["leak_benchmark"] = "leak benchmark",
         ["leak_model"] = "leak model",
         ["port_unit"] = "port unit",
+        ["quickstart"] = "quickstart",
         ["port_deps"] = "port deps",
         ["port_preview"] = "port preview",
         ["port_into_version"] = "port into-version",
@@ -356,6 +362,12 @@ public class CliMcpParityTests
         // rather than about a map, the same reason 'mcp tools' is here. The guard test regenerates
         // both documents in memory instead, so the agent surface needs no docs tool.
         "docs",
+        // Replaces the running program's own files from a GitHub release. It is about the install
+        // rather than about a map, and it overwrites the exe itself, so an agent never drives it.
+        "update",
+        // Writes the current user's registry to add an Explorer right-click entry. A local machine
+        // setting, not a map operation, and Windows only.
+        "associate",
     };
 
     // The real MCP tool names, read straight from the [McpServerTool] attributes the

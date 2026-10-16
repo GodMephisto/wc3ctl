@@ -107,7 +107,10 @@ public partial class FilesView : UserControl, IMapPanel
     /// Sniffs every nameless entry's content type off the UI thread, then refreshes the rows.
     /// The sniff reads a bounded prefix per entry and caches its verdict on the entry, so the
     /// refresh rebuild (and every later one) gets the types for free. A healthy map has no
-    /// nameless entries and skips all of this, no second rebuild, no flicker.
+    /// nameless entries and skips all of this, no second rebuild, no flicker. The sweep itself is
+    /// <see cref="Wc3.Model.MapDocument.PreSniffUnnamedEntries"/>, which parallelizes the prefix
+    /// reads over per-worker archives, so a protected map's 64,738 nameless entries no longer
+    /// serialize into 22.6 seconds on the document's archive lock.
     /// </summary>
     private void BeginTypingNamelessEntries(Wc3.Model.MapDocument doc)
     {
@@ -115,9 +118,7 @@ public partial class FilesView : UserControl, IMapPanel
         int generation = ++_typeGeneration;
         Task.Run(() =>
         {
-            foreach (var entry in doc.Files)
-                if (entry.FileName is null)
-                    Wc3.Model.ContentTypeSniffer.Sniff(entry);
+            doc.PreSniffUnnamedEntries();
             Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
                 // A newer map (or a re-shown one) owns the panel now, leave its rows alone.
