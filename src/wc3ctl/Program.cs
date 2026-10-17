@@ -6529,7 +6529,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
             + "the embedding model and builds the index once, and the MCP 'docs_search' then uses "
             + "that index automatically.");
         var ragCorpusOption = new Option<string?>("--corpus",
-            "Folder of .md documents to index. Default: the context folder beside the exe.");
+            "Folder of .md documents to index. Default: the downloaded corpus dataset, fetched and verified.");
         var ragThreads = new Option<int?>("--threads",
             "CPU threads for embedding. Default min(cores/2, 4), the low CPU setting. Raise it to build faster.");
         var ragBatch = new Option<int?>("--batch", "Chunks per inference, default 16. Larger batches finish sooner and use more memory.");

@@ -5928,7 +5928,7 @@ wc3ctl rag install [options]
 
 Options
 
-- `--corpus <corpus>`. Folder of .md documents to index. Default: the context folder beside the exe.
+- `--corpus <corpus>`. Folder of .md documents to index. Default: the downloaded corpus dataset, fetched and verified.
 - `--threads <threads>`. CPU threads for embedding. Default min(cores/2, 4), the low CPU setting. Raise it to build faster.
 - `--batch <batch>`. Chunks per inference, default 16. Larger batches finish sooner and use more memory.
 

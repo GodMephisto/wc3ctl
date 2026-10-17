@@ -427,8 +427,8 @@ public class CliMcpParityTests
         }
         Walk(Wc3Ctl.Program.BuildRoot(), "");
 
-        clashes.AddRange(typeof(Wc3Tools)
-            .GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance)
+        clashes.AddRange(new[] { typeof(Wc3Tools), typeof(Wc3Context) }
+            .SelectMany(t => t.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance))
             .Select(m => m.GetCustomAttribute<McpServerToolAttribute>()?.Name)
             .Where(n => n is not null)
             .GroupBy(n => n!, StringComparer.Ordinal)

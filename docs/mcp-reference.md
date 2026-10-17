@@ -942,7 +942,7 @@ Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 
 ## rag_install
 
-Install the local semantic retrieval index. Fetches the embedding model once (about 130 MB, needs network) and builds the index over the bundled Warcraft III documents, after which docs_search is semantic and needs nothing else. Run by a user, not per query.
+Install the local semantic index and graph over the Warcraft III corpus. Fetches the embedding model and the corpus dataset, verifies each, and builds the index and the graph, after which docs_search is semantic and the graph tools work. Needs network on the first run. The corpus is fixed to the bundled dataset, never a folder named by the caller, so this cannot read arbitrary local files.
 
 Annotations. read-only no, destructive unset, idempotent yes, open-world yes.
 
