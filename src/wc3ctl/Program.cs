@@ -6556,7 +6556,13 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
             var r = RagCommand.Search(query, top, threads);
             Emit(json, r, () => string.Join("\n", r.Results.Select(h => $"{h.Score,6:0.000}  {h.Document}  {h.Section}")));
         }), ragQueryArg, ragTopOption, ragThreads, jsonOption);
-        rag.AddCommand(ragInstall); rag.AddCommand(ragStatus); rag.AddCommand(ragSearch);
+        var ragDataset = new Command("dataset", "Download the Warcraft III corpus if it is not present. rag install does this too.");
+        ragDataset.SetHandler((bool json) => RunSafely(() =>
+        {
+            var r = RagCommand.FetchDataset(m => Console.Error.WriteLine(m));
+            Emit(json, r, () => $"dataset   {r.Dir}\ndocuments {r.Documents}\nsource    {r.Url}");
+        }), jsonOption);
+        rag.AddCommand(ragInstall); rag.AddCommand(ragStatus); rag.AddCommand(ragSearch); rag.AddCommand(ragDataset);
         root.AddCommand(rag);
 
         root.AddCommand(DocsCommand.Build());
