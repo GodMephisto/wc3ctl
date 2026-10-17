@@ -6533,13 +6533,16 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         var ragThreads = new Option<int?>("--threads",
             "CPU threads for embedding. Default min(cores/2, 4), the low CPU setting. Raise it to build faster.");
         var ragBatch = new Option<int?>("--batch", "Chunks per inference, default 16. Larger batches finish sooner and use more memory.");
-        var ragInstall = new Command("install", "Fetch the model and build the index.") { ragCorpusOption, ragThreads, ragBatch };
-        ragInstall.SetHandler((string? corpus, int? threads, int? batch, bool json) => RunSafely(() =>
+        var ragNeo4j = new Option<bool>("--neo4j", "Also load the graph into Neo4j and verify the counts. Uses NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD, defaulting to bolt://localhost:7687 as neo4j.");
+        var ragInstall = new Command("install", "Fetch the model and build the index.") { ragCorpusOption, ragThreads, ragBatch, ragNeo4j };
+        ragInstall.SetHandler((string? corpus, int? threads, int? batch, bool neo4j, bool json) => RunSafely(() =>
         {
-            var r = RagCommand.Install(corpus, threads, batch, m => Console.Error.WriteLine(m));
+            var r = RagCommand.Install(corpus, threads, batch, m => Console.Error.WriteLine(m), neo4j);
             Emit(json, r, () =>
-                $"rag installed under {r.Root}\ncorpus  {r.Corpus}\nchunks  {r.Chunks}\nmodel   {r.ModelRepo}");
-        }), ragCorpusOption, ragThreads, ragBatch, jsonOption);
+                $"rag installed under {r.Root}\ncorpus  {r.Corpus}\nchunks  {r.Chunks}\ngraph   {r.Nodes} nodes, {r.Edges} edges\n"
+                + (neo4j ? $"neo4j   {r.Neo4jNodes} nodes, {r.Neo4jEdges} edges\n" : "")
+                + $"model   {r.ModelRepo}");
+        }), ragCorpusOption, ragThreads, ragBatch, ragNeo4j, jsonOption);
         var ragStatus = new Command("status", "Report the model and index state.");
         ragStatus.SetHandler((bool json) => RunSafely(() =>
         {

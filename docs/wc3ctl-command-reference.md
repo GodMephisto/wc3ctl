@@ -5931,6 +5931,7 @@ Options
 - `--corpus <corpus>`. Folder of .md documents to index. Default: the downloaded corpus dataset, fetched and verified.
 - `--threads <threads>`. CPU threads for embedding. Default min(cores/2, 4), the low CPU setting. Raise it to build faster.
 - `--batch <batch>`. Chunks per inference, default 16. Larger batches finish sooner and use more memory.
+- `--neo4j`. Also load the graph into Neo4j and verify the counts. Uses NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD, defaulting to bolt://localhost:7687 as neo4j.
 
 ### rag status
 
