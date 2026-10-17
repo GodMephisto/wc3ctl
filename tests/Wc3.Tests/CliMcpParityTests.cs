@@ -159,6 +159,14 @@ public class CliMcpParityTests
         ["leak_model"] = "leak model",
         ["port_unit"] = "port unit",
         ["quickstart"] = "quickstart",
+        // docs_search is the read-only query over the bundled context, and rag search is its CLI
+        // twin. rag_install and rag_status map to the rag subcommands of the same name.
+        ["docs_search"] = "rag search",
+        ["rag_install"] = "rag install",
+        ["rag_status"] = "rag status",
+        ["graph_neighbors"] = "rag neighbors",
+        ["graph_hubs"] = "rag hubs",
+        ["graph_path"] = "rag path",
         ["port_deps"] = "port deps",
         ["port_preview"] = "port preview",
         ["port_into_version"] = "port into-version",
@@ -271,6 +279,9 @@ public class CliMcpParityTests
     // CLI commands that intentionally have no MCP tool (local dev / query utilities).
     private static readonly HashSet<string> CliOnly = new(StringComparer.Ordinal)
     {
+        // Downloads the corpus without indexing it. rag search is the agent-facing twin of
+        // docs_search, and rag install and rag status have tools, so only the fetch is CLI only.
+        "rag dataset",
         "gamedata schema",
         "gamedata schema-index",
         "render", "bundle object",
@@ -373,9 +384,9 @@ public class CliMcpParityTests
     // The real MCP tool names, read straight from the [McpServerTool] attributes the
     // stdio exe serves (the ExpectedTools test proves these match the live server).
     private static HashSet<string> RealMcpTools() =>
-        typeof(Wc3Tools)
-            .GetMethods(BindingFlags.Public | BindingFlags.NonPublic
-                        | BindingFlags.Static | BindingFlags.Instance)
+        new[] { typeof(Wc3Tools), typeof(Wc3Context) }
+            .SelectMany(t => t.GetMethods(BindingFlags.Public | BindingFlags.NonPublic
+                        | BindingFlags.Static | BindingFlags.Instance))
             .Select(m => m.GetCustomAttribute<McpServerToolAttribute>())
             .Where(a => a is not null)
             .Select(a => a!.Name!)

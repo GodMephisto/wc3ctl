@@ -6562,7 +6562,33 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
             var r = RagCommand.FetchDataset(m => Console.Error.WriteLine(m));
             Emit(json, r, () => $"dataset   {r.Dir}\ndocuments {r.Documents}\nsource    {r.Url}");
         }), jsonOption);
+        var ragNeighborsNode = new Argument<string>("node", "Node id or name.");
+        var ragDepth = new Option<int>("--depth", () => 1, "How many hops out to walk.");
+        var ragEdge = new Option<string?>("--edge", "HAS_SECTION, LINKS_TO or SIMILAR_TO.");
+        var ragNeighbors = new Command("neighbors", "Nodes within a depth of a start node in the corpus graph.") { ragNeighborsNode, ragDepth, ragEdge };
+        ragNeighbors.SetHandler((string node, int depth, string? edge, bool json) => RunSafely(() =>
+        {
+            var r = RagCommand.GraphNeighbors(node, depth, edge);
+            Emit(json, r, () => string.Join("\n", r.Select(x => $"{x.Type,-8} {x.Edge,-11} {x.Name}")));
+        }), ragNeighborsNode, ragDepth, ragEdge, jsonOption);
+        var ragHubsTop = new Option<int>("--top", () => 20, "How many hubs.");
+        var ragHubsType = new Option<string?>("--type", "Document or Section.");
+        var ragHubs = new Command("hubs", "The most connected nodes in the corpus graph.") { ragHubsTop, ragHubsType };
+        ragHubs.SetHandler((int top, string? type, bool json) => RunSafely(() =>
+        {
+            var r = RagCommand.GraphHubs(top, type);
+            Emit(json, r, () => string.Join("\n", r.Select(x => $"{x.Degree,5} {x.Type,-8} {x.Name}")));
+        }), ragHubsTop, ragHubsType, jsonOption);
+        var ragPathFrom = new Argument<string>("from", "Start node id or name.");
+        var ragPathTo = new Argument<string>("to", "End node id or name.");
+        var ragPath = new Command("path", "The shortest chain of edges between two nodes.") { ragPathFrom, ragPathTo };
+        ragPath.SetHandler((string from, string to, bool json) => RunSafely(() =>
+        {
+            var r = RagCommand.GraphPath(from, to);
+            Emit(json, r, () => r.Path.Count == 0 ? "no path" : string.Join(" -> ", r.Path));
+        }), ragPathFrom, ragPathTo, jsonOption);
         rag.AddCommand(ragInstall); rag.AddCommand(ragStatus); rag.AddCommand(ragSearch); rag.AddCommand(ragDataset);
+        rag.AddCommand(ragNeighbors); rag.AddCommand(ragHubs); rag.AddCommand(ragPath);
         root.AddCommand(rag);
 
         root.AddCommand(DocsCommand.Build());

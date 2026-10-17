@@ -2,7 +2,7 @@
 
 Generated from the live command tree by `wc3ctl docs cli`. Do not edit by hand. Regenerate with `wc3ctl docs cli --force`, and the CI guard fails when this file is stale.
 
-The tree holds 68 top level verb(s) and 332 command path(s) in total.
+The tree holds 69 top level verb(s) and 340 command path(s) in total.
 
 ## Global options
 
@@ -5895,6 +5895,130 @@ Arguments
 Options
 
 - `--source <source>`. wc3ctl repository directory. Default, the located repository.
+
+## rag
+
+Local semantic retrieval over the bundled Warcraft III documents. 'install' fetches the embedding model and builds the index once, and the MCP 'docs_search' then uses that index automatically.
+
+Usage
+
+```
+wc3ctl rag
+```
+
+Subcommands
+
+- `install`. Fetch the model and build the index.
+- `status`. Report the model and index state.
+- `search`. Query the index.
+- `dataset`. Download the Warcraft III corpus if it is not present. rag install does this too.
+- `neighbors`. Nodes within a depth of a start node in the corpus graph.
+- `hubs`. The most connected nodes in the corpus graph.
+- `path`. The shortest chain of edges between two nodes.
+
+### rag install
+
+Fetch the model and build the index.
+
+Usage
+
+```
+wc3ctl rag install [options]
+```
+
+Options
+
+- `--corpus <corpus>`. Folder of .md documents to index. Default: the context folder beside the exe.
+- `--threads <threads>`. CPU threads for embedding. Default min(cores/2, 4), the low CPU setting. Raise it to build faster.
+- `--batch <batch>`. Chunks per inference, default 16. Larger batches finish sooner and use more memory.
+
+### rag status
+
+Report the model and index state.
+
+Usage
+
+```
+wc3ctl rag status
+```
+
+### rag search
+
+Query the index.
+
+Usage
+
+```
+wc3ctl rag search <query> [options]
+```
+
+Arguments
+
+- `<query>` (required). What to search for.
+
+Options
+
+- `--top <top>`. Passages to return. Default `8`.
+- `--threads <threads>`. CPU threads for embedding. Default min(cores/2, 4), the low CPU setting. Raise it to build faster.
+
+### rag dataset
+
+Download the Warcraft III corpus if it is not present. rag install does this too.
+
+Usage
+
+```
+wc3ctl rag dataset
+```
+
+### rag neighbors
+
+Nodes within a depth of a start node in the corpus graph.
+
+Usage
+
+```
+wc3ctl rag neighbors <node> [options]
+```
+
+Arguments
+
+- `<node>` (required). Node id or name.
+
+Options
+
+- `--depth <depth>`. How many hops out to walk. Default `1`.
+- `--edge <edge>`. HAS_SECTION, LINKS_TO or SIMILAR_TO.
+
+### rag hubs
+
+The most connected nodes in the corpus graph.
+
+Usage
+
+```
+wc3ctl rag hubs [options]
+```
+
+Options
+
+- `--top <top>`. How many hubs. Default `20`.
+- `--type <type>`. Document or Section.
+
+### rag path
+
+The shortest chain of edges between two nodes.
+
+Usage
+
+```
+wc3ctl rag path <from> <to>
+```
+
+Arguments
+
+- `<from>` (required). Start node id or name.
+- `<to>` (required). End node id or name.
 
 ## docs
 

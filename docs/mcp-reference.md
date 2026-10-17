@@ -2,7 +2,7 @@
 
 Generated from the live tool surface by `wc3ctl docs mcp`. Do not edit by hand. Regenerate with `wc3ctl docs mcp --force`, and the CI guard fails when this file is stale.
 
-The server exposes 251 tool(s).
+The server exposes 257 tool(s).
 
 ## asset_audit
 
@@ -238,6 +238,12 @@ Compare two maps and report which internal files were added, removed or changed.
 
 Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 
+## docs_search
+
+Search the bundled Warcraft III reference documents and return the matching passages with their document and nearest heading. Use this to find the exact rule, field or warning in the UI-Frame tutorial or the Ability Insight reference without loading the whole file. Terms are matched on word boundaries and ranked by how many the passage carries, with a bonus when the section heading names a term, so an ability name finds that ability's section.
+
+Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
 ## doctor_check
 
 Will this map run on Reforged 3.0, and if not, why. A verdict plus findings, each with a code, a severity (blocker, warning, info), the affected files or models, and whether the doctor can fix it. Catches what stops a map loading that wc3ctl's own checks do not, such as half written Buttonpos in SLK profile tables and models with more than 255 matrix groups. Never starts the game. Runs Devo's Map Doctor (MIT, github.com/devoltzz/devos-map-doctor), found through WC3_DOCTOR or %LOCALAPPDATA%\wc3ctl\doctor\<version>\, and only a pinned build. Returns the doctor's own JSON unchanged.
@@ -367,6 +373,24 @@ Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 ## gamedata_sources
 
 Return the dataset's provenance index. For every schema folder it reports the build, its era, the sections present, the SHA-256 of each section file, and the input hashes from the folder's manifest, so the whole dataset can be traced back to the game files it was derived from.
+
+Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
+## graph_hubs
+
+The most connected nodes in the corpus graph, the documents and sections the corpus centres on. Use it to see what the corpus is really about.
+
+Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
+## graph_neighbors
+
+List the nodes within a depth of a start node in the corpus graph, over link edges and embedding-similarity edges. Use it to find the documents related to one you already have. The graph is built by rag install, beside the index.
+
+Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
+## graph_path
+
+The shortest chain of edges between two nodes in the corpus graph, so you can see how two documents or subjects connect.
 
 Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 
@@ -913,6 +937,18 @@ Annotations. read-only no, destructive no, idempotent yes, open-world no.
 ## quickstart
 
 Route a broad request to the right workflow. Returns the ten core workflows a map task usually falls into (inspect, port-hero, reforged-3-fix, black-portraits, shrink-map, hunt-leaks, edit-objects, terrain-and-placement, lua-conversion, patch-compat), each naming the MCP tools and the wc3ctl commands that carry it out. Pass a goal (a substring such as 'portrait', 'leak' or 'shrink') to narrow the list. With more than two hundred tools on this server, call this first when the caller states an outcome rather than a tool. Read-only, it touches no map.
+
+Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
+## rag_install
+
+Install the local semantic retrieval index. Fetches the embedding model once (about 130 MB, needs network) and builds the index over the bundled Warcraft III documents, after which docs_search is semantic and needs nothing else. Run by a user, not per query.
+
+Annotations. read-only no, destructive unset, idempotent yes, open-world yes.
+
+## rag_status
+
+Report whether the local semantic retrieval index is installed, with its chunk count, corpus and the embedding model. docs_search uses the index automatically once it is installed.
 
 Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 
