@@ -378,7 +378,7 @@ public sealed class McpSmokeAnalysisTests : McpSmokeBase
         Assert.NotNull(Prop(bench, "functions"));
     }
 
-    [Fact, Covers("repair_audit_errors", "repair_portraits")]
+    [Fact, Trait("Category", "GameData"), Covers("repair_audit_errors", "repair_portraits")]
     public async Task Repairs_write_a_copy_and_leave_the_input_alone()
     {
         var audit = await Call("repair_audit_errors", Args(("map", Fixture), ("out_path", NewOut("audit-fix"))));
