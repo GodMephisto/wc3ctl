@@ -2,7 +2,7 @@
 
 Generated from the live command tree by `wc3ctl docs cli`. Do not edit by hand. Regenerate with `wc3ctl docs cli --force`, and the CI guard fails when this file is stale.
 
-The tree holds 69 top level verb(s) and 347 command path(s) in total.
+The tree holds 69 top level verb(s) and 349 command path(s) in total.
 
 ## Global options
 
@@ -446,6 +446,8 @@ Subcommands
 
 - `export-obj`. Export a map-imported model to Wavefront OBJ, with an MTL and any map-resolvable textures converted to PNG beside it.
 - `audit`. Audit a model for the resource waste and draw-nothing problems the optimiser can remove, and report what it holds, its geosets, vertices, faces, textures, sequences, nodes and effects. Effects are counted from the chunk list, particle emitters, particle emitters 2, ribbons and popcorns, and each particle emitter's node and texture references are checked, reporting one that names a node the model does not define or a texture outside its texture list.
+- `lint`. Lint a single model for the structural problems the game renders wrongly or drops in silence. Checks finite vertices, normals and UVs, zero-length normals, indices past the vertex array, zero-area triangles, skin bones the skeleton does not define, weight sets that do not sum to one, non-finite animation keys and textures no geoset references. Read-only. Exits 1 when any finding is present.
+- `compare`. Render two models from four angles and score how close they look, by SSIM on the shaded frame and silhouette intersection-over-union, per angle and as a mean and worst case. This is the gate a lossy model step has to pass. Read-only.
 - `optimize`. Decimate a model's geometry with the quadric error metric, drop zero-area faces and duplicate textures, and write a smaller MDX, leaving the other chunks byte for byte. Optionally strip its effects when they are not wanted. Reports the before and after vertex and face counts.
 - `keys`. Drop animation keys whose value is identical to the key before them, lossless, leaving geometry and every non-animation chunk untouched.
 - `lod`. Generate a level-of-detail chain for a model, one decimated MDX per ratio, by running the optimiser once per ratio. Each level is the full model reduced to the fraction of faces its ratio names, with materials, textures, sequences, bones, emitters and cameras written back byte for byte. Ratio 1 is the original geometry, byte identical to the input. Reports the vertex and face count for each level and the total bytes written.
@@ -483,6 +485,41 @@ wc3ctl model audit <model>
 Arguments
 
 - `<model>` (required). Path to a .mdx or .mdl file.
+
+### model lint
+
+Lint a single model for the structural problems the game renders wrongly or drops in silence. Checks finite vertices, normals and UVs, zero-length normals, indices past the vertex array, zero-area triangles, skin bones the skeleton does not define, weight sets that do not sum to one, non-finite animation keys and textures no geoset references. Read-only. Exits 1 when any finding is present.
+
+Usage
+
+```
+wc3ctl model lint <model>
+```
+
+Arguments
+
+- `<model>` (required). Path to a .mdx or .mdl file.
+
+### model compare
+
+Render two models from four angles and score how close they look, by SSIM on the shaded frame and silhouette intersection-over-union, per angle and as a mean and worst case. This is the gate a lossy model step has to pass. Read-only.
+
+Usage
+
+```
+wc3ctl model compare <a> <b> [options]
+```
+
+Arguments
+
+- `<a>` (required). Path to the first .mdx or .mdl file.
+- `<b>` (required). Path to the second .mdx or .mdl file.
+
+Options
+
+- `--width <width>`. Render width in pixels. Default `256`.
+- `--height <height>`. Render height in pixels. Default `256`.
+- `--textures <textures>`. Folder to resolve textures from for both models. Default each model's own folder.
 
 ### model optimize
 

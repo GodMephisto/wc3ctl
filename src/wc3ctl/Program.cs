@@ -3353,6 +3353,40 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
                 Emit(json, r, () => Render.ModelAudit(r));
             }),
             modelAuditPath, jsonOption);
+        var modelLintPath = new Argument<string>("model", "Path to a .mdx or .mdl file.");
+        var modelLint = new Command("lint",
+            "Lint a single model for the structural problems the game renders wrongly or drops in "
+            + "silence. Checks finite vertices, normals and UVs, zero-length normals, indices past "
+            + "the vertex array, zero-area triangles, skin bones the skeleton does not define, "
+            + "weight sets that do not sum to one, non-finite animation keys and textures no geoset "
+            + "references. Read-only. Exits 1 when any finding is present.")
+            { modelLintPath, jsonOption };
+        modelLint.SetHandler(
+            (string modelPath, bool json) => RunSafely(() =>
+            {
+                var r = ModelLintCommand.ExecutePath(modelPath);
+                Emit(json, r, () => Render.ModelLint(r));
+                if (r.FindingCount > 0) Environment.ExitCode = 1;
+            }),
+            modelLintPath, jsonOption);
+        var modelCompareA = new Argument<string>("a", "Path to the first .mdx or .mdl file.");
+        var modelCompareB = new Argument<string>("b", "Path to the second .mdx or .mdl file.");
+        var modelCompareWidth = new Option<int>("--width", () => 256, "Render width in pixels.");
+        var modelCompareHeight = new Option<int>("--height", () => 256, "Render height in pixels.");
+        var modelCompareTextures = new Option<string>("--textures",
+            "Folder to resolve textures from for both models. Default each model's own folder.");
+        var modelCompare = new Command("compare",
+            "Render two models from four angles and score how close they look, by SSIM on the "
+            + "shaded frame and silhouette intersection-over-union, per angle and as a mean and "
+            + "worst case. This is the gate a lossy model step has to pass. Read-only.")
+            { modelCompareA, modelCompareB, modelCompareWidth, modelCompareHeight, modelCompareTextures, jsonOption };
+        modelCompare.SetHandler(
+            (string a, string b, int width, int height, string? textures, bool json) => RunSafely(() =>
+            {
+                var r = ModelCompareCommand.Execute(a, b, width, height, textureFolder: textures);
+                Emit(json, r, () => Render.ModelCompare(r));
+            }),
+            modelCompareA, modelCompareB, modelCompareWidth, modelCompareHeight, modelCompareTextures, jsonOption);
         var modelOptimizePath = new Argument<string>("model", "Path to a .mdx or .mdl file.");
         var modelOptimizeOut = new Option<string>(new[] { "-o", "--out" },
             "Output model path. The input is never modified.") { IsRequired = true };
@@ -3445,6 +3479,8 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         var model = new Command("model", "Model asset operations.");
         model.AddCommand(modelExportObj);
         model.AddCommand(modelAudit);
+        model.AddCommand(modelLint);
+        model.AddCommand(modelCompare);
         model.AddCommand(modelOptimize);
         model.AddCommand(modelKeys);
         model.AddCommand(modelLod);

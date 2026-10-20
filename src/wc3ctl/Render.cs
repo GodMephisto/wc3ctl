@@ -753,6 +753,32 @@ public static class Render
         return sb.ToString().TrimEnd();
     }
 
+    public static string ModelCompare(ModelCompareResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{Path.GetFileName(r.A)}  against  {Path.GetFileName(r.B)}  {r.Width}x{r.Height}");
+        foreach (var a in r.Angles)
+            sb.AppendLine($"  yaw {a.Yaw,3:0}  pitch {a.Pitch,3:0}  ssim {a.Ssim:0.0000}  silhouette {a.SilhouetteIou:0.0000}");
+        sb.AppendLine($"  mean ssim {r.MeanSsim:0.0000}  worst silhouette {r.MinSilhouetteIou:0.0000}");
+        foreach (var d in r.Diagnostics) sb.AppendLine($"  ! {d}");
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string ModelLint(ModelLintResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{Path.GetFileName(r.Path)}  geosets {r.Geosets}  vertices {r.Vertices}  textures {r.Textures}");
+        if (r.Findings.Count == 0)
+        {
+            sb.AppendLine("  no issues");
+            return sb.ToString().TrimEnd();
+        }
+        sb.AppendLine($"  {r.Findings.Count} issue(s)");
+        foreach (var f in r.Findings)
+            sb.AppendLine($"    {f.Kind,-24} {f.Detail}");
+        return sb.ToString().TrimEnd();
+    }
+
     public static string ModelOptimize(ModelOptimizeResult r)
     {
         var sb = new StringBuilder();

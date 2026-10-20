@@ -2,7 +2,7 @@
 
 Generated from the live tool surface by `wc3ctl docs mcp`. Do not edit by hand. Regenerate with `wc3ctl docs mcp --force`, and the CI guard fails when this file is stale.
 
-The server exposes 265 tool(s).
+The server exposes 267 tool(s).
 
 ## asset_audit
 
@@ -562,6 +562,12 @@ Audit a .mdx or .mdl model for the resource waste and draw-nothing problems an o
 
 Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 
+## model_compare
+
+Render two models from four angles and score how close they look, by SSIM on the shaded frame and silhouette intersection-over-union, per angle and as a mean and worst case. The gate a lossy model step has to pass. Read-only.
+
+Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
 ## model_export_obj
 
 Export a map-imported model to Wavefront OBJ at out_path, writing an MTL and any map-resolvable textures converted to PNG beside it. The map itself is never modified. Returns the .obj path, the .mtl path and the texture file names.
@@ -573,6 +579,12 @@ Annotations. read-only no, destructive no, idempotent yes, open-world no.
 Import a foreign model file into a Warcraft III MDX at out_path. Accepts Wavefront OBJ (.obj), glTF 2.0 (.gltf and .glb), STL (.stl, binary and ASCII), PLY (.ply, ASCII and binary little-endian) and FBX ASCII (.fbx). Binary FBX is not supported. The format is detected from the file content, so a correct extension is not required. Builds one v800 geoset per source primitive with normals and UVs, triangulating an n-gon face as a fan, computing a per-face normal when the source carries none and zeroing UVs when it has none. Each glTF material's baseColorTexture image is converted to .blp beside the MDX and referenced by a texture entry, one entry per distinct texture, so a multi-material model keeps every material. A model that names no material keeps the single default texture. Every glTF animation becomes a named MDX SEQS sequence whose integer frame interval is its time range scaled by fps, 30 by default. Bone keyframe tracks are not written. The input is never modified. Returns the output path, the geoset, vertex, face, texture and material counts, the sequence count and names, and the texture files written.
 
 Annotations. read-only no, destructive no, idempotent yes, open-world no.
+
+## model_lint
+
+Lint one .mdx or .mdl for the structural problems the game renders wrongly or drops in silence: non-finite vertices, normals or UVs, zero-length normals, indices past the vertex array, zero-area triangles, skin bones the skeleton does not define, weight sets that do not sum to one, non-finite animation keys and textures no geoset references. Read-only.
+
+Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 
 ## model_lod
 
