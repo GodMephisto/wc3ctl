@@ -97,3 +97,17 @@ jobs:
           wc3ctl-schemas-${{ github.ref_name }}.zip
           wc3ctl-schemas-${{ github.ref_name }}.zip.sha256
           --notes-file release-notes.md
+
+      # Hands the release to the wc3-mcp mirror, which syncs the source, bumps its
+      # patch version and tags itself, so its Release workflow publishes npm. Skipped
+      # when the token is unset, so a fork or a local run does not fail here.
+      - name: Dispatch the npm mirror
+        env:
+          GH_TOKEN: ${{ secrets.MIRROR_DISPATCH_TOKEN }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:GH_TOKEN)) {
+            Write-Host "MIRROR_DISPATCH_TOKEN is not set, skipping the npm mirror"
+            exit 0
+          }
+          gh api repos/GodMephisto/wc3-mcp/dispatches --method POST -f event_type=wc3ctl-release -f "client_payload[sha]=${{ github.sha }}"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
