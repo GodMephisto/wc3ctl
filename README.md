@@ -11,11 +11,11 @@ touch exactly as it was, byte for byte.
 
 You can use it three ways, and one install gives you all three.
 
-| | What it is | How you start it |
-|---|---|---|
-| **Studio** | A desktop editor with windows and tabs, for terrain, units, objects, triggers, script and more | Start menu, **wc3ctl Studio** |
-| **The command line** | Commands you type in PowerShell, good for quick checks and for scripts | type `wc3ctl` in a PowerShell window |
-| **AI apps** | Lets an assistant such as Claude, Cursor or VS Code Copilot open and edit your maps when you ask it to | ask your AI app, it starts wc3ctl by itself |
+|                      | What it is                                                                                             | How you start it                            |
+| -------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------- |
+| **Studio**           | A desktop editor with windows and tabs, for terrain, units, objects, triggers, script and more         | Start menu, **wc3ctl Studio**               |
+| **The command line** | Commands you type in PowerShell, good for quick checks and for scripts                                 | type `wc3ctl` in a PowerShell window        |
+| **AI apps**          | Lets an assistant such as Claude, Cursor or VS Code Copilot open and edit your maps when you ask it to | ask your AI app, it starts wc3ctl by itself |
 
 **Contents.** [What you need](#what-you-need) ·
 [Install](#install) · [Open Studio](#open-studio) ·
@@ -57,13 +57,13 @@ You can use it three ways, and one install gives you all three.
 
 That is all. Here is what it did, so nothing is a surprise.
 
-| What | Where |
-|---|---|
-| The command line tool and the AI app server, `wc3ctl.exe` | `%LOCALAPPDATA%\Programs\wc3ctl` (that is `C:\Users\<you>\AppData\Local\Programs\wc3ctl`) |
-| Studio, `Wc3.Studio.exe` | `%LOCALAPPDATA%\Programs\wc3ctl\studio` |
-| A Start menu entry | **wc3ctl Studio** |
-| Your user PATH | gains the wc3ctl folder once, so `wc3ctl` works in any new terminal |
-| Your AI apps | each supported app found on this PC gets a `wc3ctl` entry, and its settings file is first copied to `NAME.wc3ctl.bak` |
+| What                                                      | Where                                                                                                                 |
+| --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| The command line tool and the AI app server, `wc3ctl.exe` | `%LOCALAPPDATA%\Programs\wc3ctl` (that is `C:\Users\<you>\AppData\Local\Programs\wc3ctl`)                             |
+| Studio, `Wc3.Studio.exe`                                  | `%LOCALAPPDATA%\Programs\wc3ctl\studio`                                                                               |
+| A Start menu entry                                        | **wc3ctl Studio**                                                                                                     |
+| Your user PATH                                            | gains the wc3ctl folder once, so `wc3ctl` works in any new terminal                                                   |
+| Your AI apps                                              | each supported app found on this PC gets a `wc3ctl` entry, and its settings file is first copied to `NAME.wc3ctl.bak` |
 
 It checks the SHA-256 of every download before unpacking it, needs no admin
 rights and changes nothing outside your own user account.
@@ -120,24 +120,24 @@ Click **Start** and open **wc3ctl Studio**. If you installed by hand, double-cli
    **Open Source Map...**, and choose a `.w3x` or `.w3m` file.
 3. The map opens in the left pane, with a row of tabs.
 
-| Tab | What you do there |
-|---|---|
-| **Terrain** | See the map from above, and paint ground textures, raise and lower ground, cliffs, ramps, water and blight |
-| **Palette** | Pick a unit, item, doodad or destructable to place on the terrain |
-| **Unit** | Edit the placed unit you selected, its owner, position, facing, hero level, stats and more |
-| **Doodad** | Edit the placed doodad or destructable you selected |
-| **Players** | Player slots, their race, controller and team (force) |
-| **Map Info** | Map name, author, description, suggested players, tileset, fog and other scenario settings |
-| **Objects** | The object editor, units, items, abilities, buffs, upgrades, doodads and destructables, with every field the World Editor has, grouped the same way |
-| **Files** | Every file inside the map, with a viewer, replace and extract, and **Save Map As...** |
-| **Script** | The map's script (`war3map.j` or `.lua`), with a list of its functions to jump to, search, and a jump to everywhere a name is used |
-| **Triggers** | The GUI trigger tree, with rename, enable and disable, and adding or removing events, conditions and actions |
-| **Strings** | The map's text strings and its imported files |
-| **Regions** | Every region, by name and size |
-| **Cameras** | Every camera, with its target, angle and distance |
-| **Sounds** | Every sound definition and its settings |
-| **Dependencies** | Everything an object needs, its models, textures, icons, other objects and script |
-| **Hero Audit** | Checks that each hero's abilities are actually wired up in the script, not just present |
+| Tab              | What you do there                                                                                                                                   |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Terrain**      | See the map from above, and paint ground textures, raise and lower ground, cliffs, ramps, water and blight                                          |
+| **Palette**      | Pick a unit, item, doodad or destructable to place on the terrain                                                                                   |
+| **Unit**         | Edit the placed unit you selected, its owner, position, facing, hero level, stats and more                                                          |
+| **Doodad**       | Edit the placed doodad or destructable you selected                                                                                                 |
+| **Players**      | Player slots, their race, controller and team (force)                                                                                               |
+| **Map Info**     | Map name, author, description, suggested players, tileset, fog and other scenario settings                                                          |
+| **Objects**      | The object editor, units, items, abilities, buffs, upgrades, doodads and destructables, with every field the World Editor has, grouped the same way |
+| **Files**        | Every file inside the map, with a viewer, replace and extract, and **Save Map As...**                                                               |
+| **Script**       | The map's script (`war3map.j` or `.lua`), with a list of its functions to jump to, search, and a jump to everywhere a name is used                  |
+| **Triggers**     | The GUI trigger tree, with rename, enable and disable, and adding or removing events, conditions and actions                                        |
+| **Strings**      | The map's text strings and its imported files                                                                                                       |
+| **Regions**      | Every region, by name and size                                                                                                                      |
+| **Cameras**      | Every camera, with its target, angle and distance                                                                                                   |
+| **Sounds**       | Every sound definition and its settings                                                                                                             |
+| **Dependencies** | Everything an object needs, its models, textures, icons, other objects and script                                                                   |
+| **Hero Audit**   | Checks that each hero's abilities are actually wired up in the script, not just present                                                             |
 
 ### Saving
 
@@ -229,20 +229,20 @@ wc3ctl new "Blank.w3x" --name "My Arena"
 
 The command groups, by job.
 
-| Job | Commands |
-|---|---|
-| Look inside a map | `info`, `ls`, `file`, `search`, `diff`, `roundtrip`, `extract`, `strings`, `imports`, `mpq-diff`, `mpq-hash` |
-| Object data | `object`, `asset`, `bundle`, `port`, `render-model`, `convert` |
-| Models and textures | `model` (audit, optimize, lod, import, export-obj), `texture` (optimize, atlas), `map` (optimize) |
-| Placed units and doodads | `place`, `unit`, `doodad`, `region`, `palette` |
-| Terrain | `terrain` (including `audit` and `optimize`), `pathing`, `render` |
-| Map settings | `map-info`, `player`, `force`, `camera`, `sound` (including `optimize`), `new` |
-| Triggers and script | `trigger`, `script`, `editor` |
-| Checks | `audit`, `lint`, `validate`, `test-load`, `contract`, `hero`, `leak` (including `leak model`) |
-| Repairs | `repair`, `repair-generated`, `deprotect`, `debug` |
-| Replays and patches | `replay`, `uabi-profile`, `gamedata` |
-| Versions and compatibility | `gamedata`, `compat`, `target`, `bench`, `ci` |
-| AI apps | `mcp` |
+| Job                        | Commands                                                                                                     |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Look inside a map          | `info`, `ls`, `file`, `search`, `diff`, `roundtrip`, `extract`, `strings`, `imports`, `mpq-diff`, `mpq-hash` |
+| Object data                | `object`, `asset`, `bundle`, `port`, `render-model`, `convert`                                               |
+| Models and textures        | `model` (audit, optimize, lod, import, export-obj), `texture` (optimize, atlas), `map` (optimize)            |
+| Placed units and doodads   | `place`, `unit`, `doodad`, `region`, `palette`                                                               |
+| Terrain                    | `terrain` (including `audit` and `optimize`), `pathing`, `render`                                            |
+| Map settings               | `map-info`, `player`, `force`, `camera`, `sound` (including `optimize`), `new`                               |
+| Triggers and script        | `trigger`, `script`, `editor`                                                                                |
+| Checks                     | `audit`, `lint`, `validate`, `test-load`, `contract`, `hero`, `leak` (including `leak model`)                |
+| Repairs                    | `repair`, `repair-generated`, `deprotect`, `debug`                                                           |
+| Replays and patches        | `replay`, `uabi-profile`, `gamedata`                                                                         |
+| Versions and compatibility | `gamedata`, `compat`, `target`, `bench`, `ci`                                                                |
+| AI apps                    | `mcp`                                                                                                        |
 
 ## Use it from an AI app
 
@@ -305,16 +305,16 @@ not touched.
 
 ## Troubleshooting
 
-| What you see | What to do |
-|---|---|
-| `wc3ctl : The term 'wc3ctl' is not recognized` | Open a **new** PowerShell window. The PATH change only reaches windows opened after the install |
-| The install line stops with a red download error | Check your internet connection and run the install line again |
-| "Windows protected your PC" | Click **More info**, then **Run anyway**, or unblock the zip before extracting (see [By hand](#by-hand-from-the-zip-files)) |
-| Unit names, icons and abilities are blank | wc3ctl did not find Warcraft III. In Studio set the folder in **File**, **Settings...**. On the command line add `--game-dir "<folder>"` |
-| The AI app does not show the wc3ctl tools | Quit the app fully and start it again. Then run `wc3ctl mcp doctor` to see whether it is set up |
-| A settings file was not changed | It has comments in it or is not valid JSON, so the lines to paste were printed instead. `wc3ctl mcp config <app>` prints them again |
-| Update says it could not replace the folder | Close Studio and any AI app using wc3ctl, then run the install line again |
-| Studio's **Save** is greyed out | Nothing has changed since the last save |
+| What you see                                     | What to do                                                                                                                               |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `wc3ctl : The term 'wc3ctl' is not recognized`   | Open a **new** PowerShell window. The PATH change only reaches windows opened after the install                                          |
+| The install line stops with a red download error | Check your internet connection and run the install line again                                                                            |
+| "Windows protected your PC"                      | Click **More info**, then **Run anyway**, or unblock the zip before extracting (see [By hand](#by-hand-from-the-zip-files))              |
+| Unit names, icons and abilities are blank        | wc3ctl did not find Warcraft III. In Studio set the folder in **File**, **Settings...**. On the command line add `--game-dir "<folder>"` |
+| The AI app does not show the wc3ctl tools        | Quit the app fully and start it again. Then run `wc3ctl mcp doctor` to see whether it is set up                                          |
+| A settings file was not changed                  | It has comments in it or is not valid JSON, so the lines to paste were printed instead. `wc3ctl mcp config <app>` prints them again      |
+| Update says it could not replace the folder      | Close Studio and any AI app using wc3ctl, then run the install line again                                                                |
+| Studio's **Save** is greyed out                  | Nothing has changed since the last save                                                                                                  |
 
 Anything else, open an [issue](https://github.com/GodMephisto/wc3ctl/issues) with
 the map (if you can share it), what you did and what it printed.
@@ -387,17 +387,17 @@ on its own). Keep `CascLib.dll` beside each exe. Then run
 `.\dist\wc3ctl.exe mcp install --all` to put it on your PATH and set up your AI
 apps.
 
-| Project | Role |
-|---|---|
+| Project               | Role                                                                                             |
+| --------------------- | ------------------------------------------------------------------------------------------------ |
 | `src/Wc3.MapDocument` | the map model, load and save with per-file raw bytes and change tracking (namespace `Wc3.Model`) |
-| `src/Wc3.GameData` | Reforged base data through CASC, objects, strings and profiles |
-| `src/Wc3.Modeling` | MDX and MDL models and BLP textures |
-| `src/Wc3.Render` | terrain and model pictures |
-| `src/Wc3.Commands` | every operation, shared by the three front ends |
-| `src/wc3ctl` | the command line tool and `wc3ctl mcp` |
-| `src/Wc3.Studio` | the desktop editor |
-| `src/Wc3.Mcp` | the AI app server and its setup |
-| `tests/` | tests for the commands, the command line, the server and Studio |
+| `src/Wc3.GameData`    | Reforged base data through CASC, objects, strings and profiles                                   |
+| `src/Wc3.Modeling`    | MDX and MDL models and BLP textures                                                              |
+| `src/Wc3.Render`      | terrain and model pictures                                                                       |
+| `src/Wc3.Commands`    | every operation, shared by the three front ends                                                  |
+| `src/wc3ctl`          | the command line tool and `wc3ctl mcp`                                                           |
+| `src/Wc3.Studio`      | the desktop editor                                                                               |
+| `src/Wc3.Mcp`         | the AI app server and its setup                                                                  |
+| `tests/`              | tests for the commands, the command line, the server and Studio                                  |
 
 ```powershell
 dotnet test --filter "Category!=Corpus&Category!=GameData&Category!=Doctor"   # what CI runs, needs nothing else
@@ -420,20 +420,20 @@ is also published on its own as
 
 Built on
 
-| Library | Author |
-|---|---|
-| War3Net (War3Net.Build, War3Net.IO.Mpq, War3Net.Drawing.Blp, War3Net.CodeAnalysis.Decompilers) | Drake53 and contributors |
-| CascLib | Ladislav Zezula |
-| CascLib.NET | Kizari |
-| ImageSharp | Six Labors and contributors |
-| Avalonia | AvaloniaUI and contributors |
-| AvaloniaEdit | Eli Arbel and contributors |
-| System.CommandLine | .NET Foundation and contributors |
-| MCP C# SDK (ModelContextProtocol) | Model Context Protocol project |
-| Microsoft.Extensions.Hosting | .NET Foundation and contributors |
-| NAudio | Mark Heath and contributors |
-| Silk.NET | .NET Foundation and contributors |
-| Inter typeface | The Inter Project Authors |
+| Library                                                                                        | Author                           |
+| ---------------------------------------------------------------------------------------------- | -------------------------------- |
+| War3Net (War3Net.Build, War3Net.IO.Mpq, War3Net.Drawing.Blp, War3Net.CodeAnalysis.Decompilers) | Drake53 and contributors         |
+| CascLib                                                                                        | Ladislav Zezula                  |
+| CascLib.NET                                                                                    | Kizari                           |
+| ImageSharp                                                                                     | Six Labors and contributors      |
+| Avalonia                                                                                       | AvaloniaUI and contributors      |
+| AvaloniaEdit                                                                                   | Eli Arbel and contributors       |
+| System.CommandLine                                                                             | .NET Foundation and contributors |
+| MCP C# SDK (ModelContextProtocol)                                                              | Model Context Protocol project   |
+| Microsoft.Extensions.Hosting                                                                   | .NET Foundation and contributors |
+| NAudio                                                                                         | Mark Heath and contributors      |
+| Silk.NET                                                                                       | .NET Foundation and contributors |
+| Inter typeface                                                                                 | The Inter Project Authors        |
 
 It also uses Luashine/jass-history (inventory change study), pjass (JASS syntax
 checking), the SLK repair guide by devoltz and Arakunido, and the Hive Workshop

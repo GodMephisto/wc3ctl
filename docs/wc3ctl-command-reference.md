@@ -2,7 +2,7 @@
 
 Generated from the live command tree by `wc3ctl docs cli`. Do not edit by hand. Regenerate with `wc3ctl docs cli --force`, and the CI guard fails when this file is stale.
 
-The tree holds 69 top level verb(s) and 340 command path(s) in total.
+The tree holds 69 top level verb(s) and 347 command path(s) in total.
 
 ## Global options
 
@@ -229,6 +229,7 @@ Subcommands
 
 - `list`. List the asset paths an icon or model field can be set to, from the map's own imports and from the base game. Use this instead of guessing a path, because a field naming a file that does not resolve renders as nothing with no error.
 - `unused`. List imported files no object-data field value and no script string literal references, with the size each holds. Read-only.
+- `report`. One report over every imported file. Lists each entry with its size and whether anything references it, and every fault the asset checks and the model scan can find: empty entries, non power of two textures, oversized entries, models with no source, files referenced nowhere, byte-identical duplicates, and model structural problems. Add --log to fold in the faults the engine wrote to War3Log.txt. Use --json for the full per-entry list. Read-only.
 - `duplicates`. Group imported files whose bytes are identical (by sha256) and report the space each duplicate group wastes. Read-only.
 - `audit`. Flag suspicious imported assets. It reports entries over a size threshold, BLP textures whose dimensions are not powers of two, a .mdx with no sibling .mdl, and zero-byte entries. Read-only.
 - `size-report`. Per-folder total size of the archive's imported entries, largest first. Read-only.
@@ -270,6 +271,26 @@ wc3ctl asset unused <map>
 Arguments
 
 - `<map>` (required). Path to a .w3x/.w3m map.
+
+### asset report
+
+One report over every imported file. Lists each entry with its size and whether anything references it, and every fault the asset checks and the model scan can find: empty entries, non power of two textures, oversized entries, models with no source, files referenced nowhere, byte-identical duplicates, and model structural problems. Add --log to fold in the faults the engine wrote to War3Log.txt. Use --json for the full per-entry list. Read-only.
+
+Usage
+
+```
+wc3ctl asset report <map> [options]
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+
+Options
+
+- `--no-model-lint`. Skip the per-model structural scan, which reads every imported model and is the slowest part.
+- `--log`. Also read War3Log.txt and fold the engine's own faults into the report, a texture it replaced with a solid colour, a model it could not create, a UI frame or frame string defined twice, and any other line it wrote as an error. The engine logs no load list, so this is the runtime half a static inventory cannot see.
+- `--log-path <log-path>`. Path to War3Log.txt. Default Documents\Warcraft III\Logs\War3Log.txt.
 
 ### asset duplicates
 
@@ -408,6 +429,7 @@ Options
 
 - `--object <object>`. Rawcode of the object whose model or icon field is pointed at each imported file.
 - `--kind <kind>`. Object type, one of unit|item|destructable|doodad. Defaults to auto-detect from the object.
+- `--base <base>`. Keep each file's path relative to this directory instead of flattening to war3mapImported\<name>. A war3mapimported folder is normalised to war3mapImported.
 - `-o, --out <out>`. Output map path. Default: '<map>.edited.<ext>' next to the input - the original is never overwritten.
 
 ## model
@@ -425,6 +447,7 @@ Subcommands
 - `export-obj`. Export a map-imported model to Wavefront OBJ, with an MTL and any map-resolvable textures converted to PNG beside it.
 - `audit`. Audit a model for the resource waste and draw-nothing problems the optimiser can remove, and report what it holds, its geosets, vertices, faces, textures, sequences, nodes and effects. Effects are counted from the chunk list, particle emitters, particle emitters 2, ribbons and popcorns, and each particle emitter's node and texture references are checked, reporting one that names a node the model does not define or a texture outside its texture list.
 - `optimize`. Decimate a model's geometry with the quadric error metric, drop zero-area faces and duplicate textures, and write a smaller MDX, leaving the other chunks byte for byte. Optionally strip its effects when they are not wanted. Reports the before and after vertex and face counts.
+- `keys`. Drop animation keys whose value is identical to the key before them, lossless, leaving geometry and every non-animation chunk untouched.
 - `lod`. Generate a level-of-detail chain for a model, one decimated MDX per ratio, by running the optimiser once per ratio. Each level is the full model reduced to the fraction of faces its ratio names, with materials, textures, sequences, bones, emitters and cameras written back byte for byte. Ratio 1 is the original geometry, byte identical to the input. Reports the vertex and face count for each level and the total bytes written.
 - `import`. Import a foreign model into a Warcraft III MDX. Accepts Wavefront OBJ, glTF 2.0 (.gltf and .glb), STL (binary and ASCII), PLY (ASCII and binary little-endian) and FBX ASCII. Builds one v800 geoset per source primitive with normals and UVs, triangulating an n-gon face as a fan, computing a per-face normal when the source carries none and zeroing UVs when it has none. Each glTF material's baseColorTexture is written as .blp beside the MDX and referenced from a texture entry, one per distinct texture. Each glTF animation is written as a named SEQS sequence whose frame interval is its time range at the fps (30 by default). Reports the geoset, vertex, face, texture and material counts, the sequence count and names, and the written texture files.
 
@@ -480,6 +503,24 @@ Options
 - `-o, --out <out>` (required). Output model path. The input is never modified.
 - `--ratio <ratio>`. Target fraction of faces to keep, between 0 and 1. Default `0.5`.
 - `--strip-effects`. Drop the model's effect chunks, particle emitters (PREM), particle emitters 2 (PRE2), ribbons (RIBB) and corns (CORN), for a smaller MDX. This changes how the model looks, so it is off by default.
+
+### model keys
+
+Drop animation keys whose value is identical to the key before them, lossless, leaving geometry and every non-animation chunk untouched.
+
+Usage
+
+```
+wc3ctl model keys <model> [options]
+```
+
+Arguments
+
+- `<model>` (required). Path to a .mdx or .mdl file.
+
+Options
+
+- `-o, --out <out>`. Output .mdx path. The input is never modified.
 
 ### model lod
 
@@ -585,11 +626,11 @@ wc3ctl map
 
 Subcommands
 
-- `optimize`. Shrink every imported model and texture inside a map in one pass and write a new map with only those files replaced, everything else byte for byte. Each model is decimated at --ratio and each texture is scaled to --max-texture, reusing the model and texture optimisers. Reports per file what changed and the total byte saving.
+- `optimize`. Shrink every imported texture inside a map in one pass and write a new map with only those files replaced, everything else byte for byte. By default models are left untouched and each texture is scaled to --max-texture; pass --ratio below 1 to also decimate models, which needs a load test because decimation can produce a model the game crashes on. Reports per file what changed and the total byte saving.
 
 ### map optimize
 
-Shrink every imported model and texture inside a map in one pass and write a new map with only those files replaced, everything else byte for byte. Each model is decimated at --ratio and each texture is scaled to --max-texture, reusing the model and texture optimisers. Reports per file what changed and the total byte saving.
+Shrink every imported texture inside a map in one pass and write a new map with only those files replaced, everything else byte for byte. By default models are left untouched and each texture is scaled to --max-texture; pass --ratio below 1 to also decimate models, which needs a load test because decimation can produce a model the game crashes on. Reports per file what changed and the total byte saving.
 
 Usage
 
@@ -604,7 +645,7 @@ Arguments
 Options
 
 - `-o, --out <out>` (required). Output map path. The input is never modified.
-- `--ratio <ratio>`. Target fraction of a model's faces to keep, between 0 and 1. Default `0.5`.
+- `--ratio <ratio>`. Target fraction of a model's faces to keep, between 0 and 1. The default 1.0 leaves every model byte for byte and shrinks only textures, the safe mode. A value below 1 decimates models, which is known to produce a model the game crashes on in some maps, so use it only with a load test of the result. Default `1`.
 - `--max-texture <max-texture>`. Maximum texture side in pixels. A texture larger than this on either side is scaled down. Default `256`.
 
 ## strings
@@ -956,6 +997,8 @@ Options
 
 - `--timeout <timeout>`. Seconds to wait for the marker. Default `120`.
 - `--documents <documents>`. Warcraft III documents folder. Default: DocumentsWarcraft III (the game writes markers there).
+- `--via-launcher`. Start the game through the Battle.net app so it inherits the app's session and skips the login form. Needs the app logged in with keep me logged in. Briefly edits Battle.net.config and restores it after the run.
+- `--battlenet <battlenet>`. Path to Battle.net.exe. Auto-detected when omitted.
 
 ## contract
 
@@ -1151,6 +1194,7 @@ wc3ctl mpq
 
 Subcommands
 
+- `remove-many`. Remove many internal files in one rebuild and report how many were dropped. Writes a copy. The one-rebuild form of remove, for pruning the imported assets a map never uses.
 - `verify`. Open every archive entry and read it to its end, reporting the ones that fail with their error and a summary count. Read-only.
 - `listfile`. Report listfile coverage, how many entries the listfile names, how many the standard name probe recovered, and how many carry no name at all. Read-only.
 - `name-recover`. Resolve a dictionary of candidate names against the archive's hash table and report the names that hit unnamed blocks. Read-only.
@@ -1161,6 +1205,25 @@ Subcommands
 - `add`. Add or replace one internal file from a file on disk, byte-faithfully. Reports whether it was added or replaced. Writes a copy.
 - `remove`. Remove one internal file by rebuilding the container without it, and report whether the rebuild actually dropped the name. Writes a copy.
 - `extract-all`. Extract every entry of the archive to a directory, including unnamed protected blocks, through the same path-safety rule 'extract' uses. Read-only over the map.
+
+### mpq remove-many
+
+Remove many internal files in one rebuild and report how many were dropped. Writes a copy. The one-rebuild form of remove, for pruning the imported assets a map never uses.
+
+Usage
+
+```
+wc3ctl mpq remove-many <map> <names-file> [options]
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+- `<names-file>` (required). Path to a text file with one internal file name per line.
+
+Options
+
+- `-o, --out <out>`. Output map path. The input map is never overwritten.
 
 ### mpq verify
 
@@ -2025,6 +2088,8 @@ Subcommands
 
 - `functions`. List functions declared in the map script.
 - `leaks`. Find handle leaks in war3map.j (locations, groups, forces, effects, timers, text tags, lightning, triggers created and never destroyed), ranked by how often the code runs, and list the periodic timers. Read-only.
+- `bench`. Rank every script function by static engine cost per second, per-tick CreateUnit, special effects, group enumeration, conditions, damage, and flag leak shapes. Headless, no game client. Read-only.
+- `verify`. Static verifier. Reachability-aware checks for pause, timescale, timer, group, location, ability-strip, ability-hide and desync defects, following direct calls and timer callbacks so a correct channel ability is not flagged. Headless, read-only. Exits non-zero when any finding is present.
 - `unused-globals`. Find globals declared in war3map.j and never read after their declaration, including ones that are only ever assigned. The World Editor's generated gg_ and bj_ globals are excluded. Read-only.
 - `unused-functions`. Find functions no other function calls and nothing else reaches, excluding the engine's entry points and anything an InitTrig_* function or ExecuteFunc("...") names. Read-only.
 - `null-locals`. Find handle locals (location, group, force, effect, timer, trigger, text tag, lightning) destroyed with Remove/Destroy but never set to null, the classic JASS handle leak. Read-only.
@@ -2042,7 +2107,7 @@ Subcommands
 - `repair`. Repair a map whose script cannot compile (restores declarations whose initializer was dropped by a port). An un-compilable war3map.j is why a hosted map shows no player slots.
 - `check`. Check the map script for errors that stop it loading. A Lua script is checked against Lua 5.3 exactly as luac would, a JASS script by the built-in JASS checks. Exits 1 on an error.
 - `format`. Reprint a Lua map script, pretty or canonical. The result compiles to the same Lua instructions as the original. JASS maps are refused.
-- `to-lua`. Convert a JASS map to a Lua map. The script becomes war3map.lua with the JASS integer, division and null string rules kept, and the w3i script language is set to Lua.
+- `to-lua`. Convert a JASS map to a Lua map. The script becomes war3map.lua with the JASS integer, division and null string rules kept, and the w3i script language is set to Lua. A Wurst-generated script is refused unless --allow-wurst is given, because its package runtime breaks in Lua.
 - `conversion-notes`. The rules the JASS to Lua converter applies and where it diverges, one row per construct, with the JASS form, the Lua it emits and whether that runs the same.
 - `decompile`. Turn Lua entries shipped as Lua 5.3 bytecode back into Lua source that runs the same. Nothing is written when the map holds no bytecode.
 - `lua-leaks`. Find handle leaks in a Lua map script: a creator dropped as a statement, a creator on a period that is never released, and a handle kept in a table the script never clears. Read-only.
@@ -2082,6 +2147,34 @@ Arguments
 Options
 
 - `--all`. List every finding, including code that runs only once at init.
+
+### script bench
+
+Rank every script function by static engine cost per second, per-tick CreateUnit, special effects, group enumeration, conditions, damage, and flag leak shapes. Headless, no game client. Read-only.
+
+Usage
+
+```
+wc3ctl script bench <map>
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+
+### script verify
+
+Static verifier. Reachability-aware checks for pause, timescale, timer, group, location, ability-strip, ability-hide and desync defects, following direct calls and timer callbacks so a correct channel ability is not flagged. Headless, read-only. Exits non-zero when any finding is present.
+
+Usage
+
+```
+wc3ctl script verify <map>
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
 
 ### script unused-globals
 
@@ -2357,7 +2450,7 @@ Options
 
 ### script to-lua
 
-Convert a JASS map to a Lua map. The script becomes war3map.lua with the JASS integer, division and null string rules kept, and the w3i script language is set to Lua.
+Convert a JASS map to a Lua map. The script becomes war3map.lua with the JASS integer, division and null string rules kept, and the w3i script language is set to Lua. A Wurst-generated script is refused unless --allow-wurst is given, because its package runtime breaks in Lua.
 
 Usage
 
@@ -2374,6 +2467,7 @@ Options
 - `-o, --out <out>`. Output map path. Default '<map>.lua.<ext>' next to the input. An existing file is never overwritten.
 - `--strict-reals`. Round real (floating point) arithmetic to the 32 bit float JASS uses, so a converted expression does not drift from the original. Off by default, which reproduces the upstream converter byte for byte.
 - `--hashtables`. Rewrite a hashtable that is local to one function and used only through the hashtable natives into a plain Lua table. A hashtable passed to another function or a native stays a real hashtable. Off by default.
+- `--allow-wurst`. Convert even when the script was generated by WurstScript. Wurst's package runtime does not survive the conversion, and the resulting map fails in game with "Could not initialize package" when a spell runs. Refused by default for that reason. Wurst compiles to Lua directly, so rebuild the Wurst project with its own Lua target instead.
 
 ### script conversion-notes
 
@@ -4284,7 +4378,7 @@ Subcommands
 
 - `generated-heroes`. Repair the generated preplaced-hero helper block so finalized heroes use distinct owner slots and owner-aware spell wiring.
 - `reforged-3`. Detect or repair legacy SLK-map incompatibilities introduced by Reforged 3.0.0 (build 24268).
-- `portraits`. Remove the camera chunk from models below version 900, which is what makes Reforged 3.0.0 render a black portrait pane. Models with no camera already render correctly.
+- `portraits`. Remove the camera chunk from models below version 900, which is what makes Reforged 3.0.0 render a black portrait pane. Models with no camera already render correctly. Camera removal alone is safe; version stamping is refused because it crashes on load.
 - `data-pointers`. Correct a levelled field whose data pointer is 0 on some levels and a real DataA to DataF selector on others, which makes those levels name a different column than the author meant. Caused by a level ADDED by an earlier version of this tool.
 - `model-paths`. Find model paths in the script and object data that resolve to no file, which the engine logs as 'model creation failed' and retries on every creation. Fixes the ones with a single obvious target, reports the rest.
 - `uabi-runtime`. Move each unit type's normal ability list (uabi) out of the object data and add the same abilities by script the moment each unit is created. Hero abilities, morph targets and dummy units (Locust) stay whole, and Locust, Invulnerable and inventory abilities stay in every list. Reported fix for disconnects on maps with thousands of distinct uabi ids.
@@ -4330,7 +4424,7 @@ Options
 
 ### repair portraits
 
-Remove the camera chunk from models below version 900, which is what makes Reforged 3.0.0 render a black portrait pane. Models with no camera already render correctly.
+Remove the camera chunk from models below version 900, which is what makes Reforged 3.0.0 render a black portrait pane. Models with no camera already render correctly. Camera removal alone is safe; version stamping is refused because it crashes on load.
 
 Usage
 
@@ -4345,7 +4439,8 @@ Arguments
 Options
 
 - `--apply`. Rewrite the affected models. Without it, nothing is changed.
-- `--stamp-version <stamp-version>`. After removing the camera, rewrite the model's VERS to this value, for example 1800. Removing the camera alone is not enough on its own.
+- `--stamp-version <stamp-version>`. After removing the camera, rewrite the model's VERS to this value. REFUSED by default: re-stamping 800 to 1800 was measured to crash the map on load, see docs/reforged-3.0.0-blizzard-bug-report.md. Requires --allow-version-stamp.
+- `--allow-version-stamp`. Permit --stamp-version. Only for a build you are prepared to test in game; the measured result is an ACCESS_VIOLATION on load.
 - `--upgrade-geometry`. With --stamp-version, also insert the fields a version 900 or above model carries that an 800 era one does not, a u32 lod plus char[80] lod name per geoset and a char[80] shader name per material, so the declared version and the actual layout agree. Without it only the version number changes.
 - `-o, --out <out>`. Output map path. Default: '<map>.edited.<ext>' next to the input - the original is never overwritten.
 
@@ -4471,6 +4566,7 @@ Subcommands
 - `dead`. Find triggers that cannot do anything. Those with no action, and those whose events never fire, for example a unit event holding a unit variable nothing assigns or a variable event watching a variable nothing sets.
 - `read`. Read the GUI trigger tree (war3map.wtg) plus the custom-text bodies (war3map.wct). Use the sibling verbs to add, remove, rename and re-flag triggers.
 - `rename`. Rename a trigger item (a category, a trigger or a deleted stub) and save the edited map.
+- `move`. Move a trigger item under a parent category and save the edited map. Only ParentId changes, so document order and every war3map.wct code body stay put.
 - `set-enabled`. Enable or disable a trigger. A disabled trigger is not compiled into the map script.
 - `set-initially-on`. Set whether a trigger starts switched on. One that is off at map start never fires until something turns it on.
 - `set-run-on-map-init`. Set whether a trigger runs on map initialization.
@@ -4482,6 +4578,7 @@ Subcommands
 - `set-eca-enabled`. Enable or disable ONE event, condition or action within a trigger, which is the World Editor's per-line toggle rather than the whole-trigger one.
 - `var`. The map's global variables (list, add, set, remove). This is the .wtg Variables list, distinct from the trigger tree.
 - `set-code`. Set the custom-text JASS body of a custom-text trigger and save the edited map. The body goes into war3map.wct at the byte level, replacing only that trigger's slot. This edits the World Editor's trigger source, not the compiled war3map.j, so the body takes effect only after a World Editor save.
+- `sync-bodies`. Reconcile war3map.wct with the trigger tree. When the file holds more code bodies than the tree accounts for (a protected or ported build keeps orphaned bodies), the extra tail is dropped; when it holds fewer, empty slots are appended. Every surviving byte is copied verbatim. This is the repair for the lint check trigger-bodies and makes the World Editor's trigger panel trustworthy again.
 
 ### trigger catalog
 
@@ -4650,6 +4747,26 @@ Arguments
 - `<map>` (required). Path to a .w3x/.w3m map.
 - `<id>` (required). Trigger item id, as shown by 'trigger read'.
 - `<name>` (required). New name.
+
+Options
+
+- `-o, --out <out>`. Output map path. Default: '<map>.edited.<ext>' next to the input - the original is never overwritten.
+
+### trigger move
+
+Move a trigger item under a parent category and save the edited map. Only ParentId changes, so document order and every war3map.wct code body stay put.
+
+Usage
+
+```
+wc3ctl trigger move <map> <id> <parent> [options]
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+- `<id>` (required). Trigger item id, as shown by 'trigger read'.
+- `<parent>` (required). Parent category id, or -1 for the root.
 
 Options
 
@@ -4950,6 +5067,24 @@ Arguments
 - `<map>` (required). Path to a .w3x/.w3m map.
 - `<id>` (required). Trigger item id, as shown by 'trigger read'.
 - `<code>` (required). The JASS body to store in this custom-text trigger's war3map.wct slot.
+
+Options
+
+- `-o, --out <out>`. Output map path. Default: '<map>.edited.<ext>' next to the input - the original is never overwritten.
+
+### trigger sync-bodies
+
+Reconcile war3map.wct with the trigger tree. When the file holds more code bodies than the tree accounts for (a protected or ported build keeps orphaned bodies), the extra tail is dropped; when it holds fewer, empty slots are appended. Every surviving byte is copied verbatim. This is the repair for the lint check trigger-bodies and makes the World Editor's trigger panel trustworthy again.
+
+Usage
+
+```
+wc3ctl trigger sync-bodies <map> [options]
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
 
 Options
 

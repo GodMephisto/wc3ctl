@@ -2,7 +2,7 @@
 
 Generated from the live tool surface by `wc3ctl docs mcp`. Do not edit by hand. Regenerate with `wc3ctl docs mcp --force`, and the CI guard fails when this file is stale.
 
-The server exposes 257 tool(s).
+The server exposes 265 tool(s).
 
 ## asset_audit
 
@@ -46,6 +46,12 @@ Replace an asset path everywhere it is referenced (object-data field values, scr
 
 Annotations. read-only no, destructive no, idempotent no, open-world no.
 
+## asset_report
+
+One report over every imported file in a map. Lists every entry with its size and whether anything references it, and every fault the asset checks and the model scan can find: core (empty entry), audit (oversized, non power of two texture, model without source, empty), unused (referenced nowhere), duplicates (byte-identical groups), and model lint (geoset without material, missing texture, zero duration sequence, bounding box out of range). The engine does not log what it loads and its loading screen runs before the script, so this static report is the complete answer a map gives about its own contents. Note that ModelWithoutSource fires for nearly every .mdx in a compiled map and MissingTexture may be a case-insensitive base-game path, so read those two as leads. Read-only. Pass model_lint false to skip the slow per-model scan.
+
+Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
 ## asset_size_report
 
 Break the map's imported bytes down by parent folder, largest total first, so the folders that dominate the map's weight are obvious. Read-only.
@@ -60,7 +66,7 @@ Annotations. read-only no, destructive no, idempotent no, open-world no.
 
 ## asset_unused
 
-List the map's imported files that no object-data field value and no script string literal references, each with the size it holds. A lead to review before deleting an import, since the base game can also load a file a field does not name. Read-only.
+List the map's imported files that nothing references, each with the size it holds. A file is referenced when an object-data field value, a war3mapSkin.txt or war3mapMisc.txt value, a script string literal, an imported model's own texture chunk (.mdx TEXS, .mdl Bitmap), any path embedded in an imported model's bytes (a particle emitter spawn model included), an imported .fdf or .toc interface file, or a map-format file names it. The map-format scan is essential: the w3i names the loading screen model, the w3e names every terrain tile, and the w3s names every sound, so without it a loading screen or a custom terrain tile reads as unused. A lead to review before deleting an import, since the base game can also load a file none of those name. Use mpq_remove_many to act on the list in one rebuild.
 
 Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 
@@ -528,7 +534,7 @@ Annotations. read-only no, destructive no, idempotent no, open-world no.
 
 ## map_optimize
 
-Shrink every imported model and texture inside a map in one pass and write a new map to out_path with only those files replaced, everything else byte for byte. Each model is decimated at ratio (the target fraction of faces to keep) and each texture is scaled to fit max_texture on its longest side, reusing the model and texture optimisers. A file whose optimised bytes are not smaller is left untouched. Reports the per-file before and after sizes, the per-kind counts, bytesSaved (the output size subtracted from the input's) and contentBytesSaved (the per-file sum, which is larger when the archive was patched in place rather than rebuilt). The input map is NEVER modified.
+Shrink every imported texture inside a map in one pass and write a new map to out_path with only those files replaced, everything else byte for byte. By default models are left untouched and each texture is scaled to fit max_texture on its longest side; pass ratio below 1 to also decimate models, which is NOT safe by default because decimation is known to produce a model the game crashes on in some maps (a 3,091 model build hit an ACCESS_VIOLATION on load at ratio 0.9, while the same map with original models loaded). When decimating, load-test the result before shipping. A file whose optimised bytes are not smaller is left untouched. Reports the per-file before and after sizes, the per-kind counts, bytesSaved (the output size subtracted from the input's) and contentBytesSaved (the per-file sum, which is larger when the archive was patched in place rather than rebuilt). The input map is NEVER modified.
 
 Annotations. read-only no, destructive no, idempotent yes, open-world no.
 
@@ -625,6 +631,12 @@ Annotations. read-only no, destructive no, idempotent no, open-world no.
 ## mpq_remove
 
 Remove one internal file by rebuilding the archive without it, and report whether the rebuild actually dropped the name. Writes a copy, the input map is never modified in place.
+
+Annotations. read-only no, destructive no, idempotent no, open-world no.
+
+## mpq_remove_many
+
+Remove many internal files in one rebuild and report how many were dropped. Writes a copy, the input map is never modified in place. The one-rebuild form of mpq_remove, for pruning the files asset_unused reports as unreferenced.
 
 Annotations. read-only no, destructive no, idempotent no, open-world no.
 
@@ -988,9 +1000,21 @@ Render an object's model (map-imported .mdx/.mdl) to a PNG written at out_path. 
 
 Annotations. read-only no, destructive no, idempotent yes, open-world no.
 
+## repair_audit_errors
+
+Repair the object-data defects audit reports. Fills ability level gaps (a field with no value at a declared level, copied from the nearest valid level), clears dangling references and impossible requirements, and saves to out_path. The input map is NEVER modified in place.
+
+Annotations. read-only no, destructive no, idempotent yes, open-world no.
+
 ## repair_generated
 
 Repair a map that wc3ctl itself generated, whose preplaced-hero helper block is too narrow for the heroes installed into it, and save the repaired map to out_path. Widens the player slots, rewrites hero owners in the script, and brings war3map.w3i and the map header into line. This is NOT a general map repair: it looks for wc3ctl's own generated helper function and refuses any map that does not carry one. The input map is NEVER modified in place.
+
+Annotations. read-only no, destructive no, idempotent yes, open-world no.
+
+## repair_portraits
+
+Remove the pre-900 camera chunk from every at-risk model so the portrait pane renders under 3.0.0 and later, and save the repaired map to out_path. Camera removal only. The version re-stamp is refused because it was measured to crash the map on load. The input map is NEVER modified in place.
 
 Annotations. read-only no, destructive no, idempotent yes, open-world no.
 
@@ -1042,6 +1066,12 @@ List the natives and functions the map script uses that a target game build does
 
 Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 
+## script_bench
+
+Rank every script function by static engine cost per second, per-tick CreateUnit, special effects, group enumeration, condition allocation and damage, plus the leak shape each one carries. Headless and needs no game client, so an ability can be triaged before a play test. Read-only.
+
+Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
 ## script_callgraph
 
 The call edges between the functions a map's war3map.j declares, caller to callee. Only edges between functions this script declares are included, so a native call or a call through a local code value is not an edge. Read-only.
@@ -1050,7 +1080,7 @@ Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 
 ## script_check
 
-Check the map script for errors that stop it loading, war3map.j or war3map.lua. Lua is checked against Lua 5.3 exactly as luac 5.3.6 would, with its line and message, JASS by the built-in JASS checks. A script that fails here cannot run, and the game gives no reason, it just shows no slots.
+Check the map script for errors that stop it loading, war3map.j or war3map.lua. Lua is checked against Lua 5.3 exactly as luac 5.3.6 would, with its line and message, JASS by the built-in JASS checks. A script that fails here cannot run, and the game gives no reason, it just shows no slots. A Lua script that carries the Wurst package runtime is reported as a warning, because a JASS-to-Lua conversion of a Wurst map does not preserve package initialization and a spell can then fail in game with "Could not initialize package".
 
 Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 
@@ -1158,7 +1188,7 @@ Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 
 ## script_to_lua
 
-Convert a JASS map to a Lua map and save it to out_path. The script becomes war3map.lua, which keeps the JASS rules Lua lacks (32 bit integer wrap, integer division toward zero, division by zero gives zero, a null string concatenates as empty, unset array slots read their type default), and the w3i script language is set to Lua so the game runs it. war3map.j is left as a one line stub. Warnings name untyped calls, and custom text triggers the World Editor would regenerate as JASS. Lua maps are refused. The input map is NEVER modified. Pass strict_reals to also round real arithmetic back to the 32 bit float the JASS runtime holds, since Lua numbers are 64 bit doubles and a converted real expression otherwise drifts.
+Convert a JASS map to a Lua map and save it to out_path. The script becomes war3map.lua, which keeps the JASS rules Lua lacks (32 bit integer wrap, integer division toward zero, division by zero gives zero, a null string concatenates as empty, unset array slots read their type default), and the w3i script language is set to Lua so the game runs it. war3map.j is left as a one line stub. Warnings name untyped calls, and custom text triggers the World Editor would regenerate as JASS. Lua maps are refused. The input map is NEVER modified. Pass strict_reals to also round real arithmetic back to the 32 bit float the JASS runtime holds, since Lua numbers are 64 bit doubles and a converted real expression otherwise drifts. A script generated by WurstScript is refused because its package runtime does not survive the conversion and the map then fails in game with "Could not initialize package" when a spell runs; allow_wurst overrides that refusal.
 
 Annotations. read-only no, destructive no, idempotent yes, open-world no.
 
@@ -1171,6 +1201,12 @@ Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 ## script_unused_globals
 
 Find the globals a map's war3map.j declares and never reads, the variable half of dead code. A global that is only ever assigned and never appears on the right of anything is reported too, since its value is never used. The World Editor's generated globals are excluded (every gg_ handle, every bj_ name, and the literal worldedit). Read-only.
+
+Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
+## script_verify
+
+Static verifier for a map script. Reachability-aware checks for pause without a reachable restore, SetUnitTimeScale(0), periodic timers never stopped, group and location leaks, ability-strip, ability-hide, GetLocalPlayer desync, sleeps and GetTriggerUnit in a timer callback, and constant-exit loops. It follows direct calls and TimerStart callback edges, so a correct channel ability with the pause in _Start and resume in _Loop is not flagged. Headless, no game client. Read-only.
 
 Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 
@@ -1426,6 +1462,12 @@ Check a map's GUI trigger tree for three structural faults, a trigger that can n
 
 Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 
+## trigger_move
+
+Move a trigger item under a parent category in the GUI trigger tree and save the edited map to out_path. This is how you organise the tree into folders. Only ParentId changes, so document order and every war3map.wct code body stay put, and a category cannot be moved inside its own subtree. The input map is NEVER modified in place.
+
+Annotations. read-only no, destructive no, idempotent yes, open-world no.
+
 ## trigger_recover_from_script
 
 Rebuild a browsable GUI trigger tree (war3map.wtg) for a map that has NONE, by decompiling the compiled script the game runs, and save the result to out_path. The script itself is never modified, so this only ever ADDS a tree. It REFUSES any map that already carries a trigger tree, because a decompiled tree cannot be trusted to replace a real one: measured across the map library the decompiler reported success on a map holding 626 trigger items while producing 1, at zero percent name recall. Use this on protected or stripped maps whose trigger tree was removed but whose compiled script survives. The recovered tree DESCRIBES the script, it does not drive it, so editing the tree afterwards changes what the World Editor shows and not what the game runs. The input map is NEVER modified in place.
@@ -1477,6 +1519,12 @@ Annotations. read-only no, destructive no, idempotent yes, open-world no.
 ## trigger_set_run_on_map_init
 
 Set whether a GUI trigger runs on map initialization, and save the edited map to out_path. The input map is NEVER modified in place.
+
+Annotations. read-only no, destructive no, idempotent yes, open-world no.
+
+## trigger_sync_bodies
+
+Reconcile war3map.wct with the war3map.wtg trigger tree and save the edited map to out_path. A map can arrive with more code bodies than the tree accounts for (a protected or ported build keeps orphaned bodies), or fewer, and the World Editor then cannot trust which body belongs to which trigger and refuses some trigger removals. This drops the orphaned tail or appends empty slots, copying every surviving byte verbatim. It is the repair for the trigger-bodies lint warning. The input map is NEVER modified in place.
 
 Annotations. read-only no, destructive no, idempotent yes, open-world no.
 

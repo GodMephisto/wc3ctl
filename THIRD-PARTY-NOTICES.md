@@ -193,13 +193,13 @@ TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
    in Source or Object form, provided that You meet the following conditions:
 
    (a) You must give any other recipients of the Work or Derivative Works a
-       copy of this License.
+   copy of this License.
    (b) You must cause any modified files to carry prominent notices stating
-       that You changed the files.
+   that You changed the files.
    (c) You must retain, in the Source form of any Derivative Works that You
-       distribute, all copyright, patent, trademark, and attribution notices
-       from the Source form of the Work, excluding those notices that do not
-       apply to the Derivative Works.
+   distribute, all copyright, patent, trademark, and attribution notices
+   from the Source form of the Work, excluding those notices that do not
+   apply to the Derivative Works.
 
 5. Submission of Contributions. Unless You explicitly state otherwise, any
    Contribution intentionally submitted for inclusion in the Work by You

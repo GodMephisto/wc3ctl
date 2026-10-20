@@ -4,71 +4,49 @@ All notable changes to wc3ctl. One file per release lives under
 [`changelog/`](changelog/), and this file shows the latest one. The format
 follows Keep a Changelog, and the project follows Conventional Commits.
 
-## 0.4.8 - 2026-10-16
+## 0.4.9 - 2026-10-21
 
-The front door and the engine behind it. A new user can now reach the tool without ever seeing
-.NET, through an npx launcher, a one-click installer and a self-updater that replaces a running exe.
-The Studio greets you with a drop zone and a Connect AI Apps button. Behind that, the protected-map
-typing pass runs in parallel and a custom-text trigger body is written through a byte-level
-war3map.wct splice.
+A static verifier and a cost bench, a way to organise the trigger tree, and two repairs that were
+proven on a real map. The verifier is the first check here that models reachability rather than one
+function at a time, and it is the one that tells the truth about pause, timer and handle defects
+that a grep cannot see.
 
 ### Added
 
-- `npx -y wc3-mcp@latest` runs the MCP server with no install step. A zero-dependency Node launcher
-  downloads the matching release into a per-version cache folder, verifies its sha256 and spawns the
-  exe. The per-version folders are the reason an upgrade never hits a Windows lock on a running
-  `wc3-mcp.exe` or `CascLib.dll`. The launcher writes every status line to stderr, because the MCP
-  stdio transport owns stdout.
-- `wc3ctl update` and `wc3-mcp update` reinstall the latest release over the running install. A
-  locked exe or dll is renamed to a `.old` sibling and the new file copied in, so an AI app holding
-  the old binary open no longer has to be closed first.
-- `wc3ctl associate` registers an "Edit in wc3ctl Studio" entry on the Explorer right-click menu
-  for `.w3x` and `.w3m`, and `Wc3.Studio.exe <map>` opens a map passed on the command line.
-- The Studio opens on a welcome view, a drop zone for a `.w3x` or `.w3m`, the ten most recent maps,
-  and up to six maps found under `Documents\Warcraft III\Maps`. A map can be dragged onto the
-  workspace, and `Ctrl+O`, `Ctrl+Shift+O` and `Ctrl+S` do the menu actions.
-- A Connect AI Apps dialog lists every supported client with its detection and registration state
-  and sets all the detected ones up with one button.
-- A `quickstart` MCP tool returns the ten core workflows, inspect, port a hero, repair a Reforged
-  map, fix black portraits, shrink a map, hunt leaks, edit objects, terrain and placement, Lua
-  conversion and patch compatibility, each with the tools and CLI commands that do it. Five MCP
-  prompts wrap the same workflows so a client can offer them directly.
-- `trigger var list|add|set|remove` adds, edits and removes war3map.wtg variables, and
-  `trigger set-code` writes a custom-text body through a byte-level war3map.wct splice that copies
-  every untouched slot byte for byte. The wct decoder is lossy for bytes that are not valid UTF-8,
-  so writing back through its model was never safe.
-- Studio 3D terrain sculpt strokes journal one undo entry each, the way the 2D minimap strokes
-  already did, including the case where a drag loses window capture mid-stroke.
-
-### Changed
-
-- The installer edits a client config that holds comments. VS Code and Zed ship comments in their
-  default JSON and the old writer refused any file with a comment, which forced a hand copy. The new
-  writer splices only the bytes of the one entry and leaves every comment and every other setting
-  untouched, and it removes the entry's own comma so a strict client never sees a trailing comma.
-- `wc3ctl quickstart [--goal <text>]` exposes the workflow router on the command line.
+- `script verify`, a reachability-aware static verifier. It parses every function, builds a call
+  graph from direct calls and `TimerStart(..., function X)` callback edges, closes it under
+  reachability, and flags a state change only when its restore is absent from that whole set. Eleven
+  rules: pause without a reachable restore, `EnableUserControl`, `SetUnitTimeScale(0)`, a periodic
+  timer never stopped, group and location leaks, ability-strip, ability-hide, `GetLocalPlayer` on a
+  line with a game-state call, a sleep or `GetTriggerUnit` inside a timer callback, `bj_lastCreatedUnit`,
+  and a constant-exit loop. Each finding is graded `high` or `medium`, and the ability rules read the
+  map's own `uabi` lists so a real hero ability and a dummy ability are not graded the same. Exits 1
+  as a CI gate. Also `script_verify` in the MCP.
+- `script bench`, ranks every function by static engine cost per second, per-tick `CreateUnit`,
+  special effects, enumeration, condition allocation and damage, plus its leak shape. Comments are
+  stripped, so a commented-out `CreateUnit` is not counted. `script_bench` in the MCP.
+- `trigger move`, re-parent a trigger item under a category. Only `ParentId` changes, so document
+  order and every `war3map.wct` code body stay put, and a category cannot be moved inside its own
+  subtree. `trigger_move` in the MCP.
+- `repair portraits` and `repair audit-errors` in the MCP, so the two repairs reachable from the CLI
+  are reachable from a client too.
+- `asset import-wire` gained `--base`, which keeps each file's path relative to a directory instead
+  of flattening to `war3mapImported`. A sound or asset pack lands on its original subfolders, and
+  `war3mapimported` is normalised to `war3mapImported`.
 
 ### Fixed
 
-- Reading SLK-defined object rawcodes resolved the file name with `System.IO.Path.GetFileName`,
-  which treats only the forward slash as a separator off Windows, so it kept the whole archive path
-  of `Units\AbilityBuffData.slk` and a map audited on macOS or Linux missed every SLK-defined
-  rawcode. `Wc3Path` handles both separators now.
-- SLKs and `Units\UnitSkin.txt` were read by name only, so a protected map with a stripped
-  `(listfile)` lost them. They resolve by MPQ hash now.
+- `asset audit` reads PNG IHDR dimensions when a file named `.blp` is actually PNG data, which three
+  textures on a real map were. They no longer report as unreadable.
+- `repair portraits` removes the sub-900 camera chunk that renders a black portrait. The version
+  re-stamp stays refused, because it was measured to crash the map on load.
+- `repair audit-errors` fills ability level gaps from the nearest valid level as well as clearing
+  dangling references and impossible requirements.
+- The MPQ in-place patch gained a compacting save and an overwrite-when-it-fits path, and the
+  salvage patch no longer grows a map by appending a payload that would fit in its original slot.
 
-### Performance
+### Known
 
-- The first typing pass over a protected map opened one shared archive under a lock and read 64,738
-  nameless entries on one thread, 22.6 seconds. The pass now reopens the archive per thread and
-  types the entries in parallel.
-
-### Tests
-
-- A positive test for the byte-level wct splice, which sets one slot and asserts every other slot
-  survives verbatim, and a case where replacing a slot with the text it already holds returns the
-  same bytes. The riskiest new contract had only a refusal test before.
-- A test for removing the last entry from a commented client config, parsed with trailing commas
-  disallowed, because the removal left a trailing comma and a lenient parse hid it.
-- `trigger_set_code`, `trigger_var_*` and `quickstart` join `ExpectedTools` and `ToolToCliPath`, and
-  the new mutating tools join `MutatingPrefixes`.
+- A script edit beyond the trivial can destabilise a whole map even when `script check`, compat,
+  validate and mpq verify are all clean. The only proof is a host test, one change at a time.
+- Object-data edits, the level-gap fill in particular, can make a map kick on host. On one map it did.

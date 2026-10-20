@@ -109,6 +109,30 @@ public static class Render
         return sb.ToString();
     }
 
+    public static string ScriptVerify(ScriptVerifyResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine(r.Message);
+        foreach (var g in r.Findings.GroupBy(f => (f.Severity, f.Rule))
+                     .OrderBy(g => g.Key.Severity == "high" ? 0 : 1).ThenByDescending(g => g.Count()))
+        {
+            sb.AppendLine($"[{g.Key.Severity}] {g.Key.Rule} ({g.Count()})");
+            foreach (var f in g.Take(20))
+                sb.AppendLine($"    {f.Function}: {f.Detail}");
+        }
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string ScriptBench(ScriptBenchResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine(r.Message);
+        var top = r.Rows.Where(x => x.PerSecond > 0).Take(40).ToList();
+        foreach (var row in top)
+            sb.AppendLine($"{row.PerSecond,9}  iv={row.Interval,-6} create={row.CreateUnit,-3} sfx={row.SpecialEffect,-3} enum={row.GroupEnum,-3} cond={row.ConditionAndFilter,-3} dmg={row.Damage,-3} {row.Leaks,-18} {row.Function}");
+        return sb.ToString().TrimEnd();
+    }
+
     public static string ScriptLeaks(ScriptLeaksResult r, bool all)
     {
         var sb = new StringBuilder();
@@ -594,6 +618,32 @@ public static class Render
         sb.AppendLine($"{r.Unused.Count} of {r.ImportedEntries} imported file(s) are referenced nowhere");
         foreach (var e in r.Unused)
             sb.AppendLine($"  {e.Path}  {e.SizeBytes} bytes");
+        return sb.ToString().TrimEnd();
+    }
+
+    public static string AssetReport(AssetReportResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.Entries} imported entries, {r.TotalBytes / 1e6:0.0} MB uncompressed");
+        sb.AppendLine("By type");
+        foreach (var t in r.ByType)
+            sb.AppendLine($"  {t.Count,6}  {t.Bytes / 1e6,9:0.0} MB  {t.Type}");
+        sb.AppendLine($"Findings, {r.Findings.Count} across {r.Summary.Count} kind(s)");
+        foreach (var kv in r.Summary)
+            sb.AppendLine($"  {kv.Value,5}  {kv.Key}");
+        if (r.Findings.Count > 0)
+        {
+            sb.AppendLine("Detail");
+            foreach (var f in r.Findings)
+                sb.AppendLine($"  [{f.Kind}] {f.Path} ({f.SizeBytes} bytes) {f.Detail}");
+        }
+        if (r.EngineFaults.Count > 0)
+        {
+            sb.AppendLine($"Engine faults, from the game log, {r.EngineFaults.Count} distinct");
+            foreach (var f in r.EngineFaults)
+                sb.AppendLine($"  [{f.Kind}] x{f.Count} {f.Path}");
+        }
+        sb.AppendLine("The full entry list is in --json, one row per imported file.");
         return sb.ToString().TrimEnd();
     }
 
