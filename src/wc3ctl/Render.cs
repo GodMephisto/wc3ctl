@@ -740,6 +740,9 @@ public static class Render
             + $"textures {r.Textures}  sequences {r.Sequences}  nodes {r.Nodes}");
         sb.AppendLine($"  effects {r.Effects}  particle emitters {r.ParticleEmitters}  "
             + $"particle emitters 2 {r.ParticleEmitters2}  ribbons {r.Ribbons}  popcorns {r.Corns}");
+        foreach (var seq in r.SequenceList)
+            sb.AppendLine($"    seq {seq.Name}: {(seq.IntervalEnd - seq.IntervalStart) / 1000.0:0.000}s"
+                + $"  [{seq.IntervalStart}..{seq.IntervalEnd} ms]");
         if (r.Diagnostics.Count > 0)
             foreach (var d in r.Diagnostics) sb.AppendLine($"  ! {d}");
         if (r.Issues.Count == 0)

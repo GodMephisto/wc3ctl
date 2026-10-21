@@ -2,7 +2,7 @@
   <!-- One version for the CLI, Studio and the MCP server inside them. A release tag vX.Y.Z must
        match it, which the release workflow checks against what the published exe reports. -->
   <PropertyGroup>
-    <Version>0.4.12</Version>
+    <Version>0.4.13</Version>
   </PropertyGroup>
 
   <!-- Build stamp: bake the git short hash and the UTC build time into assembly metadata for every

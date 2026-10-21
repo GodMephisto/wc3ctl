@@ -2,7 +2,7 @@
 
 Generated from the live tool surface by `wc3ctl docs mcp`. Do not edit by hand. Regenerate with `wc3ctl docs mcp --force`, and the CI guard fails when this file is stale.
 
-The server exposes 268 tool(s).
+The server exposes 269 tool(s).
 
 ## asset_audit
 
@@ -705,6 +705,12 @@ Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
 The legal values for one object-data field, taken from what the base game data actually uses for it. Ask this BEFORE object_set on an enumerated field, so the value written is one the game already accepts rather than a guess.
 
 Annotations. read-only yes, destructive unset, idempotent yes, open-world no.
+
+## object_fix_model_ext
+
+Repair object-data model paths in one pass and save to out_path. A .mdl is rewritten to the .mdx that exists, a doubled war3mapImported prefix is collapsed, and any path still unresolved is redirected to redirect_missing when that file resolves. Base-game roots are left alone. The input map is NEVER modified in place.
+
+Annotations. read-only no, destructive no, idempotent no, open-world no.
 
 ## object_form
 

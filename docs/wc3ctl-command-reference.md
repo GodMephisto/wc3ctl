@@ -2,7 +2,7 @@
 
 Generated from the live command tree by `wc3ctl docs cli`. Do not edit by hand. Regenerate with `wc3ctl docs cli --force`, and the CI guard fails when this file is stale.
 
-The tree holds 69 top level verb(s) and 350 command path(s) in total.
+The tree holds 69 top level verb(s) and 351 command path(s) in total.
 
 ## Global options
 
@@ -1744,6 +1744,7 @@ Subcommands
 - `get`. Get an object's merged fields (base game data ⊕ map deltas).
 - `list`. List the map's custom/modified objects of one kind.
 - `set`. Set an object field (any kind) and save the edited map.
+- `fix-model-ext`. Rewrite object-data model paths that name a .mdl the archive does not hold when the identical stem exists as .mdx. The archive resolves paths exactly, so a .mdl reference never loads. Base-game paths are left alone. Reports the changed references and the .mdl references with no twin. Writes a copy.
 - `new`. Create a custom object derived from a base rawcode and save the edited map. Prints the fresh rawcode.
 - `search`. Search every custom/modified object's field values (base and map) for text. Read-only.
 - `noop-fields`. List fields whose map value equals the base game value, so the edit changes nothing. Read-only. Needs --game-dir for the base, or it reports map-only.
@@ -1835,6 +1836,26 @@ Options
 
 - `--kind <kind>`. Object type: unit|item|ability|destructable|doodad|buff|upgrade. Default `unit`.
 - `-o, --out <out>`. Output map path. Default: '<map>.edited.<ext>' next to the input - the original is never overwritten.
+
+### object fix-model-ext
+
+Rewrite object-data model paths that name a .mdl the archive does not hold when the identical stem exists as .mdx. The archive resolves paths exactly, so a .mdl reference never loads. Base-game paths are left alone. Reports the changed references and the .mdl references with no twin. Writes a copy.
+
+Usage
+
+```
+wc3ctl object fix-model-ext <map> [options]
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+
+Options
+
+- `--dry-run`. Report what would change without writing.
+- `--out <out>`. Output path. Default is the map name with .edited appended.
+- `--redirect-missing <redirect-missing>`. Internal path (for example war3mapImported/dummy.mdx) that unresolved model references are pointed at. A reference that names a file the archive does not hold renders nothing today, so pointing it at a blank dummy model removes the failed load without changing what the player sees.
 
 ### object new
 

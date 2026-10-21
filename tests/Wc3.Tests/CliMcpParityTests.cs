@@ -131,6 +131,7 @@ public class CliMcpParityTests
         ["object_search"] = "object search",
         ["object_noop_fields"] = "object noop-fields",
         ["object_deprecated"] = "object deprecated",
+        ["object_fix_model_ext"] = "object fix-model-ext",
         ["object_rawcode_suggest"] = "object rawcode-suggest",
         ["object_clone"] = "object clone",
         ["object_migrate"] = "object migrate",

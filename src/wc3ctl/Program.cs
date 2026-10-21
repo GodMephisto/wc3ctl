@@ -312,6 +312,42 @@ public static class Program
                 () => (r.Warning is null ? "" : $"warning: {r.Warning}\n") + $"{r.Message}\nsaved: {dest}");
         }));
         obj.AddCommand(objSet);
+        var objFixMap = new Argument<string>("map", "Path to a .w3x/.w3m map.");
+        var objFixDry = new Option<bool>("--dry-run", "Report what would change without writing.");
+        var objFixOut = new Option<string>("--out", "Output path. Default is the map name with .edited appended.");
+        var objFixRedirect = new Option<string>("--redirect-missing",
+            "Internal path (for example war3mapImported/dummy.mdx) that unresolved model references are pointed at. "
+            + "A reference that names a file the archive does not hold renders nothing today, so pointing it at a blank "
+            + "dummy model removes the failed load without changing what the player sees.");
+        var objFix = new Command("fix-model-ext",
+            "Rewrite object-data model paths that name a .mdl the archive does not hold when the "
+            + "identical stem exists as .mdx. The archive resolves paths exactly, so a .mdl "
+            + "reference never loads. Base-game paths are left alone. Reports the changed "
+            + "references and the .mdl references with no twin. Writes a copy.")
+            { objFixMap, objFixDry, objFixOut, objFixRedirect, jsonOption };
+        objFix.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(objFixMap);
+            bool dry = p.GetValueForOption(objFixDry);
+            var doc = MapDocument.Load(map);
+            var r = ModelExtFixCommand.Execute(doc, apply: !dry, redirectMissing: p.GetValueForOption(objFixRedirect));
+            if (!dry && r.ReferencesChanged > 0)
+            {
+                var dest = p.GetValueForOption(objFixOut);
+                if (string.IsNullOrWhiteSpace(dest))
+                {
+                    dest = Path.Combine(
+                        Path.GetDirectoryName(Path.GetFullPath(map))!,
+                        Path.GetFileNameWithoutExtension(map) + ".edited.w3x");
+                }
+                doc.Save(dest);
+                Emit(p.GetValueForOption(jsonOption), r, () => r.Message + Environment.NewLine + "wrote " + dest);
+                return;
+            }
+            Emit(p.GetValueForOption(jsonOption), r, () => r.Message);
+        }));
+        obj.AddCommand(objFix);
 
         var newKindArg = new Argument<string>("kind",
             "Object type: unit|item|ability|destructable|doodad|buff|upgrade.");

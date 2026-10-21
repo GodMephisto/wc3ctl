@@ -4,15 +4,23 @@ All notable changes to wc3ctl. One file per release lives under
 [`changelog/`](changelog/), and this file shows the latest one. The format
 follows Keep a Changelog, and the project follows Conventional Commits.
 
-## 0.4.12 - 2026-10-21
+## 0.4.13 - 2026-10-22
 
-Seams survive decimation.
+Model path repair as one command, and the audit that says how long a model's animations are.
 
-### Fixed
+### Added
 
-- The quadric decimator welded by position alone. Two coincident vertices carrying different
-  UVs, which is exactly a texture seam, became one vertex, and the collapse then tore the seam
-  and left the mapping wrong on every face that crossed it. It now welds by position and
-  quantised UV, and freezes every vertex that shares its position with another, so a collapse
-  can never move half a seam pair. The map-wide optimizer passes each geoset's first UV set, so
-  a model keeps its mapping through a squish.
+- `object fix-model-ext` and `object_fix_model_ext`. One pass over the object data that rewrites
+  a `.mdl` to the `.mdx` that exists, collapses a doubled `war3mapImported` prefix, and redirects
+  anything still unresolved to a file you name, normally the map's blank dummy model. It skips
+  only real base-game roots. Measured on a real map, 2,586 references repaired and 137 redirected,
+  which fixed the universal dummy and the caster dummy whose model fields were `DruidoftheTalon.mdl`
+  and the literal `.mdx.mdl`. A path that resolves to nothing renders nothing today, so rewriting
+  it cannot regress a working reference.
+- `model audit` now reports each sequence with its interval and length, which is the input a
+  throttle or a destroy timer needs.
+
+### Changed
+
+- The redirect only fires for a reference that genuinely fails to resolve, and the base-root skip
+  list deliberately excludes `war3mapImported`, since including it disables the pass.
