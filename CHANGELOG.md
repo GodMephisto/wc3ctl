@@ -4,14 +4,15 @@ All notable changes to wc3ctl. One file per release lives under
 [`changelog/`](changelog/), and this file shows the latest one. The format
 follows Keep a Changelog, and the project follows Conventional Commits.
 
-## 0.4.11 - 2026-10-21
+## 0.4.12 - 2026-10-21
 
-The lossy model run, with a receipt.
+Seams survive decimation.
 
-### Added
+### Fixed
 
-- `model squish` and `model_squish`, a render gate on every lossy step. It runs the lossless
-  key drop, then quadric decimation, renders the original and the candidate from four angles
-  after each pass, and keeps a pass only while mean SSIM and the worst silhouette overlap stay
-  above the floor. The receipt gives the bytes and the score for every pass, kept or refused.
-  Optionally it shrinks the model's own textures into a side folder, never the model in place.
+- The quadric decimator welded by position alone. Two coincident vertices carrying different
+  UVs, which is exactly a texture seam, became one vertex, and the collapse then tore the seam
+  and left the mapping wrong on every face that crossed it. It now welds by position and
+  quantised UV, and freezes every vertex that shares its position with another, so a collapse
+  can never move half a seam pair. The map-wide optimizer passes each geoset's first UV set, so
+  a model keeps its mapping through a squish.
