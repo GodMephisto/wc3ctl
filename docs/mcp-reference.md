@@ -2,7 +2,7 @@
 
 Generated from the live tool surface by `wc3ctl docs mcp`. Do not edit by hand. Regenerate with `wc3ctl docs mcp --force`, and the CI guard fails when this file is stale.
 
-The server exposes 267 tool(s).
+The server exposes 268 tool(s).
 
 ## asset_audit
 
@@ -597,6 +597,12 @@ Annotations. read-only no, destructive no, idempotent yes, open-world no.
 Decimate a .mdx or .mdl model's geometry with the quadric error metric, drop zero-area faces and duplicate textures, and write a smaller MDX at out_path, leaving the other chunks untouched. ratio is the target fraction of faces to keep. Set strip_effects to also drop the model's effect chunks, particle emitters (PREM), particle emitters 2 (PRE2), ribbons (RIBB) and corns (CORN), which changes how the model looks, so it defaults to false. Returns the before and after vertex and face counts and the number of effect chunks removed. The input is never modified.
 
 Annotations. read-only no, destructive no, idempotent yes, open-world no.
+
+## model_squish
+
+A lossy model run with a render gate. Applies the lossless key drop, then quadric decimation, renders the original and each candidate from four angles after every pass, and keeps a pass only while SSIM and silhouette stay above the floor. Writes a receipt per pass. Optionally shrinks the model's own textures into a side folder. The input is never modified.
+
+Annotations. read-only no, destructive unset, idempotent no, open-world no.
 
 ## mpq_add
 

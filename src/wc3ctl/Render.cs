@@ -753,6 +753,22 @@ public static class Render
         return sb.ToString().TrimEnd();
     }
 
+    public static string ModelSquish(ModelSquishResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"Wrote {Path.GetFileName(r.OutPath)}");
+        sb.AppendLine($"  model {r.BytesBefore} -> {r.BytesAfter} byte(s)");
+        if (r.TexturesSquished > 0)
+            sb.AppendLine($"  {r.TexturesSquished} texture(s), {r.TextureBytesBefore} -> {r.TextureBytesAfter} byte(s)");
+        foreach (var st in r.Steps)
+            sb.AppendLine($"  {st.Name,-14} {st.BytesBefore} -> {st.BytesAfter}  ssim {st.Ssim:0.0000}  "
+                + $"silhouette {st.SilhouetteIou:0.0000}  {(st.Kept ? "kept" : "refused")}"
+                + (st.Note is null ? "" : $" ({st.Note})"));
+        sb.AppendLine($"  final ssim {r.FinalSsim:0.0000}  silhouette {r.FinalSilhouetteIou:0.0000}");
+        foreach (var d in r.Diagnostics) sb.AppendLine($"  ! {d}");
+        return sb.ToString().TrimEnd();
+    }
+
     public static string ModelCompare(ModelCompareResult r)
     {
         var sb = new StringBuilder();

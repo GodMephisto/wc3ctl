@@ -47,6 +47,7 @@ public class CliMcpParityTests
         ["model_optimize"] = "model optimize",
         ["model_lint"] = "model lint",
         ["model_compare"] = "model compare",
+        ["model_squish"] = "model squish",
         ["model_lod"] = "model lod",
         ["texture_optimize"] = "texture optimize",
         ["texture_atlas"] = "texture atlas",

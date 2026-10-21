@@ -3387,6 +3387,37 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
                 Emit(json, r, () => Render.ModelCompare(r));
             }),
             modelCompareA, modelCompareB, modelCompareWidth, modelCompareHeight, modelCompareTextures, jsonOption);
+        var modelSquishPath = new Argument<string>("model", "Path to a .mdx or .mdl file.");
+        var modelSquishOut = new Option<string>(new[] { "-o", "--out" },
+            "Output model path. The input is never modified.") { IsRequired = true };
+        var modelSquishRatio = new Option<float>("--ratio", () => 0.5f,
+            "Target face fraction for the decimation pass, between 0 and 1.");
+        var modelSquishTextureSide = new Option<int>("--texture-side", () => 0,
+            "Shrink the model's textures to this maximum side. 0 leaves them alone.");
+        var modelSquishTextureOut = new Option<string>("--texture-out",
+            "Folder for the shrunk textures. Required with --texture-side.");
+        var modelSquishMinSsim = new Option<double>("--min-ssim", () => 0.90,
+            "Render gate, the minimum mean SSIM a pass must keep.");
+        var modelSquishMinIou = new Option<double>("--min-silhouette", () => 0.85,
+            "Render gate, the minimum silhouette overlap a pass must keep.");
+        var modelSquish = new Command("squish",
+            "A lossy run with a gate. Applies the lossless key drop, then quadric decimation, "
+            + "renders the original and each candidate from four angles after every pass, and "
+            + "keeps a pass only while SSIM and silhouette stay above the floor. Optionally "
+            + "shrinks the model's own textures into a side folder. Writes a receipt per pass.")
+            { modelSquishPath, modelSquishOut, modelSquishRatio, modelSquishTextureSide,
+              modelSquishTextureOut, modelSquishMinSsim, modelSquishMinIou, jsonOption };
+        modelSquish.SetHandler(
+            (string modelPath, string outPath, float ratio, int textureSide, string? textureOut,
+             double minSsim, double minIou, bool json) => RunSafely(() =>
+            {
+                var r = ModelSquishCommand.Execute(
+                    modelPath, outPath, ratio, textureSide: textureSide, textureOutDir: textureOut,
+                    minSsim: minSsim, minSilhouette: minIou);
+                Emit(json, r, () => Render.ModelSquish(r));
+            }),
+            modelSquishPath, modelSquishOut, modelSquishRatio, modelSquishTextureSide,
+            modelSquishTextureOut, modelSquishMinSsim, modelSquishMinIou, jsonOption);
         var modelOptimizePath = new Argument<string>("model", "Path to a .mdx or .mdl file.");
         var modelOptimizeOut = new Option<string>(new[] { "-o", "--out" },
             "Output model path. The input is never modified.") { IsRequired = true };
@@ -3481,6 +3512,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         model.AddCommand(modelAudit);
         model.AddCommand(modelLint);
         model.AddCommand(modelCompare);
+        model.AddCommand(modelSquish);
         model.AddCommand(modelOptimize);
         model.AddCommand(modelKeys);
         model.AddCommand(modelLod);

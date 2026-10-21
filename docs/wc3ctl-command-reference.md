@@ -2,7 +2,7 @@
 
 Generated from the live command tree by `wc3ctl docs cli`. Do not edit by hand. Regenerate with `wc3ctl docs cli --force`, and the CI guard fails when this file is stale.
 
-The tree holds 69 top level verb(s) and 349 command path(s) in total.
+The tree holds 69 top level verb(s) and 350 command path(s) in total.
 
 ## Global options
 
@@ -448,6 +448,7 @@ Subcommands
 - `audit`. Audit a model for the resource waste and draw-nothing problems the optimiser can remove, and report what it holds, its geosets, vertices, faces, textures, sequences, nodes and effects. Effects are counted from the chunk list, particle emitters, particle emitters 2, ribbons and popcorns, and each particle emitter's node and texture references are checked, reporting one that names a node the model does not define or a texture outside its texture list.
 - `lint`. Lint a single model for the structural problems the game renders wrongly or drops in silence. Checks finite vertices, normals and UVs, zero-length normals, indices past the vertex array, zero-area triangles, skin bones the skeleton does not define, weight sets that do not sum to one, non-finite animation keys and textures no geoset references. Read-only. Exits 1 when any finding is present.
 - `compare`. Render two models from four angles and score how close they look, by SSIM on the shaded frame and silhouette intersection-over-union, per angle and as a mean and worst case. This is the gate a lossy model step has to pass. Read-only.
+- `squish`. A lossy run with a gate. Applies the lossless key drop, then quadric decimation, renders the original and each candidate from four angles after every pass, and keeps a pass only while SSIM and silhouette stay above the floor. Optionally shrinks the model's own textures into a side folder. Writes a receipt per pass.
 - `optimize`. Decimate a model's geometry with the quadric error metric, drop zero-area faces and duplicate textures, and write a smaller MDX, leaving the other chunks byte for byte. Optionally strip its effects when they are not wanted. Reports the before and after vertex and face counts.
 - `keys`. Drop animation keys whose value is identical to the key before them, lossless, leaving geometry and every non-animation chunk untouched.
 - `lod`. Generate a level-of-detail chain for a model, one decimated MDX per ratio, by running the optimiser once per ratio. Each level is the full model reduced to the fraction of faces its ratio names, with materials, textures, sequences, bones, emitters and cameras written back byte for byte. Ratio 1 is the original geometry, byte identical to the input. Reports the vertex and face count for each level and the total bytes written.
@@ -520,6 +521,29 @@ Options
 - `--width <width>`. Render width in pixels. Default `256`.
 - `--height <height>`. Render height in pixels. Default `256`.
 - `--textures <textures>`. Folder to resolve textures from for both models. Default each model's own folder.
+
+### model squish
+
+A lossy run with a gate. Applies the lossless key drop, then quadric decimation, renders the original and each candidate from four angles after every pass, and keeps a pass only while SSIM and silhouette stay above the floor. Optionally shrinks the model's own textures into a side folder. Writes a receipt per pass.
+
+Usage
+
+```
+wc3ctl model squish <model> [options]
+```
+
+Arguments
+
+- `<model>` (required). Path to a .mdx or .mdl file.
+
+Options
+
+- `-o, --out <out>` (required). Output model path. The input is never modified.
+- `--ratio <ratio>`. Target face fraction for the decimation pass, between 0 and 1. Default `0.5`.
+- `--texture-side <texture-side>`. Shrink the model's textures to this maximum side. 0 leaves them alone. Default `0`.
+- `--texture-out <texture-out>`. Folder for the shrunk textures. Required with --texture-side.
+- `--min-ssim <min-ssim>`. Render gate, the minimum mean SSIM a pass must keep. Default `0.9`.
+- `--min-silhouette <min-silhouette>`. Render gate, the minimum silhouette overlap a pass must keep. Default `0.85`.
 
 ### model optimize
 
