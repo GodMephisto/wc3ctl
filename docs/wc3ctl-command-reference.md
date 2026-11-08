@@ -2,7 +2,7 @@
 
 Generated from the live command tree by `wc3ctl docs cli`. Do not edit by hand. Regenerate with `wc3ctl docs cli --force`, and the CI guard fails when this file is stale.
 
-The tree holds 69 top level verb(s) and 351 command path(s) in total.
+The tree holds 70 top level verb(s) and 360 command path(s) in total.
 
 ## Global options
 
@@ -448,6 +448,7 @@ Subcommands
 - `audit`. Audit a model for the resource waste and draw-nothing problems the optimiser can remove, and report what it holds, its geosets, vertices, faces, textures, sequences, nodes and effects. Effects are counted from the chunk list, particle emitters, particle emitters 2, ribbons and popcorns, and each particle emitter's node and texture references are checked, reporting one that names a node the model does not define or a texture outside its texture list.
 - `lint`. Lint a single model for the structural problems the game renders wrongly or drops in silence. Checks finite vertices, normals and UVs, zero-length normals, indices past the vertex array, zero-area triangles, skin bones the skeleton does not define, weight sets that do not sum to one, non-finite animation keys and textures no geoset references. Read-only. Exits 1 when any finding is present.
 - `compare`. Render two models from four angles and score how close they look, by SSIM on the shaded frame and silhouette intersection-over-union, per angle and as a mean and worst case. This is the gate a lossy model step has to pass. Read-only.
+- `primitive`. Generate a primitive mesh and write a real MDX, card, ring, cone or capsule. The same mesh builder every format importer feeds, so the output is a normal model with a geoset, a material and a texture reference.
 - `squish`. A lossy run with a gate. Applies the lossless key drop, then quadric decimation, renders the original and each candidate from four angles after every pass, and keeps a pass only while SSIM and silhouette stay above the floor. Optionally shrinks the model's own textures into a side folder. Writes a receipt per pass.
 - `optimize`. Decimate a model's geometry with the quadric error metric, drop zero-area faces and duplicate textures, and write a smaller MDX, leaving the other chunks byte for byte. Optionally strip its effects when they are not wanted. Reports the before and after vertex and face counts.
 - `keys`. Drop animation keys whose value is identical to the key before them, lossless, leaving geometry and every non-animation chunk untouched.
@@ -521,6 +522,29 @@ Options
 - `--width <width>`. Render width in pixels. Default `256`.
 - `--height <height>`. Render height in pixels. Default `256`.
 - `--textures <textures>`. Folder to resolve textures from for both models. Default each model's own folder.
+
+### model primitive
+
+Generate a primitive mesh and write a real MDX, card, ring, cone or capsule. The same mesh builder every format importer feeds, so the output is a normal model with a geoset, a material and a texture reference.
+
+Usage
+
+```
+wc3ctl model primitive <kind> <out> [options]
+```
+
+Arguments
+
+- `<kind>` (required). Primitive: card|ring|cone|capsule.
+- `<out>` (required). Output .mdx path.
+
+Options
+
+- `--size <size>`. Overall size, radius or edge length depending on the kind. Default `32`.
+- `--length <length>`. Length along Z for cone and capsule. Defaults to the size. Default `0`.
+- `--inner <inner>`. Inner radius for a ring. Defaults to half the size. Default `0`.
+- `--segments <segments>`. Segments around the curve. Below 3 is refused. Default `16`.
+- `--texture <texture>`. Texture map path written into the model, for example war3mapImported\glow.blp.
 
 ### model squish
 
@@ -1093,6 +1117,7 @@ wc3ctl hero
 Subcommands
 
 - `export`. Export a hero from a map as a reviewable definition (hero.json), its assets, and its script. Reports what it deliberately left out.
+- `generate`. Generate a multi-form hero from a JSON brief: one unit object per form, one ability object per slot with its own Base Order ID, cooldown and tooltip, each form's own ability list in uabi, and a JASS block with a transform function per form. The whole brief is validated before the first object is created, so a brief naming an unknown base is refused with nothing written.
 - `install`. Install a hero definition into any map. Refuses asset collisions, remaps rawcodes, and reports what the target must still be wired with.
 - `lint`. Validate a hero definition before installing it: assets present and hash-matched, objects installable, declared script functions present, no dangling references.
 - `roster`. List the playable heroes the map registers, and which trigger holds each one's code. A hero is not a trigger: a map can register 170 heroes whose code is bundled into a handful of triggers, so counting triggers under-counts heroes.
@@ -1115,6 +1140,25 @@ Arguments
 Options
 
 - `-o, --out <out>`. Output directory. Default: './<rawcode>-hero'.
+
+### hero generate
+
+Generate a multi-form hero from a JSON brief: one unit object per form, one ability object per slot with its own Base Order ID, cooldown and tooltip, each form's own ability list in uabi, and a JASS block with a transform function per form. The whole brief is validated before the first object is created, so a brief naming an unknown base is refused with nothing written.
+
+Usage
+
+```
+wc3ctl hero generate <map> <spec> [options]
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+- `<spec>` (required). Path to the hero brief JSON.
+
+Options
+
+- `-o, --out <out>` (required). Output map path. The input map is never modified.
 
 ### hero install
 
@@ -1165,6 +1209,39 @@ wc3ctl hero roster <map>
 Arguments
 
 - `<map>` (required). Path to a .w3x/.w3m map.
+
+## content
+
+Content packages: placeholder art and a role manifest a hero or spell can bind to.
+
+Usage
+
+```
+wc3ctl content
+```
+
+Subcommands
+
+- `scaffold`. Generate a playable content package from a name: a body model, a particle effect, an icon, an impact sound and a role manifest. Gameplay binds a role, not a filename, so replacing the placeholder art is one binding change.
+
+### content scaffold
+
+Generate a playable content package from a name: a body model, a particle effect, an icon, an impact sound and a role manifest. Gameplay binds a role, not a filename, so replacing the placeholder art is one binding change.
+
+Usage
+
+```
+wc3ctl content scaffold <out> [options]
+```
+
+Arguments
+
+- `<out>` (required). Folder to write the package into.
+
+Options
+
+- `--name <name>` (required). Package name, reduced to letters, digits, underscores and hyphens for file and role names.
+- `--texture <texture>`. Texture map path both models name, for example war3mapImported\glow.blp. Default, the package's own icon, so the package has no dependency outside itself.
 
 ## lint
 
@@ -1744,6 +1821,7 @@ Subcommands
 - `get`. Get an object's merged fields (base game data ⊕ map deltas).
 - `list`. List the map's custom/modified objects of one kind.
 - `set`. Set an object field (any kind) and save the edited map.
+- `batch-set`. Set several fields on one object in one load, and save once. The edits are all or nothing, so a field that cannot be written stops the run and no output is produced.
 - `fix-model-ext`. Rewrite object-data model paths that name a .mdl the archive does not hold when the identical stem exists as .mdx. The archive resolves paths exactly, so a .mdl reference never loads. Base-game paths are left alone. Reports the changed references and the .mdl references with no twin. Writes a copy.
 - `new`. Create a custom object derived from a base rawcode and save the edited map. Prints the fresh rawcode.
 - `search`. Search every custom/modified object's field values (base and map) for text. Read-only.
@@ -1834,6 +1912,27 @@ Arguments
 
 Options
 
+- `--kind <kind>`. Object type: unit|item|ability|destructable|doodad|buff|upgrade. Default `unit`.
+- `-o, --out <out>`. Output map path. Default: '<map>.edited.<ext>' next to the input - the original is never overwritten.
+
+### object batch-set
+
+Set several fields on one object in one load, and save once. The edits are all or nothing, so a field that cannot be written stops the run and no output is produced.
+
+Usage
+
+```
+wc3ctl object batch-set <map> <rawcode> [options]
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+- `<rawcode>` (required). Four-character object rawcode.
+
+Options
+
+- `--set <set>`. A field to write, as code=value. Repeat for each field. Every one is applied in one load and one save.
 - `--kind <kind>`. Object type: unit|item|ability|destructable|doodad|buff|upgrade. Default `unit`.
 - `-o, --out <out>`. Output map path. Default: '<map>.edited.<ext>' next to the input - the original is never overwritten.
 
@@ -2910,6 +3009,7 @@ Options
 Subcommands
 
 - `hero`. Verify every ability of a placed hero is wired end to end (object present, dispatch carried, trigger attached, event covers the player, handler not empty, identity array registered, init called exactly once). Reports the exact missing link per ability. Exits 2 if any fail.
+- `orders`. Find Channel-based abilities that share a Base Order ID (Ncl6). Channel dispatches by order string, so two abilities on one unit with the same string can both fire from a single key press. Read-only, no game install, no script run. Reports also name levels that disagree and empty order ids. Exits 2 if any collision or problem is found.
 - `ability`. Walk each ability's own runtime chain, not just whether a cast reaches a live trigger: is the handler carried and not gutted, does its follow-up loop actually start, does anything in its closure deal damage, is every pause matched by an unpause, does a timer callback still point at a declared function, is every global it reads actually assigned, does a special-effect asset still exist. 'audit hero' only proves dispatch, a hero can read '8 of 8 wired' there and still do nothing in game. Exits 2 if any ability fails a check.
 - `fidelity`. Compare an object and its whole custom closure between a source and target map, reporting fields, per-level values, levels, and objects the port failed to carry. Rawcode remaps and inlined trigger strings are accounted for and not counted as faults. Exits 2 if any real data loss is found.
 - `readiness`. Check whether a placed hero's script would actually run, not just fire. Verifies InitGlobals and RunInitializationTriggers are both carried and called, and that every udg_ global the hero's own carried code reads is assigned somewhere in the script. A hero can audit clean on 'audit hero' and still do nothing in game if its damage, range or duration values were never initialized. Exits 2 if any problem is found.
@@ -2929,6 +3029,24 @@ Arguments
 
 - `<map>` (required). Path to a .w3x/.w3m map.
 - `[<hero>]` (optional). Hero rawcode to audit. Omit to audit every hero placed on the map.
+
+### audit orders
+
+Find Channel-based abilities that share a Base Order ID (Ncl6). Channel dispatches by order string, so two abilities on one unit with the same string can both fire from a single key press. Read-only, no game install, no script run. Reports also name levels that disagree and empty order ids. Exits 2 if any collision or problem is found.
+
+Usage
+
+```
+wc3ctl audit orders <map> [options]
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+
+Options
+
+- `--hero <hero>`. Four-character hero rawcode. Checks only the abilities that hero's uabi list names.
 
 ### audit ability
 
@@ -3746,6 +3864,9 @@ Subcommands
 - `set`. Set a field on a sound and save the edited map.
 - `remove`. Remove a sound definition and save the edited map.
 - `optimize`. Decode a sound, resample it to a target rate, optionally set the channel count, and encode it as WAV or MP3 chosen by the output extension. Reports the before and after format, sample rate, channels, bitrate and byte size. Falls back to WAV when no MP3 encoder is present.
+- `analyze`. Measure a clip before using it: duration, format, peak and RMS loudness, clipped samples, and how much silence sits at the head and tail. Leading silence is what makes a correctly timed attack feel late. Read-only.
+- `trim`. Cut the silence from both ends of a clip, keep a margin, and optionally normalise the peak. Writes 16 bit PCM WAV at the source rate. The step that turns a sourced impact with a quarter second of lead-in into something that reads on time.
+- `import`. Import a sound event set into a map. Resolves each event to its clips, writes one war3map.w3s entry per clip, refuses an event whose clip is missing, and generates a JASS dispatcher with per-event cooldown, voice cap and priority. The map is saved as a copy, and the script is returned or written beside it.
 
 ### sound list
 
@@ -3841,6 +3962,66 @@ Options
 - `--rate <rate>`. Target sample rate in Hz. Default 22050. Default `22050`.
 - `--channels <channels>`. Output channels, source, mono or stereo. Default source keeps the source channel count. Default `source`.
 - `--bitrate <bitrate>`. MP3 bitrate in kbps. Applies to .mp3 output only, ignored for WAV. Default 128. Default `128`.
+
+### sound analyze
+
+Measure a clip before using it: duration, format, peak and RMS loudness, clipped samples, and how much silence sits at the head and tail. Leading silence is what makes a correctly timed attack feel late. Read-only.
+
+Usage
+
+```
+wc3ctl sound analyze <file> [options]
+```
+
+Arguments
+
+- `<file>` (required). Audio file to measure (.wav or .mp3).
+
+Options
+
+- `--threshold <threshold>`. Silence threshold in dBFS. A sample below this counts as silence. Default `-60`.
+
+### sound trim
+
+Cut the silence from both ends of a clip, keep a margin, and optionally normalise the peak. Writes 16 bit PCM WAV at the source rate. The step that turns a sourced impact with a quarter second of lead-in into something that reads on time.
+
+Usage
+
+```
+wc3ctl sound trim <file> <out> [options]
+```
+
+Arguments
+
+- `<file>` (required). Audio file to trim (.wav or .mp3).
+- `<out>` (required). Output WAV path.
+
+Options
+
+- `--threshold <threshold>`. Silence threshold in dBFS. Default `-60`.
+- `--margin <margin>`. Seconds of silence to keep at each end. Default `0.01`.
+- `--peak <peak>`. Normalise the peak to this dBFS value, for example -3.
+
+### sound import
+
+Import a sound event set into a map. Resolves each event to its clips, writes one war3map.w3s entry per clip, refuses an event whose clip is missing, and generates a JASS dispatcher with per-event cooldown, voice cap and priority. The map is saved as a copy, and the script is returned or written beside it.
+
+Usage
+
+```
+wc3ctl sound import <map> [options]
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+
+Options
+
+- `--events <events>` (required). JSON file mapping event names to clips and playback rules.
+- `--clips <clips>` (required). Folder holding the clip files named by the events document.
+- `-o, --out <out>`. Output map path. Default: '<map>.edited.<ext>' next to the input - the original is never overwritten.
+- `--jass <jass>`. Write the generated dispatcher to this file instead of only returning it.
 
 ## camera
 

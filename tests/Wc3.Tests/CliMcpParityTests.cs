@@ -46,6 +46,7 @@ public class CliMcpParityTests
         ["model_audit"] = "model audit",
         ["model_optimize"] = "model optimize",
         ["model_lint"] = "model lint",
+        ["model_primitive"] = "model primitive",
         ["model_compare"] = "model compare",
         ["model_squish"] = "model squish",
         ["model_lod"] = "model lod",
@@ -80,8 +81,10 @@ public class CliMcpParityTests
         ["repair_audit_errors"] = "repair audit-errors",
         ["repair_portraits"] = "repair portraits",
         ["hero_lint"] = "hero lint",
+        ["hero_generate"] = "hero generate",
         ["hero_install"] = "hero install",
         ["hero_roster"] = "hero roster",
+        ["content_scaffold"] = "content scaffold",
         ["terrain_fill"] = "terrain fill",
         ["trigger_recover_from_script"] = "trigger recover-from-script",
         ["trigger_move"] = "trigger move",
@@ -127,6 +130,8 @@ public class CliMcpParityTests
         ["object_get"] = "object get",
         ["object_list"] = "object list",
         ["object_set"] = "object set",
+        ["object_batch_set"] = "object batch-set",
+        ["audit_ability_orders"] = "audit orders",
         ["object_new"] = "object new",
         ["object_search"] = "object search",
         ["object_noop_fields"] = "object noop-fields",
@@ -256,6 +261,7 @@ public class CliMcpParityTests
         ["terrain_paint"] = "terrain paint",
         ["terrain_water"] = "terrain water",
         ["terrain_blight"] = "terrain blight",
+        ["sound_import_events"] = "sound import",
         ["sound_list"] = "sound list",
         ["sound_add"] = "sound add",
         ["sound_set"] = "sound set",
@@ -291,6 +297,10 @@ public class CliMcpParityTests
     // CLI commands that intentionally have no MCP tool (local dev / query utilities).
     private static readonly HashSet<string> CliOnly = new(StringComparer.Ordinal)
     {
+        // Measures a local audio file. The map-facing sound tools have MCP twins, this one is a
+        // prep step for sourced clips and has no map to act on.
+        "sound analyze",
+        "sound trim",
         // Downloads the corpus without indexing it. rag search is the agent-facing twin of
         // docs_search, and rag install and rag status have tools, so only the fetch is CLI only.
         "rag dataset",

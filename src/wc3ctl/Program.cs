@@ -312,6 +312,55 @@ public static class Program
                 () => (r.Warning is null ? "" : $"warning: {r.Warning}\n") + $"{r.Message}\nsaved: {dest}");
         }));
         obj.AddCommand(objSet);
+
+        var batchFields = new Option<string[]>("--set",
+            "A field to write, as code=value. Repeat for each field. Every one is applied in one load and one save.")
+        { AllowMultipleArgumentsPerToken = false };
+        var objBatch = new Command("batch-set",
+            "Set several fields on one object in one load, and save once. The edits are all or "
+            + "nothing, so a field that cannot be written stops the run and no output is produced.")
+        { mapArg, objRawcode, batchFields, objSetKind, setOut };
+        objBatch.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var kind = ObjectKinds.Parse(p.GetValueForOption(objSetKind)!);
+            string rawcode = p.GetValueForArgument(objRawcode);
+            var pairs = p.GetValueForOption(batchFields) ?? Array.Empty<string>();
+            if (pairs.Length == 0)
+            {
+                Console.Error.WriteLine("at least one --set code=value is required");
+                exitCode[0] = 2;
+                return;
+            }
+            var edits = new List<ObjectBatchEdit>();
+            foreach (var pair in pairs)
+            {
+                if (!TrySplitPair(pair, out var code, out var value))
+                {
+                    Console.Error.WriteLine($"expected --set code=value, got '{pair}'");
+                    exitCode[0] = 2;
+                    return;
+                }
+                edits.Add(new ObjectBatchEdit(kind, rawcode, code, value));
+            }
+            var doc = MapDocument.Load(map);
+            var r = ObjectBatchSetCommand.Execute(doc, edits);
+            if (!r.Ok)
+            {
+                Emit(p.GetValueForOption(jsonOption), r, () => r.Message);
+                exitCode[0] = 1;
+                return;
+            }
+            var dest = ObjectEditedPath(p, map);
+            if (dest is null) { exitCode[0] = 1; return; }
+            doc.Save(dest);
+            Emit(p.GetValueForOption(jsonOption),
+                new { r.Ok, r.Message, r.Applied, r.Warnings, SavedTo = dest },
+                () => (r.Warnings.Count == 0 ? "" : string.Join("\n", r.Warnings.Select(w => "warning: " + w)) + "\n")
+                      + $"{r.Message}\nsaved: {dest}");
+        }));
+        obj.AddCommand(objBatch);
         var objFixMap = new Argument<string>("map", "Path to a .w3x/.w3m map.");
         var objFixDry = new Option<bool>("--dry-run", "Report what would change without writing.");
         var objFixOut = new Option<string>("--out", "Output path. Default is the map name with .edited appended.");
@@ -1936,6 +1985,42 @@ public static class Program
         }));
         audit.AddCommand(auditHero);
 
+        var auditOrdersHero = new Option<string?>("--hero", () => null,
+            "Four-character hero rawcode. Checks only the abilities that hero's uabi list names.");
+        var auditOrders = new Command("orders",
+            "Find Channel-based abilities that share a Base Order ID (Ncl6). Channel dispatches by "
+            + "order string, so two abilities on one unit with the same string can both fire from a "
+            + "single key press. Read-only, no game install, no script run. Reports also name levels "
+            + "that disagree and empty order ids. Exits 2 if any collision or problem is found.")
+        { mapArg, auditOrdersHero };
+        auditOrders.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var doc = MapDocument.Load(p.GetValueForArgument(mapArg));
+            string? hero = p.GetValueForOption(auditOrdersHero);
+            var r = AbilityOrderAuditCommand.Execute(doc, hero);
+
+            Emit(p.GetValueForOption(jsonOption), r, () =>
+            {
+                var sb = new System.Text.StringBuilder();
+                sb.AppendLine($"{r.ChannelAbilities} Channel abilities, {r.DistinctOrders} distinct order ids"
+                    + (hero is null ? "" : $" (scoped to {hero})"));
+                foreach (var g in r.Collisions)
+                {
+                    sb.AppendLine($"  {g.Order}  used by {g.Members.Count}:");
+                    foreach (var m in g.Members)
+                        sb.AppendLine($"    {m.Rawcode}  \"{m.Name}\"");
+                }
+                if (r.Collisions.Count == 0) sb.AppendLine("  no shared order id");
+                foreach (var pr in r.Problems)
+                    sb.AppendLine($"  {pr.Kind}  {pr.Rawcode}  \"{pr.Name}\"  {pr.Detail}");
+                foreach (var d in r.Diagnostics) sb.AppendLine($"  note: {d}");
+                return sb.ToString().TrimEnd();
+            });
+            if (r.Collisions.Count > 0 || r.Problems.Count > 0) exitCode[0] = 2;
+        }));
+        audit.AddCommand(auditOrders);
+
         var auditAbilityArg = new Argument<string?>("hero", () => null,
             "Hero rawcode to audit. Omit to audit every hero placed on the map.");
         var auditAbility = new Command("ability",
@@ -3548,6 +3633,33 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         model.AddCommand(modelAudit);
         model.AddCommand(modelLint);
         model.AddCommand(modelCompare);
+
+        var primKind = new Argument<string>("kind", "Primitive: card|ring|cone|capsule.");
+        var primOut = new Argument<string>("out", "Output .mdx path.");
+        var primSize = new Option<float>("--size", () => 32f, "Overall size, radius or edge length depending on the kind.");
+        var primLength = new Option<float>("--length", () => 0f, "Length along Z for cone and capsule. Defaults to the size.");
+        var primInner = new Option<float>("--inner", () => 0f, "Inner radius for a ring. Defaults to half the size.");
+        var primSegments = new Option<int>("--segments", () => 16, "Segments around the curve. Below 3 is refused.");
+        var primTexture = new Option<string?>("--texture", () => null, "Texture map path written into the model, for example war3mapImported\\glow.blp.");
+        var modelPrimitive = new Command("primitive",
+            "Generate a primitive mesh and write a real MDX, card, ring, cone or capsule. The same "
+            + "mesh builder every format importer feeds, so the output is a normal model with a "
+            + "geoset, a material and a texture reference.")
+        { primKind, primOut, primSize, primLength, primInner, primSegments, primTexture };
+        modelPrimitive.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = MeshPrimitiveCommand.Execute(
+                Enum.Parse<MeshPrimitiveKind>(p.GetValueForArgument(primKind), ignoreCase: true),
+                p.GetValueForArgument(primOut),
+                p.GetValueForOption(primSize), p.GetValueForOption(primLength),
+                p.GetValueForOption(primInner), p.GetValueForOption(primSegments),
+                p.GetValueForOption(primTexture));
+            Emit(p.GetValueForOption(jsonOption), r, () =>
+                $"{r.Kind} {r.Path}\n  {r.Vertices} vertices, {r.Faces} faces, {r.Bytes} bytes"
+                + (r.Diagnostics.Count == 0 ? "" : "\n  " + string.Join("\n  ", r.Diagnostics)));
+        }));
+        model.AddCommand(modelPrimitive);
         model.AddCommand(modelSquish);
         model.AddCommand(modelOptimize);
         model.AddCommand(modelKeys);
@@ -4354,6 +4466,86 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         sound.AddCommand(soundSet);
         sound.AddCommand(soundRemove);
         sound.AddCommand(soundOptimize);
+
+        var soundAnalyzeFile = new Argument<string>("file", "Audio file to measure (.wav or .mp3).");
+        var soundAnalyzeThreshold = new Option<double>("--threshold", () => SoundAnalyzeCommand.DefaultThresholdDb,
+            "Silence threshold in dBFS. A sample below this counts as silence.");
+        var soundAnalyze = new Command("analyze",
+            "Measure a clip before using it: duration, format, peak and RMS loudness, clipped "
+            + "samples, and how much silence sits at the head and tail. Leading silence is what "
+            + "makes a correctly timed attack feel late. Read-only.")
+        { soundAnalyzeFile, soundAnalyzeThreshold };
+        soundAnalyze.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = SoundAnalyzeCommand.Execute(p.GetValueForArgument(soundAnalyzeFile),
+                p.GetValueForOption(soundAnalyzeThreshold));
+            Emit(p.GetValueForOption(jsonOption), r, () =>
+                $"{r.Path}\n  {r.Seconds} s, {r.SampleRate} Hz, {r.Channels} ch, {r.BitsPerSample} bit\n"
+                + $"  peak {r.PeakDb} dB, rms {r.RmsDb} dB, {r.ClippedSamples} clipped\n"
+                + $"  leading {r.LeadingSilenceSeconds} s, trailing {r.TrailingSilenceSeconds} s, "
+                + $"{r.SilentFraction:P0} silent at {r.ThresholdDb} dB");
+        }));
+        sound.AddCommand(soundAnalyze);
+
+        var trimIn = new Argument<string>("file", "Audio file to trim (.wav or .mp3).");
+        var trimOut = new Argument<string>("out", "Output WAV path.");
+        var trimThreshold = new Option<double>("--threshold", () => SoundAnalyzeCommand.DefaultThresholdDb,
+            "Silence threshold in dBFS.");
+        var trimMargin = new Option<double>("--margin", () => 0.01,
+            "Seconds of silence to keep at each end.");
+        var trimPeak = new Option<double?>("--peak", () => null,
+            "Normalise the peak to this dBFS value, for example -3.");
+        var soundTrim = new Command("trim",
+            "Cut the silence from both ends of a clip, keep a margin, and optionally normalise "
+            + "the peak. Writes 16 bit PCM WAV at the source rate. The step that turns a sourced "
+            + "impact with a quarter second of lead-in into something that reads on time.")
+        { trimIn, trimOut, trimThreshold, trimMargin, trimPeak };
+        soundTrim.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            var r = SoundTrimCommand.Execute(p.GetValueForArgument(trimIn), p.GetValueForArgument(trimOut),
+                p.GetValueForOption(trimThreshold), p.GetValueForOption(trimMargin), p.GetValueForOption(trimPeak));
+            Emit(p.GetValueForOption(jsonOption), r, () =>
+                $"{r.Path}\n  {r.SourceSeconds} s to {r.OutputSeconds} s, removed {r.RemovedSeconds} s\n"
+                + $"  peak {r.PeakBeforeDb} dB to {r.PeakAfterDb} dB\n  wrote {r.OutPath}");
+        }));
+        sound.AddCommand(soundTrim);
+
+        var importEvents = new Option<string>("--events", "JSON file mapping event names to clips and playback rules.") { IsRequired = true };
+        var importClips = new Option<string>("--clips", "Folder holding the clip files named by the events document.") { IsRequired = true };
+        var importJass = new Option<string?>("--jass", () => null, "Write the generated dispatcher to this file instead of only returning it.");
+        var soundImport = new Command("import",
+            "Import a sound event set into a map. Resolves each event to its clips, writes one "
+            + "war3map.w3s entry per clip, refuses an event whose clip is missing, and generates "
+            + "a JASS dispatcher with per-event cooldown, voice cap and priority. The map is saved "
+            + "as a copy, and the script is returned or written beside it.")
+        { mapArg, importEvents, importClips, setOut, importJass };
+        soundImport.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            var doc = MapDocument.Load(map);
+            var r = SoundImportCommand.Import(doc, File.ReadAllText(p.GetValueForOption(importEvents)!),
+                p.GetValueForOption(importClips)!);
+            if (!r.Ok)
+            {
+                Emit(p.GetValueForOption(jsonOption), r, () => r.Message);
+                exitCode[0] = 1;
+                return;
+            }
+            var dest = p.GetValueForOption(setOut) ?? Path.Combine(
+                Path.GetDirectoryName(map) ?? "",
+                Path.GetFileNameWithoutExtension(map) + ".edited" + Path.GetExtension(map));
+            doc.Save(dest);
+            string? jassPath = p.GetValueForOption(importJass);
+            if (jassPath is { Length: > 0 }) File.WriteAllText(jassPath, r.Jass);
+            Emit(p.GetValueForOption(jsonOption),
+                new { r.Ok, r.Message, r.Events, r.CatalogEntries, r.MissingClips, r.Refused, SavedTo = dest, JassPath = jassPath },
+                () => $"{r.Message}\nsaved: {dest}"
+                      + (jassPath is { Length: > 0 } ? $"\ndispatcher: {jassPath}" : ""));
+        }));
+        sound.AddCommand(soundImport);
 
         // ---- camera: edit the map's camera catalog (war3map.w3c) ----
         var camList = new Command("list", "List the map's cameras.") { mapArg };
@@ -5472,12 +5664,63 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
             });
         }));
 
+        // Generation is the step before a definition exists: a brief becomes objects in a map, so
+        // there is something for hero export, hero lint and hero install to work on afterwards.
+        var heroSpecArg = new Argument<string>("spec", "Path to the hero brief JSON.");
+        var heroGenerateOut = new Option<string>(new[] { "-o", "--out" },
+            "Output map path. The input map is never modified.") { IsRequired = true };
+        var heroGenerate = new Command("generate",
+            "Generate a multi-form hero from a JSON brief: one unit object per form, one ability "
+            + "object per slot with its own Base Order ID, cooldown and tooltip, each form's own "
+            + "ability list in uabi, and a JASS block with a transform function per form. The whole "
+            + "brief is validated before the first object is created, so a brief naming an unknown "
+            + "base is refused with nothing written.")
+        { mapArg, heroSpecArg, heroGenerateOut, gameDirOption, jsonOption };
+        heroGenerate.SetHandler(ctx => RunSafely(() =>
+        {
+            var pg = ctx.ParseResult;
+            var r = HeroGenerateCommand.Execute(
+                pg.GetValueForArgument(mapArg), pg.GetValueForOption(heroGenerateOut)!,
+                File.ReadAllText(pg.GetValueForArgument(heroSpecArg)),
+                pg.GetValueForOption(gameDirOption));
+            if (!r.Ok) exitCode[0] = 1;
+            Emit(pg.GetValueForOption(jsonOption), r, () => Render.HeroGenerate(r));
+        }));
+
         var hero = new Command("hero", "Hero definitions: the portable, reviewable form of a hero.");
         hero.AddCommand(heroExport);
+        hero.AddCommand(heroGenerate);
         hero.AddCommand(heroInstall);
         hero.AddCommand(heroLint);
         hero.AddCommand(heroRoster);
         root.AddCommand(hero);
+
+        // A content package is the placeholder half of the same job: art and a manifest a hero can
+        // bind by role, generated from a name alone so nobody starts from an empty folder.
+        var contentOut = new Argument<string>("out", "Folder to write the package into.");
+        var contentName = new Option<string>("--name",
+            "Package name, reduced to letters, digits, underscores and hyphens for file and role "
+            + "names.") { IsRequired = true };
+        var contentTexture = new Option<string?>("--texture",
+            "Texture map path both models name, for example war3mapImported\\glow.blp. Default, the "
+            + "package's own icon, so the package has no dependency outside itself.");
+        var contentScaffold = new Command("scaffold",
+            "Generate a playable content package from a name: a body model, a particle effect, an "
+            + "icon, an impact sound and a role manifest. Gameplay binds a role, not a filename, so "
+            + "replacing the placeholder art is one binding change.")
+        { contentOut, contentName, contentTexture, jsonOption };
+        contentScaffold.SetHandler(ctx => RunSafely(() =>
+        {
+            var pc = ctx.ParseResult;
+            var r = ContentScaffoldCommand.Execute(
+                pc.GetValueForOption(contentName)!, pc.GetValueForArgument(contentOut),
+                pc.GetValueForOption(contentTexture));
+            Emit(pc.GetValueForOption(jsonOption), r, () => Render.ContentScaffold(r));
+        }));
+        var content = new Command("content",
+            "Content packages: placeholder art and a role manifest a hero or spell can bind to.");
+        content.AddCommand(contentScaffold);
+        root.AddCommand(content);
 
         // Records HOW FAR initialisation gets, not just whether it finished. A hang on the loading
         // screen otherwise gives nothing at all: no error, no log, no crash dump.

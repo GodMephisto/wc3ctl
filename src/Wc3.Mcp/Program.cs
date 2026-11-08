@@ -24,10 +24,15 @@ public static class Program
     /// <summary>Runs the MCP server on stdio until the client closes the stream. Shared with 'wc3ctl mcp serve'.</summary>
     public static async Task RunServerAsync()
     {
+        // One line on stderr before the protocol starts, so a bug report can quote the build it
+        // came from (ENV-04). stdout stays clean for JSON-RPC.
+        Console.Error.WriteLine(Wc3McpServer.BuildStartLine());
+
         var builder = Host.CreateApplicationBuilder(Array.Empty<string>());
 
         // stdout carries the MCP protocol, so every log line must go to stderr.
         builder.Logging.AddConsole(o => o.LogToStandardErrorThreshold = LogLevel.Trace);
+        builder.Logging.SetMinimumLevel(McpLogLevel.FromEnvironment());
 
         builder.Services
             .AddMcpServer(Wc3McpServer.ApplyTo)

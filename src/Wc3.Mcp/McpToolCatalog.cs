@@ -72,11 +72,13 @@ public static class McpToolCatalog
 }
 
 /// <summary>
-/// Audits the MCP surface against a naming convention. A tool whose name begins with a mutating
-/// stem must not claim to be read-only, and every tool must declare at least one annotation.
-/// The prefix list is deliberately precise rather than broad. A blanket 'port_' or 'terrain_'
-/// would flag port_deps, port_preview and terrain_export_heightmap, which are genuinely
-/// read-only, so each mutating stem is named instead.
+/// Audits the MCP surface against four rules. Every tool must declare all four hints, because an
+/// unset hint defaults to true and a client reads it as a claim the server never made. A tool
+/// whose name begins with a mutating stem must not claim to be read-only. A tool that writes must
+/// not say read-only in its description, in any scope, because a caller reads that word as the
+/// whole answer. The prefix list is deliberately precise rather than broad. A blanket 'port_' or
+/// 'terrain_' would flag port_deps and port_preview, which are genuinely read-only, so each
+/// mutating stem is named instead.
 /// </summary>
 public static class McpToolAudit
 {
@@ -118,8 +120,18 @@ public static class McpToolAudit
                 problems.Add(new McpAnnotationProblem(tool.Name, "declares no annotations"));
                 continue;
             }
+            var unset = new List<string>();
+            if (tool.ReadOnly is null) unset.Add("readOnlyHint");
+            if (tool.Destructive is null) unset.Add("destructiveHint");
+            if (tool.Idempotent is null) unset.Add("idempotentHint");
+            if (tool.OpenWorld is null) unset.Add("openWorldHint");
+            if (unset.Count > 0)
+                problems.Add(new McpAnnotationProblem(tool.Name, "leaves " + string.Join(", ", unset) + " unset"));
             if (tool.ReadOnly == true && MutatingPrefixes.Any(p => tool.Name.StartsWith(p, StringComparison.Ordinal)))
                 problems.Add(new McpAnnotationProblem(tool.Name, "name looks mutating but it is marked read-only"));
+            if (tool.ReadOnly != true && tool.Description is not null
+                && tool.Description.Contains("read-only", StringComparison.OrdinalIgnoreCase))
+                problems.Add(new McpAnnotationProblem(tool.Name, "description says read-only but the tool writes"));
         }
         return new McpAnnotationAuditResult(problems);
     }

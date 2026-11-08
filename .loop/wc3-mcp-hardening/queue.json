@@ -1,0 +1,141 @@
+{
+  "slug": "wc3-mcp-hardening",
+  "items": [
+    {
+      "id": "q01",
+      "title": "Write gate and object_set reference implementation",
+      "spec": "Definition of done, 1 to 7",
+      "deps": [],
+      "verifier": "dotnet test --filter FullyQualifiedName~McpWriteGateTests",
+      "estimate": "done",
+      "status": "done",
+      "evidence": "5 tests pass, dist and dist-mcp republished, 269 tools"
+    },
+    {
+      "id": "q02",
+      "title": "Route SaveEdit through the gate, which covers the placed, camera, map-info, player, force and trigger edit tools",
+      "spec": "Scope, tool families",
+      "deps": [
+        "q01"
+      ],
+      "verifier": "dotnet test --filter Category!=Corpus&Category!=GameData&Category!=Doctor",
+      "estimate": "one session",
+      "status": "done",
+      "evidence": "SaveEdit routed, 2697 hermetic tests pass"
+    },
+    {
+      "id": "q03",
+      "title": "Route SaveTerrain and the terrain result through the gate",
+      "spec": "Scope, tool families",
+      "deps": [
+        "q01"
+      ],
+      "verifier": "dotnet test --filter Category!=Corpus&Category!=GameData&Category!=Doctor",
+      "estimate": "one session",
+      "status": "done",
+      "evidence": "SaveTerrain routed, folder map test added, 2697 pass"
+    },
+    {
+      "id": "q04",
+      "title": "Route the direct object writes, object_set already done, then new, clone, rename, bulk, import, migrate",
+      "spec": "Definition of done, 1 to 5",
+      "deps": [
+        "q02"
+      ],
+      "verifier": "dotnet test --filter Category!=Corpus&Category!=GameData&Category!=Doctor",
+      "estimate": "one session",
+      "status": "ready",
+      "evidence": "object_set, object_bulk_set and object_batch_set carry the gate. new, clone, rename, import and migrate remain"
+    },
+    {
+      "id": "q05",
+      "title": "Route the remaining save sites, strings, sound, mpq, map optimize and the repair tools",
+      "spec": "Definition of done, 1 to 5",
+      "deps": [
+        "q04"
+      ],
+      "verifier": "dotnet test --filter Category!=Corpus&Category!=GameData&Category!=Doctor",
+      "estimate": "two sessions",
+      "status": "blocked",
+      "evidence": ""
+    },
+    {
+      "id": "q06",
+      "title": "Add confirm to the destructive tools and refuse without it",
+      "spec": "Scope, a confirm parameter",
+      "deps": [
+        "q02"
+      ],
+      "verifier": "dotnet test --filter FullyQualifiedName~McpWriteGateTests",
+      "estimate": "one session",
+      "status": "ready",
+      "evidence": ""
+    },
+    {
+      "id": "q07",
+      "title": "Close G-12 and G-13 in the spec and mark SAF-05, SAF-06, SAF-07, SAF-10 and SAF-11 met",
+      "spec": "Definition of done",
+      "deps": [
+        "q05",
+        "q06"
+      ],
+      "verifier": "python tools/sync_requirements.py and python tools/build_pdf.py",
+      "estimate": "one session",
+      "status": "blocked",
+      "evidence": ""
+    },
+    {
+      "id": "q08",
+      "title": "Publish dist and dist-mcp, swap the folders, run the smoke test",
+      "spec": "Acceptance",
+      "deps": [
+        "q02",
+        "q03"
+      ],
+      "verifier": "powershell scripts/smoke-mcp.ps1 -Exe dist-mcp/Wc3.Mcp.exe -MinTools 260",
+      "estimate": "one session",
+      "status": "done",
+      "evidence": "dist and dist-mcp republished, smoke 269 tools"
+    },
+    {
+      "id": "q09",
+      "title": "Verify the specification's measured claims against the published exe and add sources",
+      "spec": "DOC-06, G-46",
+      "deps": [],
+      "verifier": "python tools/build_pdf.py",
+      "estimate": "one session",
+      "status": "done",
+      "evidence": "20 claims confirmed, 81,615 + 157 = 81,772, 619 + 1 = 620, 38 + 1 = 39, registry 0.5.19 vs tags at v0.5.9"
+    },
+    {
+      "id": "q10",
+      "title": "Guard the body numbers and the spec README against the live surface",
+      "spec": "G-36, G-45, G-47",
+      "deps": [],
+      "verifier": "dotnet test --filter Category!=Corpus&Category!=GameData&Category!=Doctor",
+      "estimate": "one session",
+      "status": "ready",
+      "evidence": ""
+    },
+    {
+      "id": "q11",
+      "title": "Fix the two export descriptions that say Read-only and set the six unset destructive hints",
+      "spec": "G-10, G-48",
+      "deps": [],
+      "verifier": "dotnet test --filter Category!=Corpus&Category!=GameData&Category!=Doctor",
+      "estimate": "one session",
+      "status": "ready",
+      "evidence": ""
+    },
+    {
+      "id": "q12",
+      "title": "Test the protocol revision set the pinned SDK negotiates",
+      "spec": "G-49, CMP-01",
+      "deps": [],
+      "verifier": "dotnet test --filter Category!=Corpus&Category!=GameData&Category!=Doctor",
+      "estimate": "one session",
+      "status": "ready",
+      "evidence": ""
+    }
+  ]
+}

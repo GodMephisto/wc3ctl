@@ -42,6 +42,12 @@
              Link="context\%(RecursiveDir)%(Filename)%(Extension)">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+    <!-- The skills resources live under docs/skills beside the exe (Wc3Skills), so they are
+         linked here with the same shape. -->
+    <Content Include="..\..\src\Wc3.Mcp\docs\skills\**\*"
+             Link="docs\skills\%(RecursiveDir)%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
 </Project>

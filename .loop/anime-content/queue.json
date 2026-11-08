@@ -1,0 +1,182 @@
+{
+  "slug": "anime-content",
+  "items": [
+    {
+      "id": "a01",
+      "title": "sound analyze and sound trim",
+      "status": "done",
+      "verifier": "SoundTrimCommandTests",
+      "evidence": "4 facts pass, 2719 hermetic, published"
+    },
+    {
+      "id": "a02",
+      "title": "sound import events, catalog and dispatcher",
+      "status": "done",
+      "deps": [],
+      "verifier": "SoundImportCommandTests",
+      "evidence": "4 facts, catalog round trip, missing clip refused, JASS compiles via JassScriptCheck, independently re-run green"
+    },
+    {
+      "id": "a03",
+      "title": "emitter writer PREM and PRE2",
+      "status": "done",
+      "deps": [
+        "a04"
+      ],
+      "verifier": "MdxEmitterWriterTests",
+      "note": "held until a02 lands, the shared project must compile before any new item can run its tests",
+      "evidence": "10 facts, reproduces the real fireblast PREM record to 384 bytes, PRE2 texture id at 155 checked against six real records, 2751 hermetic green"
+    },
+    {
+      "id": "a04",
+      "title": "sequence and keyframe writer",
+      "status": "done",
+      "deps": [],
+      "verifier": "MdxSequenceWriterTests",
+      "evidence": "6 facts, SEQS 132 byte records, byte identical to SyntheticModel, independently re-run green"
+    },
+    {
+      "id": "a05",
+      "title": "material and texture composition",
+      "status": "done",
+      "deps": [],
+      "verifier": "MdxMaterialWriterTests",
+      "evidence": "6 facts, TEXS 268 byte entries, cross checked with ModelParser, independently re-run green"
+    },
+    {
+      "id": "a06",
+      "title": "primitive mesher, capsule, ring, cone, card",
+      "status": "done",
+      "deps": [],
+      "verifier": "MeshPrimitiveTests",
+      "note": "uses the existing MdxMeshBuilder, no dependency on the emitters",
+      "evidence": "6 facts, four primitives, GEOS parsed back, degenerate refused, independently re-run green"
+    },
+    {
+      "id": "a07",
+      "title": "package generator with manifest",
+      "status": "done",
+      "deps": [
+        "a03",
+        "a04",
+        "a05",
+        "a06"
+      ],
+      "verifier": "ContentScaffoldCommandTests",
+      "evidence": "8 facts, body capsule, PRE2 effect, icon, WAV, manifest with rebind, full suite 2759 green"
+    },
+    {
+      "id": "a08",
+      "title": "hero generate with forms, install and audits",
+      "status": "done",
+      "deps": [
+        "a02",
+        "a07"
+      ],
+      "verifier": "HeroGenerateTests",
+      "evidence": "7 facts, two forms, distinct Ncl6, no audit collision, uabi per form, JASS compiles, ACA probe clean"
+    },
+    {
+      "id": "a09",
+      "title": "spec 1.4 covering audio and the first encoders",
+      "status": "done",
+      "deps": [
+        "a02",
+        "a03",
+        "a04",
+        "a05",
+        "a06"
+      ],
+      "verifier": "python tools/build_pdf.py, cover reports 1.4, then commit md and pdf only",
+      "note": "do not rebuild per item, one revision for the whole window",
+      "evidence": "spec 1.4, 60 pages, 138 bookmarks, 272 tools, committed f79c799 md and pdf only"
+    },
+    {
+      "id": "a10",
+      "title": "wire a02 and a03 to CLI and MCP in one pass",
+      "status": "done",
+      "deps": [
+        "a02",
+        "a03"
+      ],
+      "verifier": "parity, docs reference, full suite",
+      "note": "one Program.cs edit for both, not two",
+      "evidence": "sound import verb and sound_import_events tool, gate, missing clip refusal, 2768 green, 273 tools published"
+    },
+    {
+      "id": "a11",
+      "title": "permission file the agent cannot edit, plus skills as resources",
+      "status": "in flight",
+      "deps": [],
+      "verifier": "PermissionFileTests, resource test",
+      "note": "adopted from the Roblox Studio MCP model, publish and mirror gated, confirm is intent not permission"
+    },
+    {
+      "id": "a12",
+      "title": "spec 1.5 after a10 and a11",
+      "status": "done",
+      "deps": [
+        "a10",
+        "a11"
+      ],
+      "verifier": "build_pdf.py, commit md and pdf only",
+      "note": "the PDF says 272, the binary says 273, drift is recorded not hidden",
+      "evidence": "spec 1.5, 275 tools, committed d923b17 md and pdf only"
+    },
+    {
+      "id": "a13",
+      "title": "splice the generated dispatcher into war3map.j",
+      "status": "done",
+      "deps": [
+        "a02"
+      ],
+      "verifier": "SoundScriptSpliceCommandTests",
+      "note": "splice fixed and pjass green with repairs. repairing SoundImportCommand event keyword and path escape now",
+      "evidence": "8 facts, pjass green on the genuine block in both globals cases, generator defects event keyword and path escape fixed"
+    },
+    {
+      "id": "a14",
+      "title": "wire hero generate and content scaffold to CLI and MCP",
+      "status": "done",
+      "deps": [
+        "a07",
+        "a08"
+      ],
+      "verifier": "parity, docs, coverage, tool list",
+      "evidence": "hero generate and content scaffold wired, 275 tools, all four references green"
+    },
+    {
+      "id": "a15",
+      "title": "spec number guard, measure the exe before the build",
+      "status": "done",
+      "deps": [],
+      "verifier": "measure_surface.py exits 0, build refuses on mismatch",
+      "evidence": "measure_surface.py and build guard, drift refuses the PDF"
+    },
+    {
+      "id": "a16",
+      "title": "close TRN-05 by upgrading the ModelContextProtocol pin",
+      "status": "ready",
+      "deps": [],
+      "verifier": "handshake test reports listChanged false, CMP-02 protocol test green",
+      "note": "blocked only by the SDK, 1.4.1 derives capabilities from the collections and ignores McpServerOptions.Capabilities, proven at the handshake on 2026-11-08",
+      "evidence": "McpContractTests handshake fact failed on the configured value, CreateOptions Capabilities reverted"
+    },
+    {
+      "id": "a16",
+      "title": "light print edition at 8.5pt",
+      "status": "in flight",
+      "deps": [],
+      "verifier": "both PDFs build, light text larger, guard runs",
+      "note": "DOC-07"
+    },
+    {
+      "id": "a17",
+      "title": "release provenance record and check",
+      "status": "in flight",
+      "deps": [],
+      "verifier": "python tools/test_release_record.py",
+      "note": "AUT-11, PKG-13, answers the npm 0.5.19 hole"
+    }
+  ]
+}

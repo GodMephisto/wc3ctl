@@ -3,6 +3,7 @@
 // files to a directory the caller names, and import-wire writes an edited map copy. Each write
 // is checked to leave its input map untouched.
 using NAudio.Wave;
+using System.Text.Json;
 using Wc3.Modeling;
 using Wc3.Render;
 
@@ -280,5 +281,43 @@ public sealed class McpSmokeModelAssetTests : McpSmokeBase
         Assert.Contains(Rows(Prop(imports, "entries")),
             e => Prop(e, "path").GetString()!.EndsWith("wire", StringComparison.OrdinalIgnoreCase)
                  || Prop(e, "path").GetString()!.EndsWith(".mdx", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact, Covers("model_primitive")]
+    public async Task Model_primitive_writes_a_parseable_card()
+    {
+        var outPath = NewOut("primitive", ".mdx");
+        var r = await Call("model_primitive", Args(("kind", "card"), ("out_path", outPath), ("size", 16)));
+
+        Assert.True(File.Exists(outPath), "model_primitive wrote nothing");
+        Assert.True(Prop(r, "vertices").GetInt32() >= 4);
+        Assert.True(Prop(r, "faces").GetInt32() >= 2);
+    }
+
+    [Fact, Covers("content_scaffold")]
+    public async Task Content_scaffold_writes_a_package_with_a_resolvable_manifest()
+    {
+        string outDir = Path.Combine(_f.Dir, "content-" + Guid.NewGuid().ToString("N"));
+        var r = await Call("content_scaffold", Args(("name", "smoke"), ("out_dir", outDir)));
+
+        Assert.Equal("smoke", Prop(r, "name").GetString());
+        Assert.Equal(Path.GetFullPath(outDir), Prop(r, "root").GetString());
+
+        var files = Rows(Prop(r, "files"));
+        Assert.Equal(5, files.Count);
+        foreach (var f in files)
+        {
+            string path = Prop(f, "path").GetString()!;
+            Assert.True(File.Exists(path), $"{Prop(f, "role").GetString()} names a missing file at {path}");
+            Assert.True(Prop(f, "bytes").GetInt64() > 0, $"{Prop(f, "role").GetString()} carries no bytes");
+        }
+
+        string manifest = Prop(r, "manifestPath").GetString()!;
+        Assert.Equal(Path.Combine(Path.GetFullPath(outDir), "package.json"), manifest);
+        Assert.True(File.Exists(manifest), "content_scaffold reported a manifest that is not on disk");
+
+        using var json = JsonDocument.Parse(File.ReadAllText(manifest));
+        Assert.Equal("smoke", json.RootElement.GetProperty("name").GetString());
+        Assert.Equal(4, json.RootElement.GetProperty("roles").EnumerateObject().Count());
     }
 }

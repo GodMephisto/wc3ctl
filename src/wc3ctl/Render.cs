@@ -2860,4 +2860,45 @@ public static class Render
             sb.AppendLine($"  {d.Status,-8}{d.Path}");
         return sb.ToString().TrimEnd('\r', '\n');
     }
+
+    public static string HeroGenerate(HeroGenerateResult r)
+    {
+        if (!r.Ok) return r.Message;
+        var sb = new StringBuilder();
+        sb.AppendLine(r.Message);
+        sb.AppendLine();
+        foreach (var u in r.Units)
+            sb.AppendLine($"unit {u.Rawcode}  {u.FormId,-12} from {u.BaseRawcode}  \"{u.Name}\""
+                + (u.AbilityRawcodes.Count == 0 ? "" : "  uabi " + string.Join(",", u.AbilityRawcodes)));
+        sb.AppendLine();
+        foreach (var a in r.Abilities)
+            sb.AppendLine($"ability {a.Rawcode}  {a.FormId,-12} {a.Slot,-3} from {a.BaseRawcode}  "
+                + $"\"{a.Name}\"  order {a.OrderId}  {a.Levels} level(s)"
+                + (a.IsTransform ? $"  transforms to {a.TransformsToForm} ({a.TransformsToUnit})" : ""));
+        sb.AppendLine();
+        sb.AppendLine($"{r.ObjectChanges.Count} object change(s), {r.OrderIds.Count} order id(s)");
+        sb.AppendLine($"JASS block, {r.Jass.Split('\n').Length} line(s), returned rather than spliced into war3map.j");
+        if (r.Diagnostics.Count > 0)
+        {
+            sb.AppendLine();
+            foreach (string d in r.Diagnostics) sb.AppendLine($"note: {d}");
+        }
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
+    public static string ContentScaffold(ContentScaffoldResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{r.Name}  written to {r.Root}");
+        foreach (var f in r.Files)
+            sb.AppendLine($"  {f.Role,-24} {f.Path}  {f.Bytes} byte(s)");
+        sb.AppendLine();
+        sb.Append($"manifest {r.ManifestPath}");
+        if (r.Diagnostics.Count > 0)
+        {
+            sb.AppendLine();
+            foreach (string d in r.Diagnostics) sb.AppendLine($"note: {d}");
+        }
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
 }

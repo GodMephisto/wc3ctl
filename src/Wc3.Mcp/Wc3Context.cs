@@ -41,6 +41,7 @@ public static class Wc3Context
         foreach (var dir in Directory.GetDirectories(Root).OrderBy(d => d, StringComparer.Ordinal))
         {
             string id = Path.GetFileName(dir);
+            if (IsSkillFolder(id)) continue;
             string? md = Directory.GetFiles(dir, "*.md").FirstOrDefault();
             if (md is null) continue;
             string path = md;
@@ -64,7 +65,7 @@ public static class Wc3Context
         _ => "A Warcraft III reference document, read whole.",
     };
 
-    [McpServerTool(Name = "docs_search", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [McpServerTool(Name = "docs_search", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Search the bundled Warcraft III reference documents and return the matching passages with their document and nearest heading. Use this to find the exact rule, field or warning in the UI-Frame tutorial or the Ability Insight reference without loading the whole file. Terms are matched on word boundaries and ranked by how many the passage carries, with a bonus when the section heading names a term, so an ability name finds that ability's section.")]
     public static object DocsSearch(
         [Description("Words to search for.")] string query,
@@ -142,10 +143,20 @@ public static class Wc3Context
         if (!Directory.Exists(Root)) yield break;
         foreach (var dir in Directory.GetDirectories(Root).OrderBy(d => d, StringComparer.Ordinal))
         {
+            string id = Path.GetFileName(dir);
+            if (IsSkillFolder(id)) continue;
             string? md = Directory.GetFiles(dir, "*.md").FirstOrDefault();
-            if (md is not null) yield return (Path.GetFileName(dir), md);
+            if (md is not null) yield return (id, md);
         }
     }
+
+    /// <summary>
+    /// The skills live under `context/skills` only so the reference folder and the skills stay one
+    /// corpus on disk. They are served as `wc3://skills/*`, not as a context document, and the
+    /// search must not index three files as one more document, so the folder is skipped here.
+    /// </summary>
+    private static bool IsSkillFolder(string id) =>
+        id.Equals("skills", StringComparison.OrdinalIgnoreCase);
 
     private static string Truncate(string s, int n) =>
         s.Length <= n ? s : s[..n] + "\n... (truncated, read the whole document with the resource wc3://context/)";
@@ -173,11 +184,11 @@ public static class Wc3Context
         }
     }
 
-    [McpServerTool(Name = "rag_status", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [McpServerTool(Name = "rag_status", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Report whether the local semantic retrieval index is installed, with its chunk count, corpus and the embedding model. docs_search uses the index automatically once it is installed.")]
     public static object RagStatus() => Rag(() => (object)RagCommand.Status());
 
-    [McpServerTool(Name = "rag_install", ReadOnly = false, Idempotent = true, OpenWorld = true)]
+    [McpServerTool(Name = "rag_install", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = true)]
     [Description("Install the local semantic index and graph over the Warcraft III corpus. Fetches the embedding model and the corpus dataset, verifies each, and builds the index and the graph, after which docs_search is semantic and the graph tools work. Needs network on the first run. The corpus is fixed to the bundled dataset, never a folder named by the caller, so this cannot read arbitrary local files.")]
     public static object RagInstall(
         [Description("CPU threads for embedding. Default min(cores/2, 4), the low CPU setting. Raise it to build faster.")] int? threads = null,
@@ -187,7 +198,7 @@ public static class Wc3Context
         return new { r.Root, r.Corpus, r.Chunks, r.IndexFile, r.ModelRepo, note = "docs_search is now semantic" };
     }
 
-    [McpServerTool(Name = "graph_neighbors", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [McpServerTool(Name = "graph_neighbors", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("List the nodes within a depth of a start node in the corpus graph, over link edges and embedding-similarity edges. Use it to find the documents related to one you already have. The graph is built by rag install, beside the index.")]
     public static object GraphNeighbors(
         [Description("A node id or name, for example a document title or a path without the .md.")] string node,
@@ -196,14 +207,14 @@ public static class Wc3Context
         [Description("Maximum nodes to return. Default 25.")] int limit = 25)
         => Rag(() => RagCommand.GraphNeighbors(node, depth, edge, limit));
 
-    [McpServerTool(Name = "graph_hubs", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [McpServerTool(Name = "graph_hubs", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("The most connected nodes in the corpus graph, the documents and sections the corpus centres on. Use it to see what the corpus is really about.")]
     public static object GraphHubs(
         [Description("Maximum nodes to return. Default 20.")] int top = 20,
         [Description("Restrict to one node type, Document or Section. Omit for all.")] string? type = null)
         => Rag(() => RagCommand.GraphHubs(top, type));
 
-    [McpServerTool(Name = "graph_path", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [McpServerTool(Name = "graph_path", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("The shortest chain of edges between two nodes in the corpus graph, so you can see how two documents or subjects connect.")]
     public static object GraphPath(
         [Description("The start node id or name.")] string from,

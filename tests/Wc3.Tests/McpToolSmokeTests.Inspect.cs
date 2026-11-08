@@ -230,6 +230,51 @@ public sealed class McpSmokeInspectTests : McpSmokeBase
         Assert.False(Prop(empty, "ok").GetBoolean());
     }
 
+    [Fact, Trait("Category", "GameData"), Covers("hero_generate")]
+    public async Task Hero_generate_writes_a_unit_per_form_and_an_ability_per_slot()
+    {
+        // The bases come from the game install rather than the blank fixture, so this one needs it.
+        const string spec = """
+        {
+          "name": "Smoke Hero",
+          "base_unit": "Hpal",
+          "forms": [
+            { "id": "base", "abilities": [
+              { "slot": "Q", "name": "Smoke Strike", "base": "ANcl", "cooldown": [8,8,8,8], "cast": 0.35, "damage": 120 },
+              { "slot": "R", "name": "Smoke Shift", "kind": "transform", "to": "shifted" } ] },
+            { "id": "shifted", "abilities": [
+              { "slot": "Q", "name": "Smoke Surge", "base": "ANcl", "cooldown": [9,9,9,9], "cast": 0.35, "damage": 180 } ] } ]
+        }
+        """;
+
+        var before = Sha(Fixture);
+        string outPath = NewOut("hero-generate");
+        var r = await Call("hero_generate",
+            Args(("map", Fixture), ("out_path", outPath), ("spec_json", spec)));
+
+        Assert.Equal(before, Sha(Fixture));
+        Assert.True(File.Exists(outPath), "hero_generate wrote nothing");
+        Assert.True(Prop(r, "ok").GetBoolean(), r.ToString());
+
+        var units = Rows(Prop(r, "units"));
+        var abilities = Rows(Prop(r, "abilities"));
+        Assert.Equal(2, units.Count);
+        Assert.Equal(3, abilities.Count);
+        Assert.Equal(3, Prop(r, "orderIds").GetArrayLength());
+
+        // Distinct rawcodes and distinct order ids, which is what stops two generated abilities
+        // from sharing one order string in the engine.
+        Assert.Equal(3, abilities.Select(a => Prop(a, "rawcode").GetString()).Distinct().Count());
+        Assert.Equal(2, units.Select(u => Prop(u, "rawcode").GetString()).Distinct().Count());
+        Assert.All(abilities, a => Assert.Contains(
+            Prop(a, "rawcode").GetString()!, Prop(a, "orderId").GetString()));
+
+        Assert.Contains("HeroGen_Transform_shifted", Prop(r, "jass").GetString());
+        Assert.Contains(units, u => Prop(u, "abilityRawcodes").GetArrayLength() > 0);
+
+        await Call("map_info", Args(("map", outPath)));
+    }
+
     [Fact, Trait("Category", "GameData"), Covers("object_form", "object_field_options")]
     public async Task Object_form_and_field_options_come_from_the_game_data()
     {

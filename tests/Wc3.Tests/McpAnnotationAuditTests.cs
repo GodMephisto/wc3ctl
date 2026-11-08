@@ -51,6 +51,36 @@ public class McpAnnotationAuditTests
     }
 
     [Fact]
+    public void A_tool_that_leaves_one_hint_unset_is_reported()
+    {
+        var audit = McpToolAudit.Inspect(new[]
+        {
+            Tool("model_squish", readOnly: false, destructive: null, idempotent: false, openWorld: false),
+        });
+        Assert.Equal(1, audit.Count);
+        Assert.Contains("destructiveHint", audit.Problems[0].Problem);
+    }
+
+    [Fact]
+    public void A_writing_tool_that_says_read_only_in_its_description_is_reported()
+    {
+        var tool = new McpToolInfo(
+            "terrain_export_heightmap", "Export the heights. Read-only, the map is not modified.",
+            false, false, true, false);
+        var audit = McpToolAudit.Inspect(new[] { tool });
+        Assert.Equal(1, audit.Count);
+        Assert.Contains("read-only", audit.Problems[0].Problem);
+    }
+
+    [Fact]
+    public void A_reading_tool_may_say_read_only()
+    {
+        var tool = new McpToolInfo(
+            "map_info", "Read a map's metadata. Read-only.", true, false, true, false);
+        Assert.Equal(0, McpToolAudit.Inspect(new[] { tool }).Count);
+    }
+
+    [Fact]
     public void A_tool_with_no_annotations_at_all_is_reported()
     {
         var audit = McpToolAudit.Inspect(new[] { Tool("mystery", readOnly: null) });
