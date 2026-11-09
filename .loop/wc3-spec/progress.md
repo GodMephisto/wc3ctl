@@ -29,3 +29,25 @@ Append only. One block per batch, with the revision it produced.
 - Closed IDN-01 and IDN-04. Identity comes from assembly metadata, and the registered name is the one setup uses to remove.
 - Gaps, IDN-03 version_info lacks the product id, the protocol revision and the SDK version, IDN-05 the nogit fallback has no test, IDN-06 the revision is readable only from the handshake.
 - Ran out of the batch before CMP, PRF, SUR, DSC, ENV and SAF, 23 rows left in the queue.
+
+## B4, CMP, revision 1.37
+
+- Closed CMP-02 and CMP-06. The SDK is pinned at 1.4.1 where the protocol tests can hold it, and the server offers tools, resources and prompts and requires none of the four optional capabilities.
+- Gaps, CMP-03 no alias window, CMP-04 nothing keeps fields additive, CMP-05 the degraded result is not stated.
+
+## B9, ENV, revision 1.37
+
+- Closed ENV-06, the server runs with no settings file and no game install.
+- Gaps, ENV-01 and ENV-03. The scan is the finding, nineteen variables are read and five are documented, `HF_TOKEN` and the seven `WC3CTL_*` switches among the undocumented ones.
+
+## B10, SAF, revision 1.37
+
+- SAF-08 and SAF-09 closed, both output defaults are stated and one class holds the extract rule for all three front ends.
+- SAF-12 is a gap. Nothing refuses a symbolic link anywhere in the tree.
+
+## B6, B7, B8, PRF, SUR, DSC, revision 1.38
+
+- Seven closed, one loader, one extract rule, the orientation, the 42 ms list, the retrieval fallback.
+- Seven gaps. Two measurements contradicted the document, 11 parameters against a stated 8, and no test comparing the four surface views.
+- The tooling had a ceiling at 99 rows. Three scripts matched two digits, so six new rows were invisible to the counts guard and missing from requirements.json. Fixed to two or three digits.
+- Unassessed is 0. 90 met, 89 gap, 86 rows, spec 1.38, 67 pages dark and 77 light.

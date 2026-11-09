@@ -34,7 +34,7 @@
       "cluster": "CMP",
       "requirements": 5,
       "verifier": "compat tools against two builds",
-      "status": "next"
+      "status": "done"
     },
     {
       "id": "B5",
@@ -48,35 +48,35 @@
       "cluster": "PRF",
       "requirements": 5,
       "verifier": "timed calls on a real map",
-      "status": "queued"
+      "status": "done"
     },
     {
       "id": "B7",
       "cluster": "SUR",
       "requirements": 4,
       "verifier": "surface measures and description reads",
-      "status": "queued"
+      "status": "done"
     },
     {
       "id": "B8",
       "cluster": "DSC",
       "requirements": 3,
       "verifier": "catalog and quickstart probes",
-      "status": "queued"
+      "status": "done"
     },
     {
       "id": "B9",
       "cluster": "ENV",
       "requirements": 3,
       "verifier": "environment table read",
-      "status": "queued"
+      "status": "done"
     },
     {
       "id": "B10",
       "cluster": "SAF",
       "requirements": 3,
       "verifier": "write boundary probes",
-      "status": "queued"
+      "status": "done"
     }
   ],
   "code_items_not_in_the_table": [
@@ -105,5 +105,12 @@
       "what": "one gate for every writer, including the export families",
       "serves": "SAF-04, SAF-06, SAF-07"
     }
-  ]
+  ],
+  "state": {
+    "revision": "1.38",
+    "met": 90,
+    "gap": 89,
+    "unassessed": 0,
+    "gap_rows": 86
+  }
 }
