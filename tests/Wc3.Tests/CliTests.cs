@@ -126,7 +126,7 @@ public class CliTests
                 new[] { "object", "list", path, "--json", "--game-dir", "Z:\\no_such" });
             System.Console.SetOut(console);
             Assert.Equal(0, code);
-            Assert.Contains("\"Items\": []", sw.ToString());
+            Assert.Contains("\"items\": []", sw.ToString());
         }
         finally { File.Delete(path); }
     }
@@ -178,10 +178,10 @@ public class CliTests
             System.Console.SetOut(console);
             Assert.Equal(0, code);
             var output = sw.ToString();
-            Assert.Contains("\"RootRawcode\": \"H000\"", output);
-            Assert.Contains("\"Rawcode\": \"A000\"", output);
-            Assert.Contains("\"Kind\": \"Ability\"", output);   // enum serialized by name
-            Assert.Contains("\"Functions\": []", output);       // script-less map → empty closure
+            Assert.Contains("\"rootRawcode\": \"H000\"", output);
+            Assert.Contains("\"rawcode\": \"A000\"", output);
+            Assert.Contains("\"kind\": \"Ability\"", output);   // enum serialized by name
+            Assert.Contains("\"functions\": []", output);       // script-less map → empty closure
         }
         finally { File.Delete(path); }
     }
@@ -302,10 +302,10 @@ public class CliTests
             System.Console.SetOut(console);
             Assert.Equal(0, code);
             var output = sw.ToString();
-            Assert.Contains("\"Info\"", output);
-            Assert.Contains("\"Files\"", output);
-            Assert.Contains("\"ObjectCounts\"", output);
-            Assert.Contains("\"Diagnostics\"", output);
+            Assert.Contains("\"info\"", output);
+            Assert.Contains("\"files\"", output);
+            Assert.Contains("\"objectCounts\"", output);
+            Assert.Contains("\"diagnostics\"", output);
         }
         finally { File.Delete(path); }
     }
@@ -320,11 +320,11 @@ public class CliTests
         System.Console.SetOut(console);
         Assert.Equal(0, code);
         var output = sw.ToString();
-        Assert.Contains("\"Name\": \"map_info\"", output);
-        Assert.Contains("\"ReadOnly\"", output);
-        Assert.Contains("\"Destructive\"", output);
-        Assert.Contains("\"Idempotent\"", output);
-        Assert.Contains("\"OpenWorld\"", output);
+        Assert.Contains("\"name\": \"map_info\"", output);
+        Assert.Contains("\"readOnly\"", output);
+        Assert.Contains("\"destructive\"", output);
+        Assert.Contains("\"idempotent\"", output);
+        Assert.Contains("\"openWorld\"", output);
     }
 
     [Fact]
@@ -337,8 +337,8 @@ public class CliTests
         System.Console.SetOut(console);
         Assert.Equal(0, code);
         var output = sw.ToString();
-        Assert.Contains("\"Count\": 0", output);
-        Assert.Contains("\"Problems\": []", output);
+        Assert.Contains("\"count\": 0", output);
+        Assert.Contains("\"problems\": []", output);
     }
 
     [Fact]

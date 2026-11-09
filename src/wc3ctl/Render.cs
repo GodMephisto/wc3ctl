@@ -12,6 +12,9 @@ public static class Render
     private static readonly JsonSerializerOptions Json = new()
     {
         WriteIndented = true,
+        // One product, one spelling. The MCP tools answer in camelCase, so the CLI's --json uses
+        // the same policy and the two front ends agree. The human renderers never read this.
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         // ObjectKind as "Unit", not 0, and a placed object's scale as sx, sy, sz rather than {}.
         Converters = { new JsonStringEnumConverter(), new ScaleJsonConverter() },
     };

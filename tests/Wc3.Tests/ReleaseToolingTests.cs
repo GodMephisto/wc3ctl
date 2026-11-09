@@ -235,11 +235,11 @@ public class ReleaseToolingCliTests
     {
         var (code, output) = await Run("version", "--json");
         Assert.Equal(0, code);
-        Assert.Contains("\"ProductVersion\"", output);
-        Assert.Contains("\"GitHash\"", output);
-        Assert.Contains("\"BuildTimeUtc\"", output);
-        Assert.Contains("\"McpServerName\"", output);
-        Assert.Contains("\"McpVersion\"", output);
+        Assert.Contains("\"productVersion\"", output);
+        Assert.Contains("\"gitHash\"", output);
+        Assert.Contains("\"buildTimeUtc\"", output);
+        Assert.Contains("\"mcpServerName\"", output);
+        Assert.Contains("\"mcpVersion\"", output);
     }
 
     [Fact]

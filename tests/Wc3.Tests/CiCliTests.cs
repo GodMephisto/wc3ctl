@@ -133,8 +133,8 @@ public class CiCliTests : IDisposable
         var (code, output, _) = await Run("ci", "all", ValidMap(), "--json");
 
         Assert.Equal(0, code);
-        Assert.Contains("\"Passed\": true", output);
-        Assert.Contains("\"ExitCode\": 0", output);
+        Assert.Contains("\"passed\": true", output);
+        Assert.Contains("\"exitCode\": 0", output);
         Assert.Contains("\"lint\"", output);
         Assert.Contains("\"validate\"", output);
     }
