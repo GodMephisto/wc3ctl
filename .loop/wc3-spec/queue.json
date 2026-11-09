@@ -1,0 +1,109 @@
+{
+  "goal": "every requirement met with evidence or gap with a row",
+  "queue_kind": "batch schedule, the row level queue is requirements.json",
+  "guard": [
+    "python tools/check_counts.py",
+    "python tools/measure_surface.py",
+    "python tools/build_pdf.py",
+    "python tools/build_pdf.py --light"
+  ],
+  "items": [
+    {
+      "id": "B1",
+      "cluster": "SEC",
+      "requirements": 7,
+      "verifier": "endpoint scan of src plus a resource traversal probe",
+      "status": "done"
+    },
+    {
+      "id": "B2",
+      "cluster": "TST",
+      "requirements": 7,
+      "verifier": "test inventory against the claims",
+      "status": "done"
+    },
+    {
+      "id": "B3",
+      "cluster": "RES",
+      "requirements": 6,
+      "verifier": "result shape probes over the published exe",
+      "status": "next"
+    },
+    {
+      "id": "B4",
+      "cluster": "CMP",
+      "requirements": 5,
+      "verifier": "compat tools against two builds",
+      "status": "queued"
+    },
+    {
+      "id": "B5",
+      "cluster": "IDN",
+      "requirements": 5,
+      "verifier": "initialize and version_info probes",
+      "status": "queued"
+    },
+    {
+      "id": "B6",
+      "cluster": "PRF",
+      "requirements": 5,
+      "verifier": "timed calls on a real map",
+      "status": "queued"
+    },
+    {
+      "id": "B7",
+      "cluster": "SUR",
+      "requirements": 4,
+      "verifier": "surface measures and description reads",
+      "status": "queued"
+    },
+    {
+      "id": "B8",
+      "cluster": "DSC",
+      "requirements": 3,
+      "verifier": "catalog and quickstart probes",
+      "status": "queued"
+    },
+    {
+      "id": "B9",
+      "cluster": "ENV",
+      "requirements": 3,
+      "verifier": "environment table read",
+      "status": "queued"
+    },
+    {
+      "id": "B10",
+      "cluster": "SAF",
+      "requirements": 3,
+      "verifier": "write boundary probes",
+      "status": "queued"
+    }
+  ],
+  "code_items_not_in_the_table": [
+    {
+      "id": "C1",
+      "what": "gamedata_enum refuses an unknown type and names the legal set",
+      "serves": "PAR-05"
+    },
+    {
+      "id": "C2",
+      "what": "session start refuses a non win-x64 platform in one sentence",
+      "serves": "PKG-09"
+    },
+    {
+      "id": "C3",
+      "what": "a per call log line with duration and result size",
+      "serves": "OBS-02"
+    },
+    {
+      "id": "C4",
+      "what": "finish an in flight call when stdin closes",
+      "serves": "TRN-03"
+    },
+    {
+      "id": "C5",
+      "what": "one gate for every writer, including the export families",
+      "serves": "SAF-04, SAF-06, SAF-07"
+    }
+  ]
+}

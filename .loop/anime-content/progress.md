@@ -181,3 +181,18 @@
 - Four became gaps. An in-flight call is abandoned when stdin closes, exit 0 in 0.4 s with no result. The only per-call log line names the tool and isError, with no duration or size. A failing call is logged by the generic handler as an unhandled exception at debug, without its code.
 - The per-call line is the SDK's, not ours, so OBS-02 and OBS-04 need a tool invocation filter rather than a one-line edit.
 - 35 met, 62 gap, 82 unassessed, 59 rows. Spec 1.28, dark 65 pages, light 74.
+
+## Loop pass, SET and AUT/DOC, 2026-11-09 06:20
+
+- SET nine of ten closed. Added a round trip over the nine file based clients, an all install over a broken config, and a claude-code uninstall, because the claims needed tests rather than confirmation.
+- SET-03 asked setup to refuse a file carrying comments. The shipped writer preserves comments and splices them, which is stronger, so the requirement was corrected to describe what ships and the changelog says why.
+- One test I wrote was based on a false premise, that the two products carry different server names. Both report wc3ctl in this tree, so the test proved nothing and was removed rather than kept as a decoration.
+- AUT-01, AUT-03 and DOC-02 closed. DOC-04 and DOC-05 are gaps, no release note cites a requirement and nothing marks a breaking change.
+- 47 met, 65 gap, 67 unassessed, 62 rows. Spec 1.30, dark 66 pages, light 75.
+
+## Loop pass, PKG, 2026-11-09 06:50
+
+- Ten of eleven closed by reading the launcher and the two release workflows. The runtime travels with the exe, the archive is verified against its published digest, a failed download never fails an install, the bundle and registry entry come from the tag, the release starts what it ships, and a locked binary is renamed rather than blocking.
+- PKG-09 is the one gap. Nothing checks the platform before start, so a Linux or ARM user meets the operating system's error for a Windows executable instead of a sentence naming win-x64.
+- Also committed both repos in this session before the pass, wc3-mcp 965b912 on main and Wc3_CLI 644c333 on loop/wc3-mcp-hardening, 82 tests green after the second.
+- 57 met, 66 gap, 56 unassessed, 63 rows. Spec 1.31, dark 66 pages, light 75.
