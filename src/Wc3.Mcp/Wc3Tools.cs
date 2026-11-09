@@ -24,13 +24,13 @@ public static class Wc3Tools
     [McpServerTool(Name = "map_info", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Show a Warcraft III map's metadata: name, author, player count, playable dimensions and load diagnostics.")]
     public static MapInfoResult MapInfo(
-        [Description("Path to a .w3x/.w3m map file.")] string map)
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
         => Run(() => InfoCommand.Execute(LoadMap(map)));
 
     [McpServerTool(Name = "list_files", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("List the map archive's internal files, each with its name (null = unnamed/protected entry), size in bytes, whether wc3ctl knows/parses the format, and for unnamed entries the content type sniffed from their leading bytes ('BLP texture', 'MDX model', 'empty', ...). Pass brief true to get the total and only the first 50 files when the full list would be too large for the context.")]
     public static object ListFiles(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Recover unnamed entries' names from the map's own script and object data before listing (worth paying for on a protected map). Recovered names are flagged nameFromHarvest.")] bool harvest = false,
         [Description("Return the total file count and only the first 50 files instead of the full list. Default false.")] bool brief = false)
         => Run<object>(() =>
@@ -45,7 +45,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "map_overview", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("One call per map: metadata (name, author, player count, dimensions), every archive file, the custom or modified object counts by Object Editor kind, and the load diagnostics. Use this when you need a map's overall shape instead of calling map_info, list_files and object_list separately.")]
     public static MapOverviewResult MapOverview(
-        [Description("Path to a .w3x/.w3m map file.")] string map)
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
         => Run(() => MapOverviewCommand.Execute(LoadMap(map)));
 
     [McpServerTool(Name = "mcp_audit_annotations", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
@@ -98,7 +98,7 @@ public static class Wc3Tools
         + "its code runs, hot (periodic), repeat (any callback) or once (init), plus every periodic "
         + "timer and trigger with its period. Read-only.")]
     public static ScriptLeaksResult ScriptLeaks(
-        [Description("Path to a .w3x/.w3m map file.")] string map)
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
         => Run(() => ScriptLeaksCommand.Execute(LoadMap(map)));
 
     [McpServerTool(Name = "script_bench", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
@@ -107,7 +107,7 @@ public static class Wc3Tools
         + "each one carries. Headless and needs no game client, so an ability can be triaged before "
         + "a play test. Read-only.")]
     public static ScriptBenchResult ScriptBench(
-        [Description("Path to a .w3x/.w3m map file.")] string map)
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
         => Run(() => ScriptBenchCommand.Execute(LoadMap(map)));
 
     [McpServerTool(Name = "script_verify", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
@@ -118,7 +118,7 @@ public static class Wc3Tools
         + "edges, so a correct channel ability with the pause in _Start and resume in _Loop is not "
         + "flagged. Headless, no game client. Read-only.")]
     public static ScriptVerifyResult ScriptVerify(
-        [Description("Path to a .w3x/.w3m map file.")] string map)
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
         => Run(() => ScriptVerifyCommand.Execute(LoadMap(map)));
 
     [McpServerTool(Name = "leak_list", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
@@ -126,7 +126,7 @@ public static class Wc3Tools
         + "triggers that feed it, and every hot leak target by function. Read-only, a presentation over "
         + "script_leaks for the leak workflow.")]
     public static LeakListResult LeakList(
-        [Description("Path to a .w3x/.w3m map file.")] string map)
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
         => Run(() => LeakListCommand.Execute(LoadMap(map)));
 
     [McpServerTool(Name = "leak_harness", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
@@ -135,7 +135,7 @@ public static class Wc3Tools
         + "in seconds rather than an hour, plus a handle count sampler. Writes the harness to out_path as "
         + "valid syntax for the language. Does not start the game.")]
     public static LeakHarnessResult LeakHarness(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Harness language, jass or lua.")] string lang,
         [Description("A hot leak candidate function name, or all.")] string target,
         [Description("Path to write the harness text to.")] string out_path)
@@ -148,7 +148,7 @@ public static class Wc3Tools
         + "list and the session events and game log lines near it. Names the likely leaking trigger. "
         + "Read-only. A folder with no samples.csv is reported clearly.")]
     public static LeakJoinResult LeakJoin(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("A wc3watch session folder holding samples.csv and, optionally, events.csv.")] string session_folder)
         => Run(() => LeakJoinCommand.Execute(LoadMap(map), session_folder));
 
@@ -160,7 +160,7 @@ public static class Wc3Tools
     public static LeakAbResult LeakAb(
         [Description("First wc3watch session folder.")] string session_a,
         [Description("Second wc3watch session folder.")] string session_b,
-        [Description("Optional map to attribute the drop to a periodic candidate.")] string? map = null)
+        [Description("Optional map, a .w3x/.w3m file or an unpacked map folder, to attribute the drop to a periodic candidate.")] string? map = null)
         => Run(() => LeakAbCommand.Execute(session_a, session_b, map is null ? null : LoadMap(map)));
 
     [McpServerTool(Name = "leak_benchmark", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
@@ -177,7 +177,7 @@ public static class Wc3Tools
         + "under different names with identical bytes, and an imported texture no imported model names. "
         + "Reuses the existing model parser and import primitives. Read-only.")]
     public static LeakModelResult LeakModel(
-        [Description("Path to a .w3x/.w3m map file.")] string map)
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
         => Run(() => LeakModelCommand.Execute(LoadMap(map)));
 
     [McpServerTool(Name = "script_unused_globals", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
@@ -186,7 +186,7 @@ public static class Wc3Tools
         + "is reported too, since its value is never used. The World Editor's generated globals are "
         + "excluded (every gg_ handle, every bj_ name, and the literal worldedit). Read-only.")]
     public static ScriptUnusedGlobalsResult ScriptUnusedGlobals(
-        [Description("Path to a .w3x/.w3m map file.")] string map)
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
         => Run(() => ScriptUnusedGlobalsCommand.Execute(LoadMap(map)));
 
     [McpServerTool(Name = "script_unused_functions", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
@@ -195,7 +195,7 @@ public static class Wc3Tools
         + "InitCustomTriggers and the map initialization functions) and anything an InitTrig_* "
         + "function or an ExecuteFunc(\"...\") string names. Read-only.")]
     public static ScriptUnusedFunctionsResult ScriptUnusedFunctions(
-        [Description("Path to a .w3x/.w3m map file.")] string map)
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
         => Run(() => ScriptUnusedFunctionsCommand.Execute(LoadMap(map)));
 
     [McpServerTool(Name = "script_null_locals", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
@@ -205,7 +205,7 @@ public static class Wc3Tools
         + "the rest of the function. A local that is never destroyed is a different leak and is not "
         + "reported here. Read-only.")]
     public static ScriptNullLocalsResult ScriptNullLocals(
-        [Description("Path to a .w3x/.w3m map file.")] string map)
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
         => Run(() => ScriptNullLocalsCommand.Execute(LoadMap(map)));
 
     [McpServerTool(Name = "script_complexity", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
@@ -213,7 +213,7 @@ public static class Wc3Tools
         + "or branch keywords in its body, ranked worst first with the line. Answers where the "
         + "complexity is on a large script. Read-only.")]
     public static ScriptComplexityResult ScriptComplexity(
-        [Description("Path to a .w3x/.w3m map file.")] string map)
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
         => Run(() => ScriptComplexityCommand.Execute(LoadMap(map)));
 
     [McpServerTool(Name = "script_callgraph", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
@@ -221,7 +221,7 @@ public static class Wc3Tools
         + "callee. Only edges between functions this script declares are included, so a native call "
         + "or a call through a local code value is not an edge. Read-only.")]
     public static ScriptCallGraphResult ScriptCallGraph(
-        [Description("Path to a .w3x/.w3m map file.")] string map)
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
         => Run(() => ScriptCallGraphCommand.Execute(LoadMap(map)));
 
     [McpServerTool(Name = "uabi_profile", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
@@ -242,7 +242,7 @@ public static class Wc3Tools
         + "BattleNet\\<account>\\Replays\\Autosaved.")]
     public static ReplayReport ReplaySummary(
         [Description("A .w3g file, or a folder searched recursively. Default: every Battle.net account's replays.")] string? path = null,
-        [Description("Only games whose map path contains this text.")] string? map = null)
+        [Description("Only games whose map path contains this text. This is a filter, not a path to read, so a folder cannot be passed here.")] string? map = null)
         => Run(() =>
         {
             if (path is not null && !File.Exists(path) && !Directory.Exists(path))
@@ -302,7 +302,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "object_list", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("List the map's custom/modified objects of one Object Editor kind: rawcode, base rawcode (null = created from scratch) and resolved name. Pass brief true to get the total and only the first 50 objects when the full list would be too large for the context.")]
     public static object ObjectList(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Object kind: " + KindValues + ".")] string kind = "unit",
         [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Used to resolve base-game names.")] string? game_dir = null,
         [Description("Return the total object count and only the first 50 objects instead of the full list. Default false.")] bool brief = false)
@@ -313,7 +313,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "object_get", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Get an object's merged fields (base game data overlaid by the map's deltas), each labeled 'base' or 'map', with field names resolved. Omit kind to auto-detect it from the rawcode.")]
     public static MergedObjectResult ObjectGet(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Four-character object rawcode, e.g. 'hfoo' or 'u000'.")] string rawcode,
         [Description("Object kind: " + KindValues + ". Default: probe every kind (map deltas first, then base game data).")] string? kind = null,
         [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Without it only the map's own deltas resolve.")] string? game_dir = null)
@@ -324,7 +324,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "object_form", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Get an object as an editable FORM rather than a flat field dump: fields grouped and ordered the way the World Editor groups them (Art, Combat, Stats, ...), fields that do not apply to this object hidden, each field's legal range and whether a blank is allowed, and which object-data layer it is written to (war3map.* or the war3mapSkin.* twin). Prefer this over object_get when deciding what to edit.")]
     public static ObjectForm ObjectFormTool(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Four-character object rawcode, e.g. 'hfoo' or 'H000'.")] string rawcode,
         [Description("Object kind: " + KindValues + ".")] string kind = "unit",
         [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Without it fields cannot be grouped, ordered or bounds-checked, and the layer falls back to a measurement of the map itself.")] string? game_dir = null,
@@ -366,7 +366,7 @@ public static class Wc3Tools
     [Description("List the asset paths an icon or model object field can actually be set to, from the map's own imported files and from the base game. Ask this BEFORE setting a model or icon field, because a field naming a path that does not resolve renders as nothing and reports no error anywhere.")]
     public static AssetListResult AssetList(
         [Description("Asset family: icon or model. It matches the field's metadata type token.")] string family,
-        [Description("Optional path to a .w3x/.w3m map. Without one, only the base game's paths are listed.")] string? map = null,
+        [Description("Optional path to a .w3x/.w3m map, or to an unpacked map folder. Without one, only the base game's paths are listed.")] string? map = null,
         [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Without it only the map's own paths are listed.")] string? game_dir = null)
         => Run(() => AssetListCommand.Execute(
             map is null ? null : LoadMap(map),
@@ -376,13 +376,13 @@ public static class Wc3Tools
     [McpServerTool(Name = "asset_unused", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("List the map's imported files that nothing references, each with the size it holds. A file is referenced when an object-data field value, a war3mapSkin.txt or war3mapMisc.txt value, a script string literal, an imported model's own texture chunk (.mdx TEXS, .mdl Bitmap), any path embedded in an imported model's bytes (a particle emitter spawn model included), an imported .fdf or .toc interface file, or a map-format file names it. The map-format scan is essential: the w3i names the loading screen model, the w3e names every terrain tile, and the w3s names every sound, so without it a loading screen or a custom terrain tile reads as unused. A lead to review before deleting an import, since the base game can also load a file none of those name. Use mpq_remove_many to act on the list in one rebuild.")]
     public static AssetUnusedResult AssetUnused(
-        [Description("Path to a .w3x/.w3m map file.")] string map)
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
         => Run(() => AssetUnusedCommand.Execute(LoadMap(map)));
 
     [McpServerTool(Name = "asset_report", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("One report over every imported file in a map. Lists every entry with its size and whether anything references it, and every fault the asset checks and the model scan can find: core (empty entry), audit (oversized, non power of two texture, model without source, empty), unused (referenced nowhere), duplicates (byte-identical groups), and model lint (geoset without material, missing texture, zero duration sequence, bounding box out of range). The engine does not log what it loads and its loading screen runs before the script, so this static report is the complete answer a map gives about its own contents. Note that ModelWithoutSource fires for nearly every .mdx in a compiled map and MissingTexture may be a case-insensitive base-game path, so read those two as leads. Read-only. Pass model_lint false to skip the slow per-model scan.")]
     public static AssetReportResult AssetReport(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Run the per-model structural scan, the slowest part. Default true.")] bool model_lint = true,
         [Description("Also read War3Log.txt and fold the engine's own faults into the report, a texture it replaced with a solid colour, a model it could not create, a UI frame or frame string defined twice, and any other line it wrote as an error. Default false.")] bool log = false,
         [Description("Path to War3Log.txt. Default Documents\\Warcraft III\\Logs\\War3Log.txt.")] string? log_path = null)
@@ -397,26 +397,26 @@ public static class Wc3Tools
     [McpServerTool(Name = "asset_duplicates", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Group the map's imported files whose bytes are identical (by sha256) and report the space each duplicate group wastes. Zero-byte entries are excluded. Read-only.")]
     public static AssetDuplicatesResult AssetDuplicates(
-        [Description("Path to a .w3x/.w3m map file.")] string map)
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
         => Run(() => AssetDuplicatesCommand.Execute(LoadMap(map)));
 
     [McpServerTool(Name = "asset_audit", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Flag suspicious imported assets. It reports entries larger than max_bytes, BLP textures whose width or height is not a power of two, a binary .mdx with no .mdl source beside it, and zero-byte entries. Read-only.")]
     public static AssetAuditResult AssetAudit(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Flag imported entries larger than this many bytes. Default 4194304 (4 MiB).")] long max_bytes = AssetAuditCommand.DefaultMaxBytes)
         => Run(() => AssetAuditCommand.Execute(LoadMap(map), max_bytes));
 
     [McpServerTool(Name = "asset_size_report", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Break the map's imported bytes down by parent folder, largest total first, so the folders that dominate the map's weight are obvious. Read-only.")]
     public static AssetSizeReportResult AssetSizeReport(
-        [Description("Path to a .w3x/.w3m map file.")] string map)
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
         => Run(() => AssetSizeReportCommand.Execute(LoadMap(map)));
 
     [McpServerTool(Name = "asset_replace", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Replace an asset path everywhere it is referenced (object-data field values, script string literals and the war3map.imp import table) and save the edited copy to out_path. Refuses when the old path is referenced nowhere. The input map is NEVER modified, and the archive entry itself is NOT renamed, move the file if the new path must resolve.")]
     public static AssetReplaceResult AssetReplace(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map).")] string out_path,
         [Description("The asset path currently referenced.")] string old_path,
         [Description("The asset path to reference instead.")] string new_path)
@@ -434,7 +434,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "asset_model_lint", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Scan every imported model (.mdx/.mdl) in the map and report the structural problems a static check can find, a geoset with no material, a material naming a texture the map does not hold, a sequence with a zero duration, and an out of range bounding box. Read-only, it parses bytes in memory and changes nothing.")]
     public static AssetModelLintResult AssetModelLint(
-        [Description("Path to a .w3x/.w3m map file.")] string map)
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
         => Run(() => AssetModelLintCommand.Execute(LoadMap(map)));
 
     [McpServerTool(Name = "asset_thumbnails", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
@@ -482,7 +482,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "asset_import_wire", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Add disk files to a map as imports and, when a file is a model or an icon and object names an object, point its matching model or icon field at the new import. Saves the edited copy to out_path. The input map is NEVER modified. Returns the imported paths and the fields set.")]
     public static AssetImportWireToolResult AssetImportWire(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map).")] string out_path,
         [Description("One or more disk files to add as imports.")] string[] files,
         [Description("Four-character rawcode of the object whose model or icon field is pointed at each imported file. Omit to import without setting a field.")] string? obj = null,
@@ -619,7 +619,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "map_optimize", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Shrink every imported texture inside a map in one pass and write a new map to out_path with only those files replaced, everything else byte for byte. By default models are left untouched and each texture is scaled to fit max_texture on its longest side; pass ratio below 1 to also decimate models, which is NOT safe by default because decimation is known to produce a model the game crashes on in some maps (a 3,091 model build hit an ACCESS_VIOLATION on load at ratio 0.9, while the same map with original models loaded). When decimating, load-test the result before shipping. A file whose optimised bytes are not smaller is left untouched. Reports the per-file before and after sizes, the per-kind counts, bytesSaved (the output size subtracted from the input's) and contentBytesSaved (the per-file sum, which is larger when the archive was patched in place rather than rebuilt). The input map is NEVER modified.")]
     public static MapOptimizeResult MapOptimize(
-        [Description("Path to a .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map path. The input is never modified.")] string out_path,
         [Description("Target fraction of a model's faces to keep, between 0 and 1. Default 1.0, which leaves every model byte for byte and shrinks only textures. A value below 1 decimates models, which needs a load test because it can produce a model the game crashes on.")] float ratio = 1.0f,
         [Description("Maximum texture side in pixels. A texture larger than this on either side is scaled down. Default 256.")] int max_texture = 256)
@@ -632,7 +632,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "model_export_obj", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Export a map-imported model to Wavefront OBJ at out_path, writing an MTL and any map-resolvable textures converted to PNG beside it. The map itself is never modified. Every file is staged beside the target and published only when all of them are complete, so a failure leaves no partial export. An existing .obj, .mtl or texture is refused and left unchanged unless overwrite is true. Returns the .obj path, the .mtl path, the texture names and any publish note.")]
     public static ModelExportObjToolResult ModelExportObj(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Internal model path (.mdx/.mdl) inside the map.")] string model,
         [Description("Output .obj file path. A .mtl and the converted textures are written beside it.")] string out_path,
         [Description("Replace an .obj, .mtl or texture that already exists beside out_path. Default false, which refuses an existing target and leaves it exactly as it was.")] bool overwrite = false)
@@ -667,27 +667,27 @@ public static class Wc3Tools
     [McpServerTool(Name = "lint", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Pre-flight the map: does its script compile, does war3map.imp agree with what the archive holds, do referenced asset paths resolve, and is every entry a loadable type. This is the 'is this map going to work' check and is the right thing to run before handing a map to anyone. A failure here usually means the map will not host or will hang on load with no error of its own.")]
     public static LintResult Lint(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Optional path to the ORIGINAL map this one was built from. Supplied, the lint also reports what a rebuild lost or clobbered.")] string? against = null)
         => Run(() => LintCommand.Run(LoadMap(map), against is null ? null : LoadMap(against)));
 
     [McpServerTool(Name = "validate", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Check the map for structural problems: missing or empty files, entries that fail to load, and a script that cannot compile. Narrower than lint and a good first question when a map behaves as though something is absent.")]
     public static ValidateResult Validate(
-        [Description("Path to a .w3x/.w3m map file.")] string map)
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
         => Run(() => ValidateCommand.Execute(LoadMap(map)));
 
     [McpServerTool(Name = "validate_strict", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("A stricter validate. Runs the default checks and adds three that are too strict to be a default, a map with no (listfile), a script that declares no entry point function, and a placement whose type neither the map nor the installed game defines. The undefined-type check needs the installed game and reports a diagnostic rather than a clean result when it cannot run. The default validate is unchanged.")]
     public static ValidateStrictResult ValidateStrict(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Without it the undefined-type check is skipped, with a diagnostic.")] string? game_dir = null)
         => Run(() => ValidateStrictCommand.Execute(LoadMap(map), ResolveGameDir(game_dir)));
 
     [McpServerTool(Name = "lint_baseline", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Write the map's current lint findings to a baseline JSON file. A later gate, the CLI 'lint <map> --baseline <file>', then fails only on a finding this file does not already hold, so known and accepted warnings do not block CI. Writes a local file, never the map.")]
     public static LintBaselineWriteResult LintBaseline(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("File to write the baseline JSON to.")] string out_path,
         [Description("Optional path to the ORIGINAL map this one was built from, so the baseline records the before/after checks too.")] string? against = null)
         => Run(() => LintBaselineCommand.Write(map, out_path, against));
@@ -695,33 +695,33 @@ public static class Wc3Tools
     [McpServerTool(Name = "roundtrip", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Verify the map survives a load and save byte for byte. Any file that differs is one this toolkit does not reproduce faithfully, which is worth knowing BEFORE editing that map, since a save would then rewrite it. Archive bookkeeping the container regenerates is excluded by design.")]
     public static RoundtripResult Roundtrip(
-        [Description("Path to a .w3x/.w3m map file.")] string map)
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
         => Run(() => RoundtripCommand.Execute(LoadMap(map)));
 
     [McpServerTool(Name = "search", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Search the map's contents for a string, ignoring case: archive file names, script lines (with the line number), string-table entries, and object data (custom object rawcodes and every field value). Each hit names the file and where in it. Capped at 500 hits, with truncated set when the cap was reached. Use this to find where a name, an ability id or an asset path is actually referenced, rather than guessing which file holds it.")]
     public static SearchResult Search(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Text to look for.")] string query)
         => Run(() => SearchCommand.Execute(LoadMap(map), query));
 
     [McpServerTool(Name = "diff", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Compare two maps and report which internal files were added, removed or changed. The direct way to see what an edit actually did to a map, and to check that it touched only what was intended.")]
     public static DiffResult Diff(
-        [Description("Path to the first .w3x/.w3m map.")] string map,
+        [Description("Path to the first .w3x/.w3m map, or to an unpacked map folder.")] string map,
         [Description("Path to the second .w3x/.w3m map.")] string other)
         => Run(() => DiffCommand.Execute(LoadMap(map), LoadMap(other)));
 
     [McpServerTool(Name = "script_functions", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("List every function declared in the map's compiled script, with where it starts and ends. Indentation-tolerant, so it finds declarations a naive line scan misses. Use it to locate a handler before reading or editing the script.")]
     public static ScriptFunctionsResult ScriptFunctions(
-        [Description("Path to a .w3x/.w3m map file.")] string map)
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
         => Run(() => ScriptCommand.Functions(LoadMap(map)));
 
     [McpServerTool(Name = "script_references", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Find every use of a name in the map's compiled script: direct calls, and the places it is passed as a code value (Condition, Filter, TriggerAddAction). The second kind is how most trigger handlers are actually reached and a text search for 'name(' cannot see it, so use this rather than search when asking what reaches a function. Each result carries its line, the function containing it, and the line text.")]
     public static ScriptReferencesResult ScriptReferences(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Function or global name to find uses of.")] string name)
         => Run(() => ScriptCommand.References(LoadMap(map), name));
 
@@ -781,13 +781,13 @@ public static class Wc3Tools
     [McpServerTool(Name = "script_lua_leaks", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Find handle leaks in a Lua map script. Lua collects the wrapper but the engine still owns the handle, so a creator dropped as a statement, a creator on a period that is never released, and a handle kept in a table the script never clears are the shapes that grow memory. Each finding is ranked hot, repeat or once. Read-only.")]
     public static LuaScriptLeaksResult ScriptLuaLeaks(
-        [Description("Path to a .w3x/.w3m map file.")] string map)
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
         => Run(() => LuaScriptLeaksCommand.Execute(LoadMap(map)));
 
     [McpServerTool(Name = "script_lua_globals", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("List the globals a Lua map defines, where each is read and written, and any global that is written but never read. The Lua twin of script_unused_globals, parser based rather than a line scan. Read-only.")]
     public static LuaGlobalsResult ScriptLuaGlobals(
-        [Description("Path to a .w3x/.w3m map file.")] string map)
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
         => Run(() => LuaGlobalsCommand.Execute(LoadMap(map)));
 
     [McpServerTool(Name = "script_lua_check", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
@@ -799,7 +799,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "script_lua_api", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("List the natives and functions a Lua script calls that a target game build does not declare. Uses the same schema membership test as the compat check, and reads the calls from the parsed tree. Read-only.")]
     public static LuaApiResult ScriptLuaApi(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Target build name or schema folder path.")] string target,
         [Description("Directory of schema folders with manifest.json. Optional, the default search is used when omitted.")] string? schemas_dir = null)
         => Run(() => LuaApiCommand.Execute(LoadMap(map), target, schemas_dir));
@@ -826,13 +826,13 @@ public static class Wc3Tools
     [McpServerTool(Name = "script_reachable", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("List the functions reachable from the map script's entry points, main and the InitTrig functions, and the dead functions nothing reaches, each with its declaration line. A function reached only through a string (ExecuteFunc) is reported dead here, which is the honest answer to what main reaches. Read-only.")]
     public static ScriptReachableResult ScriptReachable(
-        [Description("Path to a .w3x/.w3m map file.")] string map)
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
         => Run(() => ScriptReachableCommand.Execute(LoadMap(map)));
 
     [McpServerTool(Name = "script_api_usage", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("List the natives and functions the map script uses that a target game build does not declare, the compile-time side of a port. Uses the same schema membership test as the compat check. Read-only.")]
     public static ScriptApiUsageResult ScriptApiUsage(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Target build name or schema folder path.")] string target,
         [Description("Directory of schema folders with manifest.json. Optional, the default search is used when omitted.")] string? schemas_dir = null)
         => Run(() => ScriptApiUsageCommand.Execute(LoadMap(map), target, schemas_dir));
@@ -840,14 +840,14 @@ public static class Wc3Tools
     [McpServerTool(Name = "script_semantic_diff", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Compare two map scripts line by line after normalizing whitespace, dropping comments and ignoring pure renames of local variables, and report the real changes. Use this rather than diff for a before/after of a port or an edit where a variable rename or a reindent should not drown the intended change. Read-only.")]
     public static ScriptSemanticDiffResult ScriptSemanticDiff(
-        [Description("Path to the first .w3x/.w3m map.")] string map,
+        [Description("Path to the first .w3x/.w3m map, or to an unpacked map folder.")] string map,
         [Description("Path to the second .w3x/.w3m map.")] string other)
         => Run(() => ScriptSemanticDiffCommand.Execute(LoadMap(map), LoadMap(other)));
 
     [McpServerTool(Name = "script_duplicate_bodies", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Find functions whose normalized bodies are identical, up to comments, whitespace and local variable names. A copied function is a maintenance trap, a fix in one copy silently misses the others. Read-only.")]
     public static ScriptDuplicateBodiesResult ScriptDuplicateBodies(
-        [Description("Path to a .w3x/.w3m map file.")] string map)
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
         => Run(() => ScriptDuplicateBodiesCommand.Execute(LoadMap(map)));
 
     [McpServerTool(Name = "script_modernize", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
@@ -869,14 +869,14 @@ public static class Wc3Tools
     [McpServerTool(Name = "terrain_info", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("The terrain grid's extents in corners, plus the map's ground and cliff tile lists. Texture fields on a corner are indexes into those lists, so read this first to know what an index means.")]
     public static TerrainEditCommand.TerrainInfo TerrainInfoTool(
-        [Description("Path to a .w3x/.w3m map file.")] string map)
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
         => Run(() => TerrainEditCommand.GetInfo(LoadMap(map))
             ?? throw new McpException("this map has no war3map.w3e terrain file"));
 
     [McpServerTool(Name = "terrain_corner_get", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Show one terrain corner's full state: ground height, cliff level, water, ground and cliff texture indexes with variations, and the ramp, blight, boundary and edge flags.")]
     public static TerrainEditCommand.CornerInfo TerrainCornerGet(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Corner column, 0-based. Bounds come from terrain_info.")] int col,
         [Description("Corner row, 0-based.")] int row)
         => Run(() => TerrainEditCommand.GetCorner(LoadMap(map), col, row)
@@ -885,7 +885,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "terrain_corner_set", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Set one field on ONE terrain corner and save the edited copy to out_path. The input map is NEVER modified in place. For area work prefer terrain_deform, terrain_paint and the other brush tools.")]
     public static EditToolResult TerrainCornerSet(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Corner column, 0-based.")] int col,
         [Description("Corner row, 0-based.")] int row,
         [Description("Field: " + TerrainCornerFieldNames + ".")] string field,
@@ -903,7 +903,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "placed_units_list", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("List every unit already PLACED on the map (war3mapUnits.doo), each with the creation number needed to edit or remove it, plus its type rawcode, owner, position and hero stats. Start locations appear here too. Call this before placed_unit_set or placed_unit_remove. Pass brief true to get the total and only the first 50 units when the full list would be too large for the context.")]
     public static object PlacedUnitsList(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Return the total unit count and only the first 50 units instead of the full list. Default false.")] bool brief = false)
         => Run<object>(() => brief
             ? UnitInstanceCommand.ListBrief(LoadMap(map))
@@ -912,7 +912,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "placed_unit_get", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Show one placed unit's full state by creation number: type, owner, position, facing, scale, hero level and attributes, hit points and mana percentages, gold and target acquisition range.")]
     public static UnitInstanceInfo PlacedUnitGet(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("The unit's creation number, from placed_units_list.")] int creation_number)
         => Run(() => UnitInstanceCommand.Get(LoadMap(map), creation_number)
             ?? throw new McpException($"no placed unit with creation number {creation_number}"));
@@ -920,7 +920,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "placed_unit_set", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Set one field on a unit already placed on the map and save the edited copy to out_path. The input map is NEVER modified in place. A position field takes 'x,y', a scale field takes one number (uniform) or 'sx,sy,sz', and Facing is in RADIANS (pi/2 faces north), the unit the map file stores.")]
     public static EditToolResult PlacedUnitSet(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("The unit's creation number, from placed_units_list.")] int creation_number,
         [Description("Field: " + UnitInstanceFields + ".")] string field,
         [Description("New value.")] string value,
@@ -937,7 +937,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "placed_unit_remove", ReadOnly = false, Destructive = true, Idempotent = true, OpenWorld = false)]
     [Description("Remove a unit already placed on the map and save the edited copy to out_path. The input map is NEVER modified in place.")]
     public static EditToolResult PlacedUnitRemove(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("The unit's creation number, from placed_units_list.")] int creation_number,
         [Description("Where to write the edited map. Defaults to a sibling '.edited' copy.")] string? out_path = null,
         [Description("State the intent to destroy data. Without it the call is refused with CONFIRM_REQUIRED, naming what would be removed.")] bool confirm = false,
@@ -953,13 +953,13 @@ public static class Wc3Tools
     [McpServerTool(Name = "placed_doodads_list", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("List every doodad and destructable already PLACED on the map (war3map.doo), each with the creation number needed to edit or remove it, plus its type rawcode, position, rotation, scale and variation.")]
     public static IReadOnlyList<DoodadInstanceInfo> PlacedDoodadsList(
-        [Description("Path to a .w3x/.w3m map file.")] string map)
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
         => Run(() => DoodadInstanceCommand.List(LoadMap(map)));
 
     [McpServerTool(Name = "placed_doodad_get", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Show one placed doodad's full state by creation number: type, position, rotation, scale, variation and life percentage.")]
     public static DoodadInstanceInfo PlacedDoodadGet(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("The doodad's creation number, from placed_doodads_list.")] int creation_number)
         => Run(() => DoodadInstanceCommand.Get(LoadMap(map), creation_number)
             ?? throw new McpException($"no placed doodad with creation number {creation_number}"));
@@ -967,7 +967,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "placed_doodad_set", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Set one field on a doodad already placed on the map and save the edited copy to out_path. The input map is NEVER modified in place. A position field takes 'x,y' or 'x,y,z'.")]
     public static EditToolResult PlacedDoodadSet(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("The doodad's creation number, from placed_doodads_list.")] int creation_number,
         [Description("Field: " + DoodadInstanceFields + ".")] string field,
         [Description("New value.")] string value,
@@ -984,7 +984,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "placed_doodad_remove", ReadOnly = false, Destructive = true, Idempotent = true, OpenWorld = false)]
     [Description("Remove a doodad already placed on the map and save the edited copy to out_path. The input map is NEVER modified in place.")]
     public static EditToolResult PlacedDoodadRemove(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("The doodad's creation number, from placed_doodads_list.")] int creation_number,
         [Description("Where to write the edited map. Defaults to a sibling '.edited' copy.")] string? out_path = null,
         [Description("State the intent to destroy data. Without it the call is refused with CONFIRM_REQUIRED, naming what would be removed.")] bool confirm = false,
@@ -1000,7 +1000,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "place_grid", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Place a regular rows x cols grid of copies of one unit or doodad type and save the edited copy to out_path. The grid is centred on the map origin. The input map is NEVER modified in place.")]
     public static BulkPlacementToolResult PlaceGrid(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Four-character unit or doodad type rawcode.")] string type_rawcode,
         [Description("Number of grid rows (>= 1).")] int rows,
         [Description("Number of grid columns (>= 1).")] int cols,
@@ -1022,7 +1022,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "place_scatter", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Place N copies of a unit type at deterministic random positions and save the edited copy to out_path. Positions are uniform inside a named region or across the whole playable area, and the same seed reproduces the same layout. The input map is NEVER modified in place.")]
     public static BulkPlacementToolResult PlaceScatter(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Four-character unit type rawcode.")] string type_rawcode,
         [Description("Number of copies to place (>= 1).")] int count,
         [Description("Region name to scatter inside. Omit to scatter across the whole playable map.")] string? region = null,
@@ -1042,21 +1042,21 @@ public static class Wc3Tools
     [McpServerTool(Name = "placed_stats", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Count the units and doodads already placed on the map, grouped by rawcode and by kind, with each type's resolved name where one is available. Read-only.")]
     public static PlacedStatsResult PlacedStats(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Without it only the map's own object-data names resolve.")] string? game_dir = null)
         => Run(() => PlacedStatsCommand.Execute(LoadMap(map), ResolveGameDir(game_dir)));
 
     [McpServerTool(Name = "placed_missing_refs", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("List placements whose rawcode is defined neither in the map's object data nor in the base game data. Without a game_dir only the map's object data can be consulted, so stock base-game types read as unresolved too and the message says so. Read-only.")]
     public static PlacedMissingRefsResult PlacedMissingRefs(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Without it the base-game check is skipped.")] string? game_dir = null)
         => Run(() => PlacedMissingRefsCommand.Execute(LoadMap(map), ResolveGameDir(game_dir)));
 
     [McpServerTool(Name = "placed_fix_refs", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = false)]
     [Description("Drop (or, with to_rawcode, rewrite) placements that reference a missing rawcode and save the edited copy to out_path, reporting each change. Refuses when nothing is wrong. The input map is NEVER modified in place.")]
     public static PlacedFixRefsResult PlacedFixRefs(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Where to write the edited map. Defaults to a sibling '.edited' copy.")] string? out_path = null,
         [Description("Rewrite each missing placement's rawcode to this four-character code instead of dropping it.")] string? to_rawcode = null,
         [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Without it the base-game check is skipped.")] string? game_dir = null,
@@ -1075,13 +1075,13 @@ public static class Wc3Tools
     [McpServerTool(Name = "triggers_read", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Read the map's GUI trigger tree (war3map.wtg) plus the custom-text bodies (war3map.wct) and the script language: every category, every trigger with its event/condition/action tree, and every GUI variable. Read-only, because this format cannot yet be written back. A map with no GUI triggers returns empty lists rather than failing.")]
     public static TriggerModel TriggersRead(
-        [Description("Path to a .w3x/.w3m map file.")] string map)
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
         => Run(() => TriggerReadCommand.GetTriggers(LoadMap(map)));
 
     [McpServerTool(Name = "trigger_to_script", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Render the map's GUI trigger tree (war3map.wtg) to JASS-style text, the way the World Editor's 'convert to custom text' presents one trigger. Read-only, it never edits the map. Preset parameter values are resolved to their script form through the World-Editor catalog when the installed game provides one, and otherwise keep their raw names. This is a rendering for reading rather than a replacement for the compiled script (war3map.j), so it is not guaranteed to compile.")]
     public static TriggerScriptResult TriggerToScript(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Used only to resolve preset values, and its absence is not an error.")] string? game_dir = null)
         => Run(() => TriggerToScriptCommand.Render(
             LoadMap(map), TriggerCatalogCommand.TryLoad(null, ResolveGameDir(game_dir), out _)));
@@ -1089,70 +1089,70 @@ public static class Wc3Tools
     [McpServerTool(Name = "trigger_diff", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Compare two maps' GUI trigger trees and report triggers added, removed and renamed, plus event, condition or action changes within a trigger shared by both maps. Triggers are matched first by a unique id (so a rename reads as a rename) and then by name. Read-only.")]
     public static TriggerDiffResult TriggerDiff(
-        [Description("Path to the first .w3x/.w3m map file.")] string map_a,
+        [Description("Path to the first .w3x/.w3m map file, or to an unpacked map folder.")] string map_a,
         [Description("Path to the second .w3x/.w3m map file.")] string map_b)
         => Run(() => TriggerDiffCommand.Compare(LoadMap(map_a), LoadMap(map_b)));
 
     [McpServerTool(Name = "trigger_lint", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Check a map's GUI trigger tree for three structural faults, a trigger that can never fire (no event and not run on map initialization), a trigger that registers the same event twice, and a trigger with no action. Disabled and custom-text triggers are skipped and the counts say so. Read-only.")]
     public static TriggerLintResult TriggerLint(
-        [Description("Path to a .w3x/.w3m map file.")] string map)
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
         => Run(() => TriggerLintCommand.Lint(LoadMap(map)));
 
     [McpServerTool(Name = "trigger_export", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Export a map's full GUI trigger tree as structured output. Each trigger carries its name, its enabled, initially-on and run-on-map-init flags, and its event, condition and action lists with the catalog function name, enabled flag, arguments and nested blocks for every node. Read-only. A map with no trigger tree returns empty lists.")]
     public static TriggerExportResult TriggerExport(
-        [Description("Path to a .w3x/.w3m map file.")] string map)
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
         => Run(() => TriggerExportCommand.Export(LoadMap(map)));
 
     [McpServerTool(Name = "trigger_dead", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Find triggers that cannot do anything, listing each reason. Triggers with no action, and triggers whose events never fire, which is an event depending on a variable nothing sets (a unit event holding an unassigned unit variable, or a variable event watching a variable that never changes). A variable counts as set when the tree initialises it or, when the compiled script is present, when the script assigns it. Read-only.")]
     public static TriggerDeadResult TriggerDead(
-        [Description("Path to a .w3x/.w3m map file.")] string map)
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
         => Run(() => TriggerDeadCommand.Dead(LoadMap(map)));
 
     [McpServerTool(Name = "hero_roster", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("List the playable heroes a map registers, with each hero's rawcode, display name, the string tags from its registration call (typically a role and a portrait path), and which trigger's custom-text body holds its code. A HERO IS NOT A TRIGGER and counting one does not count the other: measured on a real map, 170 registered heroes are spread across 39 Character triggers, because a few grouped triggers each bundle many heroes while a minority get a trigger of their own. Use this rather than counting triggers when asked how many heroes a map has. Returns Ok=false for maps that create heroes inline instead of registering them, since those have no roster to read.")]
     public static HeroRosterCommand.RosterResult HeroRoster(
-        [Description("Path to a .w3x/.w3m map file.")] string map)
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
         => Run(() => HeroRosterCommand.Run(LoadMap(map)));
 
     [McpServerTool(Name = "strings_list", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("List the map's string table (war3map.wts). Every TRIGSTR_ reference in object data and in scripts resolves through here, so this is how to read what a tooltip or a unit name actually says.")]
     public static StringsListResult StringsList(
-        [Description("Path to a .w3x/.w3m map file.")] string map)
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
         => Run(() => StringsCommand.List(LoadMap(map)));
 
     [McpServerTool(Name = "strings_missing", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("List the TRIGSTR_ keys the map script and the GUI trigger tree reference that have no war3map.wts entry behind them. A missing key shows the literal token TRIGSTR_nnn in game where a name or a message was meant. Read-only.")]
     public static StringsMissingResult StringsMissing(
-        [Description("Path to a .w3x/.w3m map file.")] string map)
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
         => Run(() => StringsMissingCommand.Execute(LoadMap(map)));
 
     [McpServerTool(Name = "strings_unused", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("List the war3map.wts entries no object-data field, map-info field, GUI trigger or script line references, each with its text. Read-only. An unreferenced entry is dead weight rather than a fault, so treat the list as a lead to review and not an instruction to delete.")]
     public static StringsUnusedResult StringsUnused(
-        [Description("Path to a .w3x/.w3m map file.")] string map)
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
         => Run(() => StringsUnusedCommand.Execute(LoadMap(map)));
 
     [McpServerTool(Name = "strings_diff", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Compare two maps' string tables (war3map.wts) and report entries added, removed and changed. Entries are matched by id, so a text change on the same key reads as a change rather than a remove plus an add. Read-only.")]
     public static StringsDiffResult StringsDiff(
-        [Description("Path to the first .w3x/.w3m map file.")] string map_a,
+        [Description("Path to the first .w3x/.w3m map file, or to an unpacked map folder.")] string map_a,
         [Description("Path to the second .w3x/.w3m map file.")] string map_b)
         => Run(() => StringsDiffCommand.Execute(LoadMap(map_a), LoadMap(map_b)));
 
     [McpServerTool(Name = "strings_find", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Find war3map.wts entries whose text contains the given text, case-insensitive, each with its id. Read-only. An empty query matches every entry.")]
     public static StringsFindResult StringsFind(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Text to find in entry text, a case-insensitive substring.")] string text)
         => Run(() => StringsFindCommand.Execute(LoadMap(map), text));
 
     [McpServerTool(Name = "strings_set", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Set one war3map.wts entry's text, or add the entry when the id is absent, and save the edited map to out_path. The file's own encoding and line endings are preserved and the input map is NEVER modified. out_path defaults to a sibling '<map>.edited.<ext>' and must differ from the input.")]
     public static StringsSetResult StringsSet(
-        [Description("Path to the source .w3x/.w3m map file. Read-only. The edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only. The edited copy is written to out_path.")] string map,
         [Description("war3map.wts entry id to set or add, e.g. 4084.")] int id,
         [Description("New text for the entry. Empty text clears the entry to an empty block.")] string text,
         [Description("Output map path. Defaults to a sibling '<map>.edited.<ext>'. Must differ from the input.")] string? out_path = null)
@@ -1161,13 +1161,13 @@ public static class Wc3Tools
     [McpServerTool(Name = "imports_list", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("List the map's import table (war3map.imp) against what the archive actually holds, so a table entry with no file behind it and a file absent from the table both show up.")]
     public static ImportsListResult ImportsList(
-        [Description("Path to a .w3x/.w3m map file.")] string map)
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
         => Run(() => ImportsCommand.Execute(LoadMap(map)));
 
     [McpServerTool(Name = "object_set", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Set a field on an object of one Object Editor kind and save the edited map to out_path (only that kind's war3map.* file is re-serialized). The input map is NEVER modified in place. Field syntax: a bare 4-char field code, or 'code:N' to select level N (ability/upgrade) or variation N (doodad). Returns both SHA-256 digests and the count of files rewritten, refuses an existing output unless overwrite is true, and refuses a stale expect_input_sha256.")]
     public static ObjectSetToolResult ObjectSet(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Four-character object rawcode, e.g. 'hfoo' or 'u000'.")] string rawcode,
         [Description("Field to set: a 4-char field code, optionally ':N' for level/variation.")] string field,
@@ -1188,7 +1188,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "object_batch_set", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Apply several object edits in one load and save once to out_path. The input map is NEVER modified in place. Edits are all or nothing, so the first failure stops the batch and nothing is written. Use this instead of two object_set calls from one base, which loses the first edit. Returns both digests, the rewritten count and the number applied.")]
     public static ObjectBatchSetToolResult ObjectBatchSet(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map).")] string out_path,
         [Description("The edits, applied in order. At most 500. A later edit to the same field wins.")] BatchEditInput[] edits,
         [Description("Replace out_path when it already exists. Default false, which refuses rather than silently overwriting a previous output.")] bool overwrite = false,
@@ -1225,7 +1225,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "object_new", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Create a new custom object derived from a base rawcode (a fresh unused rawcode is allocated) and save the edited map to out_path. The input map is NEVER modified in place. Returns the new rawcode.")]
     public static ObjectNewToolResult ObjectNew(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Four-character base object rawcode to derive from, e.g. 'hfoo'.")] string base_rawcode,
         [Description("Object kind: " + KindValues + ".")] string kind = "unit")
@@ -1243,7 +1243,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "object_search", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Full-text search across every custom or modified object's field values, in both the base game data and the map's own deltas. Read-only. Reports the kind, rawcode, resolved name, field code, and the base and map values, so a hit is traceable. Pass kind to search one Object Editor type or field to restrict to one field code.")]
     public static ObjectSearchResult ObjectSearch(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Text to find in field values, a case-insensitive substring.")] string query,
         [Description("Object kind: " + KindValues + ". Omit to search every kind.")] string? kind = null,
         [Description("Restrict the search to one field code, e.g. 'uhpm'.")] string? field = null,
@@ -1254,7 +1254,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "object_noop_fields", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("List object fields whose map value equals the base game value, so the edit changes nothing. Read-only. Needs a game_dir for the base values; without one the answer is map-only and says so.")]
     public static ObjectNoopFieldsResult ObjectNoopFields(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Object kind: " + KindValues + ". Omit to check every kind.")] string? kind = null,
         [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Without it there is no base value to compare against.")] string? game_dir = null)
         => Run(() => ObjectNoopFieldsCommand.Execute(
@@ -1263,7 +1263,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "object_deprecated", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("List object fields the target build's schema does not define but the map still sets, meaning the edit is ignored on that build. Read-only. The target is a schema folder path or a build name under the schemas directory. A target with no object data section is reported as such rather than as a clean result.")]
     public static ObjectDeprecatedResult ObjectDeprecated(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Target build name or path to a schema folder.")] string target,
         [Description("Optional path to a schemas directory. When omitted, searches <AppContext.BaseDirectory>/schemas then walks up to data/schemas.")] string? schemas_dir = null)
         => Run(() => ObjectDeprecatedCommand.Execute(LoadMap(map), target, schemas_dir));
@@ -1271,7 +1271,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "object_fix_model_ext", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Repair object-data model paths in one pass and save to out_path. A .mdl is rewritten to the .mdx that exists, a doubled war3mapImported prefix is collapsed, and any path still unresolved is redirected to redirect_missing when that file resolves. Base-game roots are left alone. The input map is NEVER modified in place.")]
     public static ModelExtFixResult ObjectFixModelExt(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map).")] string out_path,
         [Description("Internal path that unresolved model references are pointed at, for example war3mapImported/dummy.mdx. Omit to leave unresolved references untouched.")] string? redirect_missing = null)
         => Run(() =>
@@ -1287,7 +1287,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "object_rawcode_suggest", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Propose free four-character rawcodes for one Object Editor kind that collide with neither the map's objects nor the base game data. Read-only. Without a game_dir the suggestions are checked against the map only.")]
     public static ObjectRawcodeSuggestResult ObjectRawcodeSuggest(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Object kind: " + KindValues + ".")] string kind,
         [Description("How many rawcodes to propose. Default 10.")] int count = 10,
         [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Without it base game data is not excluded.")] string? game_dir = null)
@@ -1297,7 +1297,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "object_clone", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Deep-clone a map object under a new rawcode and save the edited map to out_path. The input map is NEVER modified in place. The clone copies the source's field deltas and, for a leveled kind, its per-level data too, keeping the source's base. Refuses a rawcode already taken by the map.")]
     public static ObjectCloneToolResult ObjectClone(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map).")] string out_path,
         [Description("Four-character source rawcode to clone.")] string rawcode,
         [Description("Four-character rawcode for the clone.")] string new_rawcode,
@@ -1316,7 +1316,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "object_migrate", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Rewrite a map's object data to a target build's field set, dropping every field the target does not define, and save the edited copy to out_path. The input map is NEVER modified in place. Every drop is reported, and a target with no object data section refuses rather than stripping everything.")]
     public static ObjectMigrateToolResult ObjectMigrate(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map).")] string out_path,
         [Description("Target build name or path to a schema folder, read the same way the compat command reads it.")] string to,
         [Description("Optional path to a schemas directory. When omitted, searches <AppContext.BaseDirectory>/schemas then walks up to data/schemas.")] string? schemas_dir = null)
@@ -1335,7 +1335,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "object_bulk_set", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Set one field on every object of a kind that matches every where clause, and save the edited copy to out_path. The input map is NEVER modified in place. A where clause is code=value and tests the object's merged value (base game data overlaid by the map). Reports how many objects changed.")]
     public static ObjectBulkSetToolResult ObjectBulkSet(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map).")] string out_path,
         [Description("The field and value to write, as code=value (e.g. uhpm=1000).")] string set,
         [Description("Object kind: " + KindValues + ".")] string kind = "unit",
@@ -1366,7 +1366,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "object_export", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Export the objects of one kind (base game data overlaid by the map's deltas) to a CSV file at out_path, one row per object, one column per field code, with a header. Read-only on the map. Feed the CSV back with object_import.")]
     public static ObjectExportToolResult ObjectExport(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("CSV output file path.")] string out_path,
         [Description("Object kind: " + KindValues + ".")] string kind = "unit",
         [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Without it the export carries the map's own deltas only.")] string? game_dir = null)
@@ -1382,7 +1382,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "object_import", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Import a CSV of one kind back into the map, adding objects the map does not define and updating those it does, then save the edited copy to out_path. The input map is NEVER modified in place. An unknown column refuses the whole import. A blank cell leaves that field untouched.")]
     public static ObjectImportToolResult ObjectImport(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map).")] string out_path,
         [Description("Path to the CSV file to import.")] string csv_path,
         [Description("Object kind: " + KindValues + ".")] string kind = "unit",
@@ -1402,7 +1402,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "object_rename", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Rename an object rawcode and save the edited copy to out_path. The input map is NEVER modified in place. With rewrite_refs true, every object-data field value and script string literal that names the old rawcode is rewritten too, so references do not dangle. Refuses a new rawcode already taken by the map.")]
     public static ObjectRenameToolResult ObjectRename(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map).")] string out_path,
         [Description("The rawcode to rename.")] string old_rawcode,
         [Description("The new rawcode.")] string new_rawcode,
@@ -1428,7 +1428,7 @@ public static class Wc3Tools
         + "where an add-ability call sits inside an if that tests for the unit type. Script entries are inferred and "
         + "carry their line number. Use this rather than object_get when asking what abilities a unit really has.")]
     public static UnitAbilitiesResult UnitAbilities(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Four-character unit type rawcode, e.g. 'H000'. Ignored when creation_number is given.")] string rawcode,
         [Description("Creation number of a placed unit, to include the abilities and levels set on that one unit.")] int? creation_number = null,
         [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Used to resolve ability names.")] string? game_dir = null)
@@ -1441,7 +1441,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "bundle_unit", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Resolve everything a unit depends on - the porting preview: referenced objects (with custom-to-map flags), asset files, trigger strings, dependency edges and the JASS trigger-function closure.")]
     public static UnitBundle BundleUnit(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Four-character unit rawcode, e.g. 'u000'.")] string rawcode,
         [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Used to tell base-game references from custom ones.")] string? game_dir = null)
         => Run(() => BundleCommand.ResolveUnit(LoadMap(map), rawcode, ResolveGameDir(game_dir)));
@@ -1452,7 +1452,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "render_model", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Render an object's model (map-imported .mdx/.mdl) to a PNG written at out_path. Returns the saved path and byte size; small images also come back inline as MCP image content. The map itself is never modified.")]
     public static CallToolResult RenderModel(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Four-character object rawcode (e.g. 'u000'), or an internal model path (contains '\\', '/' or '.').")] string rawcode,
         [Description("Output PNG file path. Created/overwritten; parent directories are created as needed.")] string out_path,
         [Description("Object kind: unit|item|destructable|doodad. Default: auto-detect from the rawcode.")] string? kind = null,
@@ -1520,7 +1520,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "port_deps", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Report the full dependency closure of a rawcode, its objects grouped by kind, its assets with their byte sizes, its display strings and its script functions. The readable shape of a dependency bundle, before porting it.")]
     public static PortDepsResult PortDeps(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Four-character object rawcode, e.g. 'H000'.")] string rawcode,
         [Description("Root object kind: unit|item|ability|destructable|doodad|buff|upgrade. Default unit.")] string? kind = null,
         [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var).")] string? game_dir = null)
@@ -1603,7 +1603,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "audit_hero", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Tells you whether a placed hero's abilities are actually wired up in the map's script, not merely present as object data. For every ability it verifies the whole chain end to end, the ability object exists, something dispatches a cast on its id, that handler is attached to a trigger, the trigger's event reaches the hero's player, the handler body still has live statements (not commented out by porting), any per-player identity array it gates on lists this hero, and the init that builds the trigger runs exactly once. When a link is missing the result names exactly which one, so a broken port can be fixed rather than only detected. Omit hero to audit every hero type placed on the map.")]
     public static IReadOnlyList<HeroWiringResult> AuditHero(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Hero rawcode to audit, e.g. 'H001'. Omit to audit every hero placed on the map.")] string? hero = null)
         => Run(() =>
         {
@@ -1625,7 +1625,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "audit_readiness", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Tells you whether a placed hero's script would actually RUN correctly, not just fire, the gap audit_hero cannot see since it only proves a cast reaches a handler, never what that handler computes. Checks that InitGlobals and RunInitializationTriggers, the two World Editor entry points that set every custom starting value (damage, range, duration, a dummy id) and run any Map Initialization trigger, are both carried and actually called, and that every udg_ global this hero's own carried code reads is assigned somewhere in the script rather than stuck at its type default. A hero can audit clean on audit_hero and still do nothing worth playing if these were dropped by a port. Omit hero to check every hero placed on the map.")]
     public static IReadOnlyList<RuntimeReadinessResult> AuditReadiness(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Hero rawcode to check, e.g. 'H001'. Omit to check every hero placed on the map.")] string? hero = null)
         => Run(() =>
         {
@@ -1638,7 +1638,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "audit_ability", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Tells you, per ability, PASS or the exact broken link across a placed hero's whole runtime chain, far deeper than audit_hero, which only proves a cast reaches a live trigger. Checks whether the dispatch is reached exactly once (two independently live triggers for the same ability is the double-registration bug that makes every affected spell fire twice), whether its handler is carried and not gutted by porting, whether a follow-up ability's TimerStart loop actually starts and its callback is declared, whether anything in its closure deals damage and names the call, whether every StartSpellUnit pause is matched by a live StopSpellUnit (an imbalance can leave the caster paused forever), whether a timer or trigger callback still points at a declared, live function, whether a global it reads is ever really assigned, and whether a special-effect asset it names still exists in the map. A hero can read '8 of 8 wired' on audit_hero and still be unplayable, this is built to catch exactly that gap. Omit hero to audit every hero placed on the map.")]
     public static IReadOnlyList<AbilityAuditResult> AuditAbility(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Hero rawcode to audit, e.g. 'H001'. Omit to audit every hero placed on the map.")] string? hero = null)
         => Run(() =>
         {
@@ -1651,14 +1651,14 @@ public static class Wc3Tools
     [McpServerTool(Name = "palette_doodad", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("List the doodad types placeable on a map - the palette to consult before place_doodad. Unions the base-game doodad catalog (installed GameData) with the map's own object-data: custom New* doodads and modified Base* doodads. Each entry carries its four-char rawcode, a resolved display name (null when unresolvable), its source (base|map-custom|map-modified) and the base it derives from. Without a WC3 install the palette is map-only. The map is never modified.")]
     public static DoodadPaletteResult PaletteDoodad(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var).")] string? game_dir = null)
         => Run(() => PaletteCommand.DoodadPalette(LoadMap(map), ResolveGameDir(game_dir)));
 
     [McpServerTool(Name = "place_doodad", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Place a doodad instance at (x, y) on the map's doodad layer (war3map.doo) and save the edited map to out_path. The input map is NEVER modified in place - out_path must differ from it. Returns the assigned creation number.")]
     public static PlacementToolResult PlaceDoodad(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). Created/overwritten; parent directories are created as needed. To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Four-character doodad type rawcode from palette_doodad, e.g. 'ATtr'.")] string type_rawcode,
         [Description("World X coordinate.")] float x,
@@ -1678,7 +1678,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "place_region", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Define a rectangular region on the map's region layer (war3map.w3r) and save the edited map to out_path. The input map is NEVER modified in place - out_path must differ from it. Bounds need right>left and top>bottom. Returns the assigned creation number.")]
     public static PlacementToolResult PlaceRegion(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). Created/overwritten; parent directories are created as needed. To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Region name (non-empty).")] string name,
         [Description("West edge, min X (world coordinate).")] float left,
@@ -1696,7 +1696,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "place_unit", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Place a unit of the given type, owned by a player, at world (x, y) and save the edited map to out_path. The input map is NEVER modified in place. Returns the assigned creation number (the id triggers use to reference the unit).")]
     public static PlacementToolResult PlaceUnit(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). Created/overwritten; parent directories are created as needed. To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Four-character unit type rawcode, e.g. 'hfoo' or 'u000'.")] string type_rawcode,
         [Description("Owning player id (0-based; 0 = red). Neutral players use the high ids (e.g. 24 = neutral hostile).")] int owner_id,
@@ -1716,7 +1716,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "place_start_location", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Place or move a player's start location at world (x, y) and save the edited map to out_path. The input map is NEVER modified in place. A start location is stored as a preplaced 'sloc' unit owned by the player; the World Editor permits exactly one per player, so if this player already has one it is moved (its creation number preserved) rather than duplicated. Returns the start location's creation number.")]
     public static PlacementToolResult PlaceStartLocation(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). Created/overwritten; parent directories are created as needed. To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Player whose start location this is (0-based; 0 = red).")] int player,
         [Description("World X coordinate.")] float x,
@@ -1732,7 +1732,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "place_item", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Place a preplaced item of the given type at world (x, y) and save the edited map to out_path. Items share war3mapUnits.doo with units (WC3 spawns a ground item because the rawcode is an item), so the item has no owning player. The input map is NEVER modified in place. Returns the assigned creation number.")]
     public static PlacementToolResult PlaceItem(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). Created/overwritten; parent directories are created as needed. To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Four-character item type rawcode, e.g. 'bspd' (Boots of Speed).")] string type_rawcode,
         [Description("World X coordinate.")] float x,
@@ -1760,26 +1760,26 @@ public static class Wc3Tools
     [McpServerTool(Name = "terrain_stats", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Summarize a map's terrain (war3map.w3e): tile count, min/mean/max ground height and min/max cliff level. Read-only.")]
     public static TerrainCommand.StatsResult TerrainStats(
-        [Description("Path to a .w3x/.w3m map file.")] string map)
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
         => Run(() => TerrainCommand.Stats(LoadMap(map)));
 
     [McpServerTool(Name = "terrain_audit", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Audit a map's terrain (war3map.w3e) for its size and its measurable waste: grid and tile counts, distinct ground and cliff textures in use, cliff/ramp/water/blight totals, the war3map.w3e byte size, and any uniform, all-zero or out-of-range-tileset pattern found. Reports which checks it ran. Read-only.")]
     public static TerrainAuditResult TerrainAudit(
-        [Description("Path to a .w3x/.w3m map file.")] string map)
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
         => Run(() => TerrainAuditCommand.ExecutePath(map));
 
     [McpServerTool(Name = "terrain_optimize", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Shrink a map's war3map.w3e by dropping the declared ground and cliff tile types the terrain never references and remapping every corner's ground and cliff texture index onto the compacted list, saving the edited copy to out_path. Every other file is written back byte for byte. Reports the before and after declared tile counts and the war3map.w3e byte saving. The input map is never modified.")]
     public static TerrainOptimizeResult TerrainOptimize(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). Created/overwritten; parent directories are created as needed.")] string out_path)
         => Run(() => TerrainOptimizeCommand.ExecutePath(map, out_path));
 
     [McpServerTool(Name = "terrain_deform", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Raise/lower/set/flatten/smooth ground height over a circular or square brush, saving the edited map to out_path. The input map is NEVER modified in place.")]
     public static TerrainToolResult TerrainDeform(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). Created/overwritten; parent directories are created as needed. To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Brush centre tile X (0-based column into war3map.w3e).")] int center_x,
         [Description("Brush centre tile Y (0-based row into war3map.w3e).")] int center_y,
@@ -1800,7 +1800,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "terrain_cliff", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Raise/lower/set the cliff (stepped-terrain) level over a brush, saving the edited map to out_path. The input map is NEVER modified in place.")]
     public static TerrainToolResult TerrainCliff(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Brush centre tile X.")] int center_x,
         [Description("Brush centre tile Y.")] int center_y,
@@ -1821,7 +1821,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "terrain_ramp", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Toggle the ramp (sloped cliff transition) flag over a brush, saving the edited map to out_path. The input map is NEVER modified in place.")]
     public static TerrainToolResult TerrainRamp(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Brush centre tile X.")] int center_x,
         [Description("Brush centre tile Y.")] int center_y,
@@ -1840,7 +1840,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "terrain_paint", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Paint a ground texture over a brush, saving the edited map to out_path. texture_index selects a slot in the map's tileset table. The input map is NEVER modified in place.")]
     public static TerrainToolResult TerrainPaint(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Brush centre tile X.")] int center_x,
         [Description("Brush centre tile Y.")] int center_y,
@@ -1860,7 +1860,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "terrain_water", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Set/raise/lower/remove water over a brush, saving the edited map to out_path. The input map is NEVER modified in place.")]
     public static TerrainToolResult TerrainWater(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Brush centre tile X.")] int center_x,
         [Description("Brush centre tile Y.")] int center_y,
@@ -1881,7 +1881,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "terrain_blight", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Set or clear the blight (corrupted ground) flag over a brush, saving the edited map to out_path. The input map is NEVER modified in place.")]
     public static TerrainToolResult TerrainBlight(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Brush centre tile X.")] int center_x,
         [Description("Brush centre tile Y.")] int center_y,
@@ -1900,7 +1900,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "terrain_export_heightmap", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Export a map's terrain heights as a 16-bit grayscale PNG of the (Width+1) by (Height+1) corner grid, one pixel per corner, to out_path. The input map is never modified, and the same file re-imports through terrain_import_heightmap.")]
     public static ImageExportToolResult TerrainExportHeightmap(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Output PNG path. Parent directories are created as needed.")] string out_path)
         => Run(() =>
         {
@@ -1913,7 +1913,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "terrain_import_heightmap", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Set the terrain tile heights from a grayscale PNG and save the edited map to out_path. The PNG dimensions must match the map's corner grid exactly or the call is refused. Only ground height is written, and cliff level, texture, water and flags are untouched. The input map is NEVER modified in place.")]
     public static TerrainToolResult TerrainImportHeightmap(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map).")] string out_path,
         [Description("Path to the grayscale heightmap PNG, as produced by terrain_export_heightmap.")] string png,
         [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
@@ -1927,7 +1927,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "terrain_smooth", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Smooth the whole map: each pass replaces every corner height with the mean of itself and its in-grid four neighbours, saving the edited map to out_path. The input map is NEVER modified in place.")]
     public static TerrainToolResult TerrainSmooth(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map).")] string out_path,
         [Description("Number of smoothing passes to run. 0 makes no change. Default 1.")] int passes = 1,
         [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
@@ -1949,7 +1949,7 @@ public static class Wc3Tools
         + "Without out_path nothing is written. With it, the recovered names go into a copy at "
         + "out_path and the input map is never modified in place.")]
     public static NameRecoveryResult DeprotectMap(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Optional output map path. When given, the recovered names are written into a copy; the input map is NEVER modified in place. Named entries are recompressed, every other entry stays byte-faithful.")] string? out_path = null,
         [Description("Paths to extra name dictionaries, one name per line. Community listfiles and sibling maps' listfiles both work.")] string[]? listfiles = null)
         => Run(() =>
@@ -1971,7 +1971,7 @@ public static class Wc3Tools
         + "fail with the error raised, plus a summary count. Use this to prove an archive is fully "
         + "usable rather than merely addressable. Read-only.")]
     public static MpqVerifyResult MpqVerify(
-        [Description("Path to a .w3x/.w3m map file.")] string map)
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
         => Run(() => MpqVerifyCommand.Execute(RequireMapPath(map)));
 
     [McpServerTool(Name = "mpq_listfile", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
@@ -1979,7 +1979,7 @@ public static class Wc3Tools
         + "listfile it ships, the entries recovered by the standard-name probe, and the entries "
         + "with no name at all. Read-only.")]
     public static MpqListfileResult MpqListfile(
-        [Description("Path to a .w3x/.w3m map file.")] string map)
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
         => Run(() => MpqListfileCommand.Execute(RequireMapPath(map)));
 
     [McpServerTool(Name = "mpq_name_recover", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
@@ -1987,7 +1987,7 @@ public static class Wc3Tools
         + "report the names that hit unnamed blocks. Narrower than deprotect_map, which harvests "
         + "its own candidates from the map. Read-only.")]
     public static MpqNameRecoverResult MpqNameRecover(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Path to a dictionary file, one candidate name per line.")] string dictionary)
         => Run(() => MpqNameRecoverCommand.Execute(LoadMap(map), dictionary));
 
@@ -1996,7 +1996,7 @@ public static class Wc3Tools
         + "dropped, then confirm the copy opens again. The input map is never overwritten. "
         + "out_path defaults to a sibling '<map>.edited.<ext>'.")]
     public static MpqStripResult MpqStripBookkeeping(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Output map path. Defaults to a sibling '<map>.edited.<ext>'. Must differ from the input.")] string? out_path = null)
         => Run(() => MpqStripBookkeepingCommand.Execute(RequireMapPath(map), out_path));
 
@@ -2005,7 +2005,7 @@ public static class Wc3Tools
         + "report whether the payload SHA256 matches, and list names only one side carries. The "
         + "byte-level counterpart of the structural mpq-diff. Read-only.")]
     public static MpqBytesDiffResult MpqBytesDiff(
-        [Description("Path to the first .w3x/.w3m map.")] string map,
+        [Description("Path to the first .w3x/.w3m map, or to an unpacked map folder.")] string map,
         [Description("Path to the second .w3x/.w3m map.")] string other)
         => Run(() => MpqBytesDiffCommand.Execute(RequireMapPath(map), RequireMapPath(other)));
 
@@ -2015,7 +2015,7 @@ public static class Wc3Tools
         + "entry counts before and after and the names dropped. Writes a copy, the input map is "
         + "never modified in place.")]
     public static MpqRebuildResult MpqRebuild(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Output map path. The input map is never overwritten.")] string? out_path,
         [Description("Force a larger hash table. Doubles the source capacity, then raises it until 3/4 occupancy fits. Default false.")] bool grow_hash = false)
         => Run(() => MpqRebuildCommand.Execute(RequireMapPath(map), ResolveOutPath(map, out_path), grow_hash));
@@ -2025,7 +2025,7 @@ public static class Wc3Tools
         + "name in both is resolved by the preferred side and reported as a conflict. Writes a copy "
         + "of the first map plus both maps' entries, the input maps are never modified.")]
     public static MpqMergeResult MpqMerge(
-        [Description("Path to the first .w3x/.w3m map.")] string map,
+        [Description("Path to the first .w3x/.w3m map, or to an unpacked map folder.")] string map,
         [Description("Path to the second .w3x/.w3m map.")] string other,
         [Description("Output map path. The input maps are never overwritten.")] string? out_path,
         [Description("Which side wins a name both maps carry, 'a' or 'b'. Default 'a'.")] string prefer = "a")
@@ -2037,7 +2037,7 @@ public static class Wc3Tools
         + "Reports whether the name was added or replaced and whether the payload round-trips. "
         + "Writes a copy, the input map is never modified in place.")]
     public static MpqAddResult MpqAdd(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Internal archive path, for example 'war3mapImported\\\\model.mdx'.")] string name,
         [Description("Path to the file whose bytes become the internal file.")] string from,
         [Description("Output map path. The input map is never overwritten.")] string? out_path)
@@ -2048,7 +2048,7 @@ public static class Wc3Tools
         + "whether the rebuild actually dropped the name. Writes a copy, the input map is never "
         + "modified in place.")]
     public static MpqRemoveResult MpqRemove(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Internal archive path to remove, for example 'war3map.j'.")] string name,
         [Description("Output map path. The input map is never overwritten.")] string? out_path,
         [Description("State the intent to destroy data. Without it the call is refused with CONFIRM_REQUIRED, naming what would be removed.")] bool confirm = false)
@@ -2058,7 +2058,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "mpq_remove_many", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = false)]
     [Description("Remove many internal files in one rebuild and report how many were dropped. Writes a copy, the input map is never modified in place. The one-rebuild form of mpq_remove, for pruning the files asset_unused reports as unreferenced.")]
     public static MpqRemoveManyResult MpqRemoveMany(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Internal archive paths to remove, for example one asset_unused path per element.")] string[] names,
         [Description("Output map path. The input map is never overwritten.")] string out_path,
         [Description("State the intent to destroy data. Without it the call is refused with CONFIRM_REQUIRED, naming what would be removed.")] bool confirm = false)
@@ -2070,7 +2070,7 @@ public static class Wc3Tools
         + "blocks, through the same path-safety rule 'extract' uses. The map is never modified. "
         + "Returns the output directory, the counts and the written file names.")]
     public static MpqExtractAllToolResult MpqExtractAll(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Directory the entries are written under. Created if absent.")] string? out_dir)
         => Run(() =>
         {
@@ -2100,7 +2100,7 @@ public static class Wc3Tools
         + "pending replacement rather than the stale original. Name is null for an unnamed entry, "
         + "which is what a protected map produces.")]
     public static IReadOnlyList<FileState> FileList(
-        [Description("Path to a .w3x/.w3m map file.")] string map)
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
         => Run(() => FileEditCommand.ListFiles(LoadMap(map)));
 
     [McpServerTool(Name = "file_get_text", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
@@ -2108,7 +2108,7 @@ public static class Wc3Tools
         + "for the override text files, war3mapSkin.txt and friends, that carry a map's string and "
         + "art overrides.")]
     public static FileTextResult FileGetText(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Internal archive path, for example 'war3mapSkin.txt'.")] string internal_path)
         => Run(() => new FileTextResult(internal_path,
             FileEditCommand.ReadText(LoadMap(map), internal_path)));
@@ -2120,7 +2120,7 @@ public static class Wc3Tools
         + "byte-faithful. Content comes from a disk path rather than an argument because these "
         + "payloads are multi-line and full of pipes and colour codes.")]
     public static FileSetResult FileSet(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map).")] string out_path,
         [Description("Internal archive path to replace or add, for example 'war3mapSkin.txt'.")] string internal_path,
         [Description("Disk file whose exact bytes become the new payload.")] string from)
@@ -2145,7 +2145,7 @@ public static class Wc3Tools
         + "It CANNOT see a trigger's damage formula, whether a status effect lands, or timing, so "
         + "a clean result means no claim in the map contradicts its data, not that the map is correct.")]
     public static AuditResult AuditMap(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Restrict to one check by name. Default: run all eight.")] string? check = null,
         [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Without it the requirement and dangling-reference checks are skipped, with a diagnostic.")] string? game_dir = null)
         => Run(() => AuditCommand.Execute(LoadMap(map), ResolveGameDir(game_dir),
@@ -2154,14 +2154,14 @@ public static class Wc3Tools
     [McpServerTool(Name = "audit_ability_orders", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Find Channel-based abilities that share a Base Order ID (Ncl6). Channel dispatches by order string, so two abilities on one unit with the same string can both fire from a single key press. Read-only, no game install, no script run. With a hero rawcode it checks only that hero's uabi list, which is the precise case. Also reports levels that disagree and empty order ids.")]
     public static AbilityOrderAuditResult AuditAbilityOrders(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Optional four-character hero rawcode whose uabi list bounds the check.")] string? hero = null)
         => Run(() => AbilityOrderAuditCommand.Execute(LoadMap(map), hero));
 
     [McpServerTool(Name = "audit_trend", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Run the behavioural audit against two maps and report the findings the second added and removed, grouped by check. Where audit_map answers what is wrong now, this answers what an edit or a port changed. Issues are matched by check, rawcode and message.")]
     public static AuditTrendResult AuditTrend(
-        [Description("Path to the first .w3x/.w3m map file.")] string map,
+        [Description("Path to the first .w3x/.w3m map file, or to an unpacked map folder.")] string map,
         [Description("Path to the second .w3x/.w3m map file, the one treated as the newer state.")] string other,
         [Description("Restrict to one check by name. Default: run all eight.")] string? check = null,
         [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Without it the requirement and dangling-reference checks are skipped, with a diagnostic.")] string? game_dir = null)
@@ -2171,7 +2171,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "sound_import_events", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Import a sound event set into a map and save the edited copy. Each event maps to clips with a cooldown, a voice cap and a priority. Writes one sound catalog entry per clip, refuses an event whose clip is missing, and returns a generated JASS dispatcher that should be appended to the map's script. The input map is never modified.")]
     public static SoundImportToolResult SoundImportEvents(
-        [Description("Path to the source .w3x/.w3m map file.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder.")] string map,
         [Description("Output map path. Defaults to a sibling .edited copy when omitted.")] string? out_path,
         [Description("JSON mapping event names to clips, cooldown, maxVoices and priority.")] string events_json,
         [Description("Folder holding the clip files.")] string clips_dir,
@@ -2190,13 +2190,13 @@ public static class Wc3Tools
     [McpServerTool(Name = "sound_list", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("List the map's sound catalog (war3map.w3s): each definition's name, file path, channel, flags, volume, pitch, priority and min/max distance.")]
     public static IReadOnlyList<SoundFields> SoundList(
-        [Description("Path to a .w3x/.w3m map file.")] string map)
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
         => Run(() => SoundCommand.List(LoadMap(map)));
 
     [McpServerTool(Name = "sound_add", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Add a new sound definition (keyed by name) to the map's sound catalog and save the edited map to out_path. The input map is NEVER modified in place.")]
     public static SoundToolResult SoundAdd(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Sound definition name (the label triggers/UI reference). Must be unique.")] string name,
         [Description("Sound file path, e.g. 'Sound\\Ambient\\...'. Optional.")] string? file = null)
@@ -2205,7 +2205,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "sound_set", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Set a field on a sound definition and save the edited map to out_path. The input map is NEVER modified in place. Editable fields: " + SoundFieldValues + ".")]
     public static SoundToolResult SoundSet(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Sound definition name to edit.")] string name,
         [Description("Field to set: " + SoundFieldValues + ".")] string field,
@@ -2215,7 +2215,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "sound_remove", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = false)]
     [Description("Remove a sound definition from the map's sound catalog and save the edited map to out_path. The input map is NEVER modified in place.")]
     public static SoundToolResult SoundRemove(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Sound definition name to remove.")] string name,
         [Description("State the intent to destroy data. Without it the call is refused with CONFIRM_REQUIRED, naming what would be removed.")] bool confirm = false)
@@ -2247,13 +2247,13 @@ public static class Wc3Tools
     [McpServerTool(Name = "camera_list", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("List the map's cameras (war3map.w3c): each camera's name, target position, rotation, angle of attack, distance and field of view.")]
     public static IReadOnlyList<CameraFields> CameraList(
-        [Description("Path to a .w3x/.w3m map file.")] string map)
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
         => Run(() => CameraCommand.List(LoadMap(map)));
 
     [McpServerTool(Name = "camera_add", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Add a camera at a target position and save the edited map to out_path. The input map is NEVER modified in place. Rejects a blank or duplicate name.")]
     public static EditToolResult CameraAdd(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Camera name (unique).")] string name,
         [Description("Camera target X (world coordinate).")] float target_x,
@@ -2269,7 +2269,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "camera_set", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Set a field on a camera and save the edited map to out_path. The input map is NEVER modified in place. Editable fields: " + CameraFieldValues + ".")]
     public static EditToolResult CameraSet(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Camera name to edit.")] string name,
         [Description("Field to set: " + CameraFieldValues + ".")] string field,
@@ -2285,7 +2285,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "camera_remove", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = false)]
     [Description("Remove a camera and save the edited map to out_path. The input map is NEVER modified in place.")]
     public static EditToolResult CameraRemove(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Camera name to remove.")] string name,
         [Description("State the intent to destroy data. Without it the call is refused with CONFIRM_REQUIRED, naming what would be removed.")] bool confirm = false,
@@ -2300,7 +2300,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "camera_tour", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Add N cameras interpolated between two existing cameras as a smooth tour path, and save the edited map to out_path. Every float field is blended linearly and the generated cameras sit strictly between the endpoints, named <from>-tour-i. The input map is NEVER modified in place.")]
     public static CameraTourToolResult CameraTour(
-        [Description("Path to the source .w3x/.w3m map file. The file is read-only and the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder. The file is read-only and the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Name of the camera the tour starts at.")] string from,
         [Description("Name of the camera the tour ends at.")] string to,
@@ -2323,7 +2323,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "pathing_paint", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Paint pathing bits over a circular or square brush and save the edited map to out_path. The input map is NEVER modified in place. Flags (comma-separated): " + PathingFlagValues + " - a SET bit RESTRICTS that capability (Walk set = ground units cannot walk there). op: set|clear|toggle.")]
     public static EditToolResult PathingPaint(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Brush centre pathing-cell X (4 cells per terrain tile).")] int center_x,
         [Description("Brush centre pathing-cell Y.")] int center_y,
@@ -2347,7 +2347,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "pathing_export_png", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Render a map's war3map.wpm pathing grid to a colour-coded PNG at out_path, one pixel per pathing cell with a legend strip of the pathing flags. The input map is never modified. The same file re-imports through pathing_import_png.")]
     public static PathingExportToolResult PathingExportPng(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Output PNG path. Parent directories are created as needed.")] string out_path)
         => Run(() =>
         {
@@ -2360,7 +2360,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "pathing_import_png", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Set the pathing flags from a colour-coded PNG and save the edited map to out_path. Each cell's flags are replaced by the value its pixel decodes to. The image must be at least the map's Width by Height cell grid (the top-left region is read, so a legend to the right is ignored) and any unknown colour is refused. The input map is NEVER modified in place.")]
     public static EditToolResult PathingImportPng(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map).")] string out_path,
         [Description("Path to the colour-coded pathing PNG, as produced by pathing_export_png.")] string png,
         [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
@@ -2374,7 +2374,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "pathing_validate", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Flag pathing problems in a map's war3map.wpm. It reports a pocket of unpathable tiles fully enclosed by pathable ones, a start location sitting on an unpathable tile, and a map corner that is unpathable or sealed off from the main walkable area. Read-only.")]
     public static PathingValidateResult PathingValidate(
-        [Description("Path to a .w3x/.w3m map file.")] string map)
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
         => Run(() => PathingCommand.Validate(LoadMap(map)));
 
     // ---- scenario: map-info, players, forces (war3map.w3i) ---------------
@@ -2387,13 +2387,13 @@ public static class Wc3Tools
     [McpServerTool(Name = "map_info_get", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Read the map's editable scenario fields (war3map.w3i): name, author, description, recommended players, tileset, environment, fog and the map-option flags. Richer than map_info; this is the field set map_info_set edits.")]
     public static MapInfoFields MapInfoGet(
-        [Description("Path to a .w3x/.w3m map file.")] string map)
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
         => Run(() => MapInfoCommand.Read(LoadMap(map)));
 
     [McpServerTool(Name = "map_info_set", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Set a scenario field and save the edited map to out_path. The input map is NEVER modified in place. Editable fields: " + MapInfoFieldValues + " (and the map-option booleans).")]
     public static EditToolResult MapInfoSet(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Field to set: " + MapInfoFieldValues + ".")] string field,
         [Description("New value (parsed to the field's type).")] string value,
@@ -2408,13 +2408,13 @@ public static class Wc3Tools
     [McpServerTool(Name = "player_list", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("List the map's player slots (war3map.w3i): each player's id, name, color, race, controller and whether its start position is fixed.")]
     public static IReadOnlyList<PlayerInfo> PlayerList(
-        [Description("Path to a .w3x/.w3m map file.")] string map)
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
         => Run(() => PlayerForceCommand.GetPlayers(LoadMap(map)));
 
     [McpServerTool(Name = "player_set_force", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Move a player into a force (team) and save the edited map to out_path. The input map is NEVER modified in place.")]
     public static EditToolResult PlayerSetForce(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Player id (0-based).")] int player_id,
         [Description("Force index (0-based).")] int force_index,
@@ -2429,13 +2429,13 @@ public static class Wc3Tools
     [McpServerTool(Name = "force_list", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("List the map's forces/teams (war3map.w3i): each force's index, name, member player ids and alliance/sharing flags.")]
     public static IReadOnlyList<ForceInfo> ForceList(
-        [Description("Path to a .w3x/.w3m map file.")] string map)
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
         => Run(() => PlayerForceCommand.GetForces(LoadMap(map)));
 
     [McpServerTool(Name = "force_set_flags", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Set a force's alliance/sharing flags and save the edited map to out_path. The input map is NEVER modified in place.")]
     public static EditToolResult ForceSetFlags(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Force index (0-based).")] int force_index,
         [Description("Allied.")] bool allied,
@@ -2455,7 +2455,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "player_set_name", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Set a player's display name (war3map.w3i) and save the edited map to out_path. The input map is NEVER modified in place.")]
     public static EditToolResult PlayerSetName(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Player id (0-based).")] int player_id,
         [Description("New display name.")] string name,
@@ -2470,7 +2470,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "player_set_color", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Set a player's team color and save the edited map to out_path. war3map.w3i has no per-player color field, so this rewrites the SetPlayerColor call the map script already carries. The input map is NEVER modified in place.")]
     public static EditToolResult PlayerSetColor(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Player id (0-based).")] int player_id,
         [Description("Team color name, for example red, lightblue or darkgreen.")] string color,
@@ -2485,7 +2485,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "player_set_race", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Set a player's race (war3map.w3i) and save the edited map to out_path. Accepted values are human, orc, undead, nightelf and random. The input map is NEVER modified in place.")]
     public static EditToolResult PlayerSetRace(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Player id (0-based).")] int player_id,
         [Description("One of human, orc, undead, nightelf or random.")] string race,
@@ -2500,7 +2500,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "force_rename", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Rename a force (team) in war3map.w3i and save the edited map to out_path. The input map is NEVER modified in place.")]
     public static EditToolResult ForceRename(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Force index (0-based).")] int force_index,
         [Description("New force name.")] string name,
@@ -2515,7 +2515,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "force_set_players", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Add or remove a player from a force (team) in war3map.w3i and save the edited map to out_path. Pass exactly one of add or remove. Adding clears the player from every other force so the masks stay consistent. The input map is NEVER modified in place.")]
     public static EditToolResult ForceSetPlayers(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Force index (0-based).")] int force_index,
         [Description("Add this player id to the force. Pass exactly one of add or remove.")] int? add = null,
@@ -2556,13 +2556,13 @@ public static class Wc3Tools
     [McpServerTool(Name = "region_list", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("List the map's rectangular regions (war3map.w3r), each with its creation number, name, and bounds. Add regions with place_region.")]
     public static IReadOnlyList<PlacementCommand.RegionInfo> RegionList(
-        [Description("Path to a .w3x/.w3m map file.")] string map)
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
         => Run(() => PlacementCommand.ListRegions(LoadMap(map)));
 
     [McpServerTool(Name = "region_remove", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = false)]
     [Description("Remove a region by name and save the edited map to out_path. The input map is NEVER modified in place.")]
     public static EditToolResult RegionRemove(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Region name to remove.")] string name,
         [Description("State the intent to destroy data. Without it the call is refused with CONFIRM_REQUIRED, naming what would be removed.")] bool confirm = false,
@@ -2577,7 +2577,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "region_create", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Create a rectangular region from its south-west corner (x, y) plus a width w and height h, and save the edited map to out_path. The input map is NEVER modified in place. Rejects a blank or duplicate name and a non-positive size. Set weather to attach the default weather effect. Returns the assigned creation number.")]
     public static PlacementToolResult RegionCreate(
-        [Description("Path to the source .w3x/.w3m map file. The file is read-only and the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder. The file is read-only and the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). Created or overwritten, and parent directories are created as needed. To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Region name (non-empty, unique).")] string name,
         [Description("South-west corner X (world coordinate).")] float x,
@@ -2596,20 +2596,20 @@ public static class Wc3Tools
     [McpServerTool(Name = "region_to_rect", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Resolve one named region to the four corner values a JASS trigger's Rect call needs (left, bottom, right, top), with a ready-to-copy Rect(...) line. Read-only.")]
     public static RegionRectResult RegionToRect(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Region name to convert.")] string region)
         => Run(() => RegionCommand.ToRect(LoadMap(map), region));
 
     [McpServerTool(Name = "region_validate", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Flag overlapping regions, zero-area regions and regions that fall outside the playable bounds in a map's war3map.w3r. Regions sharing only an edge do not overlap. Read-only.")]
     public static RegionValidateResult RegionValidate(
-        [Description("Path to a .w3x/.w3m map file.")] string map)
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
         => Run(() => RegionCommand.Validate(LoadMap(map)));
 
     [McpServerTool(Name = "trigger_add_eca", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Add an event, condition or action to a GUI trigger and save the edited map to out_path. Parameters are given in the order the function declares them; any left off are filled from the World-Editor table's own defaults. This matters more than it looks: war3map.wtg stores a function's parameters but NOT how many there are, so a function written with the wrong number of parameters yields a map that nothing, including this tool, can read afterwards. Use trigger_catalog_list and trigger_catalog_describe to find a function name and its arguments. Custom-text (script) triggers are refused, since their body is JASS rather than a list of functions. IMPORTANT: this edits war3map.wtg, the World Editor's trigger SOURCE, not war3map.j, the compiled script Warcraft III actually runs. wc3ctl does not regenerate the compiled script, so a trigger authored this way is inert in game until the map is opened and saved in the World Editor. The input map is NEVER modified in place.")]
     public static EditToolResult TriggerAddEca(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Trigger item id, from triggers_read.")] int id,
         [Description("One of: event, condition, action.")] string kind,
@@ -2628,7 +2628,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "trigger_remove_eca", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = false)]
     [Description("Remove one event, condition or action from a GUI trigger by its zero-based position, and save the edited map to out_path. Positions come from triggers_read, which lists a trigger's functions in order. The input map is NEVER modified in place.")]
     public static EditToolResult TriggerRemoveEca(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Trigger item id, from triggers_read.")] int id,
         [Description("Zero-based position of the function within the trigger.")] int index,
@@ -2644,7 +2644,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "trigger_set_eca_enabled", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Enable or disable ONE event, condition or action within a trigger, the World Editor's per-line toggle rather than the whole-trigger one, and save the edited map to out_path. The input map is NEVER modified in place.")]
     public static EditToolResult TriggerSetEcaEnabled(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Trigger item id, from triggers_read.")] int id,
         [Description("Zero-based position of the function within the trigger.")] int index,
@@ -2678,7 +2678,7 @@ public static class Wc3Tools
     [Description("Install a hero definition into a map and save the result to out_path. Remaps rawcodes that would collide, writes the hero's assets, and reports what the target map must still be wired with before the hero actually works, since a definition carries objects and script but not the target's own integration (roster registration, spell dispatch, per-player hero arrays). Refuses asset collisions unless force is set. The input map is NEVER modified in place.")]
     public static EditToolResult HeroInstall(
         [Description("Path to a hero definition directory, the folder holding hero.json.")] string definition,
-        [Description("Path to the target .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the target .w3x/.w3m map file, or to an unpacked map folder. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Overwrite target assets that collide with the definition's, instead of refusing.")] bool force = false,
         [Description("Warcraft III install directory, when the base game data is needed and auto-detection fails.")] string? game_dir = null,
@@ -2708,7 +2708,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "hero_generate", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Generate a multi-form hero from a JSON brief and save the result to out_path: one unit object per form derived from one base unit, one ability object per slot with its own Base Order ID, cooldown, cast time and tooltip per level, each form's own ability list in uabi, and a self-contained JASS block with one transform function per form and one timer driven damage stub per damaging ability. The whole brief is validated before the first object is created, so a brief that names an unknown base is refused with nothing written. The JASS is returned, not spliced into war3map.j. The input map is NEVER modified in place.")]
     public static HeroGenerateResult HeroGenerate(
-        [Description("Path to the source .w3x/.w3m map file that holds the base unit and ability bases. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder, that holds the base unit and ability bases. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument.")] string out_path,
         [Description("The hero brief as a JSON string. Shape, { \"name\": \"Kurosaki Ichigo\", \"base_unit\": \"Hpal\", \"forms\": [ { \"id\": \"base\", \"abilities\": [ { \"slot\": \"Q\", \"name\": \"Getsuga Tenshou\", \"base\": \"ANcl\", \"cooldown\": [8,8,8,8], \"cast\": 0.35, \"damage\": 120 }, { \"slot\": \"R\", \"name\": \"Bankai\", \"kind\": \"transform\", \"to\": \"bankai\" } ] }, { \"id\": \"bankai\", \"abilities\": [ ... ] } ] }. Every form id must be a JASS identifier, and a transform must name a form in the same brief.")] string spec_json,
         [Description("Warcraft III install directory, when the base unit or an ability base is not defined by the map itself and auto-detection fails.")] string? game_dir = null)
@@ -2731,7 +2731,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "repair_generated", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Repair a map that wc3ctl itself generated, whose preplaced-hero helper block is too narrow for the heroes installed into it, and save the repaired map to out_path. Widens the player slots, rewrites hero owners in the script, and brings war3map.w3i and the map header into line. This is NOT a general map repair: it looks for wc3ctl's own generated helper function and refuses any map that does not carry one. The input map is NEVER modified in place.")]
     public static EditToolResult RepairGenerated(
-        [Description("Path to the source .w3x/.w3m map file. Read-only; the repaired copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only; the repaired copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
         [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
@@ -2747,7 +2747,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "repair_portraits", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Remove the pre-900 camera chunk from every at-risk model so the portrait pane renders under 3.0.0 and later, and save the repaired map to out_path. Camera removal only. The version re-stamp is refused because it was measured to crash the map on load. The input map is NEVER modified in place.")]
     public static EditToolResult RepairPortraits(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the repaired copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the repaired copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map).")] string out_path,
         [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
         [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
@@ -2761,7 +2761,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "repair_audit_errors", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Repair the object-data defects audit reports. Fills ability level gaps (a field with no value at a declared level, copied from the nearest valid level), clears dangling references and impossible requirements, and saves to out_path. The input map is NEVER modified in place.")]
     public static EditToolResult RepairAuditErrors(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the repaired copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the repaired copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map).")] string out_path,
         [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
         [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
@@ -2774,7 +2774,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "terrain_fill", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Apply a terrain tool over an inclusive RECTANGLE of corners and save the edited map to out_path, instead of one brush dab at a time. Corners may be given in any order and a rectangle that runs off the grid is clipped rather than refused. tool is one of Raise, Lower, SetHeight, Flatten, Paint, CliffRaise, CliffLower, CliffSet, Ramp, RampOff, Water, WaterRemove, Blight, BlightOff. value means height for Raise/Lower/SetHeight/Water, a ground tile index for Paint (see terrain_info for the map's tile list), and a step count for the Cliff tools; it is ignored by Flatten, Ramp, RampOff, WaterRemove, Blight and BlightOff. The input map is NEVER modified in place.")]
     public static EditToolResult TerrainFill(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("First corner column, 0-based.")] int x0,
         [Description("First corner row, 0-based.")] int y0,
@@ -2796,7 +2796,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "trigger_recover_from_script", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Rebuild a browsable GUI trigger tree (war3map.wtg) for a map that has NONE, by decompiling the compiled script the game runs, and save the result to out_path. The script itself is never modified, so this only ever ADDS a tree. It REFUSES any map that already carries a trigger tree, because a decompiled tree cannot be trusted to replace a real one: measured across the map library the decompiler reported success on a map holding 626 trigger items while producing 1, at zero percent name recall. Use this on protected or stripped maps whose trigger tree was removed but whose compiled script survives. The recovered tree DESCRIBES the script, it does not drive it, so editing the tree afterwards changes what the World Editor shows and not what the game runs. The input map is NEVER modified in place.")]
     public static EditToolResult TriggerRecoverFromScript(
-        [Description("Path to the source .w3x/.w3m map file. Read-only; the result is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only; the result is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
         [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
@@ -2809,7 +2809,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "trigger_add_category", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Add a category to the map's GUI trigger tree and save the edited map to out_path. A category is a folder in the trigger tree, so this is always safe: categories hold no script and adding one moves nothing. The input map is NEVER modified in place. Writes war3map.wtg only.")]
     public static EditToolResult TriggerAddCategory(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Name for the new category.")] string name,
         [Description("Id of the item to nest it under, or -1 for the top level. Ids come from triggers_read.")] int parent_id = -1,
@@ -2824,7 +2824,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "trigger_add", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Add a trigger to a category in the map's GUI trigger tree and save the edited map to out_path. The new trigger is created enabled and initially on, matching the World Editor, and has no events, conditions or actions yet. IMPORTANT: this edits war3map.wtg, the World Editor's trigger SOURCE, not the compiled war3map.j that Warcraft III runs, so the trigger is inert in game until the map is opened and saved in the World Editor. Custom-text (script) triggers cannot be added, because their body lives in war3map.wct, which has a lossy decoder and so is never rewritten. The input map is NEVER modified in place. Writes war3map.wtg only.")]
     public static EditToolResult TriggerAdd(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Name for the new trigger.")] string name,
         [Description("Id of the category to add it to, or -1 for the top level. Ids come from triggers_read.")] int parent_id,
@@ -2841,7 +2841,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "trigger_remove", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = false)]
     [Description("Remove a trigger item (a category, a trigger or a comment) from the GUI trigger tree and save the edited map to out_path. Refuses rather than risk two silent corruptions: removing a category that still holds children would orphan them (pass recursive to remove the subtree instead), and removing a trigger whose script body sits ahead of other bodies in war3map.wct would shift every later body onto the wrong trigger, since that file cannot be rewritten. The input map is NEVER modified in place.")]
     public static EditToolResult TriggerRemove(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Trigger item id, from triggers_read.")] int id,
         [Description("Remove the item's descendants too, rather than refusing to orphan them.")] bool recursive = false,
@@ -2857,7 +2857,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "trigger_rename", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Rename a trigger item (a category, a trigger or a deleted stub) in the GUI trigger tree and save the edited map to out_path. The input map is NEVER modified in place. Ids come from triggers_read. Writes war3map.wtg only.")]
     public static EditToolResult TriggerRename(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Trigger item id, from triggers_read.")] int id,
         [Description("New name.")] string name,
@@ -2872,7 +2872,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "trigger_move", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Move a trigger item under a parent category in the GUI trigger tree and save the edited map to out_path. This is how you organise the tree into folders. Only ParentId changes, so document order and every war3map.wct code body stay put, and a category cannot be moved inside its own subtree. The input map is NEVER modified in place.")]
     public static EditToolResult TriggerMove(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument.")] string out_path,
         [Description("Trigger item id, from triggers_read.")] int id,
         [Description("Parent category id, or -1 for the root.")] int parent,
@@ -2887,7 +2887,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "trigger_set_enabled", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Enable or disable a GUI trigger and save the edited map to out_path. A disabled trigger is not compiled into the map script at all, so this is how you take one out of play without deleting it. The input map is NEVER modified in place.")]
     public static EditToolResult TriggerSetEnabled(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Trigger item id, from triggers_read.")] int id,
         [Description("True to enable, false to disable.")] bool on,
@@ -2902,7 +2902,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "trigger_set_initially_on", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Set whether a GUI trigger starts switched on, and save the edited map to out_path. A trigger that is off at map start never fires until something turns it on, which is a common reason a trigger looks correct and does nothing. The input map is NEVER modified in place.")]
     public static EditToolResult TriggerSetInitiallyOn(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Trigger item id, from triggers_read.")] int id,
         [Description("True to start on, false to start off.")] bool on,
@@ -2917,7 +2917,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "trigger_set_run_on_map_init", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Set whether a GUI trigger runs on map initialization, and save the edited map to out_path. The input map is NEVER modified in place.")]
     public static EditToolResult TriggerSetRunOnMapInit(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Trigger item id, from triggers_read.")] int id,
         [Description("True to run on map init.")] bool on,
@@ -2932,7 +2932,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "trigger_sync_bodies", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Reconcile war3map.wct with the war3map.wtg trigger tree and save the edited map to out_path. A map can arrive with more code bodies than the tree accounts for (a protected or ported build keeps orphaned bodies), or fewer, and the World Editor then cannot trust which body belongs to which trigger and refuses some trigger removals. This drops the orphaned tail or appends empty slots, copying every surviving byte verbatim. It is the repair for the trigger-bodies lint warning. The input map is NEVER modified in place.")]
     public static EditToolResult TriggerSyncBodies(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map).")] string out_path,
         [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
         [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
@@ -2945,13 +2945,13 @@ public static class Wc3Tools
     [McpServerTool(Name = "trigger_var_list", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("List the map's global variables (the .wtg Variables list), each with its name, type, array flag, declared size and initial value. Read-only.")]
     public static IReadOnlyList<TriggerVariableFields> TriggerVarList(
-        [Description("Path to a .w3x/.w3m map file.")] string map)
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
         => Run(() => TriggerCommand.ListVariables(LoadMap(map)));
 
     [McpServerTool(Name = "trigger_var_add", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Add a global variable to the map's wtg and save the edited map to out_path. Provides a name, a type (for example integer, real, string, boolean, unit, group, trigger) and, for an array, the array flag and size. An initial value marks the variable initialized. Refuses a blank name or type and a name that already exists, because the wtg keys variables by name. IMPORTANT: this edits war3map.wtg, the World Editor's trigger SOURCE, not war3map.j, so a variable it defines is visible in the World Editor and inert in game until that editor saves the map. The input map is NEVER modified in place.")]
     public static EditToolResult TriggerVarAdd(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Variable name.")] string name,
         [Description("Variable type, for example integer, real, string, boolean, unit, group or trigger.")] string type,
@@ -2969,7 +2969,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "trigger_var_set", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Update an existing global variable in the map's wtg by name and save the edited map to out_path. Any argument left off keeps its current value, so one field can change without restating the rest. This does not rewrite references to the variable inside trigger bodies. The input map is NEVER modified in place.")]
     public static EditToolResult TriggerVarSet(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Name of the variable to update.")] string name,
         [Description("New type. Omit to keep the current one.")] string? type = null,
@@ -2987,7 +2987,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "trigger_var_remove", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = false)]
     [Description("Remove a global variable from the map's wtg by name and save the edited map to out_path. Any trigger that referenced the variable is left pointing at nothing, so check references afterwards. The input map is NEVER modified in place.")]
     public static EditToolResult TriggerVarRemove(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Name of the variable to remove.")] string name,
         [Description("State the intent to destroy data. Without it the call is refused with CONFIRM_REQUIRED, naming what would be removed.")] bool confirm = false,
@@ -3002,7 +3002,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "trigger_set_code", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Set the custom-text JASS body of a custom-text trigger and save the edited map to out_path. The body is written into war3map.wct at the byte level, replacing only that trigger's slot so every other slot's bytes survive verbatim. This is a deliberate change of direction from the rest of the trigger surface, which never rewrites war3map.wct, and it is safe here because only the one slot is spliced rather than the whole file re-encoded. A GUI trigger is refused. IMPORTANT: this edits the World Editor's trigger source, not the compiled war3map.j the game runs, so the body is inert in game until the map is opened and saved in the World Editor. The input map is NEVER modified in place.")]
     public static EditToolResult TriggerSetCode(
-        [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Trigger item id of the custom-text trigger, from triggers_read.")] int id,
         [Description("The JASS body to store in this trigger's war3map.wct slot.")] string code,
@@ -3066,7 +3066,7 @@ public static class Wc3Tools
         + "written Buttonpos in SLK profile tables and models with more than 255 matrix groups. Never "
         + "starts the game." + DoctorNote)]
     public static MapDoctorResult DoctorCheck(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Check against an older game instead, 1.24a to 1.28.5 or 1.29.2, such as 1.27.")] string? game = null)
         => Run(() => MapDoctorCommand.Check(map, game));
 
@@ -3076,7 +3076,7 @@ public static class Wc3Tools
         + "the archive's files with recovered names, card the name, author, players and loading screen, "
         + "rawcodes the object ids with names, recipes the item recipes the script makes." + DoctorNote)]
     public static MapDoctorResult DoctorInspect(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("One of diag, files, card, rawcodes, recipes.")] string report = "diag")
         => Run(() => MapDoctorCommand.ReadOnly(report, map));
 
@@ -3085,7 +3085,7 @@ public static class Wc3Tools
         + "with names recovered on protected archives, plus object, script and string summaries. The "
         + "fastest way to see what someone else's fix actually changed." + DoctorNote)]
     public static MapDoctorResult DoctorCompare(
-        [Description("The first map.")] string map,
+        [Description("The first map, a .w3x/.w3m file or an unpacked map folder.")] string map,
         [Description("The map to compare it with.")] string other)
         => Run(() => MapDoctorCommand.Compare(map, other));
 
@@ -3095,7 +3095,7 @@ public static class Wc3Tools
         + "portrait cameras, data pointers, ability lists. The original is never written and an existing "
         + "output is never overwritten. Run doctor_inspect (diag) first to see which steps apply." + DoctorNote)]
     public static MapDoctorResult DoctorFix(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Where to write the repaired copy. Default <map>_doctor.<ext> beside the input.")] string? out_path = null,
         [Description("Steps and extras, without dashes, such as listfile, data, portraits, uabi. Prefix no- to "
             + "drop a default step. Empty applies the steps the doctor picks for this map. Allowed: unprotect, "
@@ -3338,7 +3338,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "map_compat", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Check a Warcraft III map against a target build (a schema folder path or build name). Reports compile-time incompatibilities (missing natives, globals, types, functions used by the map but absent from the target's scripts/common.j and scripts/blizzard.j) and display-time incompatibilities (object fields modified in the map but not defined in the target's object data). Returns IdentifiersChecked and FieldsChecked so you can tell 'checked and fine' from 'no script section to check'. Omit target to use the configured default from settings, environment, or the newest available schema. Pass schemas_dir to override the schemas location.")]
     public static CompatResult MapCompat(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Target build name or schema folder path to check compatibility against. Omit to use the configured default from settings, environment, or the newest available schema.")] string? target = null,
         [Description("Optional path to schemas directory containing schema folders with manifest.json. When omitted, searches <AppContext.BaseDirectory>/schemas first, then walks up from the base directory.")] string? schemas_dir = null)
         => Run(() => TargetCompatCommand.Execute(map, ResolveTarget(target, schemas_dir), schemas_dir));
@@ -3499,7 +3499,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "ci_lint", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Run the lint as a CI gate. Returns one pass or fail per check with what was examined and an exit code (0 pass, 1 fail). Fails on an error-level finding, or, with baseline, only on a finding the baseline does not already hold, so a map with known and accepted warnings can still be gated on regressions. With target it also runs the compat check and fails on an error-level finding. Read-only, never writes the map or the baseline.")]
     public static CiLintResult CiLint(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Baseline file written by lint_baseline. When given, the gate fails only on a finding the baseline does not already hold.")] string? baseline = null,
         [Description("Target build name or schema folder path. When given, a compat check runs and fails on an error-level finding.")] string? target = null,
         [Description("Optional path to schemas directory containing schema folders with manifest.json.")] string? schemas_dir = null,
@@ -3509,7 +3509,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "ci_validate", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Run the validation as a CI gate. Returns one pass or fail with what was examined and an exit code (0 pass, 1 fail). Fails when the map cannot load or reports an error-level issue. With strict the extra strict checks (missing listfile, a script with no entry point, an undefined placement type) are included. Read-only.")]
     public static CiValidateResult CiValidate(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Run the stricter validation, whose extra checks are too strict to be a default.")] bool strict = false,
         [Description("Warcraft III install directory for the strict undefined-type check. Overrides auto-detection and the WC3_GAME_DIR env var.")] string? game_dir = null)
         => Run(() => CiValidateCommand.Execute(map, strict, ResolveGameDir(game_dir)));
@@ -3517,7 +3517,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "ci_compat", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Run the compat check as a CI gate. Returns one pass or fail with what was examined and an exit code (0 pass, 1 fail). Fails on an error-level finding, a native, global, type or function the map uses that the target build does not declare. Warnings about object fields the target no longer defines do not fail the gate. Read-only.")]
     public static CiCompatResult CiCompat(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Target build name or schema folder path.")] string target,
         [Description("Optional path to schemas directory containing schema folders with manifest.json.")] string? schemas_dir = null)
         => Run(() => CiCompatCommand.Execute(map, target, schemas_dir));
@@ -3532,7 +3532,7 @@ public static class Wc3Tools
     [McpServerTool(Name = "ci_all", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Run lint, validate and, when target is given, compat in one pass. Returns one summary line per gate and the overall pass or fail with an exit code (0 pass, 1 fail), so a pipeline gets the whole map picture from one call. Reuses the lint and validate gates, so a gate means here exactly what ci_lint and ci_validate mean on their own. Read-only.")]
     public static CiAllResult CiAll(
-        [Description("Path to a .w3x/.w3m map file.")] string map,
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Target build name or schema folder path. When given, the compat gate runs. When omitted the gate is reported as skipped.")] string? target = null,
         [Description("Optional path to schemas directory containing schema folders with manifest.json.")] string? schemas_dir = null)
         => Run(() => CiAllCommand.Execute(map, target, schemas_dir));
