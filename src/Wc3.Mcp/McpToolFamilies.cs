@@ -319,6 +319,7 @@ public static class McpToolFamilies
         ["docs_search"] = "product",
         ["editor_catalog_get"] = "product",
         ["editor_catalog_list"] = "product",
+        ["error_codes"] = "product",
         ["graph_hubs"] = "product",
         ["graph_neighbors"] = "product",
         ["graph_path"] = "product",

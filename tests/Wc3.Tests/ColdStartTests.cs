@@ -73,6 +73,21 @@ public class ColdStartTests
     }
 
     [Fact]
+    public void The_start_line_carries_the_same_facts_now_that_the_probes_run_together()
+    {
+        // PRF-01. The line is the phase the cold start budget waits on, and the probes it needs are
+        // independent. Running them together must not change what the line says.
+        string line = Wc3McpServer.BuildStartLine();
+        _out.WriteLine(line);
+
+        Assert.Contains(" tools " + Wc3McpServer.ToolCount() + " ", line);
+        Assert.Contains(" protocol " + Wc3McpServer.ProtocolRevision, line);
+        Assert.Contains(" target ", line);
+        Assert.Contains(" game ", line);
+        Assert.Contains(" profile " + Wc3McpServer.DefaultProfile, line);
+    }
+
+    [Fact]
     public void The_tool_collection_is_filled_on_first_use_and_only_once()
     {
         int builds = 0;

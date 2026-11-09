@@ -43,8 +43,8 @@ public static class Wc3Tools
             catch (McpException ex) when (ex.Message.StartsWith("map must be a .w3x or .w3m file", StringComparison.Ordinal)
                 || ex.Message.StartsWith("map not found", StringComparison.Ordinal))
             {
-                throw new McpException(ex.Message
-                    + ". An asset path is listed by asset_list, which takes the map and an icon or model family");
+                throw Wc3Errors.Refuse(Wc3ErrorCodes.MapUnreadable, ex.Message
+                    + ". An asset path is listed by asset_list, which takes the map and an icon or model family", map);
             }
         });
 
@@ -73,6 +73,10 @@ public static class Wc3Tools
     [Description("Audit the MCP tool surface itself. Reports every tool whose annotations disagree with its name (a mutating name marked read-only) and every tool that declares no annotations, as a list of problems plus a count. An empty list means the surface is clean. Read-only.")]
     public static McpAnnotationAuditResult McpAuditAnnotations()
         => Run(() => McpToolAudit.InspectServer());
+
+    [McpServerTool(Name = "error_codes", Title = "List the error codes", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("List every stable error code this server can return, each with the one line that says what it means. A refusal carries one of these codes as the first bracketed word of its message and as the code field of the error result, so a caller can branch on the code instead of reading prose. Read-only, it touches no map.")]
+    public static ErrorCodesResult ErrorCodes() => Run(() => new ErrorCodesResult(Wc3ErrorCodes.Count, Wc3ErrorCodes.All));
 
     [McpServerTool(Name = "version_info", Title = "Build and version info", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Report the product version, the git short hash and UTC build time stamped into this build, the name and version of the MCP server it carries, the product id, the newest MCP protocol revision the build speaks and the SDK version it was compiled against. Read-only.")]
@@ -278,7 +282,7 @@ public static class Wc3Tools
         => Run(() =>
         {
             if (path is not null && !File.Exists(path) && !Directory.Exists(path))
-                throw new McpException($"no .w3g file or folder at {path}");
+                throw Wc3Errors.Refuse(Wc3ErrorCodes.InputNotFound, $"no .w3g file or folder at {path}", path);
             return ReplayCommand.Execute(path, map);
         });
 
@@ -325,9 +329,9 @@ public static class Wc3Tools
     private static string RequireReplay(string replay)
     {
         if (string.IsNullOrWhiteSpace(replay))
-            throw new McpException("replay path is required");
+            throw Missing("replay path");
         if (!File.Exists(replay))
-            throw new McpException($"no .w3g file at {replay}");
+            throw Wc3Errors.Refuse(Wc3ErrorCodes.InputNotFound, $"no .w3g file at {replay}", replay);
         return replay;
     }
 
@@ -345,8 +349,8 @@ public static class Wc3Tools
             catch (McpException ex) when (kind.Equals("trigger", StringComparison.OrdinalIgnoreCase)
                 || kind.Equals("script", StringComparison.OrdinalIgnoreCase))
             {
-                throw new McpException(ex.Message
-                    + ". A trigger and a script are not object kinds, and triggers_read returns both");
+                throw Wc3Errors.Refuse(Wc3ErrorCodes.InvalidArgument, ex.Message
+                    + ". A trigger and a script are not object kinds, and triggers_read returns both", kind);
             }
             return brief
                 ? ObjectListCommand.ExecuteBrief(LoadMap(map), parsed, ResolveGameDir(game_dir))
@@ -369,8 +373,8 @@ public static class Wc3Tools
             catch (McpException ex) when (kind.Equals("trigger", StringComparison.OrdinalIgnoreCase)
                 || kind.Equals("script", StringComparison.OrdinalIgnoreCase))
             {
-                throw new McpException(ex.Message
-                    + ". A trigger and a script are not object kinds, and triggers_read returns both");
+                throw Wc3Errors.Refuse(Wc3ErrorCodes.InvalidArgument, ex.Message
+                    + ". A trigger and a script are not object kinds, and triggers_read returns both", kind);
             }
             return ObjectGetCommand.Execute(LoadMap(map), parsed, rawcode, ResolveGameDir(game_dir));
         });
@@ -399,7 +403,7 @@ public static class Wc3Tools
         MapDocument doc, string map, string? outPath, bool overwrite, string? expectInputSha256,
         bool ok, string message)
     {
-        if (!ok) throw new McpException(message);
+        if (!ok) throw Rejected(message);
         var w = WriteGate.Save(doc, map, outPath, overwrite, expectInputSha256, LoadedShaOf(doc));
         return new EditToolResult(w.SavedTo, message, w.InputSha256, w.OutputSha256,
             w.FilesRewritten, w.BytesWritten);
@@ -460,7 +464,7 @@ public static class Wc3Tools
             // A command that reports a refusal rather than throwing must not have its output
             // published, so the refusal is raised inside the staging step and the temp is dropped.
             if (report.GetType().GetProperty("Ok")?.GetValue(report) is false)
-                throw new McpException(report.GetType().GetProperty("Message")?.GetValue(report) as string
+                throw Rejected(report.GetType().GetProperty("Message")?.GetValue(report) as string
                     ?? "the command refused to write the output");
         });
         var gated = Gated(report!, w);
@@ -627,7 +631,7 @@ public static class Wc3Tools
             string full = ResolveOutPath(map, out_path);
             var doc = LoadMap(map);
             var r = AssetReplaceCommand.Execute(doc, old_path, new_path);
-            if (!r.Ok) throw new McpException(r.Message);
+            if (!r.Ok) throw Rejected(r.Message);
             return Gated(r, SaveDocAt(doc, full, map, overwrite, expect_input_sha256));
         });
 
@@ -648,7 +652,7 @@ public static class Wc3Tools
         [Description("Cancels the call at the next check point. The render itself is not interruptible once it starts.")] CancellationToken cancellationToken = default)
         => Run(() =>
         {
-            if (string.IsNullOrWhiteSpace(out_dir)) throw new McpException("out_dir is required");
+            if (string.IsNullOrWhiteSpace(out_dir)) throw Missing("out_dir");
             RequireTempDisk(out_dir);
             CheckPoint(cancellationToken, "the render start");
             var r = AssetThumbnailsCommand.Execute(folder, size, size);
@@ -673,7 +677,7 @@ public static class Wc3Tools
         [Description("Cancels the call at the next check point. The conversion itself is not interruptible once it starts.")] CancellationToken cancellationToken = default)
         => Run(() =>
         {
-            if (string.IsNullOrWhiteSpace(out_dir)) throw new McpException("out_dir is required");
+            if (string.IsNullOrWhiteSpace(out_dir)) throw Missing("out_dir");
             RequireTempDisk(out_dir);
             CheckPoint(cancellationToken, "the conversion start");
             var r = AssetConvertBatchCommand.Execute(folder, to);
@@ -712,7 +716,7 @@ public static class Wc3Tools
             string full = ResolveOutPath(map, out_path);
             var doc = LoadMap(map);
             var r = AssetImportWireCommand.Execute(doc, files, obj, kind is null ? null : ParseKind(kind), base_dir);
-            if (!r.Ok) throw new McpException(r.Message);
+            if (!r.Ok) throw Rejected(r.Message);
             var w = SaveDocAt(doc, full, map, overwrite, expect_input_sha256);
             return new AssetImportWireToolResult(w.SavedTo, r.Imported, r.FieldsSet, r.Diagnostics,
                 w.InputSha256, w.OutputSha256, w.FilesRewritten, w.BytesWritten);
@@ -750,7 +754,7 @@ public static class Wc3Tools
                 if (texture_side != 0)
                 {
                     if (string.IsNullOrWhiteSpace(texture_out))
-                        throw new McpException("a texture side needs texture_out, the folder the copies land in");
+                        throw Invalid("a texture side needs texture_out, the folder the copies land in", "texture_out");
                     Directory.CreateDirectory(texStaging);
                 }
 
@@ -1019,8 +1023,8 @@ public static class Wc3Tools
             try { return SearchCommand.Execute(LoadMap(map), query); }
             catch (McpException ex) when (ex.Message.StartsWith("map must be a .w3x or .w3m file", StringComparison.Ordinal))
             {
-                throw new McpException(ex.Message
-                    + ". A recorded game is read by replay_summary, which takes the .w3g path directly");
+                throw Wc3Errors.Refuse(Wc3ErrorCodes.MapUnreadable, ex.Message
+                    + ". A recorded game is read by replay_summary, which takes the .w3g path directly", map);
             }
         });
 
@@ -1144,7 +1148,7 @@ public static class Wc3Tools
             var full = ResolveOutPath(map, out_path);
             var doc = LoadMap(map);
             var r = LuaToJassCommand.Execute(doc);
-            if (!r.Ok) throw new McpException(string.Join(" ", r.Diagnostics));
+            if (!r.Ok) throw Rejected(string.Join(" ", r.Diagnostics));
             var w = SaveDocAt(doc, full, map, overwrite, expect_input_sha256);
             return new { r.ScriptFile, r.FunctionsConverted, r.FunctionsSkipped, r.GlobalsConverted, r.Unconverted, r.Diagnostics,
                 SavedTo = w.SavedTo, w.InputSha256, w.OutputSha256, w.FilesRewritten, w.BytesWritten };
@@ -1206,7 +1210,7 @@ public static class Wc3Tools
     public static TerrainEditCommand.TerrainInfo TerrainInfoTool(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
         => Run(() => TerrainEditCommand.GetInfo(LoadMap(map))
-            ?? throw new McpException("this map has no war3map.w3e terrain file"));
+            ?? throw Wc3Errors.Refuse(Wc3ErrorCodes.ObjectNotFound, "this map has no war3map.w3e terrain file", "war3map.w3e"));
 
     [McpServerTool(Name = "terrain_corner_get", Title = "Get one terrain corner", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Show one terrain corner's full state: ground height, cliff level, water, ground and cliff texture indexes with variations, and the ramp, blight, boundary and edge flags.")]
@@ -1215,7 +1219,7 @@ public static class Wc3Tools
         [Description("Corner column, 0-based. Bounds come from terrain_info.")] int col,
         [Description("Corner row, 0-based.")] int row)
         => Run(() => TerrainEditCommand.GetCorner(LoadMap(map), col, row)
-            ?? throw new McpException($"no terrain corner at ({col}, {row})"));
+            ?? throw Wc3Errors.Refuse(Wc3ErrorCodes.ObjectNotFound, $"no terrain corner at ({col}, {row})", $"{col},{row}"));
 
     [McpServerTool(Name = "terrain_corner_set", Title = "Set one terrain corner", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Set one field on ONE terrain corner and save the edited copy to out_path. The input map is NEVER modified in place. For area work prefer terrain_deform, terrain_paint and the other brush tools.")]
@@ -1250,7 +1254,7 @@ public static class Wc3Tools
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("The unit's creation number, from placed_units_list.")] int creation_number)
         => Run(() => UnitInstanceCommand.Get(LoadMap(map), creation_number)
-            ?? throw new McpException($"no placed unit with creation number {creation_number}"));
+            ?? throw Wc3Errors.Refuse(Wc3ErrorCodes.ObjectNotFound, $"no placed unit with creation number {creation_number}", creation_number.ToString()));
 
     [McpServerTool(Name = "placed_unit_set", Title = "Edit a placed unit", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Set one field on a unit already placed on the map and save the edited copy to out_path. The input map is NEVER modified in place. A position field takes 'x,y', a scale field takes one number (uniform) or 'sx,sy,sz', and Facing is in RADIANS (pi/2 faces north), the unit the map file stores.")]
@@ -1287,9 +1291,9 @@ public static class Wc3Tools
 
     [McpServerTool(Name = "placed_doodads_list", Title = "List placed doodads", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("List every doodad and destructable already PLACED on the map (war3map.doo), each with the creation number needed to edit or remove it, plus its type rawcode, position, rotation, scale and variation.")]
-    public static IReadOnlyList<DoodadInstanceInfo> PlacedDoodadsList(
+    public static CappedItems<DoodadInstanceInfo> PlacedDoodadsList(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
-        => Run(() => DoodadInstanceCommand.List(LoadMap(map)));
+        => Run(() => Wc3Limit.Cap(DoodadInstanceCommand.List(LoadMap(map))));
 
     [McpServerTool(Name = "placed_doodad_get", Title = "Get a placed doodad", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Show one placed doodad's full state by creation number: type, position, rotation, scale, variation and life percentage.")]
@@ -1297,7 +1301,7 @@ public static class Wc3Tools
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("The doodad's creation number, from placed_doodads_list.")] int creation_number)
         => Run(() => DoodadInstanceCommand.Get(LoadMap(map), creation_number)
-            ?? throw new McpException($"no placed doodad with creation number {creation_number}"));
+            ?? throw Wc3Errors.Refuse(Wc3ErrorCodes.ObjectNotFound, $"no placed doodad with creation number {creation_number}", creation_number.ToString()));
 
     [McpServerTool(Name = "placed_doodad_set", Title = "Edit a placed doodad", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Set one field on a doodad already placed on the map and save the edited copy to out_path. The input map is NEVER modified in place. A position field takes 'x,y' or 'x,y,z'.")]
@@ -1349,7 +1353,7 @@ public static class Wc3Tools
         {
             var doc = LoadMap(map);
             var r = PlaceGridCommand.Execute(doc, type_rawcode, rows, cols, spacing, owner_id, kind);
-            if (!r.Ok) throw new McpException(r.Message);
+            if (!r.Ok) throw Rejected(r.Message);
             string full = ResolveOutPath(map, out_path);
             var w = SaveDocAt(doc, full, map, overwrite, expect_input_sha256);
             return new BulkPlacementToolResult(w.SavedTo, r.Message, r.Placed, r.CreationNumbers,
@@ -1371,7 +1375,7 @@ public static class Wc3Tools
         {
             var doc = LoadMap(map);
             var r = PlaceScatterCommand.Execute(doc, type_rawcode, count, region, seed);
-            if (!r.Ok) throw new McpException(r.Message);
+            if (!r.Ok) throw Rejected(r.Message);
             string full = ResolveOutPath(map, out_path);
             var w = SaveDocAt(doc, full, map, overwrite, expect_input_sha256);
             return new BulkPlacementToolResult(w.SavedTo, r.Message, r.Placed, r.CreationNumbers,
@@ -1406,7 +1410,7 @@ public static class Wc3Tools
         {
             var doc = LoadMap(map);
             var r = PlacedFixRefsCommand.Execute(doc, ResolveGameDir(game_dir), to_rawcode);
-            if (!r.Ok) throw new McpException(r.Message);
+            if (!r.Ok) throw Rejected(r.Message);
             string full = ResolveOutPath(map, out_path);
             return Gated(r, SaveDocAt(doc, full, map, overwrite, expect_input_sha256));
         });
@@ -1527,7 +1531,7 @@ public static class Wc3Tools
         {
             var doc = LoadMap(map);
             var r = ObjectSetCommand.Execute(doc, ParseKind(kind), rawcode, field, value);
-            if (!r.Ok) throw new McpException(r.Message);
+            if (!r.Ok) throw Rejected(r.Message);
             var w = WriteGate.Save(doc, map, out_path, overwrite, expect_input_sha256, LoadedShaOf(doc));
             return new ObjectSetToolResult(w.SavedTo, w.InputSha256, w.OutputSha256, w.FilesRewritten,
                 w.BytesWritten, r.Message, r.Warning);
@@ -1544,16 +1548,16 @@ public static class Wc3Tools
         => Run(() =>
         {
             if (edits is null || edits.Length == 0)
-                throw new McpException("at least one edit is required");
+                throw Invalid("at least one edit is required", "edits");
             if (edits.Length > ObjectBatchSetCommand.MaxEdits)
-                throw new McpException($"at most {ObjectBatchSetCommand.MaxEdits} edits are allowed in one call, got {edits.Length}");
+                throw Invalid($"at most {ObjectBatchSetCommand.MaxEdits} edits are allowed in one call, got {edits.Length}", "edits");
 
             var parsed = new List<ObjectBatchEdit>(edits.Length);
             for (int i = 0; i < edits.Length; i++)
             {
                 var e = edits[i];
                 if (string.IsNullOrWhiteSpace(e.Rawcode) || string.IsNullOrWhiteSpace(e.Field))
-                    throw new McpException($"edit {i + 1}: rawcode and field are required");
+                    throw Invalid($"edit {i + 1}: rawcode and field are required", "rawcode");
                 parsed.Add(new ObjectBatchEdit(ParseKind(e.Kind), e.Rawcode, e.Field, e.Value ?? ""));
             }
 
@@ -1562,7 +1566,7 @@ public static class Wc3Tools
             if (!r.Ok)
             {
                 string detail = r.Failed.Count == 0 ? "" : $" ({r.Failed[0].Message})";
-                throw new McpException(r.Message + detail);
+                throw Rejected(r.Message + detail);
             }
 
             var w = WriteGate.Save(doc, map, out_path, overwrite, expect_input_sha256, LoadedShaOf(doc));
@@ -1584,7 +1588,7 @@ public static class Wc3Tools
             string full = ResolveOutPath(map, out_path);
             var doc = LoadMap(map);
             var r = ObjectNewCommand.Execute(doc, ParseKind(kind), base_rawcode);
-            if (!r.Ok) throw new McpException(r.Message);
+            if (!r.Ok) throw Rejected(r.Message);
             var w = SaveDocAt(doc, full, map, overwrite, expect_input_sha256);
             return new ObjectNewToolResult(w.SavedTo, r.Message, r.NewRawcode,
                 w.InputSha256, w.OutputSha256, w.FilesRewritten, w.BytesWritten);
@@ -1659,7 +1663,7 @@ public static class Wc3Tools
             string full = ResolveOutPath(map, out_path);
             var doc = LoadMap(map);
             var r = ObjectCloneCommand.Execute(doc, ParseKind(kind), rawcode, new_rawcode);
-            if (!r.Ok) throw new McpException(r.Message);
+            if (!r.Ok) throw Rejected(r.Message);
             var w = SaveDocAt(doc, full, map, overwrite, expect_input_sha256);
             return new ObjectCloneToolResult(w.SavedTo, r.Message, r.NewRawcode, r.FieldsCopied,
                 w.InputSha256, w.OutputSha256, w.FilesRewritten, w.BytesWritten);
@@ -1679,7 +1683,7 @@ public static class Wc3Tools
             string full = ResolveOutPath(map, out_path);
             var doc = LoadMap(map);
             var r = ObjectMigrateCommand.Execute(doc, to, schemas_dir);
-            if (!r.Ok) throw new McpException(r.Message);
+            if (!r.Ok) throw Rejected(r.Message);
             var w = SaveDocAt(doc, full, map, overwrite, expect_input_sha256);
             return new ObjectMigrateToolResult(
                 w.SavedTo, r.Message, r.TargetBuild, r.FieldsKept, r.FieldsDropped, r.Drops.Count,
@@ -1701,17 +1705,17 @@ public static class Wc3Tools
         {
             RequireAtMost(where?.Length ?? 0, "where");
             if (!TrySplitPair(set, out var field, out var value))
-                throw new McpException($"expected set as code=value, got '{set}'");
+                throw Invalid($"expected set as code=value, got '{set}'", set);
             var clauses = new List<BulkSetWhere>();
             foreach (var raw in where ?? Array.Empty<string>())
             {
                 if (!TrySplitPair(raw, out var wc, out var wv))
-                    throw new McpException($"expected a where clause as code=value, got '{raw}'");
+                    throw Invalid($"expected a where clause as code=value, got '{raw}'", raw);
                 clauses.Add(new BulkSetWhere(wc, wv));
             }
             var doc = LoadMap(map);
             var r = ObjectBulkSetCommand.Execute(doc, ParseKind(kind), field, value, clauses, ResolveGameDir(game_dir));
-            if (!r.Ok) throw new McpException(r.Message);
+            if (!r.Ok) throw Rejected(r.Message);
             var w = WriteGate.Save(doc, map, out_path, overwrite, expect_input_sha256, LoadedShaOf(doc));
             var failed = r.Entries.Where(e => !e.Changed)
                 .Select(e => new SkippedItem(e.Rawcode, e.Detail)).ToList();
@@ -1748,11 +1752,11 @@ public static class Wc3Tools
         [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
         => Run(() =>
         {
-            if (!File.Exists(csv_path)) throw new McpException($"no CSV file at {csv_path}");
+            if (!File.Exists(csv_path)) throw Wc3Errors.Refuse(Wc3ErrorCodes.InputNotFound, $"no CSV file at {csv_path}", csv_path);
             string full = ResolveOutPath(map, out_path);
             var doc = LoadMap(map);
             var r = ObjectImportCommand.Execute(doc, ParseKind(kind), File.ReadAllText(csv_path), ResolveGameDir(game_dir));
-            if (!r.Ok) throw new McpException(r.Message);
+            if (!r.Ok) throw Rejected(r.Message);
             var w = SaveDocAt(doc, full, map, overwrite, expect_input_sha256);
             return new ObjectImportToolResult(w.SavedTo, r.Message, r.Kind, r.Added, r.Updated, r.FieldsSet,
                 w.InputSha256, w.OutputSha256, w.FilesRewritten, w.BytesWritten);
@@ -1774,7 +1778,7 @@ public static class Wc3Tools
             string full = ResolveOutPath(map, out_path);
             var doc = LoadMap(map);
             var r = ObjectRenameCommand.Execute(doc, ParseKind(kind), old_rawcode, new_rawcode, rewrite_refs);
-            if (!r.Ok) throw new McpException(r.Message);
+            if (!r.Ok) throw Rejected(r.Message);
             var w = SaveDocAt(doc, full, map, overwrite, expect_input_sha256);
             return new ObjectRenameToolResult(
                 w.SavedTo, r.Message, r.Kind, r.OldRawcode, r.NewRawcode, r.FieldsRewritten,
@@ -1818,7 +1822,7 @@ public static class Wc3Tools
         => Run(() =>
         {
             if (string.IsNullOrWhiteSpace(out_path))
-                throw new McpException("out_path is required");
+                throw Missing("out_path");
             var doc = LoadMap(map);
 
             // Anything that can't be a rawcode is treated as an internal model path (CLI parity).
@@ -1940,10 +1944,10 @@ public static class Wc3Tools
         [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
         => Run<object>(() =>
         {
-            if (string.IsNullOrWhiteSpace(out_path)) throw new McpException("out_path is required");
+            if (string.IsNullOrWhiteSpace(out_path)) throw Missing("out_path");
             var result = BundleMergeCommand.Execute(LoadBundle(bundle_a), LoadBundle(bundle_b));
             if (!result.Ok)
-                throw new McpException(result.Message + " " + string.Join("; ",
+                throw Rejected(result.Message + " " + string.Join("; ",
                     result.Conflicts.Select(c => $"{c.Rawcode} {c.Detail}")));
             var gated = WriteWith(out_path, Inputs(bundle_a, bundle_b), overwrite, expect_input_sha256,
                 temp => { BundleJson.Save(result.Merged!, temp); return result; });
@@ -1959,25 +1963,26 @@ public static class Wc3Tools
     /// <summary>Read a bundle JSON file, surfacing a clean MCP error when it cannot be read.</summary>
     private static UnitBundle LoadBundle(string path)
     {
-        if (string.IsNullOrWhiteSpace(path)) throw new McpException("bundle path is required");
-        if (!File.Exists(path)) throw new McpException($"bundle not found: {path}");
+        if (string.IsNullOrWhiteSpace(path)) throw Missing("bundle path");
+        if (!File.Exists(path)) throw Wc3Errors.Refuse(Wc3ErrorCodes.InputNotFound, $"bundle not found: {path}", path);
         try { return BundleJson.Load(path); }
-        catch (Exception ex) { throw new McpException($"could not read bundle '{path}': {ex.Message}"); }
+        catch (Exception ex) { throw Wc3Errors.Refuse(Wc3ErrorCodes.InputUnreadable, $"could not read bundle '{path}': {ex.Message}", path); }
     }
 
     // ---- audits (diagnostics over data already in the map) ---------------
 
     [McpServerTool(Name = "audit_hero", Title = "Audit hero wiring", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Say whether a placed hero's abilities are wired up in the script, not merely present as object data. For every ability it walks the chain end to end, the ability object exists, something dispatches a cast on its id, that handler is attached to a trigger, the trigger's event reaches the hero's player, the handler body still has live statements, any identity array it gates on lists this hero, and the init that builds the trigger runs exactly once. A missing link is named, so a broken port can be fixed rather than only detected. Omit hero to audit every placed hero.")]
-    public static IReadOnlyList<HeroWiringResult> AuditHero(
+    public static CappedItems<HeroWiringResult> AuditHero(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Hero rawcode to audit, e.g. 'H001'. Omit to audit every hero placed on the map.")] string? hero = null)
         => Run(() =>
         {
             var doc = LoadMap(map);
-            return hero is null
+            IReadOnlyList<HeroWiringResult> rows = hero is null
                 ? HeroWiringAudit.AuditPlacedHeroes(doc)
                 : new[] { HeroWiringAudit.Audit(doc, hero, ownerId: 0) };
+            return Wc3Limit.Cap(rows);
         });
 
     [McpServerTool(Name = "audit_fidelity", Title = "Audit port fidelity", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
@@ -1991,28 +1996,30 @@ public static class Wc3Tools
 
     [McpServerTool(Name = "audit_readiness", Title = "Audit script readiness", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Say whether a placed hero's script would run correctly, not merely fire, the gap audit_hero cannot see since it only proves a cast reaches a handler. Checks that InitGlobals and RunInitializationTriggers, the two World Editor entry points that set every custom starting value and run any Map Initialization trigger, are carried and actually called, and that every udg_ global the hero's carried code reads is assigned somewhere rather than left at its type default. A hero can audit clean on audit_hero and still do nothing worth playing. Omit hero to check every hero placed.")]
-    public static IReadOnlyList<RuntimeReadinessResult> AuditReadiness(
+    public static CappedItems<RuntimeReadinessResult> AuditReadiness(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Hero rawcode to check, e.g. 'H001'. Omit to check every hero placed on the map.")] string? hero = null)
         => Run(() =>
         {
             var doc = LoadMap(map);
-            return hero is null
+            IReadOnlyList<RuntimeReadinessResult> rows = hero is null
                 ? RuntimeReadinessCommand.CheckPlacedHeroes(doc)
                 : new[] { RuntimeReadinessCommand.Check(doc, hero, ownerId: 0) };
+            return Wc3Limit.Cap(rows);
         });
 
     [McpServerTool(Name = "audit_ability", Title = "Audit ability runtime chain", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Report PASS or the exact broken link, per ability, across a placed hero's runtime chain, deeper than audit_hero, which only proves a cast reaches a live trigger. Checks that the dispatch is reached exactly once (two live triggers make every affected spell fire twice), that handlers survive a port, that a follow-up TimerStart loop starts and its callback is declared, that every StartSpellUnit pause is matched by a live StopSpellUnit, that callbacks name a declared function, that globals read are assigned, and that named special effects still exist. Omit hero to audit every placed hero.")]
-    public static IReadOnlyList<AbilityAuditResult> AuditAbility(
+    public static CappedItems<AbilityAuditResult> AuditAbility(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Hero rawcode to audit, e.g. 'H001'. Omit to audit every hero placed on the map.")] string? hero = null)
         => Run(() =>
         {
             var doc = LoadMap(map);
-            return hero is null
+            IReadOnlyList<AbilityAuditResult> rows = hero is null
                 ? AbilityAuditCommand.AuditPlacedHeroes(doc)
                 : new[] { AbilityAuditCommand.Audit(doc, hero, ownerId: 0) };
+            return Wc3Limit.Cap(rows);
         });
 
     [McpServerTool(Name = "palette_doodad", Title = "List placeable doodads", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
@@ -2277,7 +2284,7 @@ public static class Wc3Tools
         => Run(() =>
         {
             var r = TerrainExportHeightmapCommand.Export(LoadMap(map));
-            if (!r.Ok || r.Png is null) throw new McpException(r.Message);
+            if (!r.Ok || r.Png is null) throw Rejected(r.Message);
             var w = WriteGate.WriteBytes(ResolveOutPath(map, out_path), r.Png, Inputs(map),
                 overwrite, expect_input_sha256);
             return new ImageExportToolResult(w.SavedTo, r.Message, r.Width, r.Height, r.Png.Length,
@@ -2490,7 +2497,7 @@ public static class Wc3Tools
         [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
         => Run(() =>
         {
-            if (string.IsNullOrWhiteSpace(out_dir)) throw new McpException("out_dir is required");
+            if (string.IsNullOrWhiteSpace(out_dir)) throw Missing("out_dir");
             var r = MpqExtractAllCommand.Execute(LoadMap(map));
             var w = WriteGate.WriteFolder(out_dir, Inputs(map), overwrite, expect_input_sha256, temp =>
             {
@@ -2500,7 +2507,7 @@ public static class Wc3Tools
                     var relative = ExtractPaths.RelativePathFor(item);
                     var dest = Path.GetFullPath(Path.Combine(temp, relative));
                     if (!dest.StartsWith(rootPrefix, StringComparison.OrdinalIgnoreCase))
-                        throw new McpException($"refusing to write outside the output directory, {item.Name}");
+                        throw Wc3Errors.Refuse(Wc3ErrorCodes.OutsideOutputDirectory, $"refusing to write outside the output directory, {item.Name}", item.Name);
                     Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
                     File.WriteAllBytes(dest, item.Bytes);
                 }
@@ -2514,9 +2521,9 @@ public static class Wc3Tools
     [Description("List the archive's internal entries with their CURRENT size, which reflects a "
         + "pending replacement rather than the stale original. Name is null for an unnamed entry, "
         + "which is what a protected map produces.")]
-    public static IReadOnlyList<FileState> FileList(
+    public static CappedItems<FileState> FileList(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
-        => Run(() => FileEditCommand.ListFiles(LoadMap(map)));
+        => Run(() => Wc3Limit.Cap(FileEditCommand.ListFiles(LoadMap(map))));
 
     [McpServerTool(Name = "file_get_text", Title = "Read an internal text file", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Read one internal file as text, naming the encoding it used and whether a byte order mark declared that encoding or it was assumed. Reports how many bytes the decoder had to replace and refuses a lossy decode with LOSSY_DECODE unless allow_lossy is true, so a binary entry is never handed back as corrupt text. Use file_extract to write the raw bytes instead.")]
@@ -2528,10 +2535,10 @@ public static class Wc3Tools
         {
             var doc = LoadMap(map);
             var entry = doc.GetFile(internal_path)
-                ?? throw new McpException($"the map has no internal file '{internal_path}'");
+                ?? throw Wc3Errors.Refuse(Wc3ErrorCodes.ObjectNotFound, $"the map has no internal file '{internal_path}'", internal_path);
             var (text, encoding, declared, replaced) = DecodeText(entry.CurrentBytes);
             if (replaced > 0 && !allow_lossy)
-                throw new ToolError("LOSSY_DECODE",
+                throw new ToolError(Wc3ErrorCodes.LossyDecode.Code,
                     $"'{internal_path}' does not decode as {encoding} without replacing {replaced} byte(s)",
                     "pass allow_lossy true to read it anyway, or use file_extract to write the raw bytes");
             return new FileTextResult(internal_path, text, encoding, declared, replaced, replaced > 0);
@@ -2549,7 +2556,7 @@ public static class Wc3Tools
         {
             var doc = LoadMap(map);
             var entry = doc.GetFile(internal_path)
-                ?? throw new McpException($"the map has no internal file '{internal_path}'");
+                ?? throw Wc3Errors.Refuse(Wc3ErrorCodes.ObjectNotFound, $"the map has no internal file '{internal_path}'", internal_path);
             byte[] bytes = entry.CurrentBytes;
             var w = WriteGate.WriteBytes(out_path, bytes, Inputs(map), overwrite, expect_input_sha256);
             return new FileExtractResult(w.SavedTo, internal_path, bytes.Length, w.OutputSha256,
@@ -2696,7 +2703,7 @@ public static class Wc3Tools
         {
             var doc = LoadMap(map);
             var r = SoundImportCommand.Import(doc, events_json, clips_dir);
-            if (!r.Ok) throw new McpException(r.Message);
+            if (!r.Ok) throw Rejected(r.Message);
             var w = WriteGate.Save(doc, map, out_path, overwrite, expect_input_sha256, LoadedShaOf(doc));
             return new SoundImportToolResult(w.SavedTo, w.InputSha256, w.OutputSha256,
                 r.Message, r.Events.Count, r.CatalogEntries.Count, r.MissingClips, r.Refused, r.Jass);
@@ -2704,9 +2711,9 @@ public static class Wc3Tools
 
     [McpServerTool(Name = "sound_list", Title = "List sound definitions", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("List the map's sound catalog (war3map.w3s): each definition's name, file path, channel, flags, volume, pitch, priority and min/max distance.")]
-    public static IReadOnlyList<SoundFields> SoundList(
+    public static CappedItems<SoundFields> SoundList(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
-        => Run(() => SoundCommand.List(LoadMap(map)));
+        => Run(() => Wc3Limit.Cap(SoundCommand.List(LoadMap(map))));
 
     [McpServerTool(Name = "sound_add", Title = "Add a sound definition", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Add a new sound definition (keyed by name) to the map's sound catalog and save the edited map to out_path. The input map is NEVER modified in place.")]
@@ -2768,9 +2775,9 @@ public static class Wc3Tools
 
     [McpServerTool(Name = "camera_list", Title = "List cameras", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("List the map's cameras (war3map.w3c): each camera's name, target position, rotation, angle of attack, distance and field of view.")]
-    public static IReadOnlyList<CameraFields> CameraList(
+    public static CappedItems<CameraFields> CameraList(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
-        => Run(() => CameraCommand.List(LoadMap(map)));
+        => Run(() => Wc3Limit.Cap(CameraCommand.List(LoadMap(map))));
 
     [McpServerTool(Name = "camera_add", Title = "Add a camera", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Add a camera at a target position and save the edited map to out_path. The input map is NEVER modified in place. Rejects a blank or duplicate name.")]
@@ -2833,7 +2840,7 @@ public static class Wc3Tools
         {
             var doc = LoadMap(map);
             var r = CameraCommand.Tour(doc, from, to, count);
-            if (!r.Ok) throw new McpException(r.Message);
+            if (!r.Ok) throw Rejected(r.Message);
             string full = ResolveOutPath(map, out_path);
             var w = SaveDocAt(doc, full, map, overwrite, expect_input_sha256);
             return new CameraTourToolResult(w.SavedTo, r.Message, r.Names, r.Count,
@@ -2861,7 +2868,7 @@ public static class Wc3Tools
         {
             var flagText = (flags ?? "").Replace(" ", "");
             if (!Enum.TryParse<War3Net.Build.Environment.PathingType>(flagText, ignoreCase: true, out var parsed))
-                throw new McpException($"invalid pathing flag(s) '{flags}'; expected a comma-separated subset of: " + PathingFlagValues);
+                throw Invalid($"invalid pathing flag(s) '{flags}'; expected a comma-separated subset of: " + PathingFlagValues, flags);
             var r = PathingCommand.Paint(doc, center_x, center_y, radius, parsed,
                 ParseEnum<PathingCommand.BrushOp>(op, "op"),
                 ParseEnum<PathingCommand.BrushShape>(shape, "shape"));
@@ -2878,7 +2885,7 @@ public static class Wc3Tools
         => Run(() =>
         {
             var r = PathingExportPngCommand.Export(LoadMap(map));
-            if (!r.Ok || r.Png is null) throw new McpException(r.Message);
+            if (!r.Ok || r.Png is null) throw Rejected(r.Message);
             var w = WriteGate.WriteBytes(ResolveOutPath(map, out_path), r.Png, Inputs(map),
                 overwrite, expect_input_sha256);
             return new PathingExportToolResult(w.SavedTo, r.Message, r.Width, r.Height, r.Png.Length,
@@ -2935,9 +2942,9 @@ public static class Wc3Tools
 
     [McpServerTool(Name = "player_list", Title = "List player slots", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("List the map's player slots (war3map.w3i): each player's id, name, color, race, controller and whether its start position is fixed.")]
-    public static IReadOnlyList<PlayerInfo> PlayerList(
+    public static CappedItems<PlayerInfo> PlayerList(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
-        => Run(() => PlayerForceCommand.GetPlayers(LoadMap(map)));
+        => Run(() => Wc3Limit.Cap(PlayerForceCommand.GetPlayers(LoadMap(map))));
 
     [McpServerTool(Name = "player_set_force", Title = "Move a player to a force", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Move a player into a force (team) and save the edited map to out_path. The input map is NEVER modified in place.")]
@@ -2956,9 +2963,9 @@ public static class Wc3Tools
 
     [McpServerTool(Name = "force_list", Title = "List forces", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("List the map's forces/teams (war3map.w3i): each force's index, name, member player ids and alliance/sharing flags.")]
-    public static IReadOnlyList<ForceInfo> ForceList(
+    public static CappedItems<ForceInfo> ForceList(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
-        => Run(() => PlayerForceCommand.GetForces(LoadMap(map)));
+        => Run(() => Wc3Limit.Cap(PlayerForceCommand.GetForces(LoadMap(map))));
 
     [McpServerTool(Name = "force_set_flags", Title = "Set force alliance flags", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Set a force's alliance/sharing flags and save the edited map to out_path. The input map is NEVER modified in place.")]
@@ -3070,13 +3077,13 @@ public static class Wc3Tools
         [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
         => Run(() =>
         {
-            if (string.IsNullOrWhiteSpace(out_path)) throw new McpException("out_path is required");
+            if (string.IsNullOrWhiteSpace(out_path)) throw Missing("out_path");
             var opts = new BlankMapOptions();
             if (!string.IsNullOrEmpty(name)) opts = opts with { MapName = name! };
             if (tiles is { } t) opts = opts with { TileEdge = t };
             byte[] bytes;
             try { bytes = BlankMap.CreateArchiveBytes(opts); }
-            catch (Exception ex) { throw new McpException(ex.Message); }
+            catch (Exception ex) { throw Failed(ex); }
             var w = WriteGate.WriteBytes(out_path, bytes, Array.Empty<string>(), overwrite, expect_input_sha256);
             return new EditToolResult(w.SavedTo,
                 $"created \"{opts.MapName}\" ({opts.TileEdge}x{opts.TileEdge} tiles, {bytes.Length} bytes)",
@@ -3085,9 +3092,9 @@ public static class Wc3Tools
 
     [McpServerTool(Name = "region_list", Title = "List regions", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("List the map's rectangular regions (war3map.w3r), each with its creation number, name, and bounds. Add regions with place_region.")]
-    public static IReadOnlyList<PlacementCommand.RegionInfo> RegionList(
+    public static CappedItems<PlacementCommand.RegionInfo> RegionList(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
-        => Run(() => PlacementCommand.ListRegions(LoadMap(map)));
+        => Run(() => Wc3Limit.Cap(PlacementCommand.ListRegions(LoadMap(map))));
 
     [McpServerTool(Name = "region_remove", Title = "Remove a region", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = false)]
     [Description("Remove a region by name and save the edited map to out_path. The input map is NEVER modified in place.")]
@@ -3493,9 +3500,9 @@ public static class Wc3Tools
 
     [McpServerTool(Name = "trigger_var_list", Title = "List global variables", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("List the map's global variables (the .wtg Variables list), each with its name, type, array flag, declared size and initial value. Read-only.")]
-    public static IReadOnlyList<TriggerVariableFields> TriggerVarList(
+    public static CappedItems<TriggerVariableFields> TriggerVarList(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
-        => Run(() => TriggerCommand.ListVariables(LoadMap(map)));
+        => Run(() => Wc3Limit.Cap(TriggerCommand.ListVariables(LoadMap(map))));
 
     [McpServerTool(Name = "trigger_var_add", Title = "Add a global variable", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Add a global variable to the map's wtg and save the edited map to out_path. Provides a name, a type (for example integer, real, string, boolean, unit, group, trigger) and, for an array, the array flag and size. An initial value marks the variable initialized. Refuses a blank name or type and a name that already exists, because the wtg keys variables by name. IMPORTANT: this edits war3map.wtg, the World Editor's trigger SOURCE, not war3map.j, so a variable it defines is visible in the World Editor and inert in game until that editor saves the map. The input map is NEVER modified in place.")]
@@ -3586,7 +3593,7 @@ public static class Wc3Tools
         {
             var catalog = TriggerCatalogCommand.Load(file, ResolveGameDir(game_dir), out _);
             return TriggerCatalogCommand.Describe(catalog, name)
-                ?? throw new McpException($"No such function: {name}");
+                ?? throw Wc3Errors.Refuse(Wc3ErrorCodes.ObjectNotFound, $"No such function: {name}", name);
         });
 
     [McpServerTool(Name = "editor_catalog_list", Title = "List editor catalogs", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
@@ -3675,7 +3682,7 @@ public static class Wc3Tools
         {
             if (!confirm)
             {
-                throw new ToolError("CONFIRM_REQUIRED", what + ", pass confirm true",
+                throw new ToolError(Wc3ErrorCodes.ConfirmRequired.Code, what + ", pass confirm true",
                     "the input is never modified, the call still writes a new file, so the flag only states intent");
             }
             return body();
@@ -3720,7 +3727,7 @@ public static class Wc3Tools
     private static void RequireAtMost(int count, string what)
     {
         if (count > MaxArrayItems)
-            throw new McpException($"{what} takes at most {MaxArrayItems} entries, got {count}");
+            throw Invalid($"{what} takes at most {MaxArrayItems} entries, got {count}", what);
     }
 
     /// <summary>
@@ -3745,22 +3752,22 @@ public static class Wc3Tools
     {
         int entries = doc.Files.Count;
         if (entries > MaxArchiveEntries)
-            throw new McpException(
-                $"[ARCHIVE_ENTRIES] {map} holds {entries} archive entries, the limit is {MaxArchiveEntries}");
+            throw Wc3Errors.Refuse(Wc3ErrorCodes.ArchiveEntries,
+                $"{map} holds {entries} archive entries, the limit is {MaxArchiveEntries}", map);
 
         long total = 0;
         foreach (var entry in doc.Files)
         {
             long size = entry.RawSize;
             if (size > MaxEntryDecompressedBytes)
-                throw new McpException(
-                    $"[ENTRY_BYTES] {map} entry '{entry.FileName ?? "(unnamed)"}' decompresses to {size} bytes, "
-                    + $"the limit per entry is {MaxEntryDecompressedBytes}");
+                throw Wc3Errors.Refuse(Wc3ErrorCodes.EntryBytes,
+                    $"{map} entry '{entry.FileName ?? "(unnamed)"}' decompresses to {size} bytes, "
+                    + $"the limit per entry is {MaxEntryDecompressedBytes}", entry.FileName ?? "(unnamed)");
             total += size;
             if (total > MaxCallDecompressedBytes)
-                throw new McpException(
-                    $"[CALL_BYTES] {map} decompresses past {total} bytes across {entries} entries, "
-                    + $"the limit per call is {MaxCallDecompressedBytes}");
+                throw Wc3Errors.Refuse(Wc3ErrorCodes.CallBytes,
+                    $"{map} decompresses past {total} bytes across {entries} entries, "
+                    + $"the limit per call is {MaxCallDecompressedBytes}", map);
         }
     }
 
@@ -3784,8 +3791,8 @@ public static class Wc3Tools
         }
         catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException) { return; }
         if (free < MaxTempBytes)
-            throw new McpException(
-                $"[TEMP_DISK] {root} has {free} bytes free, the temporary disk limit is {MaxTempBytes}");
+            throw Wc3Errors.Refuse(Wc3ErrorCodes.TempDisk,
+                $"{root} has {free} bytes free, the temporary disk limit is {MaxTempBytes}", root);
     }
 
     /// <summary>ERR-05. The skip lines a batch command records, split into the item it named and
@@ -3870,6 +3877,31 @@ public static class Wc3Tools
         }
     }
 
+    /// <summary>ERR-02. A required argument is absent. The message is the sentence the surface
+    /// already used, and the argument name is the offending value the error result reports.</summary>
+    private static McpException Missing(string argument) =>
+        Wc3Errors.Refuse(Wc3ErrorCodes.InvalidArgument, argument + " is required", argument);
+
+    /// <summary>ERR-02. A value is outside its legal set, or a limit on the argument was broken.
+    /// The message names the set or the limit, so the caller needs no other source.</summary>
+    private static McpException Invalid(string message, string? value = null) =>
+        Wc3Errors.Refuse(Wc3ErrorCodes.InvalidArgument, message, value);
+
+    /// <summary>ERR-02. The shared command refused the request and named its own reason.
+    /// The tool layer did not author the wording, so it reports the shared refusal as one code.</summary>
+    private static McpException Rejected(string message) =>
+        Wc3Errors.Refuse(Wc3ErrorCodes.CommandRejected, message);
+
+    /// <summary>ERR-02. The map path does not exist. Every loader entry point uses this, so the
+    /// text is the one sentence the surface has always returned.</summary>
+    private static McpException MapNotFound(string map) =>
+        Wc3Errors.Refuse(Wc3ErrorCodes.MapNotFound, "map not found: " + map, map);
+
+    /// <summary>ERR-02. An unexpected failure, with the message the runtime gave, reported as
+    /// <see cref="Wc3ErrorCodes.Internal"/> so a caller never reads it as its own mistake.</summary>
+    private static McpException Failed(Exception ex) =>
+        Wc3Errors.Refuse(Wc3ErrorCodes.Internal, ex.Message);
+
     private static T Run<T>(Func<T> body)
     {
         try { return body(); }
@@ -3880,27 +3912,27 @@ public static class Wc3Tools
         catch (OperationCanceledException) { throw; }
         catch (ToolError ex)
         {
-            throw new McpException("[" + ex.Code + "] " + ex.Message + (ex.Next is null ? "" : ". Next, " + ex.Next));
+            throw Wc3Errors.Refuse(ex.Code, ex.Message, next: ex.Next);
         }
-        catch (Exception ex) { throw new McpException(ex.Message); }
+        catch (Exception ex) { throw Failed(ex); }
     }
 
     private static MapDocument LoadMap(string map)
     {
         if (string.IsNullOrWhiteSpace(map))
-            throw new McpException("map path is required");
+            throw Missing("map path");
         // A folder map is a real Studio workflow, so `map` accepts one archive file or a folder.
         // The extension check only applies to a file. PAR-01 reopens as a wording problem: every
         // parameter says which of the two it takes, rather than the loader refusing one of them.
         bool folder = Directory.Exists(map);
         if (!File.Exists(map) && !folder)
-            throw new McpException($"map not found: {map}");
+            throw MapNotFound(map);
         if (!folder)
         {
             string extension = System.IO.Path.GetExtension(map);
             if (!extension.Equals(".w3x", StringComparison.OrdinalIgnoreCase)
                 && !extension.Equals(".w3m", StringComparison.OrdinalIgnoreCase))
-                throw new McpException($"map must be a .w3x or .w3m file: {map}");
+                throw Wc3Errors.Refuse(Wc3ErrorCodes.MapUnreadable, $"map must be a .w3x or .w3m file: {map}", map);
         }
         MapDocument doc;
         string? sha = null;
@@ -3919,7 +3951,7 @@ public static class Wc3Tools
                 doc = MapDocument.Load(map);
             }
         }
-        catch (Exception ex) { throw new McpException($"could not load '{map}': {ex.Message}"); }
+        catch (Exception ex) { throw Wc3Errors.Refuse(Wc3ErrorCodes.MapUnreadable, $"could not load '{map}': {ex.Message}", map); }
 
         // PRF-08. Outside the catch above, so a refused archive names the limit it broke rather
         // than being reworded as "could not load". Measured from the block table, no decompression.
@@ -3939,9 +3971,9 @@ public static class Wc3Tools
     private static string RequireMapPath(string map)
     {
         if (string.IsNullOrWhiteSpace(map))
-            throw new McpException("map path is required");
+            throw Missing("map path");
         if (!File.Exists(map))
-            throw new McpException($"map not found: {map}");
+            throw MapNotFound(map);
         return map;
     }
 
@@ -3953,11 +3985,11 @@ public static class Wc3Tools
         Func<MapDocument, (bool Ok, string Message, int CreationNumber)> place)
     {
         if (string.IsNullOrWhiteSpace(outPath))
-            throw new McpException("out_path is required");
+            throw Missing("out_path");
 
         var doc = LoadMap(map);
         var (ok, message, creationNumber) = place(doc);
-        if (!ok) throw new McpException(message);
+        if (!ok) throw Rejected(message);
 
         // Every placement write takes the same gate as every other edit, so it reports the same
         // digests and refuses to replace a file the caller did not agree to replace (SAF-05, SAF-06).
@@ -3972,11 +4004,11 @@ public static class Wc3Tools
         Func<MapDocument, (bool Ok, string Message, int TilesChanged)> edit)
     {
         if (string.IsNullOrWhiteSpace(outPath))
-            throw new McpException("out_path is required");
+            throw Missing("out_path");
 
         var doc = LoadMap(map);
         var (ok, message, tilesChanged) = edit(doc);
-        if (!ok) throw new McpException(message);
+        if (!ok) throw Rejected(message);
 
         var w = WriteGate.Save(doc, map, outPath, overwrite, expectInputSha256, LoadedShaOf(doc));
         return new TerrainToolResult(w.SavedTo, message, tilesChanged, w.InputSha256, w.OutputSha256,
@@ -3989,11 +4021,11 @@ public static class Wc3Tools
         Func<MapDocument, SoundOpResult> edit)
     {
         if (string.IsNullOrWhiteSpace(outPath))
-            throw new McpException("out_path is required");
+            throw Missing("out_path");
 
         var doc = LoadMap(map);
         var r = edit(doc);
-        if (!r.Ok) throw new McpException(r.Message);
+        if (!r.Ok) throw Rejected(r.Message);
 
         var w = WriteGate.Save(doc, map, outPath, overwrite, expectInputSha256, LoadedShaOf(doc));
         return new SoundToolResult(w.SavedTo, r.Message,
@@ -4008,7 +4040,7 @@ public static class Wc3Tools
     {
         var doc = LoadMap(map);
         var (ok, message) = edit(doc);
-        if (!ok) throw new McpException(message);
+        if (!ok) throw Rejected(message);
         var w = WriteGate.Save(doc, map, outPath, overwrite, expectInputSha256, LoadedShaOf(doc));
         return new EditToolResult(w.SavedTo, message, w.InputSha256, w.OutputSha256,
             w.FilesRewritten, w.BytesWritten);
@@ -4019,9 +4051,8 @@ public static class Wc3Tools
     {
         if (Enum.TryParse<TEnum>(value, ignoreCase: true, out var parsed) && Enum.IsDefined(parsed))
             return parsed;
-        throw new McpException(
-            $"invalid {paramName} '{value}'; expected one of: " +
-            string.Join(", ", Enum.GetNames<TEnum>()).ToLowerInvariant());
+        throw Invalid($"invalid {paramName} '{value}'; expected one of: " +
+            string.Join(", ", Enum.GetNames<TEnum>()).ToLowerInvariant(), value);
     }
 
     /// <summary>Validate an out_path (required, must differ from the input) and return its full
@@ -4047,17 +4078,17 @@ public static class Wc3Tools
         }
         string input = Path.TrimEndingDirectorySeparator(Path.GetFullPath(map));
         if (string.Equals(full, input, StringComparison.OrdinalIgnoreCase))
-            throw new McpException("out_path must not be the input map file itself");
+            throw Wc3Errors.Refuse(Wc3ErrorCodes.OutPathIsInput, "out_path must not be the input map file itself", "out_path");
         // A folder map's copy cannot live inside the folder it was read from.
         if (Directory.Exists(input) && full.StartsWith(input + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
-            throw new McpException("out_path must not be inside the input map folder");
+            throw Wc3Errors.Refuse(Wc3ErrorCodes.OutPathInsideInput, "out_path must not be inside the input map folder", "out_path");
         return full;
     }
 
     private static ObjectKind ParseKind(string kind)
     {
         try { return ObjectKinds.Parse(kind); }
-        catch (ArgumentException ex) { throw new McpException(ex.Message); }
+        catch (ArgumentException ex) { throw Wc3Errors.Refuse(Wc3ErrorCodes.InvalidArgument, ex.Message, kind); }
     }
 
     /// <summary>Split a "code=value" pair on its first '=', the value may itself contain '='.</summary>
@@ -4074,9 +4105,9 @@ public static class Wc3Tools
     private static byte[] ReadPngFile(string png)
     {
         if (string.IsNullOrWhiteSpace(png))
-            throw new McpException("png path is required");
+            throw Missing("png path");
         if (!File.Exists(png))
-            throw new McpException($"png not found {png}");
+            throw Wc3Errors.Refuse(Wc3ErrorCodes.InputNotFound, $"png not found {png}", png);
         return File.ReadAllBytes(png);
     }
 
@@ -4173,10 +4204,10 @@ public static class Wc3Tools
 
     [McpServerTool(Name = "target_list", Title = "List available builds", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("List all available builds in the schemas directory, with their sections. Use --full_only to skip scripts-only builds.")]
-    public static IReadOnlyList<BuildInfo> TargetList(
+    public static CappedItems<BuildInfo> TargetList(
         [Description("Optional path to schemas directory containing schema folders with manifest.json.")] string? schemas_dir = null,
         [Description("When true, skip scripts-only builds that have no object data.")] bool full_only = false)
-        => Run(() => TargetBuildSettings.List(schemasDir: schemas_dir, fullOnly: full_only));
+        => Run(() => Wc3Limit.Cap(TargetBuildSettings.List(schemasDir: schemas_dir, fullOnly: full_only)));
 
     [McpServerTool(Name = "gamedata_schema_diff", Title = "Diff two schema folders", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Compare two schema folders (produced by gamedata schema) and report added, removed and changed object fields, trigger functions, script types and natives, and enumerated field option sets. Groups output by section (objects, triggers, script, enums) then by file or category. A section only one build has is listed as not compared rather than everything added or removed. Use this to track what a patch changes across builds, or to check whether two maps targeting different patches are compatible.")]

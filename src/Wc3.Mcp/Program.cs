@@ -73,7 +73,7 @@ public static class Program
         // the host is built here. The two phases used to run one after the other. The 276 tool
         // descriptors and the catalog that embeds them are not part of this, they are built on the
         // first client read, so this phase is the resources and prompts.
-        Task<McpServerOptions> surface = Task.Run(Wc3McpServer.CreateOptions);
+        Task<McpServerOptions> surface = Task.Run(() => Wc3McpServer.CreateOptions());
 
         var builder = Host.CreateApplicationBuilder(Array.Empty<string>());
 

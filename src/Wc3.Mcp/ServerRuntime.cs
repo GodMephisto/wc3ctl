@@ -186,6 +186,62 @@ internal static class ServerRuntime
     }
 
     /// <summary>
+    /// SUR-02 and SUR-03. The alias window, applied at the call path rather than inside a tool
+    /// body. A call under an old name is renamed to the current tool before the lookup, so the
+    /// arguments travel untouched, no tool body learns that a second name exists and tools/list
+    /// keeps one entry per tool. A successful call gains one line saying which name the caller
+    /// used, and an alias whose removal version has been reached is refused with a code naming
+    /// that version instead of being dispatched. A name that is not in the table is left alone,
+    /// so an unknown tool still reaches the protocol layer and fails there as it always has.
+    /// </summary>
+    public static McpRequestHandler<CallToolRequestParams, CallToolResult> AliasToolCalls(
+        McpRequestHandler<CallToolRequestParams, CallToolResult> next,
+        IReadOnlyDictionary<string, ToolAlias>? renames = null)
+    {
+        ArgumentNullException.ThrowIfNull(next);
+        IReadOnlyDictionary<string, ToolAlias> table = renames ?? McpToolCatalog.Renames;
+        return async (request, cancellationToken) =>
+        {
+            string called = request.Params?.Name ?? "";
+            if (request.Params is null || !table.TryGetValue(called, out ToolAlias? alias))
+                return await next(request, cancellationToken).ConfigureAwait(false);
+
+            if (McpToolCatalog.RemovalReached(alias.RemovalVersion, ServerIdentity.Version))
+                return Refusal(AliasExpiredCode, AliasExpiredMessage(alias));
+
+            // The one rewrite. Everything after this point, the permission policy included, sees
+            // the name the surface serves.
+            request.Params.Name = alias.CurrentName;
+            CallToolResult result = await next(request, cancellationToken).ConfigureAwait(false);
+            NoteAlias(result, alias);
+            return result;
+        };
+    }
+
+    /// <summary>SUR-03. The code an alias past its removal version is refused with.</summary>
+    internal const string AliasExpiredCode = "ALIAS_EXPIRED";
+
+    /// <summary>The refusal, in the shape a tool error takes, naming the version that ended the window.</summary>
+    private static string AliasExpiredMessage(ToolAlias alias) =>
+        "The name \"" + alias.OldName + "\" was removed in " + alias.RemovalVersion
+        + ", so the alias window has closed and this build is " + ServerIdentity.Version
+        + ". Nothing ran. Call \"" + alias.CurrentName + "\" instead, which is the name the"
+        + " surface serves.";
+
+    /// <summary>
+    /// SUR-03. One text block after the tool's own content, so a client can see that the answer
+    /// came from a name it did not list. The tool's own block is left exactly as the tool wrote it.
+    /// </summary>
+    private static void NoteAlias(CallToolResult result, ToolAlias alias)
+    {
+        string note = "[ALIAS] called as \"" + alias.OldName + "\" and served by \"" + alias.CurrentName
+            + "\". The old name is deprecated and is removed in " + alias.RemovalVersion + ".";
+        IList<ContentBlock> content = result.Content ?? new List<ContentBlock>();
+        content.Add(new TextContentBlock { Text = note });
+        result.Content = content;
+    }
+
+    /// <summary>
     /// PRF-01. The incoming message filter. It remembers the id of the initialize request, so the
     /// outgoing filter can tell the handshake reply from every later response and close the cold
     /// start clock on the reply rather than on the request. TRN-03 rides the same filter, which the

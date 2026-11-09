@@ -108,7 +108,7 @@ public sealed class PermissionPolicyTests : IDisposable
         // The surface registers the policy filter on the call tool pipeline, so a client reaches it
         // without naming a file and the same refusal is what a bug report sees.
         var options = Wc3McpServer.CreateOptions();
-        Assert.Equal(2, options.Filters.Request.CallToolFilters.Count);
+        Assert.Equal(4, options.Filters.Request.CallToolFilters.Count);
     }
 
     [Fact]

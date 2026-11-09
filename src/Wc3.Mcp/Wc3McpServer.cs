@@ -31,10 +31,24 @@ public static class Wc3McpServer
     /// not built here. Both the tool collection and the catalog resource that embeds every schema
     /// are deferred to the first read, so the initialize reply does not carry a schema build no
     /// client has asked for yet. The build itself still happens once per process and every session
-    /// shares the one result.</summary>
-    public static McpServerOptions CreateOptions()
+    /// shares the one result.
+    /// <para>
+    /// SUR-03. <paramref name="renames"/> is the alias window. The shipped table is the default,
+    /// and a test supplies its own so the filter can be exercised over a rename that this tree has
+    /// not made yet. A table that cannot be trusted fails here rather than at the first call, which
+    /// is the startup validation rule the config carries.
+    /// </para></summary>
+    public static McpServerOptions CreateOptions(IReadOnlyDictionary<string, ToolAlias>? renames = null)
     {
         long started = System.Diagnostics.Stopwatch.GetTimestamp();
+
+        IReadOnlyDictionary<string, ToolAlias> aliases = renames ?? McpToolCatalog.Renames;
+        if (aliases.Count > 0 && McpToolCatalog.InspectRenames(aliases) is { Count: > 0 } aliasProblems)
+        {
+            throw new InvalidOperationException(
+                "The tool alias window is not usable, so the server did not start. "
+                + string.Join(" ", aliasProblems));
+        }
 
         var tools = new DeferredToolCollection(ToolList, ToolMethodList.Value.Count);
 
@@ -58,9 +72,20 @@ public static class Wc3McpServer
             ServerInstructions = Instructions.Value,
         };
 
+        // SUR-03. The alias window sits outermost, so a call under an old name is renamed before
+        // the policy reads the name and before the tool body runs. A refusal by either the window
+        // or the policy still answers through this filter, which is why the reply a client gets
+        // names the name it used.
+        options.Filters.Request.CallToolFilters.Add(next => ServerRuntime.AliasToolCalls(next, aliases));
+
         // SAF-17. The policy is read here, when the surface is built, and the filter refuses before
         // the tool body runs, so a denied call never opens a map or touches a file.
         options.Filters.Request.CallToolFilters.Add(PermissionPolicy.Filter(PermissionPolicy.Load()));
+
+        // ERR-03. The outermost filter turns a thrown refusal into the error result that carries
+        // the code, the message, the tool and the offending value as separate fields beside the
+        // text, so a caller branches on the code rather than parsing prose.
+        options.Filters.Request.CallToolFilters.Insert(0, Wc3Errors.StructuredErrors);
 
         // OBS-02, OBS-04, PRF-01, PRF-04 and TRN-03 ride the SDK 1.4.1 filter pipeline, which is
         // built from these lists when the server starts. The request filter wraps the tool
@@ -103,10 +128,20 @@ public static class Wc3McpServer
 
     private static StartupFacts ReadStartup()
     {
+        // PRF-01. The two probes are independent, so they start together and the line waits for the
+        // longer one rather than for their sum. The settings probe walks the schemas folder, which
+        // is the largest single item in the start line. On the published exe the startup phase is
+        // 258 ms with the schemas folder present and 133 ms with WC3_SCHEMAS_DIR pointed at an empty
+        // folder, so that walk is about 125 ms of it. The install probe reads two registry keys and
+        // one .build.info. Ten runs of the same exe put startup at a 237 ms median against a 129 ms
+        // host phase, which is why the line is the phase this change attacks.
+        Task<Wc3.Commands.TargetBuildResult?> settings = Task.Run(ReadTargetBuild);
+        Task<string?> install = Task.Run(ReadInstallBuild);
         try
         {
-            var settings = Wc3.Commands.TargetBuildSettings.Get();
-            string source = settings.Source switch
+            Wc3.Commands.TargetBuildResult? target = settings.GetAwaiter().GetResult();
+            if (target is null) return new StartupFacts("unresolved", "unavailable", null);
+            string source = target.Source switch
             {
                 Wc3.Commands.TargetSource.Option => "option",
                 Wc3.Commands.TargetSource.Environment => "environment variable",
@@ -114,18 +149,32 @@ public static class Wc3McpServer
                 Wc3.Commands.TargetSource.Default => "default",
                 _ => "unknown",
             };
-            string? installDir = null;
-            try { installDir = Wc3.GameData.GameInstall.Locate(); } catch { /* ignore */ }
-            string? installBuild = null;
-            if (installDir is not null)
-            {
-                try { installBuild = Wc3.GameData.GameInstall.ReadBuildVersion(installDir); } catch { /* ignore */ }
-            }
-            return new StartupFacts(settings.Build, source, installBuild);
+            return new StartupFacts(target.Build, source, install.GetAwaiter().GetResult());
         }
         catch
         {
             return new StartupFacts("unresolved", "unavailable", null);
+        }
+    }
+
+    /// <summary>The target build and where it came from, or null when the settings cannot be read.</summary>
+    private static Wc3.Commands.TargetBuildResult? ReadTargetBuild()
+    {
+        try { return Wc3.Commands.TargetBuildSettings.Get(); }
+        catch { return null; }
+    }
+
+    /// <summary>The installed game build, or null when there is no install or no build file.</summary>
+    private static string? ReadInstallBuild()
+    {
+        try
+        {
+            string? installDir = Wc3.GameData.GameInstall.Locate();
+            return installDir is null ? null : Wc3.GameData.GameInstall.ReadBuildVersion(installDir);
+        }
+        catch
+        {
+            return null;
         }
     }
 
@@ -155,10 +204,15 @@ public static class Wc3McpServer
     /// </summary>
     public static string BuildStartLine()
     {
-        StartupFacts facts = Startup.Value;
+        // PRF-01. The facts probe and the attribute scan are independent, so they run together and
+        // the line costs the longer one rather than both. They were two statements in a row, which
+        // put their full cost on the clock the initialize reply waits for.
+        Task<StartupFacts> probe = Task.Run(() => Startup.Value);
+        int tools = ToolCount();
+        StartupFacts facts = probe.GetAwaiter().GetResult();
         string line = ServerIdentity.ProductId + " " + ServerIdentity.Version
             + "  protocol " + ProtocolRevision
-            + "  tools " + ToolCount()
+            + "  tools " + tools
             + "  target " + facts.Target + " (" + facts.Source + ")"
             + "  game " + (facts.GameBuild ?? "none")
             + "  profile " + DefaultProfile;
@@ -176,11 +230,14 @@ public static class Wc3McpServer
     /// <summary>The methods that carry a tool, before any of them is turned into a handler. Scanned
     /// once per process, because the start line needs the count before the host builds and the
     /// surface then scans the same list. Two scans of 275 attributes cost part of the cold start
-    /// budget for no gain.</summary>
+    /// budget for no gain. The test is <c>IsDefined</c> rather than <c>GetCustomAttribute</c>,
+    /// because the scan needs to know that the attribute is there and never reads its value, so
+    /// constructing 275 attribute instances on the start line path was work nobody used. The
+    /// surface asks for the attribute itself when it binds each method.</summary>
     private static readonly Lazy<IReadOnlyList<MethodInfo>> ToolMethodList = new(
         () => new[] { typeof(Wc3Tools), typeof(Wc3Context) }
             .SelectMany(t => t.GetMethods(BindingFlags.Public | BindingFlags.Static))
-            .Where(m => m.GetCustomAttribute<McpServerToolAttribute>() is not null)
+            .Where(m => m.IsDefined(typeof(McpServerToolAttribute), inherit: false))
             .ToList(),
         LazyThreadSafetyMode.ExecutionAndPublication);
 

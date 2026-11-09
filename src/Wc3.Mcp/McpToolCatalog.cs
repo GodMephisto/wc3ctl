@@ -1,4 +1,5 @@
 // src/Wc3.Mcp/McpToolCatalog.cs
+using System.Globalization;
 using System.Text.Json;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
@@ -53,6 +54,14 @@ public sealed record McpCatalog(
     IReadOnlyList<McpToolInfo> Tools,
     IReadOnlyList<McpPromptInfo> Prompts);
 
+/// <summary>
+/// SUR-02 and SUR-03. One renamed tool and the release that ends the window. The old name answers
+/// to the current tool until the removal version is reached, so the period is stated as a version
+/// rather than a date and every build decides for itself whether the window is still open. The
+/// current name is the only name the surface lists, and the old name never becomes a tool.
+/// </summary>
+public sealed record ToolAlias(string OldName, string CurrentName, string RemovalVersion);
+
 /// <summary>The audit outcome. An empty problem list means the surface is clean.</summary>
 public sealed record McpAnnotationAuditResult(IReadOnlyList<McpAnnotationProblem> Problems)
 {
@@ -66,14 +75,129 @@ public sealed record McpAnnotationAuditResult(IReadOnlyList<McpAnnotationProblem
 /// </summary>
 public static class McpToolCatalog
 {
-    /// <summary>Every tool, ordinal-sorted, with its description and four annotation hints.</summary>
-    public static IReadOnlyList<McpToolInfo> Describe() =>
-        Wc3McpServer.CreateTools()
-            .Select(t => ToInfo(t.ProtocolTool))
+    /// <summary>
+    /// SUR-02 and SUR-03. The alias window, old name to the tool that answers to it, each entry
+    /// carrying the version that removes the old name. The table is empty while no name in this
+    /// tree has changed, because every name the surface serves is still the name it shipped with.
+    /// A rename adds one entry here and nothing else, since the call filter and the catalog both
+    /// read this table rather than a second copy of it.
+    /// </summary>
+    public static IReadOnlyDictionary<string, ToolAlias> Renames { get; } = BuildRenames();
+
+    private static IReadOnlyDictionary<string, ToolAlias> BuildRenames()
+    {
+        ToolAlias[] entries =
+        {
+            // The shape a rename takes, and the only place a period is stated.
+            // new ToolAlias("triggers_read", "trigger_tree_get", "0.5.0"),
+        };
+
+        var table = new Dictionary<string, ToolAlias>(StringComparer.Ordinal);
+        foreach (ToolAlias entry in entries) table[entry.OldName] = entry;
+        return table;
+    }
+
+    /// <summary>
+    /// SUR-03. True when this build is at or past the entry's removal version, which is when the
+    /// old name stops answering. Three numeric parts compared left to right, so 0.4.13 is inside a
+    /// window that ends at 0.5.0 and outside one that ended at 0.4.12. A removal version that does
+    /// not parse counts as reached, so a broken entry can never keep a name alive, and
+    /// <see cref="InspectRenames"/> names the same entry as a problem.
+    /// </summary>
+    public static bool RemovalReached(string removalVersion, string currentVersion)
+    {
+        if (!TryVersion(removalVersion, out int[] removal)) return true;
+        if (!TryVersion(currentVersion, out int[] current)) return false;
+        for (int i = 0; i < 3; i++)
+        {
+            if (current[i] != removal[i]) return current[i] > removal[i];
+        }
+        return true;
+    }
+
+    /// <summary>Three numeric parts, or false when the text is not a version. Missing parts are zero.</summary>
+    public static bool TryVersion(string? text, out int[] parts)
+    {
+        parts = new int[3];
+        if (string.IsNullOrWhiteSpace(text)) return false;
+        string[] pieces = text.Trim().Split('.');
+        if (pieces.Length > 3) return false;
+        for (int i = 0; i < pieces.Length; i++)
+        {
+            if (!int.TryParse(pieces[i].Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out int value))
+                return false;
+            parts[i] = value;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// The problems with an alias table, in the order they are found. An empty list means every
+    /// entry names a period, a tool and a name that were not already served. When
+    /// <paramref name="liveTools"/> is supplied the table is also checked against the surface, so
+    /// an alias whose target is missing, or whose old name is still a live tool, is a problem
+    /// rather than a silent second name. The server calls this at startup for a table it was given
+    /// and fails loud, and a test calls it for the shipped table and the live surface.
+    /// </summary>
+    public static IReadOnlyList<string> InspectRenames(
+        IReadOnlyDictionary<string, ToolAlias>? table = null, IReadOnlyList<string>? liveTools = null)
+    {
+        IReadOnlyDictionary<string, ToolAlias> entries = table ?? Renames;
+        var problems = new List<string>();
+        foreach (var pair in entries.OrderBy(p => p.Key, StringComparer.Ordinal))
+        {
+            ToolAlias entry = pair.Value;
+            if (!string.Equals(pair.Key, entry.OldName, StringComparison.Ordinal))
+                problems.Add("the table key \"" + pair.Key + "\" is not the old name \"" + entry.OldName + "\".");
+            if (string.IsNullOrWhiteSpace(entry.OldName))
+                problems.Add("an entry has no old name.");
+            if (string.IsNullOrWhiteSpace(entry.CurrentName))
+                problems.Add(entry.OldName + " names no current tool.");
+            else if (string.Equals(entry.OldName, entry.CurrentName, StringComparison.Ordinal))
+                problems.Add(entry.OldName + " is aliased to itself, which is a rename that did not happen.");
+            if (!TryVersion(entry.RemovalVersion, out _))
+                problems.Add(entry.OldName + " states the removal version \"" + entry.RemovalVersion
+                    + "\", which is not a version, so the window has no stated end.");
+            if (liveTools is null) continue;
+            if (!liveTools.Contains(entry.CurrentName, StringComparer.Ordinal))
+                problems.Add(entry.OldName + " points at \"" + entry.CurrentName + "\", which the surface does not serve.");
+            if (liveTools.Contains(entry.OldName, StringComparer.Ordinal))
+                problems.Add(entry.OldName + " is still a live tool, so it cannot also be an alias.");
+        }
+        return problems;
+    }
+
+    /// <summary>The old names that resolve to this tool, sorted, for the catalog entry.</summary>
+    private static IReadOnlyDictionary<string, IReadOnlyList<string>> AliasesByTool(
+        IReadOnlyDictionary<string, ToolAlias> table)
+    {
+        var byTool = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        foreach (ToolAlias entry in table.Values.OrderBy(e => e.OldName, StringComparer.Ordinal))
+        {
+            if (!byTool.TryGetValue(entry.CurrentName, out List<string>? names))
+                byTool[entry.CurrentName] = names = new List<string>();
+            names.Add(entry.OldName);
+        }
+        return byTool.ToDictionary(
+            p => p.Key, p => (IReadOnlyList<string>)p.Value.ToArray(), StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    /// Every tool, ordinal-sorted, with its description and four annotation hints. The aliases a
+    /// tool answers to are listed on that tool and never on a row of their own, which is what keeps
+    /// the catalog to one entry per tool.
+    /// </summary>
+    public static IReadOnlyList<McpToolInfo> Describe(IReadOnlyDictionary<string, ToolAlias>? renames = null)
+    {
+        IReadOnlyDictionary<string, IReadOnlyList<string>> byTool = AliasesByTool(renames ?? Renames);
+        return Wc3McpServer.CreateTools()
+            .Select(t => ToInfo(t.ProtocolTool, byTool))
             .OrderBy(i => i.Name, StringComparer.Ordinal)
             .ToList();
+    }
 
-    internal static McpToolInfo ToInfo(Tool tool)
+    internal static McpToolInfo ToInfo(
+        Tool tool, IReadOnlyDictionary<string, IReadOnlyList<string>>? aliasesByTool = null)
     {
         var a = tool.Annotations;
         return new McpToolInfo(
@@ -81,7 +205,9 @@ public static class McpToolCatalog
             a?.ReadOnlyHint, a?.DestructiveHint, a?.IdempotentHint, a?.OpenWorldHint,
             McpToolFamilies.Of(tool.Name))
         {
-            Aliases = Array.Empty<string>(),
+            Aliases = aliasesByTool is not null && aliasesByTool.TryGetValue(tool.Name, out var names)
+                ? names
+                : Array.Empty<string>(),
             InputSchema = tool.InputSchema,
         };
     }

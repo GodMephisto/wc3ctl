@@ -26,7 +26,7 @@ public class McpServerTests
         "ci_all", "ci_compat", "ci_lint", "ci_schema", "ci_validate",
         "compat_explain",
         "compat_matrix", "content_scaffold", "deprotect_map", "diff", "docs_search", "doctor_check", "doctor_compare", "doctor_fix",
-        "doctor_inspect", "editor_catalog_get", "editor_catalog_list",
+        "doctor_inspect", "editor_catalog_get", "editor_catalog_list", "error_codes",
         "file_extract", "file_get_text", "file_list", "file_set", "force_list", "force_rename",
         "force_set_flags", "force_set_players",
         "gamedata_bounds", "gamedata_changelog", "gamedata_coverage", "gamedata_enum", "gamedata_export_schemas",
@@ -381,7 +381,20 @@ public class McpServerTests
             {
                 var aliases = tool.GetProperty("aliases");
                 Assert.Equal(JsonValueKind.Array, aliases.ValueKind);
-                Assert.Empty(aliases.EnumerateArray());
+
+                // SUR-03. A tool lists the old names that still answer to it, and only those. The
+                // shipped table is empty, so every entry is empty today and a rename adds its old
+                // name here rather than a row of its own.
+                string name = tool.GetProperty("name").GetString() ?? "";
+                var expected = McpToolCatalog.Renames.Values
+                    .Where(a => a.CurrentName == name)
+                    .Select(a => a.OldName)
+                    .OrderBy(n => n, StringComparer.Ordinal)
+                    .ToArray();
+                Assert.Equal(expected, aliases.EnumerateArray()
+                    .Select(a => a.GetString() ?? "")
+                    .OrderBy(n => n, StringComparer.Ordinal)
+                    .ToArray());
 
                 var schema = tool.GetProperty("inputSchema");
                 Assert.Equal(JsonValueKind.Object, schema.ValueKind);
