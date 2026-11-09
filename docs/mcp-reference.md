@@ -674,13 +674,13 @@ Annotations. read-only no, destructive no, idempotent no, open-world no.
 
 Remove one internal file by rebuilding the archive without it, and report whether the rebuild actually dropped the name. Writes a copy, the input map is never modified in place.
 
-Annotations. read-only no, destructive no, idempotent no, open-world no.
+Annotations. read-only no, destructive yes, idempotent no, open-world no.
 
 ## mpq_remove_many
 
 Remove many internal files in one rebuild and report how many were dropped. Writes a copy, the input map is never modified in place. The one-rebuild form of mpq_remove, for pruning the files asset_unused reports as unreferenced.
 
-Annotations. read-only no, destructive no, idempotent no, open-world no.
+Annotations. read-only no, destructive yes, idempotent no, open-world no.
 
 ## mpq_strip_bookkeeping
 

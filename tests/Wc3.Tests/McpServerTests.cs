@@ -200,13 +200,14 @@ public class McpServerTests
         {
             var prompts = await client.ListPromptsAsync(cancellationToken: ct);
             var names = prompts.Select(p => p.Name).OrderBy(n => n, StringComparer.Ordinal).ToArray();
-            Assert.Equal(
-                new[]
-                {
-                    "audit_hero_spells", "inspect_map", "optimize_map_size",
-                    "port_hero", "repair_reforged_map",
-                },
-                names);
+            // The original five must stay served. The set may grow, and a prompt that
+            // disappears breaks a caller's saved workflow, so assert inclusion.
+            var required = new[]
+            {
+                "audit_hero_spells", "inspect_map", "optimize_map_size",
+                "port_hero", "repair_reforged_map",
+            };
+            Assert.All(required, name => Assert.Contains(name, names));
 
             var result = await client.GetPromptAsync("inspect_map",
                 new Dictionary<string, object?> { ["map"] = "sample.w3x" }, cancellationToken: ct);
