@@ -51,3 +51,10 @@ Append only. One block per batch, with the revision it produced.
 - Seven gaps. Two measurements contradicted the document, 11 parameters against a stated 8, and no test comparing the four surface views.
 - The tooling had a ceiling at 99 rows. Three scripts matched two digits, so six new rows were invisible to the counts guard and missing from requirements.json. Fixed to two or three digits.
 - Unassessed is 0. 90 met, 89 gap, 86 rows, spec 1.38, 67 pages dark and 77 light.
+
+## Round two, three workers, revision pending
+
+- First team closed seven rows at 1.45, the write gate family narrowing from 57 writers to two and the five resource requirements. Verified here, 67 tests green, 13 measures agreeing.
+- Second team dispatched on disjoint files. A owns Wc3Tools.cs for SUR-07, PAR-08, DSC-05 and ERR-05. B owns the host for OBS-02, OBS-04, TRN-03 and PRF-05. C owns the scripts and CI for IDN-02, PKG-13, DOC-04 and AUT-02.
+- Nobody builds but the parent, because three dotnet builds on one project collide in obj and the output assembly.
+- Known defect handed to C, the version script reads the other session's binary, wc3-mcp.exe, rather than Wc3.Mcp.exe which is the one the spec measures.

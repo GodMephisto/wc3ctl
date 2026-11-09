@@ -107,10 +107,43 @@
     }
   ],
   "state": {
-    "revision": "1.38",
-    "met": 90,
-    "gap": 89,
+    "revision": "1.45",
+    "met": 115,
+    "gap": 64,
     "unassessed": 0,
-    "gap_rows": 86
-  }
+    "gap_rows": 66
+  },
+  "round": "second team, three workers, disjoint files, one parent build",
+  "in_flight": [
+    {
+      "worker": "A",
+      "scope": "Wc3Tools.cs",
+      "rows": [
+        "SUR-07",
+        "PAR-08",
+        "DSC-05",
+        "ERR-05"
+      ]
+    },
+    {
+      "worker": "B",
+      "scope": "Program.cs and the host",
+      "rows": [
+        "OBS-02",
+        "OBS-04",
+        "TRN-03",
+        "PRF-05"
+      ]
+    },
+    {
+      "worker": "C",
+      "scope": "tools scripts and CI",
+      "rows": [
+        "IDN-02",
+        "PKG-13",
+        "DOC-04",
+        "AUT-02"
+      ]
+    }
+  ]
 }
