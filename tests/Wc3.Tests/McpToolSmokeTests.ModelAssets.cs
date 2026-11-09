@@ -320,4 +320,32 @@ public sealed class McpSmokeModelAssetTests : McpSmokeBase
         Assert.Equal("smoke", json.RootElement.GetProperty("name").GetString());
         Assert.Equal(4, json.RootElement.GetProperty("roles").EnumerateObject().Count());
     }
+
+    [Fact, Covers("error_codes")]
+    public async Task Error_codes_answers_with_the_documented_set()
+    {
+        var result = await Call("error_codes", Args());
+
+        Assert.True(Prop(result, "count").GetInt32() > 0);
+        Assert.Contains("POLICY_DENIED", result.GetRawText());
+        Assert.Contains("STALE_INPUT", result.GetRawText());
+    }
+
+    [Fact, Covers("file_extract")]
+    public async Task File_extract_writes_the_entry_to_out_path()
+    {
+        string outPath = Path.Combine(Path.GetTempPath(), "wc3-extract-" + Guid.NewGuid().ToString("N") + ".j");
+        try
+        {
+            var result = await Call("file_extract", Args(("map", Fixture), ("entry", "war3map.j"), ("out_path", outPath)));
+
+            Assert.Contains("sha256", result.GetRawText(), StringComparison.OrdinalIgnoreCase);
+            Assert.True(File.Exists(outPath), "the entry was not written to out_path");
+        }
+        finally
+        {
+            if (File.Exists(outPath)) File.Delete(outPath);
+        }
+    }
+
 }

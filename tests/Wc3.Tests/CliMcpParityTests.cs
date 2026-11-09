@@ -294,6 +294,15 @@ public class CliMcpParityTests
         ["mcp_export_verify"] = "export verify",
         ["version_info"] = "version",    };
 
+    // MCP tools that intentionally have no CLI verb. `error_codes` reports the set the surface can
+    // raise and `file_extract` writes one archive entry, both of which are protocol or agent work
+    // rather than something a person runs from a shell.
+    private static readonly HashSet<string> McpOnly = new(StringComparer.Ordinal)
+    {
+        "error_codes",
+        "file_extract",
+    };
+
     // CLI commands that intentionally have no MCP tool (local dev / query utilities).
     private static readonly HashSet<string> CliOnly = new(StringComparer.Ordinal)
     {
@@ -468,7 +477,7 @@ public class CliMcpParityTests
     {
         // Adding/removing an MCP tool forces a conscious update to this parity map.
         Assert.Equal(
-            RealMcpTools().OrderBy(n => n, StringComparer.Ordinal).ToArray(),
+            RealMcpTools().Where(n => !McpOnly.Contains(n)).OrderBy(n => n, StringComparer.Ordinal).ToArray(),
             ToolToCliPath.Keys.OrderBy(n => n, StringComparer.Ordinal).ToArray());
     }
 
