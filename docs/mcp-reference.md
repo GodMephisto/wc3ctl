@@ -1008,7 +1008,7 @@ Annotations. read-only yes, destructive no, idempotent yes, open-world no.
 
 ## rag_install
 
-Install the local semantic index and graph over the Warcraft III corpus. Fetches the embedding model and the corpus dataset, verifies each, and builds the index and the graph, after which docs_search is semantic and the graph tools work. Needs network on the first run. The corpus is fixed to the bundled dataset, never a folder named by the caller, so this cannot read arbitrary local files.
+Install the local semantic index and graph over the Warcraft III corpus. Fetches the embedding model and the corpus dataset, verifies each, and builds the index and the graph, after which docs_search is semantic and the graph tools work. Needs network on the first run. It writes many files under the user's local app data, in the rag root the answer names, and never into a map folder, so it is not gated like a single artifact and reports the root and how many files it wrote instead. The corpus is fixed to the bundled dataset, never a folder named by the caller, so this cannot read arbitrary local files.
 
 Annotations. read-only no, destructive no, idempotent yes, open-world yes.
 
@@ -1356,7 +1356,7 @@ Annotations. read-only yes, destructive no, idempotent yes, open-world no.
 
 ## target_set
 
-Set the target build that compat and lint use when --target is omitted. Validates the build exists in the schemas folder.
+Set the target build that compat and lint use when --target is omitted. Validates the build exists in the schemas folder, then writes the settings file through the write gate, which refuses an existing settings file without overwrite and refuses a path that crosses a symbolic link. The write is staged beside the settings file and renamed into place, and the answer carries savedTo, inputSha256, outputSha256, filesRewritten and bytesWritten.
 
 Annotations. read-only no, destructive no, idempotent yes, open-world no.
 
@@ -1650,7 +1650,7 @@ Annotations. read-only yes, destructive no, idempotent yes, open-world no.
 
 ## version_info
 
-Report the product version, the git short hash and UTC build time stamped into this build, and the name and version of the MCP server it carries. Read-only.
+Report the product version, the git short hash and UTC build time stamped into this build, the name and version of the MCP server it carries, the product id, the newest MCP protocol revision the build speaks and the SDK version it was compiled against. Read-only.
 
 Annotations. read-only yes, destructive no, idempotent yes, open-world no.
 

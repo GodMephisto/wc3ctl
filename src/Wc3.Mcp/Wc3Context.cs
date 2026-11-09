@@ -368,13 +368,64 @@ public static class Wc3Context
     public static object RagStatus() => Rag(() => (object)RagCommand.Status());
 
     [McpServerTool(Name = "rag_install", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = true)]
-    [Description("Install the local semantic index and graph over the Warcraft III corpus. Fetches the embedding model and the corpus dataset, verifies each, and builds the index and the graph, after which docs_search is semantic and the graph tools work. Needs network on the first run. The corpus is fixed to the bundled dataset, never a folder named by the caller, so this cannot read arbitrary local files.")]
+    [Description("Install the local semantic index and graph over the Warcraft III corpus. Fetches the embedding model and the corpus dataset, verifies each, and builds the index and the graph, after which docs_search is semantic and the graph tools work. Needs network on the first run. It writes many files under the user's local app data, in the rag root the answer names, and never into a map folder, so it is not gated like a single artifact and reports the root and how many files it wrote instead. The corpus is fixed to the bundled dataset, never a folder named by the caller, so this cannot read arbitrary local files.")]
     public static object RagInstall(
         [Description("CPU threads for embedding. Default min(cores/2, 4), the low CPU setting. Raise it to build faster.")] int? threads = null,
         [Description("Chunks per inference, default 16. Larger batches finish sooner and use more memory.")] int? batch = null)
     {
+        // An install writes a corpus, a model, an index and a graph, so it cannot be gated as one
+        // artifact. It declares what it wrote instead, and the count is measured from the folder
+        // before and after rather than taken from the install's own success message.
+        var before = RagFileState(RagPaths.Root);
         var r = Rag(() => RagCommand.Install(null, threads, batch));
-        return new { r.Root, r.Corpus, r.Chunks, r.IndexFile, r.ModelRepo, note = "docs_search is now semantic" };
+        int? filesWritten = RagFilesWritten(RagPaths.Root, before);
+        return new { r.Root, r.Corpus, r.Chunks, r.IndexFile, r.ModelRepo, FilesWritten = filesWritten, note = "docs_search is now semantic" };
+    }
+
+    /// <summary>
+    /// Every file under the rag root, keyed by its relative path, with the length and the last
+    /// write time that identify one version of it. Null means the folder could not be read, which
+    /// is different from an empty folder, so the count can say unknown rather than zero.
+    /// </summary>
+    private static Dictionary<string, (long Length, DateTime WrittenAt)>? RagFileState(string root)
+    {
+        var state = new Dictionary<string, (long Length, DateTime WrittenAt)>(StringComparer.OrdinalIgnoreCase);
+        if (!Directory.Exists(root)) return state;
+        try
+        {
+            foreach (string file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
+            {
+                var info = new FileInfo(file);
+                state[Path.GetRelativePath(root, file)] = (info.Length, info.LastWriteTimeUtc);
+            }
+            return state;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// How many files the install created or updated, or null when either picture of the folder
+    /// could not be read. A counting failure must not turn a finished install into an error, and
+    /// it must not be reported as zero either.
+    /// </summary>
+    private static int? RagFilesWritten(
+        string root, IReadOnlyDictionary<string, (long Length, DateTime WrittenAt)>? before)
+    {
+        if (before is null) return null;
+        var after = RagFileState(root);
+        if (after is null) return null;
+        int written = 0;
+        foreach (var (path, now) in after)
+        {
+            if (!before.TryGetValue(path, out var then)
+                || then.Length != now.Length
+                || then.WrittenAt != now.WrittenAt)
+                written++;
+        }
+        return written;
     }
 
     [McpServerTool(Name = "graph_neighbors", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]

@@ -3534,6 +3534,72 @@ public static class Wc3Tools
         return skipped;
     }
 
+    /// <summary>
+    /// The settings file TargetBuildSettings writes, rebuilt here because the path property that
+    /// names it is internal to Wc3.Commands. WC3CTL_SETTINGS_DIR overrides the folder exactly as it
+    /// does there, so the CLI, the tests and this tool all name the same file.
+    /// </summary>
+    private static string TargetSettingsPath()
+    {
+        string? dir = Environment.GetEnvironmentVariable("WC3CTL_SETTINGS_DIR");
+        if (!string.IsNullOrWhiteSpace(dir)) return Path.Combine(dir, "settings.json");
+        return Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "wc3ctl", "settings.json");
+    }
+
+    /// <summary>
+    /// The validation TargetBuildSettings.Set performs before it writes, split out so the write
+    /// itself can go through the gate. A schema folder holding a manifest is a target in its own
+    /// right, any other value must name a build the schemas folder declares, and the unknown case
+    /// is left to LoadSchema, which throws the FileNotFoundException with the close build names.
+    /// </summary>
+    private static void RequireKnownBuild(string build, string? schemasDir)
+    {
+        if (Directory.Exists(build) && File.Exists(Path.Combine(build, "manifest.json"))) return;
+        foreach (var info in TargetBuildSettings.List(schemasDir))
+            if (string.Equals(info.Build, build, StringComparison.Ordinal)) return;
+        TargetBuildSettings.LoadSchema(build, schemasDir);
+    }
+
+    /// <summary>
+    /// The settings JSON with targetBuild replaced and every other key kept. The property is
+    /// written once and an existing targetBuild is skipped rather than named twice, which is what
+    /// produced a duplicate key before. A file that cannot be parsed starts fresh.
+    /// </summary>
+    private static string TargetSettingsJson(string path, string build)
+    {
+        JsonDocument existing;
+        try
+        {
+            existing = File.Exists(path)
+                ? JsonDocument.Parse(File.ReadAllText(path))
+                : JsonDocument.Parse("{}");
+        }
+        catch (JsonException)
+        {
+            existing = JsonDocument.Parse("{}");
+        }
+
+        using (existing)
+        {
+            using var buffer = new MemoryStream();
+            using (var writer = new Utf8JsonWriter(buffer))
+            {
+                writer.WriteStartObject();
+                foreach (var prop in existing.RootElement.EnumerateObject())
+                {
+                    if (prop.Name == "targetBuild") continue;
+                    prop.WriteTo(writer);
+                }
+                writer.WriteString("targetBuild", build);
+                writer.WriteEndObject();
+            }
+            // UTF-8 with no byte order mark, which is what WriteGate.WriteText publishes.
+            return System.Text.Encoding.UTF8.GetString(buffer.ToArray());
+        }
+    }
+
     private static T Run<T>(Func<T> body)
     {
         try { return body(); }
@@ -3794,21 +3860,31 @@ public static class Wc3Tools
         });
 
     [McpServerTool(Name = "target_set", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
-    [Description("Set the target build that compat and lint use when --target is omitted. Validates the build exists in the schemas folder.")]
+    [Description("Set the target build that compat and lint use when --target is omitted. Validates the build exists in the schemas folder, then writes the settings file through the write gate, which refuses an existing settings file without overwrite and refuses a path that crosses a symbolic link. The write is staged beside the settings file and renamed into place, and the answer carries savedTo, inputSha256, outputSha256, filesRewritten and bytesWritten.")]
     public static TargetSetResult TargetSet(
         [Description("Target build name or schema folder path to set as the default.")] string build,
-        [Description("Optional path to schemas directory containing schema folders with manifest.json.")] string? schemas_dir = null)
+        [Description("Optional path to schemas directory containing schema folders with manifest.json.")] string? schemas_dir = null,
+        [Description(OverwriteDoc)] bool overwrite = false)
         => Run(() =>
         {
+            string path = TargetSettingsPath();
             try
             {
-                TargetBuildSettings.Set(build, schemasDir: schemas_dir);
-                return new TargetSetResult(true, "set target " + build, SavedTo: null);
+                RequireKnownBuild(build, schemas_dir);
             }
             catch (FileNotFoundException ex)
             {
                 return new TargetSetResult(false, ex.Message, SavedTo: null);
             }
+
+            // The settings file is both the input and the output of this write, so naming it as a
+            // gate input would trip OUT_PATH_IS_INPUT and no write would ever land. Its digest
+            // before the write is what the outcome reports, and the gate is handed no input.
+            string? inputSha = File.Exists(path) ? WriteGate.Sha256File(path) : null;
+            var w = WriteGate.WriteText(path, TargetSettingsJson(path, build), Array.Empty<string>(),
+                overwrite, expectInputSha256: null);
+            return new TargetSetResult(true, "set target " + build, w.SavedTo,
+                inputSha, w.OutputSha256, w.FilesRewritten, w.BytesWritten);
         });
 
     [McpServerTool(Name = "target_list", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
@@ -4046,8 +4122,11 @@ public static class Wc3Tools
     /// <summary>Target get outcome: the build, its source, and the installed game build.</summary>
     public sealed record TargetGetResult(string Build, string Source, string? InstallBuild, IReadOnlyList<string> Sections);
 
-    /// <summary>Target set outcome: whether it succeeded and the message.</summary>
-    public sealed record TargetSetResult(bool Ok, string Message, string? SavedTo);
+    /// <summary>target_set outcome, whether the build validated and the settings file was written,
+    /// where it landed, and the digests and size a caller can check (SAF-06).</summary>
+    public sealed record TargetSetResult(
+        bool Ok, string Message, string? SavedTo,
+        string? InputSha256 = null, string OutputSha256 = "", int FilesRewritten = 0, long BytesWritten = 0);
 }
 
 /// <summary>render_model outcome: where the PNG landed and whether it was also inlined.</summary>
