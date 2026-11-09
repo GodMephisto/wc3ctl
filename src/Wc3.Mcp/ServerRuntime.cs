@@ -318,16 +318,33 @@ internal static class ServerRuntime
     /// <summary>How long between two reads of the drain counters.</summary>
     private static readonly TimeSpan QuietPoll = TimeSpan.FromMilliseconds(10);
 
-    /// <summary>Waits for a condition to hold twice in a row, bounded by a timeout.</summary>
-    private static async Task WaitUntilAsync(Func<bool> condition, TimeSpan timeout, CancellationToken cancellationToken)
+    /// <summary>
+    /// How long a quiet reading must hold before it counts as no work left. The SDK dequeues a
+    /// message and yields before it starts the incoming filter, so two adjacent samples can both
+    /// miss a request that is about to be dispatched. A held reading covers that gap.
+    /// </summary>
+    private static readonly TimeSpan QuietHold = TimeSpan.FromMilliseconds(250);
+
+    /// <summary>Waits for a condition to hold continuously for a while, bounded by a timeout.</summary>
+    private static async Task WaitUntilAsync(
+        Func<bool> condition, TimeSpan timeout, CancellationToken cancellationToken, TimeSpan? hold = null)
     {
+        TimeSpan need = hold ?? QuietHold;
         Stopwatch clock = Stopwatch.StartNew();
-        bool quiet = false;
+        Stopwatch steady = new Stopwatch();
+        bool holding = false;
         while (true)
         {
-            bool now = condition();
-            if (now && quiet) return;
-            quiet = now;
+            if (condition())
+            {
+                if (!holding) { holding = true; steady.Restart(); }
+                else if (steady.Elapsed >= need) return;
+            }
+            else
+            {
+                holding = false;
+                steady.Reset();
+            }
             if (clock.Elapsed >= timeout) return;
             try { await Task.Delay(QuietPoll, cancellationToken).ConfigureAwait(false); }
             catch (OperationCanceledException) { return; }
