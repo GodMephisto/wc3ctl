@@ -28,6 +28,25 @@ public sealed record McpToolInfo(
 /// <summary>One annotation problem, naming the tool and what is wrong with it.</summary>
 public sealed record McpAnnotationProblem(string Tool, string Problem);
 
+/// <summary>
+/// One prompt exactly as the server serves it, for the catalog resource. Name and title come from
+/// the prompt attribute, the description from its Description attribute, and Arguments holds the
+/// argument names a caller must or may pass.
+/// </summary>
+public sealed record McpPromptInfo(
+    string Name,
+    string? Title,
+    string? Description,
+    IReadOnlyList<string> Arguments);
+
+/// <summary>
+/// The whole catalog resource. The tools keep the array they already had, now under tools, and the
+/// prompts sit beside them so a client that reads only wc3://tools can see what a prompt takes.
+/// </summary>
+public sealed record McpCatalog(
+    IReadOnlyList<McpToolInfo> Tools,
+    IReadOnlyList<McpPromptInfo> Prompts);
+
 /// <summary>The audit outcome. An empty problem list means the surface is clean.</summary>
 public sealed record McpAnnotationAuditResult(IReadOnlyList<McpAnnotationProblem> Problems)
 {
@@ -57,18 +76,31 @@ public static class McpToolCatalog
             McpToolFamilies.Of(tool.Name));
     }
 
+    /// <summary>Every prompt, ordinal-sorted, with its title, description and argument names.</summary>
+    public static IReadOnlyList<McpPromptInfo> DescribePrompts() =>
+        Wc3McpServer.CreatePrompts()
+            .Select(p => ToPromptInfo(p.ProtocolPrompt))
+            .OrderBy(p => p.Name, StringComparer.Ordinal)
+            .ToList();
+
+    internal static McpPromptInfo ToPromptInfo(Prompt prompt) =>
+        new(prompt.Name, prompt.Title, prompt.Description,
+            (prompt.Arguments ?? Array.Empty<PromptArgument>()).Select(a => a.Name).ToList());
+
     /// <summary>
     /// The catalog as one read-only MCP resource, so a client can pull the whole surface in a
-    /// single read instead of listing tools. Same reflection as the tools, so it cannot drift.
+    /// single read instead of listing tools or prompts. Same reflection as the tools and the
+    /// prompts, so it cannot drift.
     /// </summary>
     public static McpServerResource CreateCatalogResource() =>
         McpServerResource.Create(
-            () => JsonSerializer.Serialize(Describe(), Wc3McpServer.JsonOptions),
+            () => JsonSerializer.Serialize(
+                new McpCatalog(Describe(), DescribePrompts()), Wc3McpServer.JsonOptions),
             new McpServerResourceCreateOptions
             {
                 UriTemplate = "wc3://tools",
                 Name = "tool_catalog",
-                Description = "The MCP tool surface as JSON, every tool with its description, its family and the four annotations.",
+                Description = "The MCP surface as JSON. Every tool with its description, its family and the four annotations, and every prompt with its title, description and argument names.",
                 MimeType = "application/json",
             });
 }

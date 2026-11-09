@@ -184,4 +184,74 @@ public sealed class McpWriteGateTests : IDisposable
         Assert.Equal("", w.OutputSha256);
     }
 
+    [Fact]
+    public void An_output_path_through_a_link_is_refused_and_names_the_link()
+    {
+        string real = Path.Combine(_dir, "real");
+        Directory.CreateDirectory(real);
+        string link = Path.Combine(_dir, "link");
+        CreateDirectoryLink(link, real);
+        try
+        {
+            string output = Path.Combine(link, "out.w3x");
+
+            var ex = Assert.Throws<ToolError>(() => WriteGate.Save(Load(), _map, output));
+
+            Assert.Equal("OUTPUT_IS_LINK", ex.Code);
+            Assert.Contains(link, ex.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.False(File.Exists(Path.Combine(real, "out.w3x")),
+                "a refused write must leave the link's target untouched");
+        }
+        finally
+        {
+            if (Directory.Exists(link)) Directory.Delete(link, recursive: false);
+        }
+    }
+
+    /// <summary>
+    /// Make <paramref name="link"/> a directory link to <paramref name="target"/>. A symbolic link
+    /// needs Developer Mode or elevation, so a junction is the fallback. A junction is a reparse
+    /// point too, which is what the gate refuses. If neither can be made the test fails with both
+    /// errors rather than passing without exercising the refusal.
+    /// </summary>
+    private static void CreateDirectoryLink(string link, string target)
+    {
+        try
+        {
+            Directory.CreateSymbolicLink(link, target);
+            return;
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+        {
+            string symlinkError = ex.GetType().Name + ", " + ex.Message;
+            var psi = new System.Diagnostics.ProcessStartInfo("cmd.exe")
+            {
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true,
+            };
+            foreach (var a in new[] { "/c", "mklink", "/J", link, target }) psi.ArgumentList.Add(a);
+            try
+            {
+                using var p = System.Diagnostics.Process.Start(psi);
+                if (p is not null)
+                {
+                    string outText = p.StandardOutput.ReadToEnd();
+                    string errText = p.StandardError.ReadToEnd();
+                    p.WaitForExit();
+                    if (p.ExitCode == 0 && Directory.Exists(link)) return;
+                    Assert.Fail("could not create a directory link. symbolic link, " + symlinkError
+                        + ". junction, exit " + p.ExitCode + ", " + (outText + errText).Trim());
+                }
+            }
+            catch (Exception junctionError)
+            {
+                Assert.Fail("could not create a directory link. symbolic link, " + symlinkError
+                    + ". junction, " + junctionError.Message);
+            }
+            Assert.Fail("could not create a directory link. symbolic link, " + symlinkError);
+        }
+    }
+
 }

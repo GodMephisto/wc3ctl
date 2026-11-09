@@ -22,13 +22,15 @@ public sealed class McpSmokeToolsTests : McpSmokeBase
     [Fact, Covers("quickstart")]
     public async Task Quickstart_lists_the_core_workflows_and_narrows_by_goal()
     {
-        var all = Rows(await Call("quickstart", Args()));
+        var page = await Call("quickstart", Args());
+        var all = Rows(Prop(page, "items"));
         Assert.Equal(12, all.Count);
+        Assert.Equal(12, Prop(page, "count").GetInt32());
         Assert.All(all, w => Assert.False(string.IsNullOrWhiteSpace(Prop(w, "id").GetString())));
         Assert.All(all, w => Assert.False(string.IsNullOrWhiteSpace(Prop(w, "title").GetString())));
         Assert.All(all, w => Assert.False(string.IsNullOrWhiteSpace(Prop(w, "prompt").GetString())));
 
-        var narrowed = Rows(await Call("quickstart", Args(("goal", "portrait"))));
+        var narrowed = Rows(Prop(await Call("quickstart", Args(("goal", "portrait"))), "items"));
         Assert.NotEmpty(narrowed);
         Assert.Contains(narrowed, w => Prop(w, "id").GetString()!.Contains("portrait", StringComparison.OrdinalIgnoreCase));
     }

@@ -3,6 +3,7 @@
 // exactly what the stdio exe serves) driven by the SDK's own client over in-memory
 // pipes, no processes, no network, no WC3 install.
 using System.IO.Pipelines;
+using System.Text.Json;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
@@ -176,6 +177,36 @@ public class McpServerTests
             var text = Assert.IsType<TextResourceContents>(Assert.Single(contents.Contents)).Text;
             Assert.Contains("\"name\":\"map_overview\"", text);
             Assert.Contains("\"name\":\"mcp_audit_annotations\"", text);
+        });
+    }
+
+    [Fact]
+    public async Task The_catalog_lists_every_prompt_with_its_title_and_arguments()
+    {
+        var expected = Wc3McpServer.CreatePrompts()
+            .Select(p => p.ProtocolPrompt.Name)
+            .OrderBy(n => n, StringComparer.Ordinal)
+            .ToArray();
+
+        await WithClient(async (client, ct) =>
+        {
+            var contents = await client.ReadResourceAsync("wc3://tools", cancellationToken: ct);
+            var text = Assert.IsType<TextResourceContents>(Assert.Single(contents.Contents)).Text;
+            using var doc = JsonDocument.Parse(text);
+            var prompts = doc.RootElement.GetProperty("prompts").EnumerateArray().ToList();
+
+            Assert.Equal(expected, prompts.Select(p => p.GetProperty("name").GetString())
+                .OrderBy(n => n, StringComparer.Ordinal).ToArray());
+            Assert.All(prompts, p =>
+            {
+                Assert.False(string.IsNullOrWhiteSpace(p.GetProperty("title").GetString()),
+                    "a prompt was listed without a title");
+                Assert.False(string.IsNullOrWhiteSpace(p.GetProperty("description").GetString()),
+                    "a prompt was listed without a description");
+                var arguments = p.GetProperty("arguments").EnumerateArray().Select(a => a.GetString()).ToList();
+                Assert.NotEmpty(arguments);
+                Assert.All(arguments, a => Assert.False(string.IsNullOrWhiteSpace(a)));
+            });
         });
     }
 

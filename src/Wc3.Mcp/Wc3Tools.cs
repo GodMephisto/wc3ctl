@@ -54,10 +54,16 @@ public static class Wc3Tools
         => Run(() => McpToolAudit.InspectServer());
 
     [McpServerTool(Name = "version_info", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
-    [Description("Report the product version, the git short hash and UTC build time stamped into this build, and the name and version of the MCP server it carries. Read-only.")]
-    public static ReleaseVersion VersionInfo()
-        => Run(() => ReleaseVersionCommand.Read(typeof(Wc3Tools).Assembly,
-            ServerIdentity.ServerName, ServerIdentity.Version));
+    [Description("Report the product version, the git short hash and UTC build time stamped into this build, the name and version of the MCP server it carries, the product id, the newest MCP protocol revision the build speaks and the SDK version it was compiled against. Read-only.")]
+    public static VersionInfoReport VersionInfo()
+        => Run(() =>
+        {
+            var v = ReleaseVersionCommand.Read(typeof(Wc3Tools).Assembly,
+                ServerIdentity.ServerName, ServerIdentity.Version);
+            return new VersionInfoReport(
+                v.ProductVersion, v.GitHash, v.BuildTimeUtc, v.McpServerName, v.McpVersion,
+                ServerIdentity.ProductId, Wc3McpServer.ProtocolRevision, ServerIdentity.SdkVersion);
+        });
 
     [McpServerTool(Name = "changelog", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Generate release notes from git log between two refs, grouped by Conventional Commit type (feat, fix, perf, docs, chore and the rest), a heading per group with its subjects under it. Read-only over git.")]
@@ -70,9 +76,13 @@ public static class Wc3Tools
 
     [McpServerTool(Name = "quickstart", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Route a broad request to the right workflow. Returns the ten core workflows a map task usually falls into (inspect, port-hero, reforged-3-fix, black-portraits, shrink-map, hunt-leaks, edit-objects, terrain-and-placement, lua-conversion, patch-compat), each naming the MCP tools and the wc3ctl commands that carry it out. Pass a goal (a substring such as 'portrait', 'leak' or 'shrink') to narrow the list. With more than two hundred tools on this server, call this first when the caller states an outcome rather than a tool. Read-only, it touches no map.")]
-    public static IReadOnlyList<QuickstartWorkflow> Quickstart(
+    public static QuickstartPage Quickstart(
         [Description("Optional goal substring used to narrow the workflows, for example 'portrait', 'leak' or 'shrink'.")] string? goal = null)
-        => Run(() => QuickstartCommand.Execute(goal));
+        => Run(() =>
+        {
+            var items = QuickstartCommand.Execute(goal);
+            return new QuickstartPage(items, items.Count);
+        });
 
     [McpServerTool(Name = "mcp_export_verify", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Verify that a wc3-mcp checkout holds the same server source scripts/export-wc3-mcp.py would export from this repository, reporting every file that differs without writing. Read-only.")]
@@ -3741,3 +3751,8 @@ public sealed record FileSetResult(string SavedTo, string Name, bool Replaced, i
 public sealed record EditToolResult(
     string SavedTo, string Message,
     string? InputSha256 = null, string OutputSha256 = "", int FilesRewritten = 0, long BytesWritten = 0);
+
+/// <summary>The quickstart tool's answer. A read tool returns an object, not a bare array, so the
+/// workflows ride under items with their count beside them (the same shape the brief listing
+/// uses).</summary>
+public sealed record QuickstartPage(IReadOnlyList<QuickstartWorkflow> Items, int Count);
