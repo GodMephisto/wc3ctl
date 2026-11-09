@@ -36,7 +36,16 @@ public static class Wc3Tools
     [Description("Show a Warcraft III map's metadata: name, author, player count, playable dimensions and load diagnostics.")]
     public static MapInfoResult MapInfo(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
-        => Run(() => InfoCommand.Execute(LoadMap(map)));
+        => Run(() =>
+        {
+            try { return InfoCommand.Execute(LoadMap(map)); }
+            catch (McpException ex) when (ex.Message.StartsWith("map must be a .w3x or .w3m file", StringComparison.Ordinal)
+                || ex.Message.StartsWith("map not found", StringComparison.Ordinal))
+            {
+                throw new McpException(ex.Message
+                    + ". An asset path is listed by asset_list, which takes the map and an icon or model family");
+            }
+        });
 
     [McpServerTool(Name = "list_files", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("List the map archive's internal files, each with its name (null = unnamed/protected entry), size in bytes, whether wc3ctl knows/parses the format, and for unnamed entries the content type sniffed from their leading bytes ('BLP texture', 'MDX model', 'empty', ...). Pass brief true to get the total and only the first 50 files when the full list would be too large for the context.")]
@@ -248,9 +257,13 @@ public static class Wc3Tools
         + "map nor the game defines, duplicates, and a per-race breakdown. Built to compare the "
         + "variants of a disconnect bisection without starting the game.")]
     public static UabiProfileReport UabiProfile(
-        [Description("Maps, or folders searched recursively.")] string[] paths,
+        [Description("Maps, or folders searched recursively. At most 1000, and a longer list is refused with a tool error naming the limit.")] string[] paths,
         [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Without it hero, item, race and dangling columns use the map's own fields only.")] string? game_dir = null)
-        => Run(() => UabiProfileCommand.Execute(paths, ResolveGameDir(game_dir)));
+        => Run(() =>
+        {
+            RequireAtMost(paths.Length, "paths");
+            return UabiProfileCommand.Execute(paths, ResolveGameDir(game_dir));
+        });
 
     [McpServerTool(Name = "replay_summary", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Read recorded games (.w3g) and report each one's map, length, players, and how "
@@ -324,9 +337,20 @@ public static class Wc3Tools
         [Description("Object kind: " + KindValues + ".")] string kind = "unit",
         [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Used to resolve base-game names.")] string? game_dir = null,
         [Description("Return the total object count and only the first 50 objects instead of the full list. Default false.")] bool brief = false)
-        => Run<object>(() => brief
-            ? ObjectListCommand.ExecuteBrief(LoadMap(map), ParseKind(kind), ResolveGameDir(game_dir))
-            : ObjectListCommand.Execute(LoadMap(map), ParseKind(kind), ResolveGameDir(game_dir)));
+        => Run<object>(() =>
+        {
+            ObjectKind parsed;
+            try { parsed = ParseKind(kind); }
+            catch (McpException ex) when (kind.Equals("trigger", StringComparison.OrdinalIgnoreCase)
+                || kind.Equals("script", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new McpException(ex.Message
+                    + ". A trigger and a script are not object kinds, and triggers_read returns both");
+            }
+            return brief
+                ? ObjectListCommand.ExecuteBrief(LoadMap(map), parsed, ResolveGameDir(game_dir))
+                : ObjectListCommand.Execute(LoadMap(map), parsed, ResolveGameDir(game_dir));
+        });
 
     [McpServerTool(Name = "object_get", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Get an object's merged fields (base game data overlaid by the map's deltas), each labeled 'base' or 'map', with field names resolved. Omit kind to auto-detect it from the rawcode.")]
@@ -335,9 +359,20 @@ public static class Wc3Tools
         [Description("Four-character object rawcode, e.g. 'hfoo' or 'u000'.")] string rawcode,
         [Description("Object kind: " + KindValues + ". Default: probe every kind (map deltas first, then base game data).")] string? kind = null,
         [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Without it only the map's own deltas resolve.")] string? game_dir = null)
-        => Run(() => kind is null
-            ? ObjectGetCommand.Execute(LoadMap(map), rawcode, ResolveGameDir(game_dir))
-            : ObjectGetCommand.Execute(LoadMap(map), ParseKind(kind), rawcode, ResolveGameDir(game_dir)));
+        => Run(() =>
+        {
+            if (kind is null)
+                return ObjectGetCommand.Execute(LoadMap(map), rawcode, ResolveGameDir(game_dir));
+            ObjectKind parsed;
+            try { parsed = ParseKind(kind); }
+            catch (McpException ex) when (kind.Equals("trigger", StringComparison.OrdinalIgnoreCase)
+                || kind.Equals("script", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new McpException(ex.Message
+                    + ". A trigger and a script are not object kinds, and triggers_read returns both");
+            }
+            return ObjectGetCommand.Execute(LoadMap(map), parsed, rawcode, ResolveGameDir(game_dir));
+        });
 
     [McpServerTool(Name = "object_form", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Get an object as an editable FORM rather than a flat field dump: fields grouped and ordered the way the World Editor groups them (Art, Combat, Stats, ...), fields that do not apply to this object hidden, each field's legal range and whether a blank is allowed, and which object-data layer it is written to (war3map.* or the war3mapSkin.* twin). Prefer this over object_get when deciding what to edit.")]
@@ -594,9 +629,11 @@ public static class Wc3Tools
                     File.WriteAllBytes(dest, t.Bytes);
                 }
             });
+            var failed = SkippedItems(r.Diagnostics);
             return new AssetConvertBatchToolResult(w.SavedTo, r.Converted, r.ToExtension,
                 r.Textures.Select(t => t.RelativePath).ToList(), r.Diagnostics,
-                w.InputSha256, w.OutputSha256, w.FilesRewritten, w.BytesWritten);
+                w.InputSha256, w.OutputSha256, w.FilesRewritten, w.BytesWritten,
+                failed, failed.Count > 0);
         });
 
     [McpServerTool(Name = "asset_import_wire", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
@@ -604,7 +641,7 @@ public static class Wc3Tools
     public static AssetImportWireToolResult AssetImportWire(
         [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map).")] string out_path,
-        [Description("One or more disk files to add as imports.")] string[] files,
+        [Description("One or more disk files to add as imports. At most 1000, and a longer list is refused with a tool error naming the limit.")] string[] files,
         [Description("Four-character rawcode of the object whose model or icon field is pointed at each imported file. Omit to import without setting a field.")] string? obj = null,
         [Description("Object type, one of unit|item|destructable|doodad. Defaults to auto-detect from the object.")] string? kind = null,
         [Description("Keep each file's path relative to this directory instead of flattening to a single folder. A war3mapimported folder is normalised to war3mapImported. Use this for a sound or asset pack that must land on its original subfolders.")] string? base_dir = null,
@@ -612,6 +649,7 @@ public static class Wc3Tools
         [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
         => Run(() =>
         {
+            RequireAtMost(files.Length, "files");
             string full = ResolveOutPath(map, out_path);
             var doc = LoadMap(map);
             var r = AssetImportWireCommand.Execute(doc, files, obj, kind is null ? null : ParseKind(kind), base_dir);
@@ -743,12 +781,13 @@ public static class Wc3Tools
     [Description("Generate a level-of-detail chain for a .mdx or .mdl model, writing one decimated MDX per ratio into out_dir by running the optimiser once per ratio. ratios is a comma-separated list of target fractions of faces to keep, each between 0 and 1, for example 1,0.5,0.25, processed in the order given so a descending list produces a descending chain. Each level keeps the model's materials, textures, sequences, bones, emitters and cameras byte for byte and shrinks only the geometry. Ratio 1 is the original geometry and its file is byte identical to the input. The input is never modified. Returns one level per ratio with its vertex and face count and byte size, plus the total bytes written.")]
     public static object ModelLod(
         [Description("Path to a .mdx or .mdl model file.")] string model,
-        [Description("Comma-separated target fractions of faces to keep, each between 0 and 1, for example 1,0.5,0.25.")] string ratios,
+        [Description("Comma-separated target fractions of faces to keep, each between 0 and 1, for example 1,0.5,0.25. At most 1000 ratios, and a longer list is refused with a tool error naming the limit.")] string ratios,
         [Description("Output directory for the LOD chain. Created when missing. The input is never modified.")] string out_dir,
         [Description(OverwriteDoc)] bool overwrite = false,
         [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
         => Run<object>(() =>
         {
+            RequireAtMost(ratios.Split(',').Count(part => part.Trim().Length > 0), "ratios");
             ModelLodResult? r = null;
             var w = WriteGate.WriteFolder(out_dir, Inputs(model), overwrite, expect_input_sha256,
                 temp => r = ModelLodCommand.ExecutePath(model, ratios, temp));
@@ -774,13 +813,17 @@ public static class Wc3Tools
     [McpServerTool(Name = "texture_atlas", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Pack two or more .blp, .dds or standard image textures into one power-of-two atlas and write it at out_path in the first input's format. Every input is decoded, placed deterministically by a shelf packer, and left unmodified. Returns the atlas size, its byte count and each input's pixel rectangle, so a caller can build the UV mapping.")]
     public static object TextureAtlas(
-        [Description("Two or more paths to texture files.")] string[] images,
+        [Description("Two or more paths to texture files. At most 1000, and a longer list is refused with a tool error naming the limit.")] string[] images,
         [Description("Output atlas path. The inputs are never modified.")] string out_path,
         [Description("Maximum atlas side in pixels. The atlas is the smallest power of two that fits and does not exceed this.")] int max = 512,
         [Description(OverwriteDoc)] bool overwrite = false,
         [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
-        => Run<object>(() => WriteWith(out_path, images, overwrite, expect_input_sha256,
-            temp => TextureAtlasCommand.ExecutePaths(images, max, temp), "output"));
+        => Run<object>(() =>
+        {
+            RequireAtMost(images.Length, "images");
+            return WriteWith(out_path, images, overwrite, expect_input_sha256,
+                temp => TextureAtlasCommand.ExecutePaths(images, max, temp), "output");
+        });
 
     [McpServerTool(Name = "map_optimize", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Shrink every imported texture inside a map in one pass and write a new map to out_path with only those files replaced, everything else byte for byte. By default models are left untouched and each texture is scaled to fit max_texture on its longest side; pass ratio below 1 to also decimate models, which is NOT safe by default because decimation is known to produce a model the game crashes on in some maps (a 3,091 model build hit an ACCESS_VIOLATION on load at ratio 0.9, while the same map with original models loaded). When decimating, load-test the result before shipping. A file whose optimised bytes are not smaller is left untouched. Reports the per-file before and after sizes, the per-kind counts, bytesSaved (the output size subtracted from the input's) and contentBytesSaved (the per-file sum, which is larger when the archive was patched in place rather than rebuilt). The input map is NEVER modified.")]
@@ -900,7 +943,15 @@ public static class Wc3Tools
     public static SearchResult Search(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Text to look for.")] string query)
-        => Run(() => SearchCommand.Execute(LoadMap(map), query));
+        => Run(() =>
+        {
+            try { return SearchCommand.Execute(LoadMap(map), query); }
+            catch (McpException ex) when (ex.Message.StartsWith("map must be a .w3x or .w3m file", StringComparison.Ordinal))
+            {
+                throw new McpException(ex.Message
+                    + ". A recorded game is read by replay_summary, which takes the .w3g path directly");
+            }
+        });
 
     [McpServerTool(Name = "diff", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Compare two maps and report which internal files were added, removed or changed. The direct way to see what an edit actually did to a map, and to check that it touched only what was intended.")]
@@ -1571,12 +1622,13 @@ public static class Wc3Tools
         [Description("Output map file path (must differ from the input map).")] string out_path,
         [Description("The field and value to write, as code=value (e.g. uhpm=1000).")] string set,
         [Description("Object kind: " + KindValues + ".")] string kind = "unit",
-        [Description("Zero or more match clauses code=value. An object must match every clause to be written.")] string[]? where = null,
+        [Description("Zero or more match clauses code=value. An object must match every clause to be written. At most 1000, and a longer list is refused with a tool error naming the limit.")] string[]? where = null,
         [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Used to test where clauses against base game values.")] string? game_dir = null,
         [Description("Replace out_path when it already exists. Default false, which refuses rather than silently overwriting a previous output.")] bool overwrite = false,
         [Description("The SHA-256 the caller believes the input map has, from a previous result. A mismatch refuses the call as STALE_INPUT.")] string? expect_input_sha256 = null)
         => Run(() =>
         {
+            RequireAtMost(where?.Length ?? 0, "where");
             if (!TrySplitPair(set, out var field, out var value))
                 throw new McpException($"expected set as code=value, got '{set}'");
             var clauses = new List<BulkSetWhere>();
@@ -1590,9 +1642,11 @@ public static class Wc3Tools
             var r = ObjectBulkSetCommand.Execute(doc, ParseKind(kind), field, value, clauses, ResolveGameDir(game_dir));
             if (!r.Ok) throw new McpException(r.Message);
             var w = WriteGate.Save(doc, map, out_path, overwrite, expect_input_sha256, LoadedShaOf(doc));
+            var failed = r.Entries.Where(e => !e.Changed)
+                .Select(e => new SkippedItem(e.Rawcode, e.Detail)).ToList();
             return new ObjectBulkSetToolResult(
                 w.SavedTo, w.InputSha256, w.OutputSha256, w.FilesRewritten, w.BytesWritten,
-                r.Message, r.Kind, r.Matched, r.Changed, r.Skipped);
+                r.Message, r.Kind, r.Matched, r.Changed, r.Skipped, failed, failed.Count > 0);
         });
 
     [McpServerTool(Name = "object_export", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
@@ -2196,11 +2250,12 @@ public static class Wc3Tools
     public static object DeprotectMap(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Optional output map path. When given, the recovered names are written into a copy; the input map is NEVER modified in place. Named entries are recompressed, every other entry stays byte-faithful.")] string? out_path = null,
-        [Description("Paths to extra name dictionaries, one name per line. Community listfiles and sibling maps' listfiles both work.")] string[]? listfiles = null,
+        [Description("Paths to extra name dictionaries, one name per line. Community listfiles and sibling maps' listfiles both work. At most 1000, and a longer list is refused with a tool error naming the limit.")] string[]? listfiles = null,
         [Description(OverwriteDoc)] bool overwrite = false,
         [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
         => Run<object>(() =>
         {
+            RequireAtMost(listfiles?.Length ?? 0, "listfiles");
             var doc = LoadMap(map);
             var r = NameRecoveryCommand.Execute(doc, listfiles ?? Array.Empty<string>());
             if (string.IsNullOrWhiteSpace(out_path)) return r;
@@ -2336,13 +2391,14 @@ public static class Wc3Tools
     [Description("Remove many internal files in one rebuild and report how many were dropped. Writes a copy, the input map is never modified in place. The one-rebuild form of mpq_remove, for pruning the files asset_unused reports as unreferenced.")]
     public static object MpqRemoveMany(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
-        [Description("Internal archive paths to remove, for example one asset_unused path per element.")] string[] names,
+        [Description("Internal archive paths to remove, for example one asset_unused path per element. At most 1000, and a longer list is refused with a tool error naming the limit.")] string[] names,
         [Description("Output map path. The input map is never overwritten.")] string out_path,
         [Description("State the intent to destroy data. Without it the call is refused with CONFIRM_REQUIRED, naming what would be removed.")] bool confirm = false,
         [Description(OverwriteDoc)] bool overwrite = false,
         [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
         => RunConfirmed<object>(confirm, "removes " + names.Length + " entries from the archive", () =>
         {
+            RequireAtMost(names.Length, "names");
             string full = ResolveOutPath(RequireMapPath(map), out_path);
             return WriteWith(full, Inputs(map), overwrite, expect_input_sha256,
                 temp => MpqRemoveCommand.ExecuteMany(map, names, temp));
@@ -2916,16 +2972,20 @@ public static class Wc3Tools
         [Description("Trigger item id, from triggers_read.")] int id,
         [Description("One of: event, condition, action.")] string kind,
         [Description("Function name from the World-Editor table, for example DisplayTextToForce.")] string name,
-        [Description("Parameter values in declared order. Omit to take the table's defaults.")] string[]? parameters = null,
+        [Description("Parameter values in declared order. Omit to take the table's defaults. At most 1000, and a longer list is refused with a tool error naming the limit.")] string[]? parameters = null,
         [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
         [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
-        => Run(() => SaveEdit(map, out_path, overwrite, expect_input_sha256, doc =>
+        => Run(() =>
         {
-            if (!TryParseEcaKind(kind, out var parsed))
-                return (false, "kind must be event, condition or action.");
-            var r = TriggerCommand.AddFunction(doc, id, parsed, name, parameters);
-            return (r.Ok, r.Message);
-        }));
+            RequireAtMost(parameters?.Length ?? 0, "parameters");
+            return SaveEdit(map, out_path, overwrite, expect_input_sha256, doc =>
+            {
+                if (!TryParseEcaKind(kind, out var parsed))
+                    return (false, "kind must be event, condition or action.");
+                var r = TriggerCommand.AddFunction(doc, id, parsed, name, parameters);
+                return (r.Ok, r.Message);
+            });
+        });
 
     [McpServerTool(Name = "trigger_remove_eca", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = false)]
     [Description("Remove one event, condition or action from a GUI trigger by its zero-based position, and save the edited map to out_path. Positions come from triggers_read, which lists a trigger's functions in order. The input map is NEVER modified in place.")]
@@ -3418,10 +3478,14 @@ public static class Wc3Tools
             + "drop a default step. Empty applies the steps the doctor picks for this map. Allowed: unprotect, "
             + "fake-files, listfile, ids, data, script-back, editor-files, counts, doodads, gui-triggers, "
             + "script-objects, safe-units, models, model-names, portraits, data-pointers, kk-textures, "
-            + "green-icons, uabi, preload, single-player, shrink, strip-indent.")] string[]? options = null,
+            + "green-icons, uabi, preload, single-player, shrink, strip-indent. At most 1000, and a longer list is refused with a tool error naming the limit.")] string[]? options = null,
         [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
         [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
-        => Run(() => MapDoctorCommand.Fix(map, options, out_path));
+        => Run(() =>
+        {
+            RequireAtMost(options?.Length ?? 0, "options");
+            return MapDoctorCommand.Fix(map, options, out_path);
+        });
 
     // ---- shared plumbing -------------------------------------------------
 
@@ -3440,6 +3504,35 @@ public static class Wc3Tools
             }
             return body();
         });
+
+    /// <summary>PAR-08. The most entries one array argument may carry. A longer list is refused
+    /// with a tool error that names the limit, never truncated, so a caller never believes a
+    /// complete list was applied when part of it was dropped.</summary>
+    private const int MaxArrayItems = 1000;
+
+    /// <summary>PAR-08. Refuse an array argument above its maximum, naming the limit and the
+    /// count received.</summary>
+    private static void RequireAtMost(int count, string what)
+    {
+        if (count > MaxArrayItems)
+            throw new McpException($"{what} takes at most {MaxArrayItems} entries, got {count}");
+    }
+
+    /// <summary>ERR-05. The skip lines a batch command records, split into the item it named and
+    /// the reason beside it, so a partial success is reported as one.</summary>
+    private static IReadOnlyList<SkippedItem> SkippedItems(IReadOnlyList<string> diagnostics)
+    {
+        const char quote = '\'';
+        var skipped = new List<SkippedItem>();
+        foreach (var line in diagnostics)
+        {
+            if (line.Length < 3 || line[0] != quote) continue;
+            int close = line.IndexOf(quote, 1);
+            if (close <= 1) continue;
+            skipped.Add(new SkippedItem(line[1..close], line[(close + 1)..].TrimStart(',', ' ').Trim()));
+        }
+        return skipped;
+    }
 
     private static T Run<T>(Func<T> body)
     {
@@ -3661,10 +3754,15 @@ public static class Wc3Tools
     [McpServerTool(Name = "compat_matrix", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Check several maps against several target builds and return a grid of pass or fail per cell, with the finding count in each cell. Pass means the target build raised no error-level finding, so a map that only warns still passes. The whole-map by whole-build view the single map_compat call cannot give.")]
     public static CompatMatrixResult CompatMatrix(
-        [Description("One or more .w3x/.w3m map paths.")] string[] maps,
-        [Description("One or more target build names or schema folder paths.")] string[] targets,
+        [Description("One or more .w3x/.w3m map paths. At most 1000, and a longer list is refused with a tool error naming the limit.")] string[] maps,
+        [Description("One or more target build names or schema folder paths. At most 1000, and a longer list is refused with a tool error naming the limit.")] string[] targets,
         [Description("Optional path to schemas directory containing schema folders with manifest.json. When omitted, searches <AppContext.BaseDirectory>/schemas first, then walks up from the base directory.")] string? schemas_dir = null)
-        => Run(() => CompatMatrixCommand.Execute(maps, targets, schemas_dir));
+        => Run(() =>
+        {
+            RequireAtMost(maps.Length, "maps");
+            RequireAtMost(targets.Length, "targets");
+            return CompatMatrixCommand.Execute(maps, targets, schemas_dir);
+        });
 
     [McpServerTool(Name = "compat_explain", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Explain one identifier against a target build. Reports whether the target declares it as a native, global, type or function, and if not, the earliest build that added it plus the test build it was first seen in, and every build that declares it. Reuses the compat union index, so its answer about when a name appeared matches a compat finding.")]
@@ -3784,10 +3882,15 @@ public static class Wc3Tools
     [McpServerTool(Name = "bench_compat", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Check every map against every target build and return a pass or fail matrix with the finding counts in each cell, plus the aggregate over the whole grid. Pass means the target build raised no error-level finding. The measured sweep behind compat_matrix, with the totals a benchmark report needs.")]
     public static BenchCompatResult BenchCompat(
-        [Description("One or more .w3x/.w3m map paths.")] string[] maps,
-        [Description("One or more target build names or schema folder paths.")] string[] targets,
+        [Description("One or more .w3x/.w3m map paths. At most 1000, and a longer list is refused with a tool error naming the limit.")] string[] maps,
+        [Description("One or more target build names or schema folder paths. At most 1000, and a longer list is refused with a tool error naming the limit.")] string[] targets,
         [Description("Optional path to schemas directory containing schema folders with manifest.json.")] string? schemas_dir = null)
-        => Run(() => BenchCompatCommand.Execute(maps, targets, schemas_dir));
+        => Run(() =>
+        {
+            RequireAtMost(maps.Length, "maps");
+            RequireAtMost(targets.Length, "targets");
+            return BenchCompatCommand.Execute(maps, targets, schemas_dir);
+        });
 
     [McpServerTool(Name = "bench_leaks", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Run the static leak detector over every map in a folder and report the counts per map and per leak kind, with the hot and repeat totals. The folder sweep the single script_leaks call cannot give, so a whole map set can be ranked by how much leaking code it carries.")]
@@ -3962,11 +4065,16 @@ public sealed record MpqExtractAllToolResult(
     IReadOnlyList<string> Files,
     string? InputSha256 = null, string OutputSha256 = "", int FilesRewritten = 0, long BytesWritten = 0);
 
+/// <summary>ERR-05. One item a batch skipped, named, with the reason it was skipped.</summary>
+public sealed record SkippedItem(string Item, string Reason);
+
 /// <summary>asset_convert_batch outcome: where the copies landed, how many, the target extension,
-/// their relative paths and any skips.</summary>
+/// their relative paths, any skips, and each skipped file with its reason. Partial is true when
+/// anything was skipped, so a run that converted some of a folder is not reported as success.</summary>
 public sealed record AssetConvertBatchToolResult(
     string OutDir, int Converted, string To, IReadOnlyList<string> Files, IReadOnlyList<string> Diagnostics,
-    string? InputSha256 = null, string OutputSha256 = "", int FilesRewritten = 0, long BytesWritten = 0);
+    string? InputSha256 = null, string OutputSha256 = "", int FilesRewritten = 0, long BytesWritten = 0,
+    IReadOnlyList<SkippedItem>? Failed = null, bool Partial = false);
 
 /// <summary>asset_import_wire outcome: where the edited copy landed, the imported paths, the
 /// fields set and any skips.</summary>
@@ -4056,10 +4164,13 @@ public sealed record ObjectMigrateToolResult(
     string SavedTo, string Message, string TargetBuild, int FieldsKept, int FieldsDropped, int Drops,
     string? InputSha256 = null, string OutputSha256 = "", int FilesRewritten = 0, long BytesWritten = 0);
 
-/// <summary>object_bulk_set outcome: the saved map and how many objects matched and changed.</summary>
+/// <summary>object_bulk_set outcome: the saved map, how many objects matched and changed, and each
+/// object the write skipped with its reason. Partial is true when anything was skipped, so a run
+/// that changed some of the matches is not reported as success.</summary>
 public sealed record ObjectBulkSetToolResult(
     string SavedTo, string? InputSha256, string OutputSha256, int FilesRewritten, long BytesWritten,
-    string Message, string Kind, int Matched, int Changed, int Skipped);
+    string Message, string Kind, int Matched, int Changed, int Skipped,
+    IReadOnlyList<SkippedItem> Failed, bool Partial);
 
 /// <summary>object_export outcome: the CSV path, the kind, and the row and column counts.</summary>
 public sealed record ObjectExportToolResult(

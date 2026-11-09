@@ -45,7 +45,7 @@ public static class Wc3McpServer
         foreach (var prompt in CreatePrompts())
             prompts.Add(prompt);
 
-        return new McpServerOptions
+        var options = new McpServerOptions
         {
             ServerInfo = new Implementation { Name = ServerIdentity.ProductId, Version = ServerIdentity.Version },
             ToolCollection = tools,
@@ -53,6 +53,14 @@ public static class Wc3McpServer
             ResourceCollection = resources,
             ServerInstructions = Instructions.Value,
         };
+
+        // OBS-02, OBS-04 and TRN-03 ride the SDK 1.4.1 filter pipeline, which is built from these
+        // lists when the server starts. The request filter wraps the tool invocation and the
+        // message filter sees the response after it reaches the transport, so a client that closed
+        // stdin mid call still gets the bytes before the read side reports end of stream.
+        options.Filters.Request.CallToolFilters.Add(ServerRuntime.ObserveToolCalls);
+        options.Filters.Message.OutgoingFilters.Add(ServerRuntime.ObserveOutgoingResponses);
+        return options;
     }
 
     /// <summary>The only profile there is, until SUR-07 adds a second one.</summary>
@@ -136,12 +144,21 @@ public static class Wc3McpServer
     public static string BuildStartLine()
     {
         StartupFacts facts = Startup.Value;
-        return ServerIdentity.ProductId + " " + ServerIdentity.Version
+        string line = ServerIdentity.ProductId + " " + ServerIdentity.Version
             + "  protocol " + ProtocolRevision
             + "  tools " + ToolCount()
             + "  target " + facts.Target + " (" + facts.Source + ")"
             + "  game " + (facts.GameBuild ?? "none")
             + "  profile " + DefaultProfile;
+
+        // PRF-05. Only when this process is already over a gigabyte, and only then naming the work
+        // that is running. At startup nothing is in flight, so the plain line is the normal case.
+        if (ServerRuntime.IsOverMemoryLimit())
+        {
+            line += "  memory " + ServerRuntime.MemoryMegabytes() + " MB"
+                + " in tool " + (ServerRuntime.CurrentTool ?? "none");
+        }
+        return line;
     }
 
     /// <summary>The methods that carry a tool, before any of them is turned into a handler.</summary>
@@ -189,5 +206,8 @@ public static class Wc3McpServer
         options.ToolCollection = configured.ToolCollection;
         options.PromptCollection = configured.PromptCollection;
         options.ResourceCollection = configured.ResourceCollection;
+        // The filters carry OBS-02, OBS-04 and TRN-03. Copying them by hand like the rest is what
+        // keeps a host that calls ApplyTo from running without them.
+        options.Filters = configured.Filters;
     }
 }

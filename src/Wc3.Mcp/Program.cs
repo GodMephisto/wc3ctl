@@ -3,6 +3,8 @@ using System.Runtime.InteropServices;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using ModelContextProtocol.Protocol;
+using ModelContextProtocol.Server;
 using Wc3.Mcp.Setup;
 
 namespace Wc3.Mcp;
@@ -67,11 +69,29 @@ public static class Program
         // stdout carries the MCP protocol, so every log line must go to stderr.
         builder.Logging.AddConsole(o => o.LogToStandardErrorThreshold = LogLevel.Trace);
         builder.Logging.SetMinimumLevel(McpLogLevel.FromEnvironment());
+        // OBS-02 logs a slow call at information. The category keeps that level even when the
+        // server runs at the default warn, so the line is there without turning on everything.
+        builder.Logging.AddFilter(ServerRuntime.Category, LogLevel.Information);
 
         builder.Services
             .AddMcpServer(Wc3McpServer.ApplyTo)
             .WithStdioServerTransport();
 
-        await builder.Build().RunAsync();
+        // TRN-03. The stdio registration above opens its own streams, so ours goes in last and the
+        // container resolves it. The read side reports end of stream only after a call in flight
+        // has written its response, which is what a client that closed the pipe midway waits for.
+        builder.Services.AddSingleton<ITransport>(sp => new StreamServerTransport(
+            new ServerRuntime.DrainingStdinStream(Console.OpenStandardInput()),
+            new BufferedStream(Console.OpenStandardOutput()),
+            ServerIdentity.ProductId,
+            sp.GetService<ILoggerFactory>()));
+
+        using IHost host = builder.Build();
+        await host.RunAsync();
+
+        // TRN-03. The read side already held the end of stream for the calls in flight, so this is
+        // the last look rather than the wait. A short bound keeps a leaked record from delaying the
+        // exit. Exit stays 0 either way.
+        await ServerRuntime.WaitForDrainAsync(ServerRuntime.ResponseGrace);
     }
 }
