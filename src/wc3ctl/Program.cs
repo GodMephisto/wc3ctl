@@ -3433,30 +3433,21 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
             "Internal model path (.mdx/.mdl) inside the map.");
         var modelObjOutOpt = new Option<string?>(new[] { "-o", "--out" },
             "Output .obj path. A .mtl and any map-resolvable textures are written beside it.");
+        var modelObjOverwriteOpt = new Option<bool>(new[] { "--overwrite" },
+            "Replace an .obj, .mtl or texture that already exists beside the target.");
         var modelExportObj = new Command("export-obj",
             "Export a map-imported model to Wavefront OBJ, with an MTL and any map-resolvable "
             + "textures converted to PNG beside it.")
-        { mapArg, modelPathArg, modelObjOutOpt, jsonOption };
+        { mapArg, modelPathArg, modelObjOutOpt, modelObjOverwriteOpt, jsonOption };
         modelExportObj.SetHandler(ctx => RunSafely(() =>
         {
             var p = ctx.ParseResult;
             var doc = MapDocument.Load(p.GetValueForArgument(mapArg));
             var dest = p.GetValueForOption(modelObjOutOpt) ?? "model.obj";
-            var export = ModelExportObjCommand.Execute(doc, p.GetValueForArgument(modelPathArg),
-                Path.GetFileNameWithoutExtension(dest));
-            File.WriteAllText(dest, export.Obj);
-            var mtlPath = Path.ChangeExtension(dest, ".mtl");
-            File.WriteAllText(mtlPath, export.Mtl);
-            var dir = Path.GetDirectoryName(Path.GetFullPath(dest)) ?? ".";
-            var textures = new List<string>();
-            foreach (var (name, bytes) in export.Textures)
-            {
-                File.WriteAllBytes(Path.Combine(dir, name), bytes);
-                textures.Add(name);
-            }
-            Emit(p.GetValueForOption(jsonOption),
-                new { SavedTo = dest, Mtl = mtlPath, Textures = textures },
-                () => Render.ModelExportObj(export, dest, mtlPath, textures));
+            var r = ModelExportObjCommand.Write(doc, p.GetValueForArgument(modelPathArg), dest,
+                p.GetValueForOption(modelObjOverwriteOpt));
+            Emit(p.GetValueForOption(jsonOption), r,
+                () => Render.ModelExportObj(r.SavedTo, r.Mtl, r.Textures));
         }));
         var modelAuditPath = new Argument<string>("model", "Path to a .mdx or .mdl file.");
         var modelAudit = new Command("audit",

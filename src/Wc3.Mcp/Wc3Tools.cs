@@ -620,32 +620,20 @@ public static class Wc3Tools
         });
 
     [McpServerTool(Name = "model_export_obj", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
-    [Description("Export a map-imported model to Wavefront OBJ at out_path, writing an MTL and any map-resolvable textures converted to PNG beside it. The map itself is never modified. Returns the .obj path, the .mtl path and the texture file names.")]
+    [Description("Export a map-imported model to Wavefront OBJ at out_path, writing an MTL and any map-resolvable textures converted to PNG beside it. The map itself is never modified. Every file is staged beside the target and published only when all of them are complete, so a failure leaves no partial export. An existing .obj, .mtl or texture is refused and left unchanged unless overwrite is true. Returns the .obj path, the .mtl path, the texture names and any publish note.")]
     public static ModelExportObjToolResult ModelExportObj(
         [Description("Path to a .w3x/.w3m map file.")] string map,
         [Description("Internal model path (.mdx/.mdl) inside the map.")] string model,
-        [Description("Output .obj file path. A .mtl and the converted textures are written beside it.")] string out_path)
+        [Description("Output .obj file path. A .mtl and the converted textures are written beside it.")] string out_path,
+        [Description("Replace an .obj, .mtl or texture that already exists beside out_path. Default false, which refuses an existing target and leaves it exactly as it was.")] bool overwrite = false)
         => Run(() =>
         {
             var doc = LoadMap(map);
             string full = Path.GetFullPath(out_path);
             if (string.Equals(full, Path.GetFullPath(map), StringComparison.OrdinalIgnoreCase))
                 throw new McpException("out_path must not be the map file itself");
-            if (Path.GetDirectoryName(full) is { Length: > 0 } dir) Directory.CreateDirectory(dir);
-            // The OBJ's mtllib must name the MTL written beside it, which is named from out_path,
-            // not from the model's own name.
-            var export = ModelExportObjCommand.Execute(doc, model, Path.GetFileNameWithoutExtension(full));
-            File.WriteAllText(full, export.Obj);
-            var mtlPath = Path.ChangeExtension(full, ".mtl");
-            File.WriteAllText(mtlPath, export.Mtl);
-            var dirName = Path.GetDirectoryName(full)!;
-            var textures = new List<string>();
-            foreach (var (name, bytes) in export.Textures)
-            {
-                File.WriteAllBytes(Path.Combine(dirName, name), bytes);
-                textures.Add(name);
-            }
-            return new ModelExportObjToolResult(full, mtlPath, textures);
+            var r = ModelExportObjCommand.Write(doc, model, full, overwrite);
+            return new ModelExportObjToolResult(r.SavedTo, r.Mtl, r.Textures, r.Diagnostics);
         });
 
     [McpServerTool(Name = "model_import", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
@@ -3641,7 +3629,8 @@ public sealed record AssetImportWireToolResult(
     IReadOnlyList<string> Diagnostics);
 
 /// <summary>model_export_obj outcome: where the .obj landed, its .mtl path and the texture names.</summary>
-public sealed record ModelExportObjToolResult(string SavedTo, string Mtl, IReadOnlyList<string> Textures);
+public sealed record ModelExportObjToolResult(
+    string SavedTo, string Mtl, IReadOnlyList<string> Textures, IReadOnlyList<string> Diagnostics);
 
 /// <summary>model_import outcome: where the .mdx landed, the counts it holds, the sequence count and
 /// names, and the texture files written.</summary>

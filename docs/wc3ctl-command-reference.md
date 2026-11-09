@@ -473,6 +473,7 @@ Arguments
 Options
 
 - `-o, --out <out>`. Output .obj path. A .mtl and any map-resolvable textures are written beside it.
+- `--overwrite`. Replace an .obj, .mtl or texture that already exists beside the target.
 
 ### model audit
 

@@ -721,7 +721,7 @@ public static class Render
         return sb.ToString().TrimEnd();
     }
 
-    public static string ModelExportObj(ModelExport export, string objPath, string mtlPath, IReadOnlyList<string> textures)
+    public static string ModelExportObj(string objPath, string mtlPath, IReadOnlyList<string> textures)
     {
         var sb = new StringBuilder();
         sb.AppendLine($"Wrote {objPath} + {mtlPath}");
