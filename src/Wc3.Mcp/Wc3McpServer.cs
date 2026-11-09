@@ -27,17 +27,19 @@ public static class Wc3McpServer
         return options;
     }
 
-    /// <summary>Server options with every wc3ctl tool registered.</summary>
+    /// <summary>Server options with every wc3ctl tool registered. PRF-01. The 276 descriptors are
+    /// not built here. Both the tool collection and the catalog resource that embeds every schema
+    /// are deferred to the first read, so the initialize reply does not carry a schema build no
+    /// client has asked for yet. The build itself still happens once per process and every session
+    /// shares the one result.</summary>
     public static McpServerOptions CreateOptions()
     {
         long started = System.Diagnostics.Stopwatch.GetTimestamp();
 
-        var tools = new McpServerPrimitiveCollection<McpServerTool>();
-        foreach (var tool in CreateTools())
-            tools.Add(tool);
+        var tools = new DeferredToolCollection(ToolList, ToolMethodList.Value.Count);
 
         var resources = new McpServerResourceCollection();
-        resources.Add(McpToolCatalog.CreateCatalogResource());
+        resources.Add(new DeferredCatalogResource());
         foreach (var resource in Wc3Context.CreateResources())
             resources.Add(resource);
         foreach (var resource in Wc3Skills.CreateResources())
@@ -55,6 +57,10 @@ public static class Wc3McpServer
             ResourceCollection = resources,
             ServerInstructions = Instructions.Value,
         };
+
+        // SAF-17. The policy is read here, when the surface is built, and the filter refuses before
+        // the tool body runs, so a denied call never opens a map or touches a file.
+        options.Filters.Request.CallToolFilters.Add(PermissionPolicy.Filter(PermissionPolicy.Load()));
 
         // OBS-02, OBS-04, PRF-01, PRF-04 and TRN-03 ride the SDK 1.4.1 filter pipeline, which is
         // built from these lists when the server starts. The request filter wraps the tool
@@ -187,11 +193,24 @@ public static class Wc3McpServer
     /// state, so one list serves every session.
     /// </summary>
     private static readonly Lazy<IReadOnlyList<McpServerTool>> ToolList = new(
-        () => ToolMethodList.Value
+        BuildTools, LazyThreadSafetyMode.ExecutionAndPublication);
+
+    /// <summary>
+    /// PRF-01. One schema build per method, on the first use rather than before the initialize
+    /// reply. The time it took is written once as its own line, so the cost this defers stays
+    /// visible instead of disappearing into the surface phase.
+    /// </summary>
+    private static IReadOnlyList<McpServerTool> BuildTools()
+    {
+        long started = System.Diagnostics.Stopwatch.GetTimestamp();
+        List<McpServerTool> tools = ToolMethodList.Value
             .Select(m => McpServerTool.Create(m, target: null,
                 new McpServerToolCreateOptions { SerializerOptions = JsonOptions }))
-            .ToList(),
-        LazyThreadSafetyMode.ExecutionAndPublication);
+            .ToList();
+        ServerRuntime.ColdStart.DescriptorsBuilt(
+            tools.Count, System.Diagnostics.Stopwatch.GetElapsedTime(started));
+        return tools;
+    }
 
     /// <summary>Every [McpServerTool] method on <see cref="Wc3Tools"/> and <see cref="Wc3Context"/>, bound with our JSON options.</summary>
     public static IReadOnlyList<McpServerTool> CreateTools() => ToolList.Value;
@@ -238,4 +257,109 @@ public static class Wc3McpServer
         // rest is what keeps a host that calls ApplyTo from running without them.
         options.Filters = configured.Filters;
     }
+}
+
+/// <summary>
+/// PRF-01. The tool collection the server serves, built on first use. The reads the SDK makes, the
+/// enumeration behind tools/list and the name lookup behind tools/call, materialize the descriptors
+/// once and answer from the result. The base dictionary is left empty on purpose. Filling it would
+/// raise the collection's Changed event once per tool, and the server answers that event with a
+/// list_changed notification, so a first tools/list would put 276 notices on the pipe. Nothing the
+/// SDK reads for tools needs that dictionary, and <see cref="Count"/> is the one member it would
+/// have served, which is why <see cref="Expected"/> carries the number instead.
+/// </summary>
+internal sealed class DeferredToolCollection : McpServerPrimitiveCollection<McpServerTool>
+{
+    private readonly Lazy<IReadOnlyList<McpServerTool>> _source;
+    private IReadOnlyDictionary<string, McpServerTool>? _byName;
+
+    internal DeferredToolCollection(Lazy<IReadOnlyList<McpServerTool>> source, int expected)
+        : base(StringComparer.Ordinal)
+    {
+        _source = source;
+        Expected = expected;
+    }
+
+    /// <summary>
+    /// How many descriptors the surface holds, from the one method scan rather than from the
+    /// dictionary, so the number is right before the first use.
+    /// </summary>
+    internal int Expected { get; }
+
+    /// <summary>The one descriptor build, made when the first client reads the surface.</summary>
+    internal IReadOnlyList<McpServerTool> Materialized => _source.Value;
+
+    private IReadOnlyDictionary<string, McpServerTool> ByName
+    {
+        get
+        {
+            IReadOnlyDictionary<string, McpServerTool>? byName = Volatile.Read(ref _byName);
+            if (byName is not null) return byName;
+            var map = new Dictionary<string, McpServerTool>(StringComparer.Ordinal);
+            foreach (McpServerTool tool in Materialized) map[tool.ProtocolTool.Name] = tool;
+            Volatile.Write(ref _byName, map);
+            return map;
+        }
+    }
+
+    public override bool TryGetPrimitive(string name, out McpServerTool? primitive) =>
+        ByName.TryGetValue(name, out primitive);
+
+    public override IEnumerator<McpServerTool> GetEnumerator() => Materialized.GetEnumerator();
+
+    public override McpServerTool[] ToArray() => Materialized.ToArray();
+
+    public override void CopyTo(McpServerTool[] array, int arrayIndex)
+    {
+        ArgumentNullException.ThrowIfNull(array);
+        for (int i = 0; i < Materialized.Count; i++) array[arrayIndex + i] = Materialized[i];
+    }
+
+    public override bool Contains(McpServerTool primitive) => Materialized.Contains(primitive);
+
+    public override ICollection<string> PrimitiveNames => ByName.Keys.ToArray();
+}
+
+/// <summary>
+/// PRF-01. The catalog resource carries every tool description and input schema, so building it
+/// forces the whole descriptor set. It is built on the first read of the resource or the first
+/// resources/list, and the build is memoized for the process. The protocol template is answered
+/// from the constants the catalog is published under, because the base collection reads it to key
+/// the resource, so adding this resource costs nothing.
+/// </summary>
+internal sealed class DeferredCatalogResource : McpServerResource
+{
+    internal const string Uri = "wc3://tools";
+    internal const string Name = "tool_catalog";
+    internal const string MimeType = "application/json";
+    internal const string Description =
+        "The MCP surface as JSON. Every tool with its description, its family, the four annotations,"
+        + " its aliases and its input schema, and every prompt with its title, description and"
+        + " argument names.";
+
+    private static readonly Lazy<McpServerResource> Inner =
+        new(McpToolCatalog.CreateCatalogResource, LazyThreadSafetyMode.ExecutionAndPublication);
+
+    /// <summary>The catalog a read serves, built once per process on first use.</summary>
+    internal static McpServerResource Materialized => Inner.Value;
+
+    public override ResourceTemplate ProtocolResourceTemplate => new()
+    {
+        UriTemplate = Uri,
+        Name = Name,
+        Description = Description,
+        MimeType = MimeType,
+    };
+
+    public override Resource? ProtocolResource => Inner.Value.ProtocolResource;
+
+    public override IReadOnlyList<object> Metadata => Array.Empty<object>();
+
+    public override bool IsMatch(string uri) =>
+        string.Equals(uri, Uri, StringComparison.OrdinalIgnoreCase);
+
+    public override ValueTask<ReadResourceResult> ReadAsync(
+        RequestContext<ReadResourceRequestParams> request,
+        CancellationToken cancellationToken = default) =>
+        Inner.Value.ReadAsync(request, cancellationToken);
 }

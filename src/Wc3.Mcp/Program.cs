@@ -69,9 +69,10 @@ public static class Program
         Console.Error.WriteLine(Wc3McpServer.BuildStartLine());
         ServerRuntime.ColdStart.StartLineWritten();
 
-        // PRF-01. The tool collection does not depend on the host, so it is built on the thread pool
-        // while the host is built here. The two phases used to run one after the other and the
-        // surface is the longer of them.
+        // PRF-01. The surface does not depend on the host, so it is built on the thread pool while
+        // the host is built here. The two phases used to run one after the other. The 276 tool
+        // descriptors and the catalog that embeds them are not part of this, they are built on the
+        // first client read, so this phase is the resources and prompts.
         Task<McpServerOptions> surface = Task.Run(Wc3McpServer.CreateOptions);
 
         var builder = Host.CreateApplicationBuilder(Array.Empty<string>());
@@ -89,13 +90,21 @@ public static class Program
             .WithStdioServerTransport();
 
         // TRN-03. The stdio registration above opens its own streams, so ours goes in last and the
-        // container resolves it. The read side reports end of stream only after a call in flight
-        // has written its response, which is what a client that closed the pipe midway waits for.
-        builder.Services.AddSingleton<ITransport>(sp => new StreamServerTransport(
-            new ServerRuntime.DrainingStdinStream(Console.OpenStandardInput()),
-            new BufferedStream(Console.OpenStandardOutput()),
-            ServerIdentity.ProductId,
-            sp.GetService<ILoggerFactory>()));
+        // container resolves it. The gate is attached to the transport's pending queue, so the read
+        // side holds end of stream until every message already read has been dispatched and every
+        // response has been written, including a call that is still queued in the transport at the
+        // moment the client closes the pipe.
+        var drain = new ServerRuntime.DrainGate();
+        builder.Services.AddSingleton<ITransport>(sp =>
+        {
+            var transport = new StreamServerTransport(
+                new ServerRuntime.DrainingStdinStream(Console.OpenStandardInput(), drain),
+                new BufferedStream(Console.OpenStandardOutput()),
+                ServerIdentity.ProductId,
+                sp.GetService<ILoggerFactory>());
+            drain.Attach(() => transport.MessageReader.Count);
+            return transport;
+        });
 
         using IHost host = builder.Build();
         ServerRuntime.ColdStart.HostBuilt();
@@ -106,9 +115,9 @@ public static class Program
 
         await host.RunAsync();
 
-        // TRN-03. The read side already held the end of stream for the calls in flight, so this is
-        // the last look rather than the wait. A short bound keeps a leaked record from delaying the
-        // exit. Exit stays 0 either way.
-        await ServerRuntime.WaitForDrainAsync(ServerRuntime.ResponseGrace);
+        // TRN-03. The read side already held the end of stream until the queue was drained, so this
+        // is the last look rather than the wait. A short bound keeps a leaked record from delaying
+        // the exit. Exit stays 0 either way.
+        await drain.WaitAsync(ServerRuntime.ResponseGrace);
     }
 }

@@ -1,4 +1,4 @@
-// src/Wc3.Mcp/Wc3Tools.cs
+﻿// src/Wc3.Mcp/Wc3Tools.cs
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
@@ -419,9 +419,13 @@ public static class Wc3Tools
     /// </summary>
     private static FileWriteOutcome SaveDoc(
         MapDocument doc, string outPath, IReadOnlyList<string> inputs, bool overwrite, string? expectInputSha256)
-        => doc.SourceFolder is null
+    {
+        // PRF-08. The staged copy lands beside the destination, so the temp budget is that volume.
+        RequireTempDisk(outPath);
+        return doc.SourceFolder is null
             ? WriteGate.WriteFile(outPath, inputs, overwrite, expectInputSha256, temp => doc.Save(temp))
             : WriteGate.WriteFolder(outPath, inputs, overwrite, expectInputSha256, temp => doc.Save(temp));
+    }
 
     /// <summary>
     /// Gated save of a loaded map to a path the tool computed itself, through the file level gate.
@@ -445,6 +449,9 @@ public static class Wc3Tools
         Func<string, T> write,
         params string[] pathKeys) where T : class
     {
+        // PRF-08. Every staged write in this file passes through here, so the temp disk limit is
+        // checked once, at the point the staging folder is about to be created.
+        RequireTempDisk(outPath);
         T? report = null;
         var w = WriteGate.WriteFile(outPath, inputs, overwrite, expectInputSha256, temp =>
         {
@@ -473,10 +480,14 @@ public static class Wc3Tools
                 ? 0 : 1)
             .ToList();
 
-    /// <summary>A staging folder beside the destination, so a publish is a rename on one volume.</summary>
-    private static string StagingFolder(string finalPath) =>
-        Path.Combine(Path.GetDirectoryName(Path.GetFullPath(finalPath)) is { Length: > 0 } d ? d : ".",
+    /// <summary>A staging folder beside the destination, so a publish is a rename on one volume.
+    /// PRF-08 checks the temp disk on that same volume, since the staged copy lands beside it.</summary>
+    private static string StagingFolder(string finalPath)
+    {
+        RequireTempDisk(finalPath);
+        return Path.Combine(Path.GetDirectoryName(Path.GetFullPath(finalPath)) is { Length: > 0 } d ? d : ".",
             "." + Path.GetFileNameWithoutExtension(finalPath) + "." + Guid.NewGuid().ToString("N") + ".stage");
+    }
 
     /// <summary>
     /// A command's own report with the gate outcome merged in. The five gate fields sit at the top
@@ -633,11 +644,15 @@ public static class Wc3Tools
         [Description("Directory the PNG thumbnails are written under. Created if absent.")] string out_dir,
         [Description("Thumbnail edge length in pixels. Default 256.")] int size = AssetThumbnailsCommand.DefaultSize,
         [Description(OverwriteDoc)] bool overwrite = false,
-        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null,
+        [Description("Cancels the call at the next check point. The render itself is not interruptible once it starts.")] CancellationToken cancellationToken = default)
         => Run(() =>
         {
             if (string.IsNullOrWhiteSpace(out_dir)) throw new McpException("out_dir is required");
+            RequireTempDisk(out_dir);
+            CheckPoint(cancellationToken, "the render start");
             var r = AssetThumbnailsCommand.Execute(folder, size, size);
+            CheckPoint(cancellationToken, "the publish");
             var w = WriteGate.WriteFolder(out_dir, Inputs(folder), overwrite, expect_input_sha256, temp =>
             {
                 Directory.CreateDirectory(temp);
@@ -654,11 +669,15 @@ public static class Wc3Tools
         [Description("Target format extension, e.g. .png or .blp.")] string to,
         [Description("Directory the converted textures are written under. Created if absent.")] string out_dir,
         [Description(OverwriteDoc)] bool overwrite = false,
-        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null,
+        [Description("Cancels the call at the next check point. The conversion itself is not interruptible once it starts.")] CancellationToken cancellationToken = default)
         => Run(() =>
         {
             if (string.IsNullOrWhiteSpace(out_dir)) throw new McpException("out_dir is required");
+            RequireTempDisk(out_dir);
+            CheckPoint(cancellationToken, "the conversion start");
             var r = AssetConvertBatchCommand.Execute(folder, to);
+            CheckPoint(cancellationToken, "the publish");
             var w = WriteGate.WriteFolder(out_dir, Inputs(folder), overwrite, expect_input_sha256, temp =>
             {
                 Directory.CreateDirectory(temp);
@@ -873,12 +892,18 @@ public static class Wc3Tools
         [Description("Target fraction of a model's faces to keep, between 0 and 1. Default 1.0, which leaves every model byte for byte and shrinks only textures. A value below 1 decimates models, which needs a load test because it can produce a model the game crashes on.")] float ratio = 1.0f,
         [Description("Maximum texture side in pixels. A texture larger than this on either side is scaled down. Default 256.")] int max_texture = 256,
         [Description(OverwriteDoc)] bool overwrite = false,
-        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null,
+        [Description("Cancels the call at the next check point. The per texture optimisation inside the map is not interruptible.")] CancellationToken cancellationToken = default)
         => Run<object>(() =>
         {
             string full = ResolveOutPath(map, out_path);
+            CheckPoint(cancellationToken, "the optimisation start");
             return WriteWith(full, Inputs(map), overwrite, expect_input_sha256,
-                temp => MapOptimizeCommand.ExecutePath(map, ratio, max_texture, temp), "path");
+                temp =>
+                {
+                    CheckPoint(cancellationToken, "the staging copy");
+                    return MapOptimizeCommand.ExecutePath(map, ratio, max_texture, temp);
+                }, "path");
         });
 
     [McpServerTool(Name = "model_export_obj", Title = "Export a model to OBJ", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
@@ -888,7 +913,8 @@ public static class Wc3Tools
         [Description("Internal model path (.mdx/.mdl) inside the map.")] string model,
         [Description("Output .obj file path. A .mtl and the converted textures are written beside it.")] string out_path,
         [Description("Replace an .obj, .mtl or texture that already exists beside out_path. Default false, which refuses an existing target and leaves it exactly as it was.")] bool overwrite = false,
-        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null,
+        [Description("Cancels the call at the next check point. The export itself is not interruptible, and a cancel after it finishes still publishes nothing.")] CancellationToken cancellationToken = default)
         => Run<object>(() =>
         {
             var doc = LoadMap(map);
@@ -897,7 +923,9 @@ public static class Wc3Tools
             Directory.CreateDirectory(staging);
             try
             {
+                CheckPoint(cancellationToken, "the export start");
                 var r = ModelExportObjCommand.Write(doc, model, Path.Combine(staging, Path.GetFileName(full)), false);
+                CheckPoint(cancellationToken, "the publish");
                 var w = WriteGate.Publish(
                     StagedPairs(staging, Path.GetDirectoryName(full) ?? ".", Path.GetFileName(full)),
                     Inputs(map), overwrite, expect_input_sha256);
@@ -920,7 +948,8 @@ public static class Wc3Tools
         [Description("Optional texture path to embed, relative to the map, overriding every material. Omit to use the model's own materials, or war3mapImported\\<name>.blp when it names none.")] string? texture = null,
         [Description("Frames per second used to convert a glTF animation's time range into a sequence frame interval. The Warcraft III default is 30.")] double fps = 30,
         [Description(OverwriteDoc)] bool overwrite = false,
-        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null,
+        [Description("Cancels the call at the next check point. The import itself is not interruptible, and a cancel after it finishes still publishes nothing.")] CancellationToken cancellationToken = default)
         => Run<object>(() =>
         {
             string full = Path.GetFullPath(out_path);
@@ -928,8 +957,10 @@ public static class Wc3Tools
             Directory.CreateDirectory(staging);
             try
             {
+                CheckPoint(cancellationToken, "the import start");
                 var r = ModelImportCommand.ExecutePath(obj, Path.Combine(staging, Path.GetFileName(full)),
                     texture, fps);
+                CheckPoint(cancellationToken, "the publish");
                 var w = WriteGate.Publish(
                     StagedPairs(staging, Path.GetDirectoryName(full) ?? ".", Path.GetFileName(full)),
                     Inputs(obj), overwrite, expect_input_sha256);
@@ -3621,11 +3652,15 @@ public static class Wc3Tools
             + "script-objects, safe-units, models, model-names, portraits, data-pointers, kk-textures, "
             + "green-icons, uabi, preload, single-player, shrink, strip-indent. At most 1000, and a longer list is refused with a tool error naming the limit.")] string[]? options = null,
         [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
-        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null,
+        [Description("Cancels the call at the next check point. The repair itself is not interruptible once it starts.")] CancellationToken cancellationToken = default)
         => Run(() =>
         {
             RequireAtMost(options?.Length ?? 0, "options");
-            return MapDoctorCommand.Fix(map, options, out_path);
+            CheckPoint(cancellationToken, "the repair start");
+            var result = MapDoctorCommand.Fix(map, options, out_path);
+            CheckPoint(cancellationToken, "the result");
+            return result;
         });
 
     // ---- shared plumbing -------------------------------------------------
@@ -3651,12 +3686,106 @@ public static class Wc3Tools
     /// complete list was applied when part of it was dropped.</summary>
     private const int MaxArrayItems = 1000;
 
+    // ---- PRF-08. The four resource limits, in one place ------------------
+    //
+    // The corpus measurement these are set against is the largest map this toolkit loads,
+    // ORDR_S2_2.323[R]_english.w3x, 7914 archive entries and 339 MB decompressed (see the
+    // comment on MapFileEntry.RawBytes). Each limit sits a few times above that baseline, so a
+    // real map and a bigger one both pass, and a decrypt bomb or a runaway entry count does not.
+
+    /// <summary>PRF-08. The most entries one archive may hold. 20000 is 2.5x the corpus map's
+    /// 7914 entries. A protected map pads its hash table with decoys, so the count is high by
+    /// nature and a low bound would refuse legitimate maps.</summary>
+    private const int MaxArchiveEntries = 20000;
+
+    /// <summary>PRF-08. The most bytes one entry may decompress to, read from the block table so
+    /// nothing is decompressed to measure it. 256 MiB is far above the largest real entry, a
+    /// music or model file of a few MiB, and far below a single-sector bomb.</summary>
+    private const long MaxEntryDecompressedBytes = 256L * 1024 * 1024;
+
+    /// <summary>PRF-08. The most bytes one call may hold decompressed across every entry of a
+    /// map. 2 GiB is 6x the corpus map's 339 MB, which leaves room for a bigger campaign map and
+    /// still bounds a 64 bit process.</summary>
+    private const long MaxCallDecompressedBytes = 2L * 1024 * 1024 * 1024;
+
+    /// <summary>PRF-08. The temporary disk a call may assume. A staged write puts a whole second
+    /// copy of its output beside the destination before it publishes, so the volume holding that
+    /// destination must have this much free. 2 GiB covers a copy of the corpus map plus its
+    /// intermediates, and matches the per call decompressed ceiling. The measured value is the
+    /// free space, since the staged bytes do not exist yet when the call starts.</summary>
+    private const long MaxTempBytes = 2L * 1024 * 1024 * 1024;
+
     /// <summary>PAR-08. Refuse an array argument above its maximum, naming the limit and the
     /// count received.</summary>
     private static void RequireAtMost(int count, string what)
     {
         if (count > MaxArrayItems)
             throw new McpException($"{what} takes at most {MaxArrayItems} entries, got {count}");
+    }
+
+    /// <summary>
+    /// PRF-04. The one check point every slow tool runs, before it starts the command and again
+    /// before it publishes. None of the commands under these tools takes a CancellationToken, so
+    /// a cancel cannot stop one mid run. This makes the cancel observed at the boundary the tool
+    /// owns, rather than swallowed by the catch in <see cref="Run"/> and reported as success.
+    /// </summary>
+    private static void CheckPoint(CancellationToken cancellationToken, string step)
+    {
+        if (cancellationToken.IsCancellationRequested)
+            throw new OperationCanceledException(
+                $"cancelled at {step}. The command already running is not interruptible, so no further step is started.");
+    }
+
+    /// <summary>
+    /// PRF-08. The three archive limits, measured from the block table so policing them costs no
+    /// decompression. The entry count, the largest single entry and the running total are all
+    /// refused by name with the value measured, never truncated.
+    /// </summary>
+    private static void RequireArchiveWithinLimits(MapDocument doc, string map)
+    {
+        int entries = doc.Files.Count;
+        if (entries > MaxArchiveEntries)
+            throw new McpException(
+                $"[ARCHIVE_ENTRIES] {map} holds {entries} archive entries, the limit is {MaxArchiveEntries}");
+
+        long total = 0;
+        foreach (var entry in doc.Files)
+        {
+            long size = entry.RawSize;
+            if (size > MaxEntryDecompressedBytes)
+                throw new McpException(
+                    $"[ENTRY_BYTES] {map} entry '{entry.FileName ?? "(unnamed)"}' decompresses to {size} bytes, "
+                    + $"the limit per entry is {MaxEntryDecompressedBytes}");
+            total += size;
+            if (total > MaxCallDecompressedBytes)
+                throw new McpException(
+                    $"[CALL_BYTES] {map} decompresses past {total} bytes across {entries} entries, "
+                    + $"the limit per call is {MaxCallDecompressedBytes}");
+        }
+    }
+
+    /// <summary>
+    /// PRF-08. The temporary disk limit, measured on the volume the staged write will land on. A
+    /// volume that cannot be measured, a UNC share with no drive info, is let through rather than
+    /// refused, because the limit must never be the thing that breaks a working call.
+    /// </summary>
+    private static void RequireTempDisk(string destinationPath)
+    {
+        string? root;
+        try { root = Path.GetPathRoot(Path.GetFullPath(destinationPath)); }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException) { return; }
+        if (string.IsNullOrEmpty(root)) return;
+        long free;
+        try
+        {
+            var drive = new DriveInfo(root);
+            if (!drive.IsReady) return;
+            free = drive.AvailableFreeSpace;
+        }
+        catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException) { return; }
+        if (free < MaxTempBytes)
+            throw new McpException(
+                $"[TEMP_DISK] {root} has {free} bytes free, the temporary disk limit is {MaxTempBytes}");
     }
 
     /// <summary>ERR-05. The skip lines a batch command records, split into the item it named and
@@ -3745,6 +3874,10 @@ public static class Wc3Tools
     {
         try { return body(); }
         catch (McpException) { throw; }
+        // PRF-04. A cancel is reported as a cancel. The generic arm below would otherwise turn
+        // OperationCanceledException into an McpException and the client could not tell a
+        // cancelled call from a failed one.
+        catch (OperationCanceledException) { throw; }
         catch (ToolError ex)
         {
             throw new McpException("[" + ex.Code + "] " + ex.Message + (ex.Next is null ? "" : ". Next, " + ex.Next));
@@ -3769,6 +3902,8 @@ public static class Wc3Tools
                 && !extension.Equals(".w3m", StringComparison.OrdinalIgnoreCase))
                 throw new McpException($"map must be a .w3x or .w3m file: {map}");
         }
+        MapDocument doc;
+        string? sha = null;
         try
         {
             if (File.Exists(map))
@@ -3776,13 +3911,21 @@ public static class Wc3Tools
                 // Hash the exact snapshot the document is built from, so a later write reports the
                 // digest of what it read rather than the digest of whatever replaced the file.
                 byte[] bytes = File.ReadAllBytes(map);
-                var doc = MapDocument.Load(bytes);
-                LoadedSha.AddOrUpdate(doc, Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant());
-                return doc;
+                doc = MapDocument.Load(bytes);
+                sha = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
             }
-            return MapDocument.Load(map);
+            else
+            {
+                doc = MapDocument.Load(map);
+            }
         }
         catch (Exception ex) { throw new McpException($"could not load '{map}': {ex.Message}"); }
+
+        // PRF-08. Outside the catch above, so a refused archive names the limit it broke rather
+        // than being reworded as "could not load". Measured from the block table, no decompression.
+        RequireArchiveWithinLimits(doc, map);
+        if (sha is not null) LoadedSha.AddOrUpdate(doc, sha);
+        return doc;
     }
 
     /// <summary>Digests of the bytes each loaded document was built from, keyed by the document.</summary>
@@ -4177,28 +4320,48 @@ public static class Wc3Tools
     [McpServerTool(Name = "library_scan", Title = "Scan a folder of maps", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Open every map in a folder through the loader and report per map its size in bytes, the build it targets if known, whether it loads, its archive entry count and its diagnostic count, plus the loaded, failed and byte totals. Opens one map at a time. Read-only.")]
     public static LibraryScanResult LibraryScan(
-        [Description("Folder of .w3x/.w3m maps, searched recursively.")] string folder)
-        => Run(() => LibraryScanCommand.Execute(folder));
+        [Description("Folder of .w3x/.w3m maps, searched recursively.")] string folder,
+        [Description("Cancels the call at the next check point. The scan itself is not interruptible once it starts.")] CancellationToken cancellationToken = default)
+        => Run(() =>
+        {
+            CheckPoint(cancellationToken, "the scan start");
+            return LibraryScanCommand.Execute(folder);
+        });
 
     [McpServerTool(Name = "library_audit", Title = "Audit a folder of maps", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Run the behavioural audit over every map in a folder and report the findings per map and the totals per check, so a whole library is ranked by how much it needs fixing. Opens one map at a time. Read-only.")]
     public static LibraryAuditResult LibraryAudit(
         [Description("Folder of .w3x/.w3m maps, searched recursively.")] string folder,
-        [Description("Warcraft III install directory for the checks that need game data. Omit to auto-detect.")] string? game_dir = null)
-        => Run(() => LibraryAuditCommand.Execute(folder, ResolveGameDir(game_dir)));
+        [Description("Warcraft III install directory for the checks that need game data. Omit to auto-detect.")] string? game_dir = null,
+        [Description("Cancels the call at the next check point. The audit itself is not interruptible once it starts.")] CancellationToken cancellationToken = default)
+        => Run(() =>
+        {
+            CheckPoint(cancellationToken, "the audit start");
+            return LibraryAuditCommand.Execute(folder, ResolveGameDir(game_dir));
+        });
 
     [McpServerTool(Name = "library_validate", Title = "Validate a folder of maps", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Run the load validation over every map in a folder and list the ones that fail, with the reason. A map that cannot be opened counts as invalid. Opens one map at a time. Read-only.")]
     public static LibraryValidateResult LibraryValidate(
-        [Description("Folder of .w3x/.w3m maps, searched recursively.")] string folder)
-        => Run(() => LibraryValidateCommand.Execute(folder));
+        [Description("Folder of .w3x/.w3m maps, searched recursively.")] string folder,
+        [Description("Cancels the call at the next check point. The validation itself is not interruptible once it starts.")] CancellationToken cancellationToken = default)
+        => Run(() =>
+        {
+            CheckPoint(cancellationToken, "the validation start");
+            return LibraryValidateCommand.Execute(folder);
+        });
 
     [McpServerTool(Name = "library_compare", Title = "Compare two map folders", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Compare two folders of maps by file name and content hash, listing the maps only in the first folder, only in the second, and changed between them, plus the identical count and any file name that is not unique inside a folder. Read-only.")]
     public static LibraryCompareResult LibraryCompare(
         [Description("The first folder of maps.")] string folder_a,
-        [Description("The second folder of maps.")] string folder_b)
-        => Run(() => LibraryCompareCommand.Execute(folder_a, folder_b));
+        [Description("The second folder of maps.")] string folder_b,
+        [Description("Cancels the call at the next check point. The comparison itself is not interruptible once it starts.")] CancellationToken cancellationToken = default)
+        => Run(() =>
+        {
+            CheckPoint(cancellationToken, "the comparison start");
+            return LibraryCompareCommand.Execute(folder_a, folder_b);
+        });
 
     [McpServerTool(Name = "library_report", Title = "Write a library report", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Write one Markdown report over a folder of maps, a summary line, a per-map table and the aggregated findings, to out_path. The report is built from the same probes the scan, audit and validate sweeps use. Writes only out_path and never a map.")]
@@ -4207,9 +4370,18 @@ public static class Wc3Tools
         [Description("Path to write the Markdown report to.")] string out_path,
         [Description("Warcraft III install directory for the checks that need game data. Omit to auto-detect.")] string? game_dir = null,
         [Description(OverwriteDoc)] bool overwrite = false,
-        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
-        => Run<object>(() => WriteWith(out_path, Inputs(folder), overwrite, expect_input_sha256,
-            temp => LibraryReportCommand.Execute(folder, temp, ResolveGameDir(game_dir)), "path"));
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null,
+        [Description("Cancels the call at the next check point. The report sweep itself is not interruptible, and a cancel during it still writes nothing.")] CancellationToken cancellationToken = default)
+        => Run<object>(() =>
+        {
+            CheckPoint(cancellationToken, "the report start");
+            return WriteWith(out_path, Inputs(folder), overwrite, expect_input_sha256,
+                temp =>
+                {
+                    CheckPoint(cancellationToken, "the sweep");
+                    return LibraryReportCommand.Execute(folder, temp, ResolveGameDir(game_dir));
+                }, "path");
+        });
     [McpServerTool(Name = "gamedata_sources", Title = "Show dataset provenance", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Return the dataset's provenance index. For every schema folder it reports the build, its era, the sections present, the SHA-256 of each section file, and the input hashes from the folder's manifest, so the whole dataset can be traced back to the game files it was derived from.")]
     public static GamedataSourcesResult GameDataSources(

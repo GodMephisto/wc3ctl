@@ -5,6 +5,8 @@
 // line names, and that a gross regression in either fails here before a client sees it.
 using System.Diagnostics;
 using ModelContextProtocol.Client;
+using ModelContextProtocol.Protocol;
+using ModelContextProtocol.Server;
 using Wc3.Mcp;
 using Xunit.Abstractions;
 
@@ -68,5 +70,46 @@ public class ColdStartTests
         // from a different origin, which is the way a phase line silently lies.
         Assert.True(surface >= 0);
         if (total >= 0) Assert.True(surface <= total, $"surface {surface:0} ms is longer than total {total:0} ms");
+    }
+
+    [Fact]
+    public void The_tool_collection_is_filled_on_first_use_and_only_once()
+    {
+        int builds = 0;
+        var source = new Lazy<IReadOnlyList<McpServerTool>>(() =>
+        {
+            Interlocked.Increment(ref builds);
+            return Wc3McpServer.CreateTools();
+        });
+        var collection = new DeferredToolCollection(source, Wc3McpServer.ToolCount());
+
+        // PRF-01. The options carry the collection, not the descriptors. Nothing is built until a
+        // client asks for the list or calls a tool by name.
+        Assert.Equal(0, builds);
+        Assert.Equal(Wc3McpServer.ToolCount(), collection.Expected);
+
+        Assert.Equal(Wc3McpServer.ToolCount(), collection.PrimitiveNames.Count);
+        Assert.Equal(1, builds);
+
+        // A second read is a dictionary lookup over the one build, which is what a second session
+        // in the same process used to pay for again.
+        Assert.Equal(collection.Expected, collection.ToArray().Length);
+        Assert.Equal(1, builds);
+        Assert.True(collection.TryGetPrimitive("map_overview", out McpServerTool? tool));
+        Assert.Equal("map_overview", tool!.ProtocolTool.Name);
+    }
+
+    [Fact]
+    public void The_deferred_catalog_resource_publishes_the_same_template()
+    {
+        // The proxy answers the template from its own constants so that adding the resource costs
+        // nothing. This pins those constants to the catalog the server used to build eagerly.
+        ResourceTemplate eager = McpToolCatalog.CreateCatalogResource().ProtocolResourceTemplate;
+        var deferred = new DeferredCatalogResource().ProtocolResourceTemplate;
+
+        Assert.Equal(eager.UriTemplate, deferred.UriTemplate);
+        Assert.Equal(eager.Name, deferred.Name);
+        Assert.Equal(eager.Description, deferred.Description);
+        Assert.Equal(eager.MimeType, deferred.MimeType);
     }
 }

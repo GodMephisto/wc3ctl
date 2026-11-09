@@ -21,7 +21,8 @@ namespace Wc3.Mcp;
 /// progress heartbeat when the client asked for one, and every call records a client cancel so the
 /// line names the tool that was stopped. PRF-05 refuses a folder call over an entry ceiling before
 /// a single map opens, and PRF-09 refuses an input whose measured projection is past the stated
-/// memory budget. PRF-01 records the three cold start phases and writes them as one line.
+/// memory budget. PRF-01 records the four cold start phases and writes them as one line, and the
+/// descriptor build that the initialize reply no longer waits for gets its own line when it runs.
 /// </summary>
 internal static class ServerRuntime
 {
@@ -56,10 +57,9 @@ internal static class ServerRuntime
     private static readonly object Gate = new();
     private static readonly Dictionary<RequestId, PendingCall> Calls = new();
 
-    private static TaskCompletionSource _handlersIdle = CompletedSource();
-    private static TaskCompletionSource _responsesIdle = CompletedSource();
     private static int _handlers;
     private static int _responses;
+    private static int _messagesInFlight;
     private static string? _currentTool;
     private static int _memoryNoteWritten;
     private static int _cancelledCalls;
@@ -188,7 +188,10 @@ internal static class ServerRuntime
     /// <summary>
     /// PRF-01. The incoming message filter. It remembers the id of the initialize request, so the
     /// outgoing filter can tell the handshake reply from every later response and close the cold
-    /// start clock on the reply rather than on the request.
+    /// start clock on the reply rather than on the request. TRN-03 rides the same filter, which the
+    /// SDK runs around the whole of a message, dispatch included. The count it keeps is therefore
+    /// the exact answer to whether a message that was read is still being answered, and it covers
+    /// the first tool call, where the descriptor build happens between the queue and the handler.
     /// </summary>
     public static McpMessageHandler ObserveIncomingMessages(McpMessageHandler next)
     {
@@ -197,7 +200,15 @@ internal static class ServerRuntime
         {
             if (context.JsonRpcMessage is JsonRpcRequest { Method: "initialize" } request)
                 ColdStart.InitializeRequested(request.Id);
-            await next(context, cancellationToken).ConfigureAwait(false);
+            Interlocked.Increment(ref _messagesInFlight);
+            try
+            {
+                await next(context, cancellationToken).ConfigureAwait(false);
+            }
+            finally
+            {
+                Interlocked.Decrement(ref _messagesInFlight);
+            }
         };
     }
 
@@ -224,38 +235,121 @@ internal static class ServerRuntime
     }
 
     /// <summary>
-    /// TRN-03. Waits for the calls in flight to finish and their responses to be written. The
-    /// stdin wrapper calls this before it reports end of stream, so a client that closes the pipe
-    /// during a write still gets its response and the host exits 0 afterwards.
+    /// TRN-03. Waits for the calls in flight to finish and their responses to be written, through
+    /// the gate the stdio stream holds. Kept for the exit path, which takes the last look after the
+    /// host has stopped, and for a test that wants the same answer without a stream.
     /// </summary>
-    public static async Task WaitForDrainAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
-    {
-        Task handlers;
-        lock (Gate)
-        {
-            handlers = _handlers == 0 ? Task.CompletedTask : _handlersIdle.Task;
-        }
-        await WaitQuietlyAsync(handlers, timeout, cancellationToken).ConfigureAwait(false);
+    public static Task WaitForDrainAsync(TimeSpan timeout, CancellationToken cancellationToken = default) =>
+        new DrainGate().WaitAsync(timeout, cancellationToken);
 
-        Task responses;
-        lock (Gate)
+    /// <summary>
+    /// TRN-03. What the stream waits on at end of stream. A call is in flight while a tool request
+    /// is running, while its response has not reached the pipe, and while a message read from stdin
+    /// is still queued in the transport. The third case is the one that was missed. A client that
+    /// writes a call and closes the pipe at once hits end of stream before the handler has picked
+    /// the request up, so a gate that counted only dispatched calls let the transport disconnect
+    /// first, and the transport drops a response for a disconnected peer without an error.
+    /// </summary>
+    public sealed class DrainGate
+    {
+        private readonly Func<bool> _messagesIdle;
+        private readonly Func<bool> _responsesIdle;
+        private Func<int>? _queued;
+
+        public DrainGate()
+            : this(null, null)
         {
-            responses = _responses == 0 ? Task.CompletedTask : _responsesIdle.Task;
         }
-        await WaitQuietlyAsync(responses, ResponseGrace, cancellationToken).ConfigureAwait(false);
+
+        /// <summary>
+        /// A gate over the counters a test supplies, so the gate can be driven without a message
+        /// arriving on the shared process.
+        /// </summary>
+        internal DrainGate(Func<bool>? messagesIdle, Func<bool>? responsesIdle)
+        {
+            _messagesIdle = messagesIdle ?? (() => MessagesIdle);
+            _responsesIdle = responsesIdle ?? (() => ResponsesIdle);
+        }
+
+        /// <summary>
+        /// The transport's pending message count, attached once the transport exists. A count that
+        /// the channel cannot answer is read as nothing queued, which is the old behaviour rather
+        /// than a wait that never ends.
+        /// </summary>
+        public void Attach(Func<int> queued) =>
+            _queued = queued ?? throw new ArgumentNullException(nameof(queued));
+
+        /// <summary>Messages read from stdin that no handler has picked up yet.</summary>
+        public int Queued()
+        {
+            Func<int>? queued = Volatile.Read(ref _queued);
+            if (queued is null) return 0;
+            try { return queued(); }
+            catch (NotSupportedException) { return 0; }
+        }
+
+        /// <summary>True when no message is being handled.</summary>
+        internal bool MessagesIdle => Volatile.Read(ref _messagesInFlight) == 0;
+
+        /// <summary>True when no tool response is still on its way to the pipe.</summary>
+        internal bool ResponsesIdle
+        {
+            get { lock (Gate) return _responses == 0; }
+        }
+
+        /// <summary>True when nothing that was read is still waiting for an answer.</summary>
+        internal bool IsIdle => Queued() == 0 && _messagesIdle();
+
+        /// <summary>
+        /// Waits until the queue and the messages are both quiet, then until the last response has
+        /// been written. The quiet reading has to hold over two samples, because the instant
+        /// between a message leaving the transport and its filter starting is invisible to both
+        /// counters. <paramref name="timeout"/> bounds the first wait and
+        /// <see cref="ResponseGrace"/> bounds the second, so a response that is never sent cannot
+        /// hold the process for the whole drain window.
+        /// </summary>
+        public async Task WaitAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
+        {
+            await WaitUntilAsync(() => IsIdle, timeout, cancellationToken).ConfigureAwait(false);
+            await WaitUntilAsync(_responsesIdle, ResponseGrace, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>How long between two reads of the drain counters.</summary>
+    private static readonly TimeSpan QuietPoll = TimeSpan.FromMilliseconds(10);
+
+    /// <summary>Waits for a condition to hold twice in a row, bounded by a timeout.</summary>
+    private static async Task WaitUntilAsync(Func<bool> condition, TimeSpan timeout, CancellationToken cancellationToken)
+    {
+        Stopwatch clock = Stopwatch.StartNew();
+        bool quiet = false;
+        while (true)
+        {
+            bool now = condition();
+            if (now && quiet) return;
+            quiet = now;
+            if (clock.Elapsed >= timeout) return;
+            try { await Task.Delay(QuietPoll, cancellationToken).ConfigureAwait(false); }
+            catch (OperationCanceledException) { return; }
+            catch (ObjectDisposedException) { return; }
+        }
     }
 
     /// <summary>
-    /// TRN-03. Standard input with one difference. When the inner stream reports end of stream and
-    /// a call is still running, the read blocks until the response is written and only then lets
-    /// the transport see the end of stream and disconnect.
+    /// TRN-03. Standard input with one difference. When the inner stream reports end of stream the
+    /// read waits on the gate instead of reporting it, so a call that was already read, or is still
+    /// running, answers before the transport sees the end of stream and disconnects.
     /// </summary>
     public sealed class DrainingStdinStream : Stream
     {
         private readonly Stream _inner;
+        private readonly DrainGate _gate;
 
-        public DrainingStdinStream(Stream inner) =>
+        public DrainingStdinStream(Stream inner, DrainGate? gate = null)
+        {
             _inner = inner ?? throw new ArgumentNullException(nameof(inner));
+            _gate = gate ?? new DrainGate();
+        }
 
         public override bool CanRead => true;
         public override bool CanSeek => false;
@@ -271,21 +365,21 @@ internal static class ServerRuntime
         public override int Read(byte[] buffer, int offset, int count)
         {
             int read = _inner.Read(buffer, offset, count);
-            if (read == 0) WaitForDrainAsync(DrainTimeout).GetAwaiter().GetResult();
+            if (read == 0) _gate.WaitAsync(DrainTimeout).GetAwaiter().GetResult();
             return read;
         }
 
         public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
         {
             int read = await _inner.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
-            if (read == 0) await WaitForDrainAsync(DrainTimeout, cancellationToken).ConfigureAwait(false);
+            if (read == 0) await _gate.WaitAsync(DrainTimeout, cancellationToken).ConfigureAwait(false);
             return read;
         }
 
         public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
             int read = await _inner.ReadAsync(buffer.AsMemory(offset, count), cancellationToken).ConfigureAwait(false);
-            if (read == 0) await WaitForDrainAsync(DrainTimeout, cancellationToken).ConfigureAwait(false);
+            if (read == 0) await _gate.WaitAsync(DrainTimeout, cancellationToken).ConfigureAwait(false);
             return read;
         }
 
@@ -313,19 +407,10 @@ internal static class ServerRuntime
         public bool Failed { get; set; }
     }
 
-    private static TaskCompletionSource CompletedSource()
-    {
-        var source = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        source.SetResult();
-        return source;
-    }
-
     private static void Begin(RequestId id, string tool)
     {
         lock (Gate)
         {
-            if (_handlers == 0) _handlersIdle = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            if (_responses == 0) _responsesIdle = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             _handlers++;
             _responses++;
             _currentTool = tool;
@@ -343,11 +428,7 @@ internal static class ServerRuntime
                 call.Failed = failed;
             }
             if (_handlers > 0) _handlers--;
-            if (_handlers == 0)
-            {
-                _currentTool = null;
-                _handlersIdle.TrySetResult();
-            }
+            if (_handlers == 0) _currentTool = null;
         }
     }
 
@@ -363,7 +444,6 @@ internal static class ServerRuntime
         {
             if (!Calls.Remove(withId.Id, out call)) return;
             if (_responses > 0) _responses--;
-            if (_responses == 0) _responsesIdle.TrySetResult();
         }
 
         // A failed call already has its warning line, and a fast call is not worth a line.
@@ -666,10 +746,18 @@ internal static class ServerRuntime
         private static double _surfaceMs = -1;
         private static double _handshakeMs = -1;
         private static double _totalMs = -1;
+        private static double _descriptorsMs = -1;
+        private static int _descriptorCount;
         private static string? _line;
 
         /// <summary>What the surface build cost, or -1 before it was recorded.</summary>
         public static double SurfaceMs { get { lock (Sync) return _surfaceMs; } }
+
+        /// <summary>PRF-01. What the deferred descriptor build cost, or -1 before it ran.</summary>
+        public static double DescriptorsMs { get { lock (Sync) return _descriptorsMs; } }
+
+        /// <summary>PRF-01. How many descriptors the deferred build produced, or 0 before it ran.</summary>
+        public static int DescriptorCount { get { lock (Sync) return _descriptorCount; } }
 
         /// <summary>The handshake from the later of host and surface to the initialize reply.</summary>
         public static double HandshakeMs { get { lock (Sync) return _handshakeMs; } }
@@ -705,6 +793,25 @@ internal static class ServerRuntime
                 _surfaceMs = (done - startedTicks) * 1000.0 / Stopwatch.Frequency;
                 _surfaceDoneTicks = done;
             }
+        }
+
+        /// <summary>
+        /// PRF-01. The deferred descriptor build finished, so its cost is written once on stderr
+        /// rather than absorbed into a phase that no longer contains it. The exe enables the line,
+        /// a test reads <see cref="DescriptorsMs"/> instead.
+        /// </summary>
+        public static void DescriptorsBuilt(int count, TimeSpan elapsed)
+        {
+            string line;
+            lock (Sync)
+            {
+                if (_descriptorsMs >= 0) return;
+                _descriptorsMs = elapsed.TotalMilliseconds;
+                _descriptorCount = count;
+                line = "wc3 tool descriptors " + _descriptorCount + " built in "
+                    + Round(_descriptorsMs) + " ms on first use";
+            }
+            if (Volatile.Read(ref _enabled) != 0) Console.Error.WriteLine(line);
         }
 
         /// <summary>The initialize request arrived, so the handshake has a reply to wait for.</summary>
@@ -761,17 +868,4 @@ internal static class ServerRuntime
         OperationCanceledException => RequestCancelled,
         _ => (int)McpErrorCode.InternalError,
     };
-
-    private static async Task WaitQuietlyAsync(Task task, TimeSpan timeout, CancellationToken cancellationToken)
-    {
-        if (task.IsCompleted) return;
-        try
-        {
-            await task.WaitAsync(timeout, cancellationToken).ConfigureAwait(false);
-        }
-        catch (TimeoutException)
-        {
-            // The bound is the point. The call still finishes, the host just stops waiting for it.
-        }
-    }
 }
