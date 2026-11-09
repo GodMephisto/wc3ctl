@@ -6989,6 +6989,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
             Emit(p.GetValueForOption(jsonOption), workflows, () => string.Join("\n\n", workflows.Select(w =>
                 w.Id + "  " + w.Title
                 + "\n  When. " + w.WhenToUse
+                + "\n  Prompt. " + w.Prompt
                 + "\n  MCP tools. " + string.Join(", ", w.McpTools)
                 + "\n  CLI. " + string.Join(", ", w.CliCommands))));
         }));

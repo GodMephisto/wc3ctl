@@ -317,7 +317,9 @@ public static class Wc3Tools
         [Description("Path to a .w3x/.w3m map file.")] string map,
         [Description("Four-character object rawcode, e.g. 'hfoo' or 'H000'.")] string rawcode,
         [Description("Object kind: " + KindValues + ".")] string kind = "unit",
-        [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Without it fields cannot be grouped, ordered or bounds-checked, and the layer falls back to a measurement of the map itself.")] string? game_dir = null)
+        [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Without it fields cannot be grouped, ordered or bounds-checked, and the layer falls back to a measurement of the map itself.")] string? game_dir = null,
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
         => Run(() => ObjectFormCommand.Execute(LoadMap(map), ParseKind(kind), rawcode, ResolveGameDir(game_dir)));
 
     private const string UnitInstanceFields =
@@ -330,10 +332,11 @@ public static class Wc3Tools
     /// <summary>Save-and-report for a placed-instance edit. One helper rather than one per tool,
     /// so every mutating tool refuses and reports identically.</summary>
     private static EditToolResult SaveEdit(
-        MapDocument doc, string map, string? outPath, bool ok, string message)
+        MapDocument doc, string map, string? outPath, bool overwrite, string? expectInputSha256,
+        bool ok, string message)
     {
         if (!ok) throw new McpException(message);
-        var w = WriteGate.Save(doc, map, outPath, overwrite: true);
+        var w = WriteGate.Save(doc, map, outPath, overwrite, expectInputSha256, LoadedShaOf(doc));
         return new EditToolResult(w.SavedTo, message, w.InputSha256, w.OutputSha256,
             w.FilesRewritten, w.BytesWritten);
     }
@@ -889,12 +892,14 @@ public static class Wc3Tools
         [Description("Corner row, 0-based.")] int row,
         [Description("Field: " + TerrainCornerFieldNames + ".")] string field,
         [Description("New value.")] string value,
-        [Description("Where to write the edited map. Defaults to a sibling '.edited' copy.")] string? out_path = null)
+        [Description("Where to write the edited map. Defaults to a sibling '.edited' copy.")] string? out_path = null,
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
         => Run(() =>
         {
             var doc = LoadMap(map);
             var r = TerrainCornerFields.SetField(doc, col, row, field, value);
-            return SaveEdit(doc, map, out_path, r.Ok, r.Message);
+            return SaveEdit(doc, map, out_path, overwrite, expect_input_sha256, r.Ok, r.Message);
         });
 
     [McpServerTool(Name = "placed_units_list", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
@@ -921,12 +926,14 @@ public static class Wc3Tools
         [Description("The unit's creation number, from placed_units_list.")] int creation_number,
         [Description("Field: " + UnitInstanceFields + ".")] string field,
         [Description("New value.")] string value,
-        [Description("Where to write the edited map. Defaults to a sibling '.edited' copy.")] string? out_path = null)
+        [Description("Where to write the edited map. Defaults to a sibling '.edited' copy.")] string? out_path = null,
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
         => Run(() =>
         {
             var doc = LoadMap(map);
             var r = PlacedInstanceFields.SetUnitField(doc, creation_number, field, value);
-            return SaveEdit(doc, map, out_path, r.Ok, r.Message);
+            return SaveEdit(doc, map, out_path, overwrite, expect_input_sha256, r.Ok, r.Message);
         });
 
     [McpServerTool(Name = "placed_unit_remove", ReadOnly = false, Destructive = true, Idempotent = true, OpenWorld = false)]
@@ -934,12 +941,15 @@ public static class Wc3Tools
     public static EditToolResult PlacedUnitRemove(
         [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
         [Description("The unit's creation number, from placed_units_list.")] int creation_number,
-        [Description("Where to write the edited map. Defaults to a sibling '.edited' copy.")] string? out_path = null)
-        => Run(() =>
+        [Description("Where to write the edited map. Defaults to a sibling '.edited' copy.")] string? out_path = null,
+        [Description("State the intent to destroy data. Without it the call is refused with CONFIRM_REQUIRED, naming what would be removed.")] bool confirm = false,
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
+        => RunConfirmed(confirm, "removes placed unit " + creation_number + "", () =>
         {
             var doc = LoadMap(map);
             var r = UnitInstanceCommand.Delete(doc, creation_number);
-            return SaveEdit(doc, map, out_path, r.Ok, r.Message);
+            return SaveEdit(doc, map, out_path, overwrite, expect_input_sha256, r.Ok, r.Message);
         });
 
     [McpServerTool(Name = "placed_doodads_list", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
@@ -963,12 +973,14 @@ public static class Wc3Tools
         [Description("The doodad's creation number, from placed_doodads_list.")] int creation_number,
         [Description("Field: " + DoodadInstanceFields + ".")] string field,
         [Description("New value.")] string value,
-        [Description("Where to write the edited map. Defaults to a sibling '.edited' copy.")] string? out_path = null)
+        [Description("Where to write the edited map. Defaults to a sibling '.edited' copy.")] string? out_path = null,
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
         => Run(() =>
         {
             var doc = LoadMap(map);
             var r = PlacedInstanceFields.SetDoodadField(doc, creation_number, field, value);
-            return SaveEdit(doc, map, out_path, r.Ok, r.Message);
+            return SaveEdit(doc, map, out_path, overwrite, expect_input_sha256, r.Ok, r.Message);
         });
 
     [McpServerTool(Name = "placed_doodad_remove", ReadOnly = false, Destructive = true, Idempotent = true, OpenWorld = false)]
@@ -976,12 +988,15 @@ public static class Wc3Tools
     public static EditToolResult PlacedDoodadRemove(
         [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
         [Description("The doodad's creation number, from placed_doodads_list.")] int creation_number,
-        [Description("Where to write the edited map. Defaults to a sibling '.edited' copy.")] string? out_path = null)
-        => Run(() =>
+        [Description("Where to write the edited map. Defaults to a sibling '.edited' copy.")] string? out_path = null,
+        [Description("State the intent to destroy data. Without it the call is refused with CONFIRM_REQUIRED, naming what would be removed.")] bool confirm = false,
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
+        => RunConfirmed(confirm, "removes placed doodad " + creation_number + "", () =>
         {
             var doc = LoadMap(map);
             var r = DoodadInstanceCommand.Delete(doc, creation_number);
-            return SaveEdit(doc, map, out_path, r.Ok, r.Message);
+            return SaveEdit(doc, map, out_path, overwrite, expect_input_sha256, r.Ok, r.Message);
         });
 
     [McpServerTool(Name = "place_grid", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
@@ -1046,8 +1061,9 @@ public static class Wc3Tools
         [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Where to write the edited map. Defaults to a sibling '.edited' copy.")] string? out_path = null,
         [Description("Rewrite each missing placement's rawcode to this four-character code instead of dropping it.")] string? to_rawcode = null,
-        [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Without it the base-game check is skipped.")] string? game_dir = null)
-        => Run(() =>
+        [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Without it the base-game check is skipped.")] string? game_dir = null,
+        [Description("State the intent to destroy data. Without it the call is refused with CONFIRM_REQUIRED, naming what would be removed.")] bool confirm = false)
+        => RunConfirmed(confirm, "rewrites or drops every placement whose type is missing", () =>
         {
             var doc = LoadMap(map);
             var r = PlacedFixRefsCommand.Execute(doc, ResolveGameDir(game_dir), to_rawcode);
@@ -1652,8 +1668,10 @@ public static class Wc3Tools
         [Description("World Z height offset. Default 0.")] float z = 0f,
         [Description("Facing angle in radians. Default 0.")] float rotation = 0f,
         [Description("Uniform scale. Default 1.")] float scale = 1f,
-        [Description("Doodad variation index. Default 0.")] int variation = 0)
-        => Run(() => SavePlacement(map, out_path, doc =>
+        [Description("Doodad variation index. Default 0.")] int variation = 0,
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
+        => Run(() => SavePlacement(map, out_path, overwrite, expect_input_sha256, doc =>
         {
             var r = PlacementCommand.PlaceDoodad(doc, type_rawcode, x, y, z, rotation, scale, variation);
             return (r.Ok, r.Message, r.CreationNumber);
@@ -1668,8 +1686,10 @@ public static class Wc3Tools
         [Description("West edge, min X (world coordinate).")] float left,
         [Description("South edge, min Y (world coordinate).")] float bottom,
         [Description("East edge, max X (world coordinate).")] float right,
-        [Description("North edge, max Y (world coordinate).")] float top)
-        => Run(() => SavePlacement(map, out_path, doc =>
+        [Description("North edge, max Y (world coordinate).")] float top,
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
+        => Run(() => SavePlacement(map, out_path, overwrite, expect_input_sha256, doc =>
         {
             var r = PlacementCommand.PlaceRegion(doc, name, left, bottom, right, top);
             return (r.Ok, r.Message, r.CreationNumber);
@@ -1686,8 +1706,10 @@ public static class Wc3Tools
         [Description("World Y coordinate.")] float y,
         [Description("Height above ground in world units. Default 0.")] float z = 0f,
         [Description("Facing angle in radians. Default 0.")] float rotation = 0f,
-        [Description("Uniform scale. Default 1.")] float scale = 1f)
-        => Run(() => SavePlacement(map, out_path, doc =>
+        [Description("Uniform scale. Default 1.")] float scale = 1f,
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
+        => Run(() => SavePlacement(map, out_path, overwrite, expect_input_sha256, doc =>
         {
             var r = PlacementCommand.PlaceUnit(doc, type_rawcode, owner_id, x, y, z, rotation, scale);
             return (r.Ok, r.Message, r.CreationNumber);
@@ -1700,8 +1722,10 @@ public static class Wc3Tools
         [Description("Output map file path (must differ from the input map). Created/overwritten; parent directories are created as needed. To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Player whose start location this is (0-based; 0 = red).")] int player,
         [Description("World X coordinate.")] float x,
-        [Description("World Y coordinate.")] float y)
-        => Run(() => SavePlacement(map, out_path, doc =>
+        [Description("World Y coordinate.")] float y,
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
+        => Run(() => SavePlacement(map, out_path, overwrite, expect_input_sha256, doc =>
         {
             var r = PlacementCommand.PlaceStartLocation(doc, player, x, y);
             return (r.Ok, r.Message, r.CreationNumber);
@@ -1717,8 +1741,10 @@ public static class Wc3Tools
         [Description("World Y coordinate.")] float y,
         [Description("Height above ground in world units. Default 0.")] float z = 0f,
         [Description("Facing angle in radians. Default 0.")] float rotation = 0f,
-        [Description("Uniform scale. Default 1.")] float scale = 1f)
-        => Run(() => SavePlacement(map, out_path, doc =>
+        [Description("Uniform scale. Default 1.")] float scale = 1f,
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
+        => Run(() => SavePlacement(map, out_path, overwrite, expect_input_sha256, doc =>
         {
             var r = PlacementCommand.PlaceItem(doc, type_rawcode, x, y, z, rotation, scale);
             return (r.Ok, r.Message, r.CreationNumber);
@@ -1762,8 +1788,10 @@ public static class Wc3Tools
         [Description("Brush radius in tiles (>= 0).")] int radius,
         [Description("Height operation: raise|lower|set|flatten|smooth.")] string op = "raise",
         [Description("Step for raise/lower; target for set; ignored by flatten/smooth. WC3 world units.")] float amount = 1f,
-        [Description("Brush footprint: " + ShapeValues + ".")] string shape = "circle")
-        => Run(() => SaveTerrain(map, out_path, doc =>
+        [Description("Brush footprint: " + ShapeValues + ".")] string shape = "circle",
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
+        => Run(() => SaveTerrain(map, out_path, overwrite, expect_input_sha256, doc =>
         {
             var r = TerrainCommand.Deform(doc, center_x, center_y, radius,
                 ParseEnum<TerrainCommand.HeightOp>(op, "op"), amount,
@@ -1781,8 +1809,10 @@ public static class Wc3Tools
         [Description("Brush radius in tiles (>= 0).")] int radius,
         [Description("Cliff operation: raise|lower|set.")] string op = "raise",
         [Description("Step count for raise/lower; the absolute cliff level for set.")] int level = 1,
-        [Description("Brush footprint: " + ShapeValues + ".")] string shape = "circle")
-        => Run(() => SaveTerrain(map, out_path, doc =>
+        [Description("Brush footprint: " + ShapeValues + ".")] string shape = "circle",
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
+        => Run(() => SaveTerrain(map, out_path, overwrite, expect_input_sha256, doc =>
         {
             var r = TerrainCommand.Cliff(doc, center_x, center_y, radius,
                 ParseEnum<TerrainCommand.CliffOp>(op, "op"), level,
@@ -1799,8 +1829,10 @@ public static class Wc3Tools
         [Description("Brush centre tile Y.")] int center_y,
         [Description("Brush radius in tiles (>= 0).")] int radius,
         [Description("true = set the ramp flag; false = clear it.")] bool on = true,
-        [Description("Brush footprint: " + ShapeValues + ".")] string shape = "circle")
-        => Run(() => SaveTerrain(map, out_path, doc =>
+        [Description("Brush footprint: " + ShapeValues + ".")] string shape = "circle",
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
+        => Run(() => SaveTerrain(map, out_path, overwrite, expect_input_sha256, doc =>
         {
             var r = TerrainCommand.Ramp(doc, center_x, center_y, radius, on,
                 ParseEnum<TerrainCommand.BrushShape>(shape, "shape"));
@@ -1817,8 +1849,10 @@ public static class Wc3Tools
         [Description("Brush radius in tiles (>= 0).")] int radius,
         [Description("Ground texture slot index in the map's tileset table.")] int texture_index,
         [Description("Optional tile variation; omit to choose the default.")] int? variation = null,
-        [Description("Brush footprint: " + ShapeValues + ".")] string shape = "circle")
-        => Run(() => SaveTerrain(map, out_path, doc =>
+        [Description("Brush footprint: " + ShapeValues + ".")] string shape = "circle",
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
+        => Run(() => SaveTerrain(map, out_path, overwrite, expect_input_sha256, doc =>
         {
             var r = TerrainCommand.Paint(doc, center_x, center_y, radius, texture_index, variation,
                 ParseEnum<TerrainCommand.BrushShape>(shape, "shape"));
@@ -1835,8 +1869,10 @@ public static class Wc3Tools
         [Description("Brush radius in tiles (>= 0).")] int radius,
         [Description("Water operation: set|raise|lower|remove. set/raise/lower flag the tile as water; remove clears the flag.")] string op = "set",
         [Description("Absolute water height for set; delta for raise/lower; ignored by remove. WC3 world units.")] float amount = 0f,
-        [Description("Brush footprint: " + ShapeValues + ".")] string shape = "circle")
-        => Run(() => SaveTerrain(map, out_path, doc =>
+        [Description("Brush footprint: " + ShapeValues + ".")] string shape = "circle",
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
+        => Run(() => SaveTerrain(map, out_path, overwrite, expect_input_sha256, doc =>
         {
             var r = TerrainCommand.Water(doc, center_x, center_y, radius,
                 ParseEnum<TerrainCommand.WaterOp>(op, "op"), amount,
@@ -1853,8 +1889,10 @@ public static class Wc3Tools
         [Description("Brush centre tile Y.")] int center_y,
         [Description("Brush radius in tiles (>= 0).")] int radius,
         [Description("true = blight the tiles; false = clear blight.")] bool on = true,
-        [Description("Brush footprint: " + ShapeValues + ".")] string shape = "circle")
-        => Run(() => SaveTerrain(map, out_path, doc =>
+        [Description("Brush footprint: " + ShapeValues + ".")] string shape = "circle",
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
+        => Run(() => SaveTerrain(map, out_path, overwrite, expect_input_sha256, doc =>
         {
             var r = TerrainCommand.Blight(doc, center_x, center_y, radius, on,
                 ParseEnum<TerrainCommand.BrushShape>(shape, "shape"));
@@ -1879,8 +1917,10 @@ public static class Wc3Tools
     public static TerrainToolResult TerrainImportHeightmap(
         [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map).")] string out_path,
-        [Description("Path to the grayscale heightmap PNG, as produced by terrain_export_heightmap.")] string png)
-        => Run(() => SaveTerrain(map, out_path, doc =>
+        [Description("Path to the grayscale heightmap PNG, as produced by terrain_export_heightmap.")] string png,
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
+        => Run(() => SaveTerrain(map, out_path, overwrite, expect_input_sha256, doc =>
         {
             var r = TerrainImportHeightmapCommand.Import(doc, ReadPngFile(png));
             return (r.Ok, r.Message, r.TilesChanged);
@@ -1891,8 +1931,10 @@ public static class Wc3Tools
     public static TerrainToolResult TerrainSmooth(
         [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map).")] string out_path,
-        [Description("Number of smoothing passes to run. 0 makes no change. Default 1.")] int passes = 1)
-        => Run(() => SaveTerrain(map, out_path, doc =>
+        [Description("Number of smoothing passes to run. 0 makes no change. Default 1.")] int passes = 1,
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
+        => Run(() => SaveTerrain(map, out_path, overwrite, expect_input_sha256, doc =>
         {
             var r = TerrainSmoothCommand.Smooth(doc, passes);
             return (r.Ok, r.Message, r.TilesChanged);
@@ -2003,23 +2045,27 @@ public static class Wc3Tools
         [Description("Output map path. The input map is never overwritten.")] string? out_path)
         => Run(() => MpqAddCommand.Execute(RequireMapPath(map), name, from, ResolveOutPath(map, out_path)));
 
-    [McpServerTool(Name = "mpq_remove", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [McpServerTool(Name = "mpq_remove", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = false)]
     [Description("Remove one internal file by rebuilding the archive without it, and report "
         + "whether the rebuild actually dropped the name. Writes a copy, the input map is never "
         + "modified in place.")]
     public static MpqRemoveResult MpqRemove(
         [Description("Path to a .w3x/.w3m map file.")] string map,
         [Description("Internal archive path to remove, for example 'war3map.j'.")] string name,
-        [Description("Output map path. The input map is never overwritten.")] string? out_path)
-        => Run(() => MpqRemoveCommand.Execute(RequireMapPath(map), name, ResolveOutPath(map, out_path)));
+        [Description("Output map path. The input map is never overwritten.")] string? out_path,
+        [Description("State the intent to destroy data. Without it the call is refused with CONFIRM_REQUIRED, naming what would be removed.")] bool confirm = false)
+        => RunConfirmed(confirm, "removes '" + name + "' from the archive", () =>
+            MpqRemoveCommand.Execute(RequireMapPath(map), name, ResolveOutPath(map, out_path)));
 
-    [McpServerTool(Name = "mpq_remove_many", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [McpServerTool(Name = "mpq_remove_many", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = false)]
     [Description("Remove many internal files in one rebuild and report how many were dropped. Writes a copy, the input map is never modified in place. The one-rebuild form of mpq_remove, for pruning the files asset_unused reports as unreferenced.")]
     public static MpqRemoveManyResult MpqRemoveMany(
         [Description("Path to a .w3x/.w3m map file.")] string map,
         [Description("Internal archive paths to remove, for example one asset_unused path per element.")] string[] names,
-        [Description("Output map path. The input map is never overwritten.")] string out_path)
-        => Run(() => MpqRemoveCommand.ExecuteMany(RequireMapPath(map), names, ResolveOutPath(map, out_path)));
+        [Description("Output map path. The input map is never overwritten.")] string out_path,
+        [Description("State the intent to destroy data. Without it the call is refused with CONFIRM_REQUIRED, naming what would be removed.")] bool confirm = false)
+        => RunConfirmed(confirm, "removes " + names.Length + " entries from the archive", () =>
+            MpqRemoveCommand.ExecuteMany(RequireMapPath(map), names, ResolveOutPath(map, out_path)));
 
     [McpServerTool(Name = "mpq_extract_all", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Extract every entry of a map archive to a directory, including unnamed protected "
@@ -2173,8 +2219,9 @@ public static class Wc3Tools
     public static SoundToolResult SoundRemove(
         [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
-        [Description("Sound definition name to remove.")] string name)
-        => Run(() => SaveSound(map, out_path, doc => SoundCommand.Remove(doc, name)));
+        [Description("Sound definition name to remove.")] string name,
+        [Description("State the intent to destroy data. Without it the call is refused with CONFIRM_REQUIRED, naming what would be removed.")] bool confirm = false)
+        => RunConfirmed(confirm, "removes sound definition '" + name + "'", () => SaveSound(map, out_path, doc => SoundCommand.Remove(doc, name)));
 
     [McpServerTool(Name = "sound_optimize", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Shrink a sound file by decoding it, resampling to a target rate (default 22050 Hz), optionally setting the channel count and encoding it. The format comes from out_path's extension, .mp3 selects MP3 and anything else WAV. The input is never modified. Reads .wav natively and .mp3 through the Windows codecs. When no MP3 encoder is present the command writes WAV and reports a note rather than failing. Returns the before and after format, sample rate, channel count and byte size.")]
@@ -2212,8 +2259,10 @@ public static class Wc3Tools
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Camera name (unique).")] string name,
         [Description("Camera target X (world coordinate).")] float target_x,
-        [Description("Camera target Y (world coordinate).")] float target_y)
-        => Run(() => SaveEdit(map, out_path, doc =>
+        [Description("Camera target Y (world coordinate).")] float target_y,
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
+        => Run(() => SaveEdit(map, out_path, overwrite, expect_input_sha256, doc =>
         {
             var r = CameraCommand.Add(doc, name, target_x, target_y);
             return (r.Ok, r.Message);
@@ -2226,8 +2275,10 @@ public static class Wc3Tools
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Camera name to edit.")] string name,
         [Description("Field to set: " + CameraFieldValues + ".")] string field,
-        [Description("New value (parsed to the field's type).")] string value)
-        => Run(() => SaveEdit(map, out_path, doc =>
+        [Description("New value (parsed to the field's type).")] string value,
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
+        => Run(() => SaveEdit(map, out_path, overwrite, expect_input_sha256, doc =>
         {
             var r = CameraCommand.Set(doc, name, field, value);
             return (r.Ok, r.Message);
@@ -2238,8 +2289,11 @@ public static class Wc3Tools
     public static EditToolResult CameraRemove(
         [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
-        [Description("Camera name to remove.")] string name)
-        => Run(() => SaveEdit(map, out_path, doc =>
+        [Description("Camera name to remove.")] string name,
+        [Description("State the intent to destroy data. Without it the call is refused with CONFIRM_REQUIRED, naming what would be removed.")] bool confirm = false,
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
+        => RunConfirmed(confirm, "removes camera '" + name + "'", () => SaveEdit(map, out_path, overwrite, expect_input_sha256, doc =>
         {
             var r = CameraCommand.Remove(doc, name);
             return (r.Ok, r.Message);
@@ -2278,8 +2332,10 @@ public static class Wc3Tools
         [Description("Brush radius in pathing cells (>= 0).")] int radius,
         [Description("Comma-separated pathing bits: " + PathingFlagValues + ".")] string flags,
         [Description("How the bits combine: set|clear|toggle. Default set.")] string op = "set",
-        [Description("Brush footprint: circle|square. Default circle.")] string shape = "circle")
-        => Run(() => SaveEdit(map, out_path, doc =>
+        [Description("Brush footprint: circle|square. Default circle.")] string shape = "circle",
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
+        => Run(() => SaveEdit(map, out_path, overwrite, expect_input_sha256, doc =>
         {
             var flagText = (flags ?? "").Replace(" ", "");
             if (!Enum.TryParse<War3Net.Build.Environment.PathingType>(flagText, ignoreCase: true, out var parsed))
@@ -2308,8 +2364,10 @@ public static class Wc3Tools
     public static EditToolResult PathingImportPng(
         [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map).")] string out_path,
-        [Description("Path to the colour-coded pathing PNG, as produced by pathing_export_png.")] string png)
-        => Run(() => SaveEdit(map, out_path, doc =>
+        [Description("Path to the colour-coded pathing PNG, as produced by pathing_export_png.")] string png,
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
+        => Run(() => SaveEdit(map, out_path, overwrite, expect_input_sha256, doc =>
         {
             var r = PathingImportPngCommand.Import(doc, ReadPngFile(png));
             return (r.Ok, r.Message);
@@ -2340,8 +2398,10 @@ public static class Wc3Tools
         [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Field to set: " + MapInfoFieldValues + ".")] string field,
-        [Description("New value (parsed to the field's type).")] string value)
-        => Run(() => SaveEdit(map, out_path, doc =>
+        [Description("New value (parsed to the field's type).")] string value,
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
+        => Run(() => SaveEdit(map, out_path, overwrite, expect_input_sha256, doc =>
         {
             MapInfoCommand.Set(doc, field, value); // throws on bad field -> clean MCP error via Run
             return (true, $"set {field} = {value}");
@@ -2359,8 +2419,10 @@ public static class Wc3Tools
         [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Player id (0-based).")] int player_id,
-        [Description("Force index (0-based).")] int force_index)
-        => Run(() => SaveEdit(map, out_path, doc =>
+        [Description("Force index (0-based).")] int force_index,
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
+        => Run(() => SaveEdit(map, out_path, overwrite, expect_input_sha256, doc =>
         {
             var r = PlayerForceCommand.SetPlayerForce(doc, player_id, force_index);
             return (r.Ok, r.Message);
@@ -2382,8 +2444,10 @@ public static class Wc3Tools
         [Description("Allied victory.")] bool allied_victory,
         [Description("Shared vision.")] bool shared_vision,
         [Description("Shared unit control.")] bool shared_unit_control,
-        [Description("Shared advanced unit control.")] bool shared_adv_unit_control)
-        => Run(() => SaveEdit(map, out_path, doc =>
+        [Description("Shared advanced unit control.")] bool shared_adv_unit_control,
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
+        => Run(() => SaveEdit(map, out_path, overwrite, expect_input_sha256, doc =>
         {
             var r = PlayerForceCommand.SetForceFlags(doc, force_index, allied, allied_victory,
                 shared_vision, shared_unit_control, shared_adv_unit_control);
@@ -2396,8 +2460,10 @@ public static class Wc3Tools
         [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Player id (0-based).")] int player_id,
-        [Description("New display name.")] string name)
-        => Run(() => SaveEdit(map, out_path, doc =>
+        [Description("New display name.")] string name,
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
+        => Run(() => SaveEdit(map, out_path, overwrite, expect_input_sha256, doc =>
         {
             var r = PlayerSetNameCommand.Execute(doc, player_id, name);
             return (r.Ok, r.Message);
@@ -2409,8 +2475,10 @@ public static class Wc3Tools
         [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Player id (0-based).")] int player_id,
-        [Description("Team color name, for example red, lightblue or darkgreen.")] string color)
-        => Run(() => SaveEdit(map, out_path, doc =>
+        [Description("Team color name, for example red, lightblue or darkgreen.")] string color,
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
+        => Run(() => SaveEdit(map, out_path, overwrite, expect_input_sha256, doc =>
         {
             var r = PlayerSetColorCommand.Execute(doc, player_id, color);
             return (r.Ok, r.Message);
@@ -2422,8 +2490,10 @@ public static class Wc3Tools
         [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Player id (0-based).")] int player_id,
-        [Description("One of human, orc, undead, nightelf or random.")] string race)
-        => Run(() => SaveEdit(map, out_path, doc =>
+        [Description("One of human, orc, undead, nightelf or random.")] string race,
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
+        => Run(() => SaveEdit(map, out_path, overwrite, expect_input_sha256, doc =>
         {
             var r = PlayerSetRaceCommand.Execute(doc, player_id, race);
             return (r.Ok, r.Message);
@@ -2435,8 +2505,10 @@ public static class Wc3Tools
         [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Force index (0-based).")] int force_index,
-        [Description("New force name.")] string name)
-        => Run(() => SaveEdit(map, out_path, doc =>
+        [Description("New force name.")] string name,
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
+        => Run(() => SaveEdit(map, out_path, overwrite, expect_input_sha256, doc =>
         {
             var r = ForceRenameCommand.Execute(doc, force_index, name);
             return (r.Ok, r.Message);
@@ -2449,8 +2521,10 @@ public static class Wc3Tools
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Force index (0-based).")] int force_index,
         [Description("Add this player id to the force. Pass exactly one of add or remove.")] int? add = null,
-        [Description("Remove this player id from the force. Pass exactly one of add or remove.")] int? remove = null)
-        => Run(() => SaveEdit(map, out_path, doc =>
+        [Description("Remove this player id from the force. Pass exactly one of add or remove.")] int? remove = null,
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
+        => Run(() => SaveEdit(map, out_path, overwrite, expect_input_sha256, doc =>
         {
             if ((add is null) == (remove is null))
                 return (false, "pass exactly one of add or remove");
@@ -2492,8 +2566,11 @@ public static class Wc3Tools
     public static EditToolResult RegionRemove(
         [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
-        [Description("Region name to remove.")] string name)
-        => Run(() => SaveEdit(map, out_path, doc =>
+        [Description("Region name to remove.")] string name,
+        [Description("State the intent to destroy data. Without it the call is refused with CONFIRM_REQUIRED, naming what would be removed.")] bool confirm = false,
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
+        => RunConfirmed(confirm, "removes region '" + name + "'", () => SaveEdit(map, out_path, overwrite, expect_input_sha256, doc =>
         {
             var r = PlacementCommand.RemoveRegion(doc, name);
             return (r.Ok, r.Message);
@@ -2509,8 +2586,10 @@ public static class Wc3Tools
         [Description("South-west corner Y (world coordinate).")] float y,
         [Description("Region width in world units (must be > 0).")] float w,
         [Description("Region height in world units (must be > 0).")] float h,
-        [Description("Attach the default weather effect to the region. Default false.")] bool weather = false)
-        => Run(() => SavePlacement(map, out_path, doc =>
+        [Description("Attach the default weather effect to the region. Default false.")] bool weather = false,
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
+        => Run(() => SavePlacement(map, out_path, overwrite, expect_input_sha256, doc =>
         {
             var r = RegionCommand.Create(doc, name, x, y, w, h, weather);
             return (r.Ok, r.Message, r.CreationNumber);
@@ -2537,8 +2616,10 @@ public static class Wc3Tools
         [Description("Trigger item id, from triggers_read.")] int id,
         [Description("One of: event, condition, action.")] string kind,
         [Description("Function name from the World-Editor table, for example DisplayTextToForce.")] string name,
-        [Description("Parameter values in declared order. Omit to take the table's defaults.")] string[]? parameters = null)
-        => Run(() => SaveEdit(map, out_path, doc =>
+        [Description("Parameter values in declared order. Omit to take the table's defaults.")] string[]? parameters = null,
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
+        => Run(() => SaveEdit(map, out_path, overwrite, expect_input_sha256, doc =>
         {
             if (!TryParseEcaKind(kind, out var parsed))
                 return (false, "kind must be event, condition or action.");
@@ -2552,8 +2633,11 @@ public static class Wc3Tools
         [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Trigger item id, from triggers_read.")] int id,
-        [Description("Zero-based position of the function within the trigger.")] int index)
-        => Run(() => SaveEdit(map, out_path, doc =>
+        [Description("Zero-based position of the function within the trigger.")] int index,
+        [Description("State the intent to destroy data. Without it the call is refused with CONFIRM_REQUIRED, naming what would be removed.")] bool confirm = false,
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
+        => RunConfirmed(confirm, "removes function " + index + " from trigger " + id + "", () => SaveEdit(map, out_path, overwrite, expect_input_sha256, doc =>
         {
             var r = TriggerCommand.RemoveFunction(doc, id, index);
             return (r.Ok, r.Message);
@@ -2566,8 +2650,10 @@ public static class Wc3Tools
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Trigger item id, from triggers_read.")] int id,
         [Description("Zero-based position of the function within the trigger.")] int index,
-        [Description("True to enable, false to disable.")] bool on)
-        => Run(() => SaveEdit(map, out_path, doc =>
+        [Description("True to enable, false to disable.")] bool on,
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
+        => Run(() => SaveEdit(map, out_path, overwrite, expect_input_sha256, doc =>
         {
             var r = TriggerCommand.SetFunctionEnabled(doc, id, index, on);
             return (r.Ok, r.Message);
@@ -2599,8 +2685,10 @@ public static class Wc3Tools
         [Description("Overwrite target assets that collide with the definition's, instead of refusing.")] bool force = false,
         [Description("Warcraft III install directory, when the base game data is needed and auto-detection fails.")] string? game_dir = null,
         [Description("Role to install the hero as, when the definition supports more than one.")] string? role = null,
-        [Description("Keep the source map's stat values rather than adapting them to the target.")] bool keep_source_stats = false)
-        => Run(() => SaveEdit(map, out_path, doc =>
+        [Description("Keep the source map's stat values rather than adapting them to the target.")] bool keep_source_stats = false,
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
+        => Run(() => SaveEdit(map, out_path, overwrite, expect_input_sha256, doc =>
         {
             var r = HeroInstallCommand.Run(definition, doc, force, game_dir, role, keep_source_stats);
             string detail = r.Ok
@@ -2646,8 +2734,10 @@ public static class Wc3Tools
     [Description("Repair a map that wc3ctl itself generated, whose preplaced-hero helper block is too narrow for the heroes installed into it, and save the repaired map to out_path. Widens the player slots, rewrites hero owners in the script, and brings war3map.w3i and the map header into line. This is NOT a general map repair: it looks for wc3ctl's own generated helper function and refuses any map that does not carry one. The input map is NEVER modified in place.")]
     public static EditToolResult RepairGenerated(
         [Description("Path to the source .w3x/.w3m map file. Read-only; the repaired copy is written to out_path.")] string map,
-        [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path)
-        => Run(() => SaveEdit(map, out_path, doc =>
+        [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
+        => Run(() => SaveEdit(map, out_path, overwrite, expect_input_sha256, doc =>
         {
             var r = GeneratedMapRepairCommand.RepairGeneratedHeroes(doc);
             return (r.Ok, r.Ok
@@ -2660,8 +2750,10 @@ public static class Wc3Tools
     [Description("Remove the pre-900 camera chunk from every at-risk model so the portrait pane renders under 3.0.0 and later, and save the repaired map to out_path. Camera removal only. The version re-stamp is refused because it was measured to crash the map on load. The input map is NEVER modified in place.")]
     public static EditToolResult RepairPortraits(
         [Description("Path to the source .w3x/.w3m map file. Read-only, the repaired copy is written to out_path.")] string map,
-        [Description("Output map file path (must differ from the input map).")] string out_path)
-        => Run(() => SaveEdit(map, out_path, doc =>
+        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
+        => Run(() => SaveEdit(map, out_path, overwrite, expect_input_sha256, doc =>
         {
             var r = PortraitRepairCommand.Execute(doc, apply: true);
             return (r.ModelsRepaired > 0 || r.ModelsAtRisk == 0,
@@ -2672,8 +2764,10 @@ public static class Wc3Tools
     [Description("Repair the object-data defects audit reports. Fills ability level gaps (a field with no value at a declared level, copied from the nearest valid level), clears dangling references and impossible requirements, and saves to out_path. The input map is NEVER modified in place.")]
     public static EditToolResult RepairAuditErrors(
         [Description("Path to the source .w3x/.w3m map file. Read-only, the repaired copy is written to out_path.")] string map,
-        [Description("Output map file path (must differ from the input map).")] string out_path)
-        => Run(() => SaveEdit(map, out_path, doc =>
+        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
+        => Run(() => SaveEdit(map, out_path, overwrite, expect_input_sha256, doc =>
         {
             var r = AuditRepairCommand.Execute(doc, apply: true);
             return (r.Ok, r.Message);
@@ -2689,8 +2783,10 @@ public static class Wc3Tools
         [Description("Second corner column, 0-based and inclusive.")] int x1,
         [Description("Second corner row, 0-based and inclusive.")] int y1,
         [Description("Raise, Lower, SetHeight, Flatten, Paint, CliffRaise, CliffLower, CliffSet, Ramp, RampOff, Water, WaterRemove, Blight or BlightOff.")] string tool,
-        [Description("Height, ground tile index or cliff step count, depending on the tool. Defaults to 1.")] float value = 1f)
-        => Run(() => SaveEdit(map, out_path, doc =>
+        [Description("Height, ground tile index or cliff step count, depending on the tool. Defaults to 1.")] float value = 1f,
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
+        => Run(() => SaveEdit(map, out_path, overwrite, expect_input_sha256, doc =>
         {
             if (!Enum.TryParse<TerrainFillCommand.FillTool>(tool, ignoreCase: true, out var parsed))
                 return (false, $"unknown tool '{tool}'. Valid tools are "
@@ -2703,8 +2799,10 @@ public static class Wc3Tools
     [Description("Rebuild a browsable GUI trigger tree (war3map.wtg) for a map that has NONE, by decompiling the compiled script the game runs, and save the result to out_path. The script itself is never modified, so this only ever ADDS a tree. It REFUSES any map that already carries a trigger tree, because a decompiled tree cannot be trusted to replace a real one: measured across the map library the decompiler reported success on a map holding 626 trigger items while producing 1, at zero percent name recall. Use this on protected or stripped maps whose trigger tree was removed but whose compiled script survives. The recovered tree DESCRIBES the script, it does not drive it, so editing the tree afterwards changes what the World Editor shows and not what the game runs. The input map is NEVER modified in place.")]
     public static EditToolResult TriggerRecoverFromScript(
         [Description("Path to the source .w3x/.w3m map file. Read-only; the result is written to out_path.")] string map,
-        [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path)
-        => Run(() => SaveEdit(map, out_path, doc =>
+        [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
+        => Run(() => SaveEdit(map, out_path, overwrite, expect_input_sha256, doc =>
         {
             var r = TriggerRecoverCommand.Recover(doc);
             return (r.Ok, r.Message);
@@ -2716,8 +2814,10 @@ public static class Wc3Tools
         [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Name for the new category.")] string name,
-        [Description("Id of the item to nest it under, or -1 for the top level. Ids come from triggers_read.")] int parent_id = -1)
-        => Run(() => SaveEdit(map, out_path, doc =>
+        [Description("Id of the item to nest it under, or -1 for the top level. Ids come from triggers_read.")] int parent_id = -1,
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
+        => Run(() => SaveEdit(map, out_path, overwrite, expect_input_sha256, doc =>
         {
             var r = TriggerCommand.AddCategory(doc, name, parent_id);
             return (r.Ok, r.Message);
@@ -2730,8 +2830,10 @@ public static class Wc3Tools
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Name for the new trigger.")] string name,
         [Description("Id of the category to add it to, or -1 for the top level. Ids come from triggers_read.")] int parent_id,
-        [Description("Create a comment rather than a GUI trigger.")] bool comment = false)
-        => Run(() => SaveEdit(map, out_path, doc =>
+        [Description("Create a comment rather than a GUI trigger.")] bool comment = false,
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
+        => Run(() => SaveEdit(map, out_path, overwrite, expect_input_sha256, doc =>
         {
             var r = TriggerCommand.AddTrigger(doc, name, parent_id,
                 comment ? TriggerCommand.NewTriggerKind.Comment : TriggerCommand.NewTriggerKind.Gui);
@@ -2744,8 +2846,11 @@ public static class Wc3Tools
         [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Trigger item id, from triggers_read.")] int id,
-        [Description("Remove the item's descendants too, rather than refusing to orphan them.")] bool recursive = false)
-        => Run(() => SaveEdit(map, out_path, doc =>
+        [Description("Remove the item's descendants too, rather than refusing to orphan them.")] bool recursive = false,
+        [Description("State the intent to destroy data. Without it the call is refused with CONFIRM_REQUIRED, naming what would be removed.")] bool confirm = false,
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
+        => RunConfirmed(confirm, "removes trigger item " + id + (recursive ? " and its descendants" : "") + "", () => SaveEdit(map, out_path, overwrite, expect_input_sha256, doc =>
         {
             var r = TriggerCommand.Remove(doc, id, recursive);
             return (r.Ok, r.Message);
@@ -2757,8 +2862,10 @@ public static class Wc3Tools
         [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Trigger item id, from triggers_read.")] int id,
-        [Description("New name.")] string name)
-        => Run(() => SaveEdit(map, out_path, doc =>
+        [Description("New name.")] string name,
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
+        => Run(() => SaveEdit(map, out_path, overwrite, expect_input_sha256, doc =>
         {
             var r = TriggerCommand.Rename(doc, id, name);
             return (r.Ok, r.Message);
@@ -2770,8 +2877,10 @@ public static class Wc3Tools
         [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument.")] string out_path,
         [Description("Trigger item id, from triggers_read.")] int id,
-        [Description("Parent category id, or -1 for the root.")] int parent)
-        => Run(() => SaveEdit(map, out_path, doc =>
+        [Description("Parent category id, or -1 for the root.")] int parent,
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
+        => Run(() => SaveEdit(map, out_path, overwrite, expect_input_sha256, doc =>
         {
             var r = TriggerCommand.Move(doc, id, parent);
             return (r.Ok, r.Message);
@@ -2783,8 +2892,10 @@ public static class Wc3Tools
         [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Trigger item id, from triggers_read.")] int id,
-        [Description("True to enable, false to disable.")] bool on)
-        => Run(() => SaveEdit(map, out_path, doc =>
+        [Description("True to enable, false to disable.")] bool on,
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
+        => Run(() => SaveEdit(map, out_path, overwrite, expect_input_sha256, doc =>
         {
             var r = TriggerCommand.SetEnabled(doc, id, on);
             return (r.Ok, r.Message);
@@ -2796,8 +2907,10 @@ public static class Wc3Tools
         [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Trigger item id, from triggers_read.")] int id,
-        [Description("True to start on, false to start off.")] bool on)
-        => Run(() => SaveEdit(map, out_path, doc =>
+        [Description("True to start on, false to start off.")] bool on,
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
+        => Run(() => SaveEdit(map, out_path, overwrite, expect_input_sha256, doc =>
         {
             var r = TriggerCommand.SetInitiallyOn(doc, id, on);
             return (r.Ok, r.Message);
@@ -2809,8 +2922,10 @@ public static class Wc3Tools
         [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Trigger item id, from triggers_read.")] int id,
-        [Description("True to run on map init.")] bool on)
-        => Run(() => SaveEdit(map, out_path, doc =>
+        [Description("True to run on map init.")] bool on,
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
+        => Run(() => SaveEdit(map, out_path, overwrite, expect_input_sha256, doc =>
         {
             var r = TriggerCommand.SetRunOnMapInit(doc, id, on);
             return (r.Ok, r.Message);
@@ -2820,8 +2935,10 @@ public static class Wc3Tools
     [Description("Reconcile war3map.wct with the war3map.wtg trigger tree and save the edited map to out_path. A map can arrive with more code bodies than the tree accounts for (a protected or ported build keeps orphaned bodies), or fewer, and the World Editor then cannot trust which body belongs to which trigger and refuses some trigger removals. This drops the orphaned tail or appends empty slots, copying every surviving byte verbatim. It is the repair for the trigger-bodies lint warning. The input map is NEVER modified in place.")]
     public static EditToolResult TriggerSyncBodies(
         [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
-        [Description("Output map file path (must differ from the input map).")] string out_path)
-        => Run(() => SaveEdit(map, out_path, doc =>
+        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
+        => Run(() => SaveEdit(map, out_path, overwrite, expect_input_sha256, doc =>
         {
             var r = TriggerCommand.SyncBodies(doc);
             return (r.Ok, r.Message);
@@ -2842,8 +2959,10 @@ public static class Wc3Tools
         [Description("Variable type, for example integer, real, string, boolean, unit, group or trigger.")] string type,
         [Description("Declare it as an array. Default false.")] bool is_array = false,
         [Description("Array size when is_array is true. Default 1.")] int array_size = 1,
-        [Description("Initial value. Providing one marks the variable initialized. Omit to leave it uninitialized.")] string? initial_value = null)
-        => Run(() => SaveEdit(map, out_path, doc =>
+        [Description("Initial value. Providing one marks the variable initialized. Omit to leave it uninitialized.")] string? initial_value = null,
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
+        => Run(() => SaveEdit(map, out_path, overwrite, expect_input_sha256, doc =>
         {
             var r = TriggerCommand.AddVariable(doc, name, type, is_array, array_size, initial_value);
             return (r.Ok, r.Message);
@@ -2858,8 +2977,10 @@ public static class Wc3Tools
         [Description("New type. Omit to keep the current one.")] string? type = null,
         [Description("New array flag. Omit to keep the current one.")] bool? is_array = null,
         [Description("New array size. Omit to keep the current one.")] int? array_size = null,
-        [Description("New initial value, which also marks the variable initialized. Omit to keep the current one.")] string? initial_value = null)
-        => Run(() => SaveEdit(map, out_path, doc =>
+        [Description("New initial value, which also marks the variable initialized. Omit to keep the current one.")] string? initial_value = null,
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
+        => Run(() => SaveEdit(map, out_path, overwrite, expect_input_sha256, doc =>
         {
             var r = TriggerCommand.SetVariable(doc, name, type, is_array, array_size, initial_value);
             return (r.Ok, r.Message);
@@ -2870,8 +2991,11 @@ public static class Wc3Tools
     public static EditToolResult TriggerVarRemove(
         [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
-        [Description("Name of the variable to remove.")] string name)
-        => Run(() => SaveEdit(map, out_path, doc =>
+        [Description("Name of the variable to remove.")] string name,
+        [Description("State the intent to destroy data. Without it the call is refused with CONFIRM_REQUIRED, naming what would be removed.")] bool confirm = false,
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
+        => RunConfirmed(confirm, "removes trigger variable '" + name + "'", () => SaveEdit(map, out_path, overwrite, expect_input_sha256, doc =>
         {
             var r = TriggerCommand.RemoveVariable(doc, name);
             return (r.Ok, r.Message);
@@ -2883,8 +3007,10 @@ public static class Wc3Tools
         [Description("Path to the source .w3x/.w3m map file. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Trigger item id of the custom-text trigger, from triggers_read.")] int id,
-        [Description("The JASS body to store in this trigger's war3map.wct slot.")] string code)
-        => Run(() => SaveEdit(map, out_path, doc =>
+        [Description("The JASS body to store in this trigger's war3map.wct slot.")] string code,
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
+        => Run(() => SaveEdit(map, out_path, overwrite, expect_input_sha256, doc =>
         {
             var r = TriggerCommand.SetCustomText(doc, id, code);
             return (r.Ok, r.Message);
@@ -2977,12 +3103,29 @@ public static class Wc3Tools
             + "drop a default step. Empty applies the steps the doctor picks for this map. Allowed: unprotect, "
             + "fake-files, listfile, ids, data, script-back, editor-files, counts, doodads, gui-triggers, "
             + "script-objects, safe-units, models, model-names, portraits, data-pointers, kk-textures, "
-            + "green-icons, uabi, preload, single-player, shrink, strip-indent.")] string[]? options = null)
+            + "green-icons, uabi, preload, single-player, shrink, strip-indent.")] string[]? options = null,
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
         => Run(() => MapDoctorCommand.Fix(map, options, out_path));
 
     // ---- shared plumbing -------------------------------------------------
 
     /// <summary>Expected failures become clean MCP tool errors, never stack traces.</summary>
+    /// <summary>
+    /// SAF-10. A destructive call states its intent, and the refusal names what would be removed.
+    /// The flag proves the caller included it, not that a person approved it, which is SAF-18.
+    /// </summary>
+    private static T RunConfirmed<T>(bool confirm, string what, Func<T> body) =>
+        Run(() =>
+        {
+            if (!confirm)
+            {
+                throw new ToolError("CONFIRM_REQUIRED", what + ", pass confirm true",
+                    "the input is never modified, the call still writes a new file, so the flag only states intent");
+            }
+            return body();
+        });
+
     private static T Run<T>(Func<T> body)
     {
         try { return body(); }
@@ -3048,26 +3191,27 @@ public static class Wc3Tools
     /// The input map is never modified in place (out_path must differ) - mirroring the no-clobber
     /// stance of render_model and port_unit. A rejected placement surfaces as a clean MCP error.</summary>
     private static PlacementToolResult SavePlacement(
-        string map, string outPath, Func<MapDocument, (bool Ok, string Message, int CreationNumber)> place)
+        string map, string outPath, bool overwrite, string? expectInputSha256,
+        Func<MapDocument, (bool Ok, string Message, int CreationNumber)> place)
     {
         if (string.IsNullOrWhiteSpace(outPath))
             throw new McpException("out_path is required");
-        string full = Path.GetFullPath(outPath);
-        if (string.Equals(full, Path.GetFullPath(map), StringComparison.OrdinalIgnoreCase))
-            throw new McpException("out_path must not be the input map file itself");
 
         var doc = LoadMap(map);
         var (ok, message, creationNumber) = place(doc);
         if (!ok) throw new McpException(message);
 
-        if (Path.GetDirectoryName(full) is { Length: > 0 } dir) Directory.CreateDirectory(dir);
-        doc.Save(full);
-        return new PlacementToolResult(full, message, creationNumber);
+        // Every placement write takes the same gate as every other edit, so it reports the same
+        // digests and refuses to replace a file the caller did not agree to replace (SAF-05, SAF-06).
+        var w = WriteGate.Save(doc, map, outPath, overwrite, expectInputSha256, LoadedShaOf(doc));
+        return new PlacementToolResult(w.SavedTo, message, creationNumber,
+            w.InputSha256, w.OutputSha256, w.FilesRewritten, w.BytesWritten);
     }
 
     /// <summary>Load the map, apply a terrain edit, and save the edited copy to out_path.</summary>
     private static TerrainToolResult SaveTerrain(
-        string map, string outPath, Func<MapDocument, (bool Ok, string Message, int TilesChanged)> edit)
+        string map, string outPath, bool overwrite, string? expectInputSha256,
+        Func<MapDocument, (bool Ok, string Message, int TilesChanged)> edit)
     {
         if (string.IsNullOrWhiteSpace(outPath))
             throw new McpException("out_path is required");
@@ -3076,7 +3220,7 @@ public static class Wc3Tools
         var (ok, message, tilesChanged) = edit(doc);
         if (!ok) throw new McpException(message);
 
-        var w = WriteGate.Save(doc, map, outPath, overwrite: true, loadedInputSha: LoadedShaOf(doc));
+        var w = WriteGate.Save(doc, map, outPath, overwrite, expectInputSha256, LoadedShaOf(doc));
         return new TerrainToolResult(w.SavedTo, message, tilesChanged, w.InputSha256, w.OutputSha256,
             w.FilesRewritten, w.BytesWritten);
     }
@@ -3103,12 +3247,13 @@ public static class Wc3Tools
     /// <summary>Load the map, apply an (Ok, Message) mutation, and save the edited copy to
     /// out_path. Shared by the camera, pathing, map-info, player and force write tools.</summary>
     private static EditToolResult SaveEdit(
-        string map, string outPath, Func<MapDocument, (bool Ok, string Message)> edit)
+        string map, string outPath, bool overwrite, string? expectInputSha256,
+        Func<MapDocument, (bool Ok, string Message)> edit)
     {
         var doc = LoadMap(map);
         var (ok, message) = edit(doc);
         if (!ok) throw new McpException(message);
-        var w = WriteGate.Save(doc, map, outPath, overwrite: true, loadedInputSha: LoadedShaOf(doc));
+        var w = WriteGate.Save(doc, map, outPath, overwrite, expectInputSha256, LoadedShaOf(doc));
         return new EditToolResult(w.SavedTo, message, w.InputSha256, w.OutputSha256,
             w.FilesRewritten, w.BytesWritten);
     }
@@ -3515,7 +3660,8 @@ public sealed record BundleMergeToolResult(string SavedTo, BundleMergeResult Mer
 
 /// <summary>place_doodad / place_region outcome: where the edited map was written, a
 /// human-readable message, and the creation number assigned to the new instance.</summary>
-public sealed record PlacementToolResult(string SavedTo, string Message, int CreationNumber);
+public sealed record PlacementToolResult(string SavedTo, string Message, int CreationNumber,
+    string? InputSha256 = null, string OutputSha256 = "", int FilesRewritten = 0, long BytesWritten = 0);
 
 /// <summary>camera_tour outcome, where the edited map was written, the generated camera names
 /// in order, and the camera total after the op.</summary>

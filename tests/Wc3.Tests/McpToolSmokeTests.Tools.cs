@@ -23,9 +23,10 @@ public sealed class McpSmokeToolsTests : McpSmokeBase
     public async Task Quickstart_lists_the_core_workflows_and_narrows_by_goal()
     {
         var all = Rows(await Call("quickstart", Args()));
-        Assert.Equal(10, all.Count);
+        Assert.Equal(12, all.Count);
         Assert.All(all, w => Assert.False(string.IsNullOrWhiteSpace(Prop(w, "id").GetString())));
         Assert.All(all, w => Assert.False(string.IsNullOrWhiteSpace(Prop(w, "title").GetString())));
+        Assert.All(all, w => Assert.False(string.IsNullOrWhiteSpace(Prop(w, "prompt").GetString())));
 
         var narrowed = Rows(await Call("quickstart", Args(("goal", "portrait"))));
         Assert.NotEmpty(narrowed);

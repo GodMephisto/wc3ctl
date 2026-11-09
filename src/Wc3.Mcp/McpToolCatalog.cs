@@ -18,7 +18,8 @@ public sealed record McpToolInfo(
     bool? ReadOnly,
     bool? Destructive,
     bool? Idempotent,
-    bool? OpenWorld)
+    bool? OpenWorld,
+    string? Family = null)
 {
     public bool Annotated =>
         ReadOnly is not null || Destructive is not null || Idempotent is not null || OpenWorld is not null;
@@ -52,7 +53,8 @@ public static class McpToolCatalog
         var a = tool.Annotations;
         return new McpToolInfo(
             tool.Name, tool.Description,
-            a?.ReadOnlyHint, a?.DestructiveHint, a?.IdempotentHint, a?.OpenWorldHint);
+            a?.ReadOnlyHint, a?.DestructiveHint, a?.IdempotentHint, a?.OpenWorldHint,
+            McpToolFamilies.Of(tool.Name));
     }
 
     /// <summary>
@@ -66,22 +68,36 @@ public static class McpToolCatalog
             {
                 UriTemplate = "wc3://tools",
                 Name = "tool_catalog",
-                Description = "The MCP tool surface as JSON, every tool with its description and the four annotations.",
+                Description = "The MCP tool surface as JSON, every tool with its description, its family and the four annotations.",
                 MimeType = "application/json",
             });
 }
 
 /// <summary>
-/// Audits the MCP surface against four rules. Every tool must declare all four hints, because an
+/// Audits the MCP surface against six rules. Every tool must declare all four hints, because an
 /// unset hint defaults to true and a client reads it as a claim the server never made. A tool
 /// whose name begins with a mutating stem must not claim to be read-only. A tool that writes must
 /// not say read-only in its description, in any scope, because a caller reads that word as the
-/// whole answer. The prefix list is deliberately precise rather than broad. A blanket 'port_' or
+/// whole answer. A tool cannot be both read-only and destructive, and a tool whose only effect is
+/// to remove something must declare destructive. The prefix list is deliberately precise rather than broad. A blanket 'port_' or
 /// 'terrain_' would flag port_deps and port_preview, which are genuinely read-only, so each
 /// mutating stem is named instead.
 /// </summary>
 public static class McpToolAudit
 {
+    /// <summary>
+    /// Tool names that discard content a caller cannot get back, so they must declare
+    /// <c>destructiveHint</c> true. Kept deliberately precise: each name is a tool whose only
+    /// effect is to remove something, and <c>mpq_strip_bookkeeping</c> is absent because the
+    /// bookkeeping entries it drops are regenerated (SAF-03).
+    /// </summary>
+    private static readonly string[] DestructiveNames =
+    {
+        "camera_remove", "mpq_remove", "mpq_remove_many", "placed_doodad_remove",
+        "placed_fix_refs", "placed_unit_remove", "region_remove", "sound_remove",
+        "trigger_remove", "trigger_remove_eca", "trigger_var_remove",
+    };
+
     /// <summary>Name stems that only ever prefix a tool that writes. Kept in step with the surface.</summary>
     private static readonly string[] MutatingPrefixes =
     {
@@ -132,6 +148,10 @@ public static class McpToolAudit
             if (tool.ReadOnly != true && tool.Description is not null
                 && tool.Description.Contains("read-only", StringComparison.OrdinalIgnoreCase))
                 problems.Add(new McpAnnotationProblem(tool.Name, "description says read-only but the tool writes"));
+            if (tool.ReadOnly == true && tool.Destructive == true)
+                problems.Add(new McpAnnotationProblem(tool.Name, "declares both read-only and destructive"));
+            if (tool.Destructive != true && DestructiveNames.Contains(tool.Name, StringComparer.Ordinal))
+                problems.Add(new McpAnnotationProblem(tool.Name, "name looks destructive but it is marked non-destructive"));
         }
         return new McpAnnotationAuditResult(problems);
     }
