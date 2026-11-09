@@ -17,3 +17,15 @@ Append only. One block per batch, with the revision it produced.
 - Protocol suite covers all seven surfaces, parity both directions, references byte for byte, setup over temp paths, hermetic categories, CI on windows-latest for every pull request.
 - Gap, G-86 no family has a result size test.
 - Concurrency, another session edited the same tree during this batch. The description total and the catalog size moved to 84,550 and 127,478 under me, two gap requirements closed, and one historical changelog row was rewritten by a blind replace and had to be restored to 84,319. The revision is therefore not solely this batch's work.
+
+## B3, RES, revision 1.35
+
+- Closed RES-05, RES-07, RES-09. A render inlines only under a million bytes and always reports the path, enums travel as names, and an allocated rawcode is the same against two copies of one map.
+- Gaps, RES-01 quickstart returns a bare array where everything else returns an object, RES-06 the CLI emits PascalCase where the tool emits camelCase for the same record, RES-08 nothing pins a field name.
+- RES-06 is the finding, it is the same record with two spellings and it is exactly what the requirement forbids.
+
+## B5, IDN, revision 1.36
+
+- Closed IDN-01 and IDN-04. Identity comes from assembly metadata, and the registered name is the one setup uses to remove.
+- Gaps, IDN-03 version_info lacks the product id, the protocol revision and the SDK version, IDN-05 the nogit fallback has no test, IDN-06 the revision is readable only from the handshake.
+- Ran out of the batch before CMP, PRF, SUR, DSC, ENV and SAF, 23 rows left in the queue.

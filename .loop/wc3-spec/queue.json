@@ -27,21 +27,21 @@
       "cluster": "RES",
       "requirements": 6,
       "verifier": "result shape probes over the published exe",
-      "status": "next"
+      "status": "done"
     },
     {
       "id": "B4",
       "cluster": "CMP",
       "requirements": 5,
       "verifier": "compat tools against two builds",
-      "status": "queued"
+      "status": "next"
     },
     {
       "id": "B5",
       "cluster": "IDN",
       "requirements": 5,
       "verifier": "initialize and version_info probes",
-      "status": "queued"
+      "status": "done"
     },
     {
       "id": "B6",
