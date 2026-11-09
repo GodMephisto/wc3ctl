@@ -82,6 +82,16 @@ internal static class ServerRuntime
     /// <summary>PRF-04. True when the tool is in a family the specification names as slow.</summary>
     public static bool IsLongCall(string tool) => LongCallTools.Contains(tool);
 
+    /// <summary>
+    /// PRF-04. The two long family tools whose command reads the token itself. The library scan
+    /// reads it before each map opens and the model import before each file it writes, so a cancel
+    /// stops them at the next file rather than at the end of the run. The other nine take the token
+    /// and read it only at the check points the tool owns, so a cancel there still waits for the one
+    /// step that is already running. Kept beside <see cref="LongCallTools"/> so the two lists are
+    /// read together, and a test pins both.
+    /// </summary>
+    public static readonly IReadOnlyList<string> InterruptibleTools = new[] { "library_scan", "model_import" };
+
     /// <summary>PRF-04. How many calls a client cancelled in this process.</summary>
     public static int CancelledCalls => Volatile.Read(ref _cancelledCalls);
 

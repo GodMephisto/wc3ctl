@@ -33,14 +33,28 @@ public sealed record LibraryScanResult(
 ///
 /// Maps are opened one at a time. Each document is released before the next is opened, so a sweep
 /// never holds a whole library in memory at once, and the result carries only the small rows.
+///
+/// PRF-04. The sweep takes a cancellation token and reads it before each map opens, so a cancel
+/// stops the run at the next file rather than at the end of the folder. The exception it throws
+/// names how many maps were scanned and how many the folder holds, so a client that cancelled can
+/// see how far the sweep got. The map that is already open when the token fires is finished, which
+/// is the unit of work this command can honour.
 /// </summary>
 public static class LibraryScanCommand
 {
-    public static LibraryScanResult Execute(string folder)
+    public static LibraryScanResult Execute(string folder, CancellationToken cancellationToken = default)
     {
-        var maps = new List<LibraryScanMap>();
-        foreach (var path in BenchMapFolder.Enumerate(folder))
+        var paths = BenchMapFolder.Enumerate(folder);
+        var maps = new List<LibraryScanMap>(paths.Count);
+        for (int i = 0; i < paths.Count; i++)
         {
+            // PRF-04. The check point is the top of the loop, before the map opens, so the cancel
+            // costs one map at most and never a whole folder.
+            if (cancellationToken.IsCancellationRequested)
+                throw new OperationCanceledException(
+                    "library scan cancelled after " + i + " of " + paths.Count + " maps");
+
+            string path = paths[i];
             string name = Path.GetFileName(path);
             long bytes = new FileInfo(path).Length;
             try

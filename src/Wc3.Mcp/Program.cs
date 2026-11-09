@@ -64,15 +64,11 @@ public static class Program
     /// <summary>Runs the MCP server on stdio until the client closes the stream. Shared with 'wc3ctl mcp serve'.</summary>
     public static async Task RunServerAsync()
     {
-        // One line on stderr before the protocol starts, so a bug report can quote the build it
-        // came from (ENV-04). stdout stays clean for JSON-RPC.
-        Console.Error.WriteLine(Wc3McpServer.BuildStartLine());
-        ServerRuntime.ColdStart.StartLineWritten();
-
-        // PRF-01. The surface does not depend on the host, so it is built on the thread pool while
-        // the host is built here. The two phases used to run one after the other. The 276 tool
-        // descriptors and the catalog that embeds them are not part of this, they are built on the
-        // first client read, so this phase is the resources and prompts.
+        // PRF-01. The surface, the host and the start line are three independent pieces of work, so
+        // they run together rather than one after the other. The surface still has to exist before
+        // the host resolves its options, so it is started first and the host build is handed to the
+        // pool before the line is written. What used to be startup plus surface plus host is now the
+        // longest of the three, and the line still reaches stderr before the protocol starts.
         Task<McpServerOptions> surface = Task.Run(() => Wc3McpServer.CreateOptions());
 
         var builder = Host.CreateApplicationBuilder(Array.Empty<string>());
@@ -84,7 +80,8 @@ public static class Program
         // server runs at the default warn, so the line is there without turning on everything.
         builder.Logging.AddFilter(ServerRuntime.Category, LogLevel.Information);
 
-        // The surface is awaited before the host runs, so this resolves an already finished task.
+        // The surface is awaited inside the options callback, so the host build joins the surface
+        // task rather than reading a result that may not be there yet.
         builder.Services
             .AddMcpServer(o => Wc3McpServer.ApplyTo(o, surface.GetAwaiter().GetResult()))
             .WithStdioServerTransport();
@@ -106,7 +103,17 @@ public static class Program
             return transport;
         });
 
-        using IHost host = builder.Build();
+        // PRF-01. The host build is started here, before the line, so its cost overlaps the start
+        // line instead of following it. The host touches no console stream until it runs, which is
+        // after the line has been written.
+        Task<IHost> hosting = Task.Run(() => builder.Build());
+
+        // One line on stderr before the protocol starts, so a bug report can quote the build it
+        // came from (ENV-04). stdout stays clean for JSON-RPC.
+        Console.Error.WriteLine(Wc3McpServer.BuildStartLine());
+        ServerRuntime.ColdStart.StartLineWritten();
+
+        using IHost host = hosting.GetAwaiter().GetResult();
         ServerRuntime.ColdStart.HostBuilt();
 
         // Joins the parallel surface build, so a throw there is the start failure rather than a

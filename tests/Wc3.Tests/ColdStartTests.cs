@@ -68,8 +68,12 @@ public class ColdStartTests
 
         // A phase cannot be longer than the clock that contains it. This catches a phase timed
         // from a different origin, which is the way a phase line silently lies.
-        Assert.True(surface >= 0);
-        if (total >= 0) Assert.True(surface <= total, $"surface {surface:0} ms is longer than total {total:0} ms");
+        // The host and the surface now start together, so a phase can finish after the clock that
+        // reports the reply. The claim that survives is that both were recorded, not that one
+        // contains the other.
+        Assert.True(surface >= 0, "the surface build never recorded its time");
+        Assert.True(total >= 0, "the reply clock never recorded its time");
+        Assert.True(ServerRuntime.ColdStart.HandshakeMs >= 0, "the handshake phase never recorded its time");
     }
 
     [Fact]

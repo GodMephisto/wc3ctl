@@ -964,7 +964,7 @@ public static class Wc3Tools
         [Description("Frames per second used to convert a glTF animation's time range into a sequence frame interval. The Warcraft III default is 30.")] double fps = 30,
         [Description(OverwriteDoc)] bool overwrite = false,
         [Description(ExpectShaDoc)] string? expect_input_sha256 = null,
-        [Description("Cancels the call at the next check point. The import itself is not interruptible, and a cancel after it finishes still publishes nothing.")] CancellationToken cancellationToken = default)
+        [Description("Cancels the call at the next check point. The import reads the token before the file it writes, so it stops at that file, removes what it wrote and publishes nothing.")] CancellationToken cancellationToken = default)
         => Run<object>(() =>
         {
             string full = Path.GetFullPath(out_path);
@@ -974,7 +974,7 @@ public static class Wc3Tools
             {
                 CheckPoint(cancellationToken, "the import start");
                 var r = ModelImportCommand.ExecutePath(obj, Path.Combine(staging, Path.GetFileName(full)),
-                    texture, fps);
+                    texture, fps, cancellationToken);
                 CheckPoint(cancellationToken, "the publish");
                 var w = WriteGate.Publish(
                     StagedPairs(staging, Path.GetDirectoryName(full) ?? ".", Path.GetFileName(full)),
@@ -3754,10 +3754,12 @@ public static class Wc3Tools
     }
 
     /// <summary>
-    /// PRF-04. The one check point every slow tool runs, before it starts the command and again
-    /// before it publishes. None of the commands under these tools takes a CancellationToken, so
-    /// a cancel cannot stop one mid run. This makes the cancel observed at the boundary the tool
-    /// owns, rather than swallowed by the catch in <see cref="Run"/> and reported as success.
+    /// PRF-04. The check point every slow tool runs, before it starts the command and again
+    /// before it publishes. Two of the commands behind these tools now take a token of their own
+    /// (the library scan and the model import), so those two stop at the next file inside the run.
+    /// The rest take none, so a cancel can only be read at the boundary the tool owns. This makes
+    /// the cancel observed there rather than swallowed by the catch in <see cref="Run"/> and
+    /// reported as success.
     /// </summary>
     private static void CheckPoint(CancellationToken cancellationToken, string step)
     {
@@ -4427,11 +4429,11 @@ public static class Wc3Tools
     [Description("Open every map in a folder through the loader and report per map its size in bytes, the build it targets if known, whether it loads, its archive entry count and its diagnostic count, plus the loaded, failed and byte totals. Opens one map at a time. Read-only.")]
     public static LibraryScanResult LibraryScan(
         [Description("Folder of .w3x/.w3m maps, searched recursively.")] string folder,
-        [Description("Cancels the call at the next check point. The scan itself is not interruptible once it starts.")] CancellationToken cancellationToken = default)
+        [Description("Cancels the call at the next check point. The sweep reads the token before each map opens, so it stops at the next file rather than at the end of the folder.")] CancellationToken cancellationToken = default)
         => Run(() =>
         {
             CheckPoint(cancellationToken, "the scan start");
-            return LibraryScanCommand.Execute(folder);
+            return LibraryScanCommand.Execute(folder, cancellationToken);
         });
 
     [McpServerTool(Name = "library_audit", Title = "Audit a folder of maps", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
