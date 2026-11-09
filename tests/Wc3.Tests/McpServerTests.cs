@@ -270,4 +270,133 @@ public class McpServerTests
             Assert.Contains("Aerial Shackles", body);
         });
     }
+
+    [Fact]
+    public async Task Every_resource_reports_a_byte_size_and_the_sha256_of_the_file_it_serves()
+    {
+        // RSC-01, RSC-05 and RSC-08. The listing must name the size and the digest of what a read
+        // returns, computed at start from the installed file. A section serves a slice of a
+        // document, so its reference is the slice itself rather than the file.
+        await WithClient(async (client, ct) =>
+        {
+            var resources = await client.ListResourcesAsync(cancellationToken: ct);
+            Assert.NotEmpty(resources);
+
+            foreach (var resource in resources)
+            {
+                var protocol = resource.ProtocolResource;
+                Assert.NotNull(protocol);
+                Assert.True(protocol!.Size > 0, resource.Uri + " reports no byte size");
+                Assert.NotNull(protocol.Meta);
+                string sha = protocol.Meta!["sha256"]!.GetValue<string>();
+                Assert.Matches("^[0-9a-f]{64}$", sha);
+
+                if (resource.Uri == "wc3://tools")
+                {
+                    string json = await ReadResourceText(client, resource.Uri, ct);
+                    var bytes = System.Text.Encoding.UTF8.GetBytes(json);
+                    Assert.Equal(Sha256Hex(bytes), sha);
+                    Assert.Equal((long)bytes.Length, protocol!.Size!.Value);
+                    continue;
+                }
+
+                if (resource.Uri.StartsWith("wc3://skills/", StringComparison.Ordinal))
+                {
+                    string id = resource.Uri["wc3://skills/".Length..];
+                    string path = Wc3Skills.Locate(id);
+                    byte[] bytes = File.ReadAllBytes(path);
+                    Assert.Equal(Sha256Hex(bytes), sha);
+                    Assert.Equal((long)bytes.Length, protocol!.Size!.Value);
+                    Assert.Equal(File.ReadAllText(path), await ReadResourceText(client, resource.Uri, ct));
+                    continue;
+                }
+
+                string[] parts = resource.Uri.Split('/');
+                Assert.True(parts.Length is 4 or 5, resource.Uri + " is not a document or section uri");
+                Assert.Equal("context", parts[2]);
+                string doc = parts[3];
+                if (parts.Length == 4)
+                {
+                    string file = Assert.Single(Directory.GetFiles(
+                        Path.Combine(AppContext.BaseDirectory, "context", doc), "*.md"));
+                    byte[] bytes = File.ReadAllBytes(file);
+                    Assert.Equal(Sha256Hex(bytes), sha);
+                    Assert.Equal((long)bytes.Length, protocol!.Size!.Value);
+                }
+                else
+                {
+                    string section = await ReadResourceText(client, resource.Uri, ct);
+                    var bytes = System.Text.Encoding.UTF8.GetBytes(section);
+                    Assert.Equal(Sha256Hex(bytes), sha);
+                    Assert.Equal((long)bytes.Length, protocol!.Size!.Value);
+                }
+            }
+        });
+    }
+
+    [Fact]
+    public async Task A_section_resource_returns_that_section_only()
+    {
+        // RSC-02. A client that wants one ability or one introductory section reads the section
+        // uri, not the whole 300KB document.
+        await WithClient(async (client, ct) =>
+        {
+            var resources = await client.ListResourcesAsync(cancellationToken: ct);
+            Assert.Contains(resources, r => r.Uri == "wc3://context/abilities/aerial-shackles");
+
+            string section = await ReadResourceText(client, "wc3://context/abilities/aerial-shackles", ct);
+            Assert.Contains("Aerial Shackles", section);
+            Assert.DoesNotContain("Barrage", section);
+            Assert.DoesNotContain("Warcraft 3 Editor Ability Insight", section);
+
+            string whole = await ReadResourceText(client, "wc3://context/abilities", ct);
+            Assert.Contains("Barrage", whole);
+            Assert.Contains("Warcraft 3 Editor Ability Insight", whole);
+            Assert.True(whole.Length > section.Length * 10);
+
+            Assert.Contains(resources, r => r.Uri == "wc3://context/ui-frames/introduction");
+            string intro = await ReadResourceText(client, "wc3://context/ui-frames/introduction", ct);
+            Assert.Contains("Frames can display Text", intro);
+            Assert.DoesNotContain("The Big UI-Frame Tutorial", intro);
+            Assert.DoesNotContain("The nativ GUI-TriggerData", intro);
+        });
+    }
+
+    [Fact]
+    public async Task The_catalog_carries_an_aliases_array_and_an_input_schema_for_every_tool()
+    {
+        // RSC-03. A client that reads only wc3://tools can see each tool's arguments, so it need
+        // not call tools/list to learn the shape of a call.
+        await WithClient(async (client, ct) =>
+        {
+            var tools = await client.ListToolsAsync(cancellationToken: ct);
+            string text = await ReadResourceText(client, "wc3://tools", ct);
+
+            using var doc = JsonDocument.Parse(text);
+            var catalog = doc.RootElement.GetProperty("tools").EnumerateArray().ToList();
+            Assert.Equal(tools.Count, catalog.Count);
+            Assert.NotEmpty(catalog);
+
+            Assert.All(catalog, tool =>
+            {
+                var aliases = tool.GetProperty("aliases");
+                Assert.Equal(JsonValueKind.Array, aliases.ValueKind);
+                Assert.Empty(aliases.EnumerateArray());
+
+                var schema = tool.GetProperty("inputSchema");
+                Assert.Equal(JsonValueKind.Object, schema.ValueKind);
+                Assert.True(schema.TryGetProperty("type", out var type));
+                Assert.Equal("object", type.GetString());
+            });
+        });
+    }
+
+    private static async Task<string> ReadResourceText(McpClient client, string uri, CancellationToken ct)
+    {
+        var contents = await client.ReadResourceAsync(uri, cancellationToken: ct);
+        return Assert.IsType<TextResourceContents>(Assert.Single(contents.Contents)).Text;
+    }
+
+    private static string Sha256Hex(byte[] bytes) =>
+        Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes)).ToLowerInvariant();
 }

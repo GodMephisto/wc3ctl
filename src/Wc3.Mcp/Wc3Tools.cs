@@ -21,6 +21,17 @@ public static class Wc3Tools
 {
     private const string KindValues = "unit|item|ability|destructable|doodad|buff|upgrade";
 
+    /// <summary>The overwrite argument's wording, identical on every writing tool, so a caller
+    /// reads one contract across the whole surface.</summary>
+    private const string OverwriteDoc =
+        "Replace an existing output. Default false, and a rerun that would overwrite is refused with "
+        + "OUTPUT_EXISTS and the output is left as it was (SAF-05).";
+
+    /// <summary>The expected digest argument's wording, identical on every writing tool.</summary>
+    private const string ExpectShaDoc =
+        "The SHA-256 of the input as you last read it. A mismatch is refused with STALE_INPUT, so a "
+        + "write cannot land on content that changed underneath it (SAF-07).";
+
     [McpServerTool(Name = "map_info", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Show a Warcraft III map's metadata: name, author, player count, playable dimensions and load diagnostics.")]
     public static MapInfoResult MapInfo(
@@ -134,12 +145,19 @@ public static class Wc3Tools
         + "named hot leak candidates on a short timer so the runtime handle and memory slope is measurable "
         + "in seconds rather than an hour, plus a handle count sampler. Writes the harness to out_path as "
         + "valid syntax for the language. Does not start the game.")]
-    public static LeakHarnessResult LeakHarness(
+    public static object LeakHarness(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Harness language, jass or lua.")] string lang,
         [Description("A hot leak candidate function name, or all.")] string target,
-        [Description("Path to write the harness text to.")] string out_path)
-        => Run(() => LeakHarnessCommand.Execute(LoadMap(map), lang, target, out_path));
+        [Description("Path to write the harness text to.")] string out_path,
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
+        => Run<object>(() =>
+        {
+            var doc = LoadMap(map);
+            return WriteWith(out_path, Inputs(map), overwrite, expect_input_sha256,
+                temp => LeakHarnessCommand.Execute(doc, lang, target, temp));
+        });
 
     [McpServerTool(Name = "leak_join", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Join a map's static leak list to a wc3watch session folder. Reads samples.csv and "
@@ -351,6 +369,102 @@ public static class Wc3Tools
             w.FilesRewritten, w.BytesWritten);
     }
 
+    /// <summary>
+    /// The inputs a file level write names, so the gate can refuse an output that is one of them.
+    /// A null or blank path is dropped rather than passed through.
+    /// </summary>
+    private static string[] Inputs(params string?[] paths) =>
+        paths.Where(p => !string.IsNullOrWhiteSpace(p)).Select(p => p!).ToArray();
+
+    /// <summary>
+    /// Write a loaded document whose source may be an archive or a folder map. An archive is
+    /// staged as one file and renamed. A folder map is staged as one folder and renamed, since a
+    /// folder cannot be published as a file (SAF-15).
+    /// </summary>
+    private static FileWriteOutcome SaveDoc(
+        MapDocument doc, string outPath, IReadOnlyList<string> inputs, bool overwrite, string? expectInputSha256)
+        => doc.SourceFolder is null
+            ? WriteGate.WriteFile(outPath, inputs, overwrite, expectInputSha256, temp => doc.Save(temp))
+            : WriteGate.WriteFolder(outPath, inputs, overwrite, expectInputSha256, temp => doc.Save(temp));
+
+    /// <summary>
+    /// Gated save of a loaded map to a path the tool computed itself, through the file level gate.
+    /// The map gate resolves its own destination, so a tool that names one directly (a report, a
+    /// ported copy, a decompiled map) needs this twin to take the same refusals and digests.
+    /// </summary>
+    private static FileWriteOutcome SaveDocAt(
+        MapDocument doc, string outPath, string? map, bool overwrite, string? expectInputSha256)
+        => SaveDoc(doc, outPath, Inputs(map), overwrite, expectInputSha256);
+
+    /// <summary>
+    /// Run a command that writes its own output, staging the destination first. The command's
+    /// report is kept, the gate outcome is merged in, and any path field the report holds is
+    /// pointed at the published file rather than the staging path (SAF-15).
+    /// </summary>
+    private static Dictionary<string, object?> WriteWith<T>(
+        string outPath,
+        IReadOnlyList<string> inputs,
+        bool overwrite,
+        string? expectInputSha256,
+        Func<string, T> write,
+        params string[] pathKeys) where T : class
+    {
+        T? report = null;
+        var w = WriteGate.WriteFile(outPath, inputs, overwrite, expectInputSha256, temp =>
+        {
+            report = write(temp);
+
+            // A command that reports a refusal rather than throwing must not have its output
+            // published, so the refusal is raised inside the staging step and the temp is dropped.
+            if (report.GetType().GetProperty("Ok")?.GetValue(report) is false)
+                throw new McpException(report.GetType().GetProperty("Message")?.GetValue(report) as string
+                    ?? "the command refused to write the output");
+        });
+        var gated = Gated(report!, w);
+        foreach (string key in pathKeys) gated[key] = w.SavedTo;
+        return gated;
+    }
+
+    /// <summary>Pairs of staged file and final file for a command that wrote into a staging folder.
+    /// The primary is ordered first, so it becomes the reported savedTo (SAF-15).</summary>
+    private static List<(string Source, string Target)> StagedPairs(
+        string staging, string destDir, string? primaryName = null) =>
+        Directory.EnumerateFiles(staging, "*", SearchOption.AllDirectories)
+            .Select(src => (Source: src,
+                Target: Path.Combine(destDir, Path.GetRelativePath(staging, src))))
+            .OrderBy(p => primaryName is not null &&
+                          string.Equals(Path.GetFileName(p.Target), primaryName, StringComparison.OrdinalIgnoreCase)
+                ? 0 : 1)
+            .ToList();
+
+    /// <summary>A staging folder beside the destination, so a publish is a rename on one volume.</summary>
+    private static string StagingFolder(string finalPath) =>
+        Path.Combine(Path.GetDirectoryName(Path.GetFullPath(finalPath)) is { Length: > 0 } d ? d : ".",
+            "." + Path.GetFileNameWithoutExtension(finalPath) + "." + Guid.NewGuid().ToString("N") + ".stage");
+
+    /// <summary>
+    /// A command's own report with the gate outcome merged in. The five gate fields sit at the top
+    /// level beside the report's fields, under the same camelCase names the serializer gives a
+    /// record, so every writing tool answers the same way whatever type its report is (SAF-15).
+    /// </summary>
+    private static Dictionary<string, object?> Gated(object report, FileWriteOutcome w)
+    {
+        var map = new Dictionary<string, object?>(StringComparer.Ordinal);
+        foreach (var p in report.GetType().GetProperties(
+                     System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance))
+            if (p.GetIndexParameters().Length == 0)
+                map[JsonNamingPolicy.CamelCase.ConvertName(p.Name)] = p.GetValue(report);
+        map["savedTo"] = w.SavedTo;
+        map["inputSha256"] = w.InputSha256;
+        map["outputSha256"] = w.OutputSha256;
+        map["filesRewritten"] = w.FilesRewritten;
+        map["bytesWritten"] = w.BytesWritten;
+        if (w.Files.Count > 1)
+            map["files"] = w.Files;
+        return map;
+    }
+
+
     private const string TerrainCornerFieldNames =
         "GroundHeight|AddGroundHeight|WaterHeight|GroundTexture|CliffLevel";
 
@@ -415,20 +529,20 @@ public static class Wc3Tools
 
     [McpServerTool(Name = "asset_replace", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Replace an asset path everywhere it is referenced (object-data field values, script string literals and the war3map.imp import table) and save the edited copy to out_path. Refuses when the old path is referenced nowhere. The input map is NEVER modified, and the archive entry itself is NOT renamed, move the file if the new path must resolve.")]
-    public static AssetReplaceResult AssetReplace(
+    public static object AssetReplace(
         [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map).")] string out_path,
         [Description("The asset path currently referenced.")] string old_path,
-        [Description("The asset path to reference instead.")] string new_path)
-        => Run(() =>
+        [Description("The asset path to reference instead.")] string new_path,
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
+        => Run<object>(() =>
         {
             string full = ResolveOutPath(map, out_path);
             var doc = LoadMap(map);
             var r = AssetReplaceCommand.Execute(doc, old_path, new_path);
             if (!r.Ok) throw new McpException(r.Message);
-            if (Path.GetDirectoryName(full) is { Length: > 0 } dir) Directory.CreateDirectory(dir);
-            doc.Save(full);
-            return r;
+            return Gated(r, SaveDocAt(doc, full, map, overwrite, expect_input_sha256));
         });
 
     [McpServerTool(Name = "asset_model_lint", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
@@ -442,19 +556,20 @@ public static class Wc3Tools
     public static AssetThumbnailsToolResult AssetThumbnails(
         [Description("Folder holding model (.mdx/.mdl) files, or map (.w3x/.w3m) files whose imported models are rendered.")] string folder,
         [Description("Directory the PNG thumbnails are written under. Created if absent.")] string out_dir,
-        [Description("Thumbnail edge length in pixels. Default 256.")] int size = AssetThumbnailsCommand.DefaultSize)
+        [Description("Thumbnail edge length in pixels. Default 256.")] int size = AssetThumbnailsCommand.DefaultSize,
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
         => Run(() =>
         {
             if (string.IsNullOrWhiteSpace(out_dir)) throw new McpException("out_dir is required");
             var r = AssetThumbnailsCommand.Execute(folder, size, size);
-            Directory.CreateDirectory(out_dir);
-            var files = new List<string>();
-            foreach (var t in r.Thumbnails)
+            var w = WriteGate.WriteFolder(out_dir, Inputs(folder), overwrite, expect_input_sha256, temp =>
             {
-                File.WriteAllBytes(Path.Combine(out_dir, t.Name), t.Png);
-                files.Add(t.Name);
-            }
-            return new AssetThumbnailsToolResult(Path.GetFullPath(out_dir), r.Rendered, files, r.Diagnostics);
+                Directory.CreateDirectory(temp);
+                foreach (var t in r.Thumbnails) File.WriteAllBytes(Path.Combine(temp, t.Name), t.Png);
+            });
+            return new AssetThumbnailsToolResult(w.SavedTo, r.Rendered, r.Thumbnails.Select(t => t.Name).ToList(),
+                r.Diagnostics, w.InputSha256, w.OutputSha256, w.FilesRewritten, w.BytesWritten);
         });
 
     [McpServerTool(Name = "asset_convert_batch", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
@@ -462,21 +577,26 @@ public static class Wc3Tools
     public static AssetConvertBatchToolResult AssetConvertBatch(
         [Description("Folder holding texture files.")] string folder,
         [Description("Target format extension, e.g. .png or .blp.")] string to,
-        [Description("Directory the converted textures are written under. Created if absent.")] string out_dir)
+        [Description("Directory the converted textures are written under. Created if absent.")] string out_dir,
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
         => Run(() =>
         {
             if (string.IsNullOrWhiteSpace(out_dir)) throw new McpException("out_dir is required");
             var r = AssetConvertBatchCommand.Execute(folder, to);
-            Directory.CreateDirectory(out_dir);
-            var files = new List<string>();
-            foreach (var t in r.Textures)
+            var w = WriteGate.WriteFolder(out_dir, Inputs(folder), overwrite, expect_input_sha256, temp =>
             {
-                var dest = Path.Combine(out_dir, t.RelativePath);
-                if (Path.GetDirectoryName(dest) is { Length: > 0 } dir) Directory.CreateDirectory(dir);
-                File.WriteAllBytes(dest, t.Bytes);
-                files.Add(t.RelativePath);
-            }
-            return new AssetConvertBatchToolResult(Path.GetFullPath(out_dir), r.Converted, r.ToExtension, files, r.Diagnostics);
+                Directory.CreateDirectory(temp);
+                foreach (var t in r.Textures)
+                {
+                    var dest = Path.Combine(temp, t.RelativePath);
+                    if (Path.GetDirectoryName(dest) is { Length: > 0 } dir) Directory.CreateDirectory(dir);
+                    File.WriteAllBytes(dest, t.Bytes);
+                }
+            });
+            return new AssetConvertBatchToolResult(w.SavedTo, r.Converted, r.ToExtension,
+                r.Textures.Select(t => t.RelativePath).ToList(), r.Diagnostics,
+                w.InputSha256, w.OutputSha256, w.FilesRewritten, w.BytesWritten);
         });
 
     [McpServerTool(Name = "asset_import_wire", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
@@ -487,16 +607,18 @@ public static class Wc3Tools
         [Description("One or more disk files to add as imports.")] string[] files,
         [Description("Four-character rawcode of the object whose model or icon field is pointed at each imported file. Omit to import without setting a field.")] string? obj = null,
         [Description("Object type, one of unit|item|destructable|doodad. Defaults to auto-detect from the object.")] string? kind = null,
-        [Description("Keep each file's path relative to this directory instead of flattening to a single folder. A war3mapimported folder is normalised to war3mapImported. Use this for a sound or asset pack that must land on its original subfolders.")] string? base_dir = null)
+        [Description("Keep each file's path relative to this directory instead of flattening to a single folder. A war3mapimported folder is normalised to war3mapImported. Use this for a sound or asset pack that must land on its original subfolders.")] string? base_dir = null,
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
         => Run(() =>
         {
             string full = ResolveOutPath(map, out_path);
             var doc = LoadMap(map);
             var r = AssetImportWireCommand.Execute(doc, files, obj, kind is null ? null : ParseKind(kind), base_dir);
             if (!r.Ok) throw new McpException(r.Message);
-            if (Path.GetDirectoryName(full) is { Length: > 0 } dir) Directory.CreateDirectory(dir);
-            doc.Save(full);
-            return new AssetImportWireToolResult(full, r.Imported, r.FieldsSet, r.Diagnostics);
+            var w = SaveDocAt(doc, full, map, overwrite, expect_input_sha256);
+            return new AssetImportWireToolResult(w.SavedTo, r.Imported, r.FieldsSet, r.Diagnostics,
+                w.InputSha256, w.OutputSha256, w.FilesRewritten, w.BytesWritten);
         });
 
     [McpServerTool(Name = "model_squish", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
@@ -505,7 +627,7 @@ public static class Wc3Tools
         + "every pass, and keeps a pass only while SSIM and silhouette stay above the floor. "
         + "Writes a receipt per pass. Optionally shrinks the model's own textures into a side "
         + "folder. The input is never modified.")]
-    public static ModelSquishResult ModelSquish(
+    public static object ModelSquish(
         [Description("Path to a .mdx or .mdl file.")] string model,
         [Description("Output model path.")] string out_path,
         [Description("Target face fraction for decimation, 0 to 1.")] float ratio = 0.5f,
@@ -517,24 +639,64 @@ public static class Wc3Tools
         [Description("Render gate, the minimum silhouette overlap.")] double min_silhouette = 0.85,
         [Description("Skip the lossless key drop.")] bool no_lossless = false,
         [Description("Skip the decimation pass.")] bool no_decimate = false,
-        [Description("Strip effect chunks during decimation.")] bool strip_effects = false)
-        => Run(() => ModelSquishCommand.Execute(
-            model, out_path, ratio, !no_lossless, !no_decimate,
-            texture_side, texture_out, min_ssim, min_silhouette, strip_effects));
+        [Description("Strip effect chunks during decimation.")] bool strip_effects = false,
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
+        => Run<object>(() =>
+        {
+            string full = Path.GetFullPath(out_path);
+            string staging = StagingFolder(full);
+            string texStaging = staging + "-tex";
+            Directory.CreateDirectory(staging);
+            try
+            {
+                if (texture_side != 0)
+                {
+                    if (string.IsNullOrWhiteSpace(texture_out))
+                        throw new McpException("a texture side needs texture_out, the folder the copies land in");
+                    Directory.CreateDirectory(texStaging);
+                }
+
+                var r = ModelSquishCommand.Execute(model, Path.Combine(staging, Path.GetFileName(full)), ratio,
+                    !no_lossless, !no_decimate, texture_side, texture_side != 0 ? texStaging : null,
+                    min_ssim, min_silhouette, strip_effects);
+
+                var pairs = new List<(string Source, string Target)>
+                {
+                    (Path.Combine(staging, Path.GetFileName(full)), full),
+                };
+                if (texture_side != 0)
+                    pairs.AddRange(StagedPairs(texStaging, Path.GetFullPath(texture_out!)));
+
+                var w = WriteGate.Publish(pairs, Inputs(model), overwrite, expect_input_sha256);
+                var gated = Gated(r, w);
+                gated["outPath"] = w.SavedTo;
+                return gated;
+            }
+            finally
+            {
+                try { Directory.Delete(staging, recursive: true); } catch { /* best effort */ }
+                try { if (Directory.Exists(texStaging)) Directory.Delete(texStaging, recursive: true); }
+                catch { /* best effort */ }
+            }
+        });
 
     [McpServerTool(Name = "model_primitive", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Generate a primitive mesh and write a real MDX at out_path. Kinds are card, ring, cone and capsule. The output has a geoset, a material and a texture reference, so it loads like any imported model. Use it for effects and placeholders without an external asset. A curved kind with fewer than three segments is refused.")]
-    public static MeshPrimitiveResult ModelPrimitive(
+    public static object ModelPrimitive(
         [Description("Primitive kind: card|ring|cone|capsule.")] string kind,
         [Description("Output .mdx path.")] string out_path,
         [Description("Overall size, radius or edge length depending on the kind. Default 32.")] float size = 32f,
         [Description("Length along Z for cone and capsule. Zero uses the size.")] float length = 0f,
         [Description("Inner radius for a ring. Zero uses half the size.")] float inner_radius = 0f,
         [Description("Segments around the curve. Default 16, below 3 is refused.")] int segments = 16,
-        [Description("Texture map path written into the model, for example war3mapImported\\glow.blp.")] string? texture_path = null)
-        => Run(() => MeshPrimitiveCommand.Execute(
-            ParseEnum<MeshPrimitiveKind>(kind, nameof(kind)),
-            out_path, size, length, inner_radius, segments, texture_path));
+        [Description("Texture map path written into the model, for example war3mapImported\\glow.blp.")] string? texture_path = null,
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
+        => Run<object>(() => WriteWith(out_path, Array.Empty<string>(), overwrite, expect_input_sha256,
+            temp => MeshPrimitiveCommand.Execute(
+                ParseEnum<MeshPrimitiveKind>(kind, nameof(kind)),
+                temp, size, length, inner_radius, segments, texture_path), "path"));
 
     [McpServerTool(Name = "model_compare", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Render two models from four angles and score how close they look, by SSIM on "
@@ -567,101 +729,133 @@ public static class Wc3Tools
 
     [McpServerTool(Name = "model_optimize", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Decimate a .mdx or .mdl model's geometry with the quadric error metric, drop zero-area faces and duplicate textures, and write a smaller MDX at out_path, leaving the other chunks untouched. ratio is the target fraction of faces to keep. Set strip_effects to also drop the model's effect chunks, particle emitters (PREM), particle emitters 2 (PRE2), ribbons (RIBB) and corns (CORN), which changes how the model looks, so it defaults to false. Returns the before and after vertex and face counts and the number of effect chunks removed. The input is never modified.")]
-    public static ModelOptimizeResult ModelOptimize(
+    public static object ModelOptimize(
         [Description("Path to a .mdx or .mdl model file.")] string model,
         [Description("Output .mdx path. The input is never modified.")] string out_path,
         [Description("Target fraction of faces to keep, between 0 and 1.")] float ratio = 0.5f,
-        [Description("Drop the model's effects (particle emitters, particle emitters 2, ribbons and corns) when true. Changes how the model looks. Default false.")] bool strip_effects = false)
-        => Run(() =>
-        {
-            if (string.Equals(Path.GetFullPath(out_path), Path.GetFullPath(model), StringComparison.OrdinalIgnoreCase))
-                throw new McpException("out_path must not be the input model");
-            return ModelOptimizeCommand.ExecutePath(model, ratio, out_path, strip_effects);
-        });
+        [Description("Drop the model's effects (particle emitters, particle emitters 2, ribbons and corns) when true. Changes how the model looks. Default false.")] bool strip_effects = false,
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
+        => Run<object>(() => WriteWith(out_path, Inputs(model), overwrite, expect_input_sha256,
+            temp => ModelOptimizeCommand.ExecutePath(model, ratio, temp, strip_effects), "path", "outPath"));
 
     [McpServerTool(Name = "model_lod", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Generate a level-of-detail chain for a .mdx or .mdl model, writing one decimated MDX per ratio into out_dir by running the optimiser once per ratio. ratios is a comma-separated list of target fractions of faces to keep, each between 0 and 1, for example 1,0.5,0.25, processed in the order given so a descending list produces a descending chain. Each level keeps the model's materials, textures, sequences, bones, emitters and cameras byte for byte and shrinks only the geometry. Ratio 1 is the original geometry and its file is byte identical to the input. The input is never modified. Returns one level per ratio with its vertex and face count and byte size, plus the total bytes written.")]
-    public static ModelLodResult ModelLod(
+    public static object ModelLod(
         [Description("Path to a .mdx or .mdl model file.")] string model,
         [Description("Comma-separated target fractions of faces to keep, each between 0 and 1, for example 1,0.5,0.25.")] string ratios,
-        [Description("Output directory for the LOD chain. Created when missing. The input is never modified.")] string out_dir)
-        => Run(() => ModelLodCommand.ExecutePath(model, ratios, out_dir));
+        [Description("Output directory for the LOD chain. Created when missing. The input is never modified.")] string out_dir,
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
+        => Run<object>(() =>
+        {
+            ModelLodResult? r = null;
+            var w = WriteGate.WriteFolder(out_dir, Inputs(model), overwrite, expect_input_sha256,
+                temp => r = ModelLodCommand.ExecutePath(model, ratios, temp));
+            var gated = Gated(r!, w);
+            gated["outputDirectory"] = w.SavedTo;
+            gated["levels"] = r!.Levels
+                .Select(l => l with { Path = Path.Combine(w.SavedTo, Path.GetFileName(l.Path)) })
+                .ToList();
+            return gated;
+        });
 
     [McpServerTool(Name = "texture_optimize", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Shrink a .blp, .dds or standard image texture to fit a maximum side, preserving aspect ratio, and write it at out_path in the same format. The input is never modified. Returns the before and after dimensions and byte sizes.")]
-    public static TextureOptimizeResult TextureOptimize(
+    public static object TextureOptimize(
         [Description("Path to a texture file.")] string texture,
         [Description("Output path. The input is never modified.")] string out_path,
-        [Description("Maximum side length in pixels.")] int max = 256)
-        => Run(() =>
-        {
-            if (string.Equals(Path.GetFullPath(out_path), Path.GetFullPath(texture), StringComparison.OrdinalIgnoreCase))
-                throw new McpException("out_path must not be the input texture");
-            return TextureOptimizeCommand.ExecutePath(texture, max, out_path);
-        });
+        [Description("Maximum side length in pixels.")] int max = 256,
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
+        => Run<object>(() => WriteWith(out_path, Inputs(texture), overwrite, expect_input_sha256,
+            temp => TextureOptimizeCommand.ExecutePath(texture, max, temp), "path"));
 
     [McpServerTool(Name = "texture_atlas", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Pack two or more .blp, .dds or standard image textures into one power-of-two atlas and write it at out_path in the first input's format. Every input is decoded, placed deterministically by a shelf packer, and left unmodified. Returns the atlas size, its byte count and each input's pixel rectangle, so a caller can build the UV mapping.")]
-    public static TextureAtlasResult TextureAtlas(
+    public static object TextureAtlas(
         [Description("Two or more paths to texture files.")] string[] images,
         [Description("Output atlas path. The inputs are never modified.")] string out_path,
-        [Description("Maximum atlas side in pixels. The atlas is the smallest power of two that fits and does not exceed this.")] int max = 512)
-        => Run(() =>
-        {
-            string full = Path.GetFullPath(out_path);
-            foreach (var image in images)
-                if (string.Equals(full, Path.GetFullPath(image), StringComparison.OrdinalIgnoreCase))
-                    throw new McpException("out_path must not be one of the input textures");
-            if (Path.GetDirectoryName(full) is { Length: > 0 } dir) Directory.CreateDirectory(dir);
-            return TextureAtlasCommand.ExecutePaths(images, max, full);
-        });
+        [Description("Maximum atlas side in pixels. The atlas is the smallest power of two that fits and does not exceed this.")] int max = 512,
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
+        => Run<object>(() => WriteWith(out_path, images, overwrite, expect_input_sha256,
+            temp => TextureAtlasCommand.ExecutePaths(images, max, temp), "output"));
 
     [McpServerTool(Name = "map_optimize", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Shrink every imported texture inside a map in one pass and write a new map to out_path with only those files replaced, everything else byte for byte. By default models are left untouched and each texture is scaled to fit max_texture on its longest side; pass ratio below 1 to also decimate models, which is NOT safe by default because decimation is known to produce a model the game crashes on in some maps (a 3,091 model build hit an ACCESS_VIOLATION on load at ratio 0.9, while the same map with original models loaded). When decimating, load-test the result before shipping. A file whose optimised bytes are not smaller is left untouched. Reports the per-file before and after sizes, the per-kind counts, bytesSaved (the output size subtracted from the input's) and contentBytesSaved (the per-file sum, which is larger when the archive was patched in place rather than rebuilt). The input map is NEVER modified.")]
-    public static MapOptimizeResult MapOptimize(
+    public static object MapOptimize(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map path. The input is never modified.")] string out_path,
         [Description("Target fraction of a model's faces to keep, between 0 and 1. Default 1.0, which leaves every model byte for byte and shrinks only textures. A value below 1 decimates models, which needs a load test because it can produce a model the game crashes on.")] float ratio = 1.0f,
-        [Description("Maximum texture side in pixels. A texture larger than this on either side is scaled down. Default 256.")] int max_texture = 256)
-        => Run(() =>
+        [Description("Maximum texture side in pixels. A texture larger than this on either side is scaled down. Default 256.")] int max_texture = 256,
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
+        => Run<object>(() =>
         {
             string full = ResolveOutPath(map, out_path);
-            return MapOptimizeCommand.ExecutePath(map, ratio, max_texture, full);
+            return WriteWith(full, Inputs(map), overwrite, expect_input_sha256,
+                temp => MapOptimizeCommand.ExecutePath(map, ratio, max_texture, temp), "path");
         });
 
     [McpServerTool(Name = "model_export_obj", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Export a map-imported model to Wavefront OBJ at out_path, writing an MTL and any map-resolvable textures converted to PNG beside it. The map itself is never modified. Every file is staged beside the target and published only when all of them are complete, so a failure leaves no partial export. An existing .obj, .mtl or texture is refused and left unchanged unless overwrite is true. Returns the .obj path, the .mtl path, the texture names and any publish note.")]
-    public static ModelExportObjToolResult ModelExportObj(
+    public static object ModelExportObj(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Internal model path (.mdx/.mdl) inside the map.")] string model,
         [Description("Output .obj file path. A .mtl and the converted textures are written beside it.")] string out_path,
-        [Description("Replace an .obj, .mtl or texture that already exists beside out_path. Default false, which refuses an existing target and leaves it exactly as it was.")] bool overwrite = false)
-        => Run(() =>
+        [Description("Replace an .obj, .mtl or texture that already exists beside out_path. Default false, which refuses an existing target and leaves it exactly as it was.")] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
+        => Run<object>(() =>
         {
             var doc = LoadMap(map);
             string full = Path.GetFullPath(out_path);
-            if (string.Equals(full, Path.GetFullPath(map), StringComparison.OrdinalIgnoreCase))
-                throw new McpException("out_path must not be the map file itself");
-            var r = ModelExportObjCommand.Write(doc, model, full, overwrite);
-            return new ModelExportObjToolResult(r.SavedTo, r.Mtl, r.Textures, r.Diagnostics);
+            string staging = StagingFolder(full);
+            Directory.CreateDirectory(staging);
+            try
+            {
+                var r = ModelExportObjCommand.Write(doc, model, Path.Combine(staging, Path.GetFileName(full)), false);
+                var w = WriteGate.Publish(
+                    StagedPairs(staging, Path.GetDirectoryName(full) ?? ".", Path.GetFileName(full)),
+                    Inputs(map), overwrite, expect_input_sha256);
+                var gated = Gated(r, w);
+                gated["mtl"] = Path.Combine(Path.GetDirectoryName(w.SavedTo)!,
+                    r.Mtl is null ? Path.GetFileNameWithoutExtension(w.SavedTo) + ".mtl" : Path.GetFileName(r.Mtl));
+                return gated;
+            }
+            finally
+            {
+                try { Directory.Delete(staging, recursive: true); } catch { /* best effort */ }
+            }
         });
 
     [McpServerTool(Name = "model_import", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Import a foreign model file into a Warcraft III MDX at out_path. Accepts Wavefront OBJ (.obj), glTF 2.0 (.gltf and .glb), STL (.stl, binary and ASCII), PLY (.ply, ASCII and binary little-endian) and FBX ASCII (.fbx). Binary FBX is not supported. The format is detected from the file content, so a correct extension is not required. Builds one v800 geoset per source primitive with normals and UVs, triangulating an n-gon face as a fan, computing a per-face normal when the source carries none and zeroing UVs when it has none. Each glTF material's baseColorTexture image is converted to .blp beside the MDX and referenced by a texture entry, one entry per distinct texture, so a multi-material model keeps every material. A model that names no material keeps the single default texture. Every glTF animation becomes a named MDX SEQS sequence whose integer frame interval is its time range scaled by fps, 30 by default. Bone keyframe tracks are not written. The input is never modified. Returns the output path, the geoset, vertex, face, texture and material counts, the sequence count and names, and the texture files written.")]
-    public static ModelImportToolResult ModelImport(
+    public static object ModelImport(
         [Description("Path to a foreign model file, one of OBJ, glTF, GLB, STL, PLY or ASCII FBX.")] string obj,
         [Description("Output .mdx path. The input is never modified.")] string out_path,
         [Description("Optional texture path to embed, relative to the map, overriding every material. Omit to use the model's own materials, or war3mapImported\\<name>.blp when it names none.")] string? texture = null,
-        [Description("Frames per second used to convert a glTF animation's time range into a sequence frame interval. The Warcraft III default is 30.")] double fps = 30)
-        => Run(() =>
+        [Description("Frames per second used to convert a glTF animation's time range into a sequence frame interval. The Warcraft III default is 30.")] double fps = 30,
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
+        => Run<object>(() =>
         {
             string full = Path.GetFullPath(out_path);
-            if (string.Equals(full, Path.GetFullPath(obj), StringComparison.OrdinalIgnoreCase))
-                throw new McpException("out_path must not be the input OBJ");
-            var r = ModelImportCommand.ExecutePath(obj, out_path, texture, fps);
-            return new ModelImportToolResult(
-                full, r.Geosets, r.Vertices, r.Faces, r.Textures, r.Materials,
-                r.Sequences, r.SequenceNames ?? Array.Empty<string>(), r.TextureFiles);
+            string staging = StagingFolder(full);
+            Directory.CreateDirectory(staging);
+            try
+            {
+                var r = ModelImportCommand.ExecutePath(obj, Path.Combine(staging, Path.GetFileName(full)),
+                    texture, fps);
+                var w = WriteGate.Publish(
+                    StagedPairs(staging, Path.GetDirectoryName(full) ?? ".", Path.GetFileName(full)),
+                    Inputs(obj), overwrite, expect_input_sha256);
+                return Gated(r, w);
+            }
+            finally
+            {
+                try { Directory.Delete(staging, recursive: true); } catch { /* best effort */ }
+            }
         });
 
     [McpServerTool(Name = "lint", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
@@ -686,11 +880,14 @@ public static class Wc3Tools
 
     [McpServerTool(Name = "lint_baseline", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Write the map's current lint findings to a baseline JSON file. A later gate, the CLI 'lint <map> --baseline <file>', then fails only on a finding this file does not already hold, so known and accepted warnings do not block CI. Writes a local file, never the map.")]
-    public static LintBaselineWriteResult LintBaseline(
+    public static object LintBaseline(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("File to write the baseline JSON to.")] string out_path,
-        [Description("Optional path to the ORIGINAL map this one was built from, so the baseline records the before/after checks too.")] string? against = null)
-        => Run(() => LintBaselineCommand.Write(map, out_path, against));
+        [Description("Optional path to the ORIGINAL map this one was built from, so the baseline records the before/after checks too.")] string? against = null,
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
+        => Run<object>(() => WriteWith(out_path, Inputs(map, against), overwrite, expect_input_sha256,
+            temp => LintBaselineCommand.Write(map, temp, against), "outPath"));
 
     [McpServerTool(Name = "roundtrip", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Verify the map survives a load and save byte for byte. Any file that differs is one this toolkit does not reproduce faithfully, which is worth knowing BEFORE editing that map, since a save would then rewrite it. Archive bookkeeping the container regenerates is excluded by design.")]
@@ -736,46 +933,55 @@ public static class Wc3Tools
     public static object ScriptFormat(
         [Description("Path to a .w3x/.w3m map file or map folder.")] string map,
         [Description("Where to save the reformatted map.")] string out_path,
-        [Description("pretty or canonical.")] string style = "pretty")
+        [Description("pretty or canonical.")] string style = "pretty",
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
         => Run(() =>
         {
             var full = ResolveOutPath(map, out_path);
             var doc = LoadMap(map);
             var r = ScriptCommand.Format(doc, style);
-            if (r.Changed) doc.Save(full);
-            return new { r.ScriptFile, r.Style, r.Changed, r.BytesBefore, r.BytesAfter, SavedTo = r.Changed ? full : null };
+            var w = r.Changed ? SaveDocAt(doc, full, map, overwrite, expect_input_sha256) : null;
+            return new { r.ScriptFile, r.Style, r.Changed, r.BytesBefore, r.BytesAfter,
+                SavedTo = w?.SavedTo, InputSha256 = w?.InputSha256, OutputSha256 = w?.OutputSha256 ?? "",
+                FilesRewritten = w?.FilesRewritten ?? 0, BytesWritten = w?.BytesWritten ?? 0 };
         });
 
     [McpServerTool(Name = "script_to_lua", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Convert a JASS map to a Lua map and save it to out_path. The script becomes war3map.lua, which keeps the JASS rules Lua lacks (32 bit integer wrap, integer division toward zero, division by zero gives zero, a null string concatenates as empty, unset array slots read their type default), and the w3i script language is set to Lua so the game runs it. war3map.j is left as a one line stub. Warnings name untyped calls, and custom text triggers the World Editor would regenerate as JASS. Lua maps are refused. The input map is NEVER modified. Pass strict_reals to also round real arithmetic back to the 32 bit float the JASS runtime holds, since Lua numbers are 64 bit doubles and a converted real expression otherwise drifts. A script generated by WurstScript is refused because its package runtime does not survive the conversion and the map then fails in game with \"Could not initialize package\" when a spell runs; allow_wurst overrides that refusal.")]
-    public static JassToLuaSummary ScriptToLua(
+    public static object ScriptToLua(
         [Description("Path to a .w3x/.w3m map file or map folder.")] string map,
         [Description("Where to save the converted map.")] string out_path,
         [Description("Round real (floating point) arithmetic to the 32 bit float JASS uses, so a converted expression does not drift from the original. Off by default, which reproduces the upstream converter byte for byte.")] bool strict_reals = false,
         [Description("Rewrite a hashtable that is local to one function and used only through the hashtable natives into a plain Lua table, which is what Lua should use. A hashtable passed to another function or a native stays a real hashtable, since a native still has to receive one. Off by default.")] bool hashtables = false,
-        [Description("Convert even when the script was generated by WurstScript. Wurst's package runtime does not survive the conversion, and the map fails in game with \"Could not initialize package\" when a spell runs. Off by default. Wurst compiles to Lua directly, so rebuild the Wurst project with its own Lua target instead.")] bool allow_wurst = false)
-        => Run(() =>
+        [Description("Convert even when the script was generated by WurstScript. Wurst's package runtime does not survive the conversion, and the map fails in game with \"Could not initialize package\" when a spell runs. Off by default. Wurst compiles to Lua directly, so rebuild the Wurst project with its own Lua target instead.")] bool allow_wurst = false,
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
+        => Run<object>(() =>
         {
             var full = ResolveOutPath(map, out_path);
             var doc = LoadMap(map);
             var r = JassToLuaCommand.Convert(doc, strictReals: strict_reals, hashtables: hashtables,
                 allowWurst: allow_wurst);
-            doc.Save(full);
-            return r;
+            return Gated(r, SaveDocAt(doc, full, map, overwrite, expect_input_sha256));
         });
 
     [McpServerTool(Name = "script_decompile", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Turn every Lua entry of a map that ships as precompiled Lua 5.3 bytecode (war3map.lua or a module it requires, common in YDWE maps) back into Lua source that runs the same, and save the map to out_path. The source is a transcription of the bytecode, one statement per instruction with gotos, not the author's original text. Both standard Lua 5.3 and the KK YDWE engine's opcode numbering are read. Nothing is written when the map holds no bytecode. The input map is NEVER modified.")]
     public static object ScriptDecompile(
         [Description("Path to a .w3x/.w3m map file or map folder.")] string map,
-        [Description("Where to save the decompiled map.")] string out_path)
+        [Description("Where to save the decompiled map.")] string out_path,
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
         => Run(() =>
         {
             var full = ResolveOutPath(map, out_path);
             var doc = LoadMap(map);
             var r = LuaDecompileCommand.Decompile(doc);
-            if (r.Files.Count > 0) doc.Save(full);
-            return new { r.Files, r.Failed, SavedTo = r.Files.Count > 0 ? full : null };
+            var w = r.Files.Count > 0 ? SaveDocAt(doc, full, map, overwrite, expect_input_sha256) : null;
+            return new { r.Files, r.Failed, SavedTo = w?.SavedTo, InputSha256 = w?.InputSha256,
+                OutputSha256 = w?.OutputSha256 ?? "", FilesRewritten = w?.FilesRewritten ?? 0,
+                BytesWritten = w?.BytesWritten ?? 0 };
         });
 
     [McpServerTool(Name = "script_lua_leaks", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
@@ -808,15 +1014,18 @@ public static class Wc3Tools
     [Description("Best effort conversion of a Lua map back to JASS, saved to out_path. The JASS to Lua conversion is not reversible in general, so only the constructs that map back without guessing are converted and every construct left is reported. Nothing is written when the script does not convert. The input map is NEVER modified.")]
     public static object ScriptLuaToJass(
         [Description("Path to a .w3x/.w3m map file or map folder.")] string map,
-        [Description("Where to save the converted map.")] string out_path)
+        [Description("Where to save the converted map.")] string out_path,
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
         => Run(() =>
         {
             var full = ResolveOutPath(map, out_path);
             var doc = LoadMap(map);
             var r = LuaToJassCommand.Execute(doc);
             if (!r.Ok) throw new McpException(string.Join(" ", r.Diagnostics));
-            doc.Save(full);
-            return new { r.ScriptFile, r.FunctionsConverted, r.FunctionsSkipped, r.GlobalsConverted, r.Unconverted, r.Diagnostics, SavedTo = full };
+            var w = SaveDocAt(doc, full, map, overwrite, expect_input_sha256);
+            return new { r.ScriptFile, r.FunctionsConverted, r.FunctionsSkipped, r.GlobalsConverted, r.Unconverted, r.Diagnostics,
+                SavedTo = w.SavedTo, w.InputSha256, w.OutputSha256, w.FilesRewritten, w.BytesWritten };
         });
 
     [McpServerTool(Name = "script_conversion_notes", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
@@ -856,14 +1065,18 @@ public static class Wc3Tools
         [Description("Path to a .w3x/.w3m map file or map folder.")] string map,
         [Description("Where to save the rewritten map.")] string out_path,
         [Description("Target build name or schema folder path.")] string target,
-        [Description("Directory of schema folders with manifest.json. Optional, the default search is used when omitted.")] string? schemas_dir = null)
+        [Description("Directory of schema folders with manifest.json. Optional, the default search is used when omitted.")] string? schemas_dir = null,
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
         => Run(() =>
         {
             var full = ResolveOutPath(map, out_path);
             var doc = LoadMap(map);
             var r = ScriptModernizeCommand.Execute(doc, target, schemas_dir);
-            if (r.Rewrites > 0) doc.Save(full);
-            return new { r.ScriptFile, r.TargetBuild, r.Rewrites, r.Changes, SavedTo = r.Rewrites > 0 ? full : null };
+            var w = r.Rewrites > 0 ? SaveDocAt(doc, full, map, overwrite, expect_input_sha256) : null;
+            return new { r.ScriptFile, r.TargetBuild, r.Rewrites, r.Changes, SavedTo = w?.SavedTo,
+                InputSha256 = w?.InputSha256, OutputSha256 = w?.OutputSha256 ?? "",
+                FilesRewritten = w?.FilesRewritten ?? 0, BytesWritten = w?.BytesWritten ?? 0 };
         });
 
     [McpServerTool(Name = "terrain_info", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
@@ -1007,16 +1220,18 @@ public static class Wc3Tools
         [Description("Spacing between adjacent cells in world units. Default 128 (one tile).")] float spacing = PlaceGridCommand.DefaultSpacing,
         [Description("Owning player id for a unit grid (0-based). Ignored for doodads.")] int owner_id = 0,
         [Description("Placement kind, unit or doodad.")] string kind = "unit",
-        [Description("Where to write the edited map. Defaults to a sibling '.edited' copy.")] string? out_path = null)
+        [Description("Where to write the edited map. Defaults to a sibling '.edited' copy.")] string? out_path = null,
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
         => Run(() =>
         {
             var doc = LoadMap(map);
             var r = PlaceGridCommand.Execute(doc, type_rawcode, rows, cols, spacing, owner_id, kind);
             if (!r.Ok) throw new McpException(r.Message);
             string full = ResolveOutPath(map, out_path);
-            if (Path.GetDirectoryName(full) is { Length: > 0 } dir) Directory.CreateDirectory(dir);
-            doc.Save(full);
-            return new BulkPlacementToolResult(full, r.Message, r.Placed, r.CreationNumbers);
+            var w = SaveDocAt(doc, full, map, overwrite, expect_input_sha256);
+            return new BulkPlacementToolResult(w.SavedTo, r.Message, r.Placed, r.CreationNumbers,
+                w.InputSha256, w.OutputSha256, w.FilesRewritten, w.BytesWritten);
         });
 
     [McpServerTool(Name = "place_scatter", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
@@ -1027,16 +1242,18 @@ public static class Wc3Tools
         [Description("Number of copies to place (>= 1).")] int count,
         [Description("Region name to scatter inside. Omit to scatter across the whole playable map.")] string? region = null,
         [Description("Deterministic random seed. Default 0.")] int seed = PlaceScatterCommand.DefaultSeed,
-        [Description("Where to write the edited map. Defaults to a sibling '.edited' copy.")] string? out_path = null)
+        [Description("Where to write the edited map. Defaults to a sibling '.edited' copy.")] string? out_path = null,
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
         => Run(() =>
         {
             var doc = LoadMap(map);
             var r = PlaceScatterCommand.Execute(doc, type_rawcode, count, region, seed);
             if (!r.Ok) throw new McpException(r.Message);
             string full = ResolveOutPath(map, out_path);
-            if (Path.GetDirectoryName(full) is { Length: > 0 } dir) Directory.CreateDirectory(dir);
-            doc.Save(full);
-            return new BulkPlacementToolResult(full, r.Message, r.Placed, r.CreationNumbers);
+            var w = SaveDocAt(doc, full, map, overwrite, expect_input_sha256);
+            return new BulkPlacementToolResult(w.SavedTo, r.Message, r.Placed, r.CreationNumbers,
+                w.InputSha256, w.OutputSha256, w.FilesRewritten, w.BytesWritten);
         });
 
     [McpServerTool(Name = "placed_stats", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
@@ -1055,21 +1272,21 @@ public static class Wc3Tools
 
     [McpServerTool(Name = "placed_fix_refs", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = false)]
     [Description("Drop (or, with to_rawcode, rewrite) placements that reference a missing rawcode and save the edited copy to out_path, reporting each change. Refuses when nothing is wrong. The input map is NEVER modified in place.")]
-    public static PlacedFixRefsResult PlacedFixRefs(
+    public static object PlacedFixRefs(
         [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Where to write the edited map. Defaults to a sibling '.edited' copy.")] string? out_path = null,
         [Description("Rewrite each missing placement's rawcode to this four-character code instead of dropping it.")] string? to_rawcode = null,
         [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Without it the base-game check is skipped.")] string? game_dir = null,
-        [Description("State the intent to destroy data. Without it the call is refused with CONFIRM_REQUIRED, naming what would be removed.")] bool confirm = false)
+        [Description("State the intent to destroy data. Without it the call is refused with CONFIRM_REQUIRED, naming what would be removed.")] bool confirm = false,
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
         => RunConfirmed(confirm, "rewrites or drops every placement whose type is missing", () =>
         {
             var doc = LoadMap(map);
             var r = PlacedFixRefsCommand.Execute(doc, ResolveGameDir(game_dir), to_rawcode);
             if (!r.Ok) throw new McpException(r.Message);
             string full = ResolveOutPath(map, out_path);
-            if (Path.GetDirectoryName(full) is { Length: > 0 } dir) Directory.CreateDirectory(dir);
-            doc.Save(full);
-            return r;
+            return Gated(r, SaveDocAt(doc, full, map, overwrite, expect_input_sha256));
         });
 
     [McpServerTool(Name = "triggers_read", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
@@ -1151,12 +1368,21 @@ public static class Wc3Tools
 
     [McpServerTool(Name = "strings_set", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Set one war3map.wts entry's text, or add the entry when the id is absent, and save the edited map to out_path. The file's own encoding and line endings are preserved and the input map is NEVER modified. out_path defaults to a sibling '<map>.edited.<ext>' and must differ from the input.")]
-    public static StringsSetResult StringsSet(
+    public static object StringsSet(
         [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only. The edited copy is written to out_path.")] string map,
         [Description("war3map.wts entry id to set or add, e.g. 4084.")] int id,
         [Description("New text for the entry. Empty text clears the entry to an empty block.")] string text,
-        [Description("Output map path. Defaults to a sibling '<map>.edited.<ext>'. Must differ from the input.")] string? out_path = null)
-        => Run(() => StringsSetCommand.Execute(RequireMapPath(map), id, text, out_path));
+        [Description("Output map path. Defaults to a sibling '<map>.edited.<ext>'. Must differ from the input.")] string? out_path = null,
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
+        => Run<object>(() =>
+        {
+            string dest = MpqStripBookkeepingCommand.ResolveOutput(RequireMapPath(map), out_path);
+            StringsSetResult? r = null;
+            var w = WriteGate.WriteFile(dest, Inputs(map), overwrite, expect_input_sha256,
+                temp => r = StringsSetCommand.Execute(map, id, text, temp));
+            return Gated(r!, w);
+        });
 
     [McpServerTool(Name = "imports_list", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("List the map's import table (war3map.imp) against what the archive actually holds, so a table entry with no file behind it and a file absent from the table both show up.")]
@@ -1228,16 +1454,18 @@ public static class Wc3Tools
         [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Four-character base object rawcode to derive from, e.g. 'hfoo'.")] string base_rawcode,
-        [Description("Object kind: " + KindValues + ".")] string kind = "unit")
+        [Description("Object kind: " + KindValues + ".")] string kind = "unit",
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
         => Run(() =>
         {
             string full = ResolveOutPath(map, out_path);
             var doc = LoadMap(map);
             var r = ObjectNewCommand.Execute(doc, ParseKind(kind), base_rawcode);
             if (!r.Ok) throw new McpException(r.Message);
-            if (Path.GetDirectoryName(full) is { Length: > 0 } dir) Directory.CreateDirectory(dir);
-            doc.Save(full);
-            return new ObjectNewToolResult(full, r.Message, r.NewRawcode);
+            var w = SaveDocAt(doc, full, map, overwrite, expect_input_sha256);
+            return new ObjectNewToolResult(w.SavedTo, r.Message, r.NewRawcode,
+                w.InputSha256, w.OutputSha256, w.FilesRewritten, w.BytesWritten);
         });
 
     [McpServerTool(Name = "object_search", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
@@ -1270,18 +1498,18 @@ public static class Wc3Tools
 
     [McpServerTool(Name = "object_fix_model_ext", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Repair object-data model paths in one pass and save to out_path. A .mdl is rewritten to the .mdx that exists, a doubled war3mapImported prefix is collapsed, and any path still unresolved is redirected to redirect_missing when that file resolves. Base-game roots are left alone. The input map is NEVER modified in place.")]
-    public static ModelExtFixResult ObjectFixModelExt(
+    public static object ObjectFixModelExt(
         [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map).")] string out_path,
-        [Description("Internal path that unresolved model references are pointed at, for example war3mapImported/dummy.mdx. Omit to leave unresolved references untouched.")] string? redirect_missing = null)
-        => Run(() =>
+        [Description("Internal path that unresolved model references are pointed at, for example war3mapImported/dummy.mdx. Omit to leave unresolved references untouched.")] string? redirect_missing = null,
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
+        => Run<object>(() =>
         {
             string full = ResolveOutPath(map, out_path);
             var doc = LoadMap(map);
             var r = ModelExtFixCommand.Execute(doc, apply: true, redirectMissing: redirect_missing);
-            if (Path.GetDirectoryName(full) is { Length: > 0 } dir) Directory.CreateDirectory(dir);
-            doc.Save(full);
-            return r;
+            return Gated(r, SaveDocAt(doc, full, map, overwrite, expect_input_sha256));
         });
 
     [McpServerTool(Name = "object_rawcode_suggest", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
@@ -1301,16 +1529,18 @@ public static class Wc3Tools
         [Description("Output map file path (must differ from the input map).")] string out_path,
         [Description("Four-character source rawcode to clone.")] string rawcode,
         [Description("Four-character rawcode for the clone.")] string new_rawcode,
-        [Description("Object kind: " + KindValues + ".")] string kind = "unit")
+        [Description("Object kind: " + KindValues + ".")] string kind = "unit",
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
         => Run(() =>
         {
             string full = ResolveOutPath(map, out_path);
             var doc = LoadMap(map);
             var r = ObjectCloneCommand.Execute(doc, ParseKind(kind), rawcode, new_rawcode);
             if (!r.Ok) throw new McpException(r.Message);
-            if (Path.GetDirectoryName(full) is { Length: > 0 } dir) Directory.CreateDirectory(dir);
-            doc.Save(full);
-            return new ObjectCloneToolResult(full, r.Message, r.NewRawcode, r.FieldsCopied);
+            var w = SaveDocAt(doc, full, map, overwrite, expect_input_sha256);
+            return new ObjectCloneToolResult(w.SavedTo, r.Message, r.NewRawcode, r.FieldsCopied,
+                w.InputSha256, w.OutputSha256, w.FilesRewritten, w.BytesWritten);
         });
 
     [McpServerTool(Name = "object_migrate", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
@@ -1319,17 +1549,19 @@ public static class Wc3Tools
         [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map).")] string out_path,
         [Description("Target build name or path to a schema folder, read the same way the compat command reads it.")] string to,
-        [Description("Optional path to a schemas directory. When omitted, searches <AppContext.BaseDirectory>/schemas then walks up to data/schemas.")] string? schemas_dir = null)
+        [Description("Optional path to a schemas directory. When omitted, searches <AppContext.BaseDirectory>/schemas then walks up to data/schemas.")] string? schemas_dir = null,
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
         => Run(() =>
         {
             string full = ResolveOutPath(map, out_path);
             var doc = LoadMap(map);
             var r = ObjectMigrateCommand.Execute(doc, to, schemas_dir);
             if (!r.Ok) throw new McpException(r.Message);
-            if (Path.GetDirectoryName(full) is { Length: > 0 } dir) Directory.CreateDirectory(dir);
-            doc.Save(full);
+            var w = SaveDocAt(doc, full, map, overwrite, expect_input_sha256);
             return new ObjectMigrateToolResult(
-                full, r.Message, r.TargetBuild, r.FieldsKept, r.FieldsDropped, r.Drops.Count);
+                w.SavedTo, r.Message, r.TargetBuild, r.FieldsKept, r.FieldsDropped, r.Drops.Count,
+                w.InputSha256, w.OutputSha256, w.FilesRewritten, w.BytesWritten);
         });
 
     [McpServerTool(Name = "object_bulk_set", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
@@ -1386,7 +1618,9 @@ public static class Wc3Tools
         [Description("Output map file path (must differ from the input map).")] string out_path,
         [Description("Path to the CSV file to import.")] string csv_path,
         [Description("Object kind: " + KindValues + ".")] string kind = "unit",
-        [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Used to verify a column is a field the kind defines.")] string? game_dir = null)
+        [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Used to verify a column is a field the kind defines.")] string? game_dir = null,
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
         => Run(() =>
         {
             if (!File.Exists(csv_path)) throw new McpException($"no CSV file at {csv_path}");
@@ -1394,9 +1628,9 @@ public static class Wc3Tools
             var doc = LoadMap(map);
             var r = ObjectImportCommand.Execute(doc, ParseKind(kind), File.ReadAllText(csv_path), ResolveGameDir(game_dir));
             if (!r.Ok) throw new McpException(r.Message);
-            if (Path.GetDirectoryName(full) is { Length: > 0 } dir) Directory.CreateDirectory(dir);
-            doc.Save(full);
-            return new ObjectImportToolResult(full, r.Message, r.Kind, r.Added, r.Updated, r.FieldsSet);
+            var w = SaveDocAt(doc, full, map, overwrite, expect_input_sha256);
+            return new ObjectImportToolResult(w.SavedTo, r.Message, r.Kind, r.Added, r.Updated, r.FieldsSet,
+                w.InputSha256, w.OutputSha256, w.FilesRewritten, w.BytesWritten);
         });
 
     [McpServerTool(Name = "object_rename", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
@@ -1407,17 +1641,19 @@ public static class Wc3Tools
         [Description("The rawcode to rename.")] string old_rawcode,
         [Description("The new rawcode.")] string new_rawcode,
         [Description("Object kind: " + KindValues + ".")] string kind = "unit",
-        [Description("Also rewrite every field value and script literal that references the old rawcode. Default false.")] bool rewrite_refs = false)
+        [Description("Also rewrite every field value and script literal that references the old rawcode. Default false.")] bool rewrite_refs = false,
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
         => Run(() =>
         {
             string full = ResolveOutPath(map, out_path);
             var doc = LoadMap(map);
             var r = ObjectRenameCommand.Execute(doc, ParseKind(kind), old_rawcode, new_rawcode, rewrite_refs);
             if (!r.Ok) throw new McpException(r.Message);
-            if (Path.GetDirectoryName(full) is { Length: > 0 } dir) Directory.CreateDirectory(dir);
-            doc.Save(full);
+            var w = SaveDocAt(doc, full, map, overwrite, expect_input_sha256);
             return new ObjectRenameToolResult(
-                full, r.Message, r.Kind, r.OldRawcode, r.NewRawcode, r.FieldsRewritten, r.ScriptLiteralsRewritten);
+                w.SavedTo, r.Message, r.Kind, r.OldRawcode, r.NewRawcode, r.FieldsRewritten,
+                r.ScriptLiteralsRewritten, w.InputSha256, w.OutputSha256, w.FilesRewritten, w.BytesWritten);
         });
 
     [McpServerTool(Name = "unit_abilities", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
@@ -1456,7 +1692,9 @@ public static class Wc3Tools
         [Description("Four-character object rawcode (e.g. 'u000'), or an internal model path (contains '\\', '/' or '.').")] string rawcode,
         [Description("Output PNG file path. Created/overwritten; parent directories are created as needed.")] string out_path,
         [Description("Object kind: unit|item|destructable|doodad. Default: auto-detect from the rawcode.")] string? kind = null,
-        [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var).")] string? game_dir = null)
+        [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var).")] string? game_dir = null,
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
         => Run(() =>
         {
             if (string.IsNullOrWhiteSpace(out_path))
@@ -1471,14 +1709,11 @@ public static class Wc3Tools
                     ? RenderModelCommand.Execute(doc, rawcode, ResolveGameDir(game_dir))
                     : RenderModelCommand.Execute(doc, ParseKind(kind), rawcode, ResolveGameDir(game_dir));
 
-            string full = Path.GetFullPath(out_path);
-            if (string.Equals(full, Path.GetFullPath(map), StringComparison.OrdinalIgnoreCase))
-                throw new McpException("out_path must not be the map file itself");
-            if (Path.GetDirectoryName(full) is { Length: > 0 } dir) Directory.CreateDirectory(dir);
-            File.WriteAllBytes(full, png);
+            var w = WriteGate.WriteBytes(out_path, png, Inputs(map), overwrite, expect_input_sha256);
 
             bool inline = png.Length <= InlineImageLimit;
-            var info = new RenderModelToolResult(full, png.Length, inline);
+            var info = new RenderModelToolResult(w.SavedTo, png.Length, inline,
+                w.InputSha256, w.OutputSha256, w.FilesRewritten, w.BytesWritten);
             var content = new List<ContentBlock>
             {
                 new TextContentBlock { Text = JsonSerializer.Serialize(info, Wc3McpServer.JsonOptions) },
@@ -1502,7 +1737,9 @@ public static class Wc3Tools
         [Description("Four-character rawcode of the unit to port, e.g. 'u000'.")] string rawcode,
         [Description("Map to port INTO (.w3x/.w3m). Read-only - the result is saved as a sibling '<target>.ported.<ext>' file.")] string target_map,
         [Description("Also carry the unit's JASS trigger-function closure into the target script (best effort). Default true.")] bool include_script = true,
-        [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var).")] string? game_dir = null)
+        [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var).")] string? game_dir = null,
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
         => Run(() =>
         {
             var source = LoadMap(source_map);
@@ -1513,8 +1750,9 @@ public static class Wc3Tools
             string targetFull = Path.GetFullPath(target_map);
             string outPath = Path.Combine(Path.GetDirectoryName(targetFull) ?? ".",
                 Path.GetFileNameWithoutExtension(targetFull) + ".ported" + Path.GetExtension(targetFull));
-            target.Save(outPath);
-            return new PortUnitToolResult(outPath, report);
+            var w = SaveDoc(target, outPath, Inputs(source_map, target_map), overwrite, expect_input_sha256);
+            return new PortUnitToolResult(w.SavedTo, report,
+                w.InputSha256, w.OutputSha256, w.FilesRewritten, w.BytesWritten);
         });
 
     [McpServerTool(Name = "port_deps", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
@@ -1548,19 +1786,19 @@ public static class Wc3Tools
         [Description("Path to write the downgraded map. Must differ from the source and target maps.")] string out_path,
         [Description("Schemas directory, when target is a build name rather than a folder path.")] string? schemas_dir = null,
         [Description("Also carry the unit's JASS trigger-function closure before downgrading. Default true.")] bool include_script = true,
-        [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var).")] string? game_dir = null)
+        [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var).")] string? game_dir = null,
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
         => Run(() =>
         {
             string full = ResolveOutPath(target_map, out_path);
-            if (string.Equals(full, Path.GetFullPath(source_map), StringComparison.OrdinalIgnoreCase))
-                throw new McpException("out_path must not be the source map file itself");
             var targetDoc = LoadMap(target_map);
             var report = PortIntoVersionCommand.Execute(
                 LoadMap(source_map), rawcode, targetDoc, target, schemas_dir,
                 ResolveGameDir(game_dir), include_script);
-            if (Path.GetDirectoryName(full) is { Length: > 0 } dir) Directory.CreateDirectory(dir);
-            targetDoc.Save(full);
-            return new PortIntoVersionToolResult(full, report);
+            var w = SaveDoc(targetDoc, full, Inputs(source_map, target_map), overwrite, expect_input_sha256);
+            return new PortIntoVersionToolResult(w.SavedTo, report,
+                w.InputSha256, w.OutputSha256, w.FilesRewritten, w.BytesWritten);
         });
 
     [McpServerTool(Name = "bundle_diff", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
@@ -1572,21 +1810,21 @@ public static class Wc3Tools
 
     [McpServerTool(Name = "bundle_merge", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Merge two dependency bundles into one, written as JSON at out_path. Refuses when the same rawcode is defined differently in the two bundles (a different kind, custom-vs-base, or a contradicting name).")]
-    public static BundleMergeToolResult BundleMerge(
+    public static object BundleMerge(
         [Description("Path to the first bundle JSON file.")] string bundle_a,
         [Description("Path to the second bundle JSON file.")] string bundle_b,
-        [Description("Path to write the merged bundle JSON.")] string out_path)
-        => Run(() =>
+        [Description("Path to write the merged bundle JSON.")] string out_path,
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
+        => Run<object>(() =>
         {
             if (string.IsNullOrWhiteSpace(out_path)) throw new McpException("out_path is required");
             var result = BundleMergeCommand.Execute(LoadBundle(bundle_a), LoadBundle(bundle_b));
             if (!result.Ok)
                 throw new McpException(result.Message + " " + string.Join("; ",
                     result.Conflicts.Select(c => $"{c.Rawcode} {c.Detail}")));
-            string full = Path.GetFullPath(out_path);
-            if (Path.GetDirectoryName(full) is { Length: > 0 } dir) Directory.CreateDirectory(dir);
-            BundleJson.Save(result.Merged!, full);
-            return new BundleMergeToolResult(full, result);
+            return WriteWith(out_path, Inputs(bundle_a, bundle_b), overwrite, expect_input_sha256,
+                temp => { BundleJson.Save(result.Merged!, temp); return result; });
         });
 
     /// <summary>Read a bundle JSON file, surfacing a clean MCP error when it cannot be read.</summary>
@@ -1771,10 +2009,13 @@ public static class Wc3Tools
 
     [McpServerTool(Name = "terrain_optimize", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Shrink a map's war3map.w3e by dropping the declared ground and cliff tile types the terrain never references and remapping every corner's ground and cliff texture index onto the compacted list, saving the edited copy to out_path. Every other file is written back byte for byte. Reports the before and after declared tile counts and the war3map.w3e byte saving. The input map is never modified.")]
-    public static TerrainOptimizeResult TerrainOptimize(
+    public static object TerrainOptimize(
         [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
-        [Description("Output map file path (must differ from the input map). Created/overwritten; parent directories are created as needed.")] string out_path)
-        => Run(() => TerrainOptimizeCommand.ExecutePath(map, out_path));
+        [Description("Output map file path (must differ from the input map). Created/overwritten; parent directories are created as needed.")] string out_path,
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
+        => Run<object>(() => WriteWith(ResolveOutPath(map, out_path), Inputs(map), overwrite, expect_input_sha256,
+            temp => TerrainOptimizeCommand.ExecutePath(map, temp), "path"));
 
     [McpServerTool(Name = "terrain_deform", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Raise/lower/set/flatten/smooth ground height over a circular or square brush, saving the edited map to out_path. The input map is NEVER modified in place.")]
@@ -1901,13 +2142,17 @@ public static class Wc3Tools
     [Description("Export a map's terrain heights as a 16-bit grayscale PNG of the (Width+1) by (Height+1) corner grid, one pixel per corner, to out_path. The input map is never modified, and the same file re-imports through terrain_import_heightmap.")]
     public static ImageExportToolResult TerrainExportHeightmap(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
-        [Description("Output PNG path. Parent directories are created as needed.")] string out_path)
+        [Description("Output PNG path. Parent directories are created as needed.")] string out_path,
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
         => Run(() =>
         {
             var r = TerrainExportHeightmapCommand.Export(LoadMap(map));
             if (!r.Ok || r.Png is null) throw new McpException(r.Message);
-            string full = WritePngFile(map, out_path, r.Png);
-            return new ImageExportToolResult(full, r.Message, r.Width, r.Height, r.Png.Length);
+            var w = WriteGate.WriteBytes(ResolveOutPath(map, out_path), r.Png, Inputs(map),
+                overwrite, expect_input_sha256);
+            return new ImageExportToolResult(w.SavedTo, r.Message, r.Width, r.Height, r.Png.Length,
+                w.InputSha256, w.OutputSha256, w.FilesRewritten, w.BytesWritten);
         });
 
     [McpServerTool(Name = "terrain_import_heightmap", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
@@ -1948,20 +2193,19 @@ public static class Wc3Tools
         + "models declare, any listfiles supplied, and an asset-name sweep of every block. "
         + "Without out_path nothing is written. With it, the recovered names go into a copy at "
         + "out_path and the input map is never modified in place.")]
-    public static NameRecoveryResult DeprotectMap(
+    public static object DeprotectMap(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Optional output map path. When given, the recovered names are written into a copy; the input map is NEVER modified in place. Named entries are recompressed, every other entry stays byte-faithful.")] string? out_path = null,
-        [Description("Paths to extra name dictionaries, one name per line. Community listfiles and sibling maps' listfiles both work.")] string[]? listfiles = null)
-        => Run(() =>
+        [Description("Paths to extra name dictionaries, one name per line. Community listfiles and sibling maps' listfiles both work.")] string[]? listfiles = null,
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
+        => Run<object>(() =>
         {
             var doc = LoadMap(map);
             var r = NameRecoveryCommand.Execute(doc, listfiles ?? Array.Empty<string>());
-            if (!string.IsNullOrWhiteSpace(out_path))
-            {
-                NameRecoveryCommand.ApplyNames(doc, r);
-                doc.Save(ResolveOutPath(map, out_path));
-            }
-            return r;
+            if (string.IsNullOrWhiteSpace(out_path)) return r;
+            NameRecoveryCommand.ApplyNames(doc, r);
+            return Gated(r, SaveDocAt(doc, ResolveOutPath(map, out_path), map, overwrite, expect_input_sha256));
         });
 
     // ---- mpq container tools ---------------------------------------------
@@ -1995,10 +2239,17 @@ public static class Wc3Tools
     [Description("Save a copy of a map with the (listfile) and (attributes) bookkeeping entries "
         + "dropped, then confirm the copy opens again. The input map is never overwritten. "
         + "out_path defaults to a sibling '<map>.edited.<ext>'.")]
-    public static MpqStripResult MpqStripBookkeeping(
+    public static object MpqStripBookkeeping(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
-        [Description("Output map path. Defaults to a sibling '<map>.edited.<ext>'. Must differ from the input.")] string? out_path = null)
-        => Run(() => MpqStripBookkeepingCommand.Execute(RequireMapPath(map), out_path));
+        [Description("Output map path. Defaults to a sibling '<map>.edited.<ext>'. Must differ from the input.")] string? out_path = null,
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
+        => Run<object>(() =>
+        {
+            string full = ResolveOutPath(RequireMapPath(map), out_path);
+            return WriteWith(full, Inputs(map), overwrite, expect_input_sha256,
+                temp => MpqStripBookkeepingCommand.Execute(map, temp));
+        });
 
     [McpServerTool(Name = "mpq_bytes_diff", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Compare two archives entry by entry by name. For each name present in both, "
@@ -2014,56 +2265,88 @@ public static class Wc3Tools
         + "entry and dropping the blocks protection made unreadable or left nameless. Reports the "
         + "entry counts before and after and the names dropped. Writes a copy, the input map is "
         + "never modified in place.")]
-    public static MpqRebuildResult MpqRebuild(
+    public static object MpqRebuild(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Output map path. The input map is never overwritten.")] string? out_path,
-        [Description("Force a larger hash table. Doubles the source capacity, then raises it until 3/4 occupancy fits. Default false.")] bool grow_hash = false)
-        => Run(() => MpqRebuildCommand.Execute(RequireMapPath(map), ResolveOutPath(map, out_path), grow_hash));
+        [Description("Force a larger hash table. Doubles the source capacity, then raises it until 3/4 occupancy fits. Default false.")] bool grow_hash = false,
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
+        => Run<object>(() =>
+        {
+            string full = ResolveOutPath(RequireMapPath(map), out_path);
+            return WriteWith(full, Inputs(map), overwrite, expect_input_sha256,
+                temp => MpqRebuildCommand.Execute(map, temp, grow_hash));
+        });
 
     [McpServerTool(Name = "mpq_merge", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Merge two map archives into one, taking every readable named entry from both. A "
         + "name in both is resolved by the preferred side and reported as a conflict. Writes a copy "
         + "of the first map plus both maps' entries, the input maps are never modified.")]
-    public static MpqMergeResult MpqMerge(
+    public static object MpqMerge(
         [Description("Path to the first .w3x/.w3m map, or to an unpacked map folder.")] string map,
         [Description("Path to the second .w3x/.w3m map.")] string other,
         [Description("Output map path. The input maps are never overwritten.")] string? out_path,
-        [Description("Which side wins a name both maps carry, 'a' or 'b'. Default 'a'.")] string prefer = "a")
-        => Run(() => MpqMergeCommand.Execute(RequireMapPath(map), RequireMapPath(other),
-            ResolveOutPath(map, out_path), prefer));
+        [Description("Which side wins a name both maps carry, 'a' or 'b'. Default 'a'.")] string prefer = "a",
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
+        => Run<object>(() =>
+        {
+            string full = ResolveOutPath(RequireMapPath(map), out_path);
+            return WriteWith(full, Inputs(map, other), overwrite, expect_input_sha256,
+                temp => MpqMergeCommand.Execute(map, other, temp, prefer));
+        });
 
     [McpServerTool(Name = "mpq_add", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Add or replace one internal archive file from a file on disk, byte-faithfully. "
         + "Reports whether the name was added or replaced and whether the payload round-trips. "
         + "Writes a copy, the input map is never modified in place.")]
-    public static MpqAddResult MpqAdd(
+    public static object MpqAdd(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Internal archive path, for example 'war3mapImported\\\\model.mdx'.")] string name,
         [Description("Path to the file whose bytes become the internal file.")] string from,
-        [Description("Output map path. The input map is never overwritten.")] string? out_path)
-        => Run(() => MpqAddCommand.Execute(RequireMapPath(map), name, from, ResolveOutPath(map, out_path)));
+        [Description("Output map path. The input map is never overwritten.")] string? out_path,
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
+        => Run<object>(() =>
+        {
+            string full = ResolveOutPath(RequireMapPath(map), out_path);
+            return WriteWith(full, Inputs(map, from), overwrite, expect_input_sha256,
+                temp => MpqAddCommand.Execute(map, name, from, temp));
+        });
 
     [McpServerTool(Name = "mpq_remove", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = false)]
     [Description("Remove one internal file by rebuilding the archive without it, and report "
         + "whether the rebuild actually dropped the name. Writes a copy, the input map is never "
         + "modified in place.")]
-    public static MpqRemoveResult MpqRemove(
+    public static object MpqRemove(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Internal archive path to remove, for example 'war3map.j'.")] string name,
         [Description("Output map path. The input map is never overwritten.")] string? out_path,
-        [Description("State the intent to destroy data. Without it the call is refused with CONFIRM_REQUIRED, naming what would be removed.")] bool confirm = false)
-        => RunConfirmed(confirm, "removes '" + name + "' from the archive", () =>
-            MpqRemoveCommand.Execute(RequireMapPath(map), name, ResolveOutPath(map, out_path)));
+        [Description("State the intent to destroy data. Without it the call is refused with CONFIRM_REQUIRED, naming what would be removed.")] bool confirm = false,
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
+        => RunConfirmed<object>(confirm, "removes '" + name + "' from the archive", () =>
+        {
+            string full = ResolveOutPath(RequireMapPath(map), out_path);
+            return WriteWith(full, Inputs(map), overwrite, expect_input_sha256,
+                temp => MpqRemoveCommand.Execute(map, name, temp));
+        });
 
     [McpServerTool(Name = "mpq_remove_many", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = false)]
     [Description("Remove many internal files in one rebuild and report how many were dropped. Writes a copy, the input map is never modified in place. The one-rebuild form of mpq_remove, for pruning the files asset_unused reports as unreferenced.")]
-    public static MpqRemoveManyResult MpqRemoveMany(
+    public static object MpqRemoveMany(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Internal archive paths to remove, for example one asset_unused path per element.")] string[] names,
         [Description("Output map path. The input map is never overwritten.")] string out_path,
-        [Description("State the intent to destroy data. Without it the call is refused with CONFIRM_REQUIRED, naming what would be removed.")] bool confirm = false)
-        => RunConfirmed(confirm, "removes " + names.Length + " entries from the archive", () =>
-            MpqRemoveCommand.ExecuteMany(RequireMapPath(map), names, ResolveOutPath(map, out_path)));
+        [Description("State the intent to destroy data. Without it the call is refused with CONFIRM_REQUIRED, naming what would be removed.")] bool confirm = false,
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
+        => RunConfirmed<object>(confirm, "removes " + names.Length + " entries from the archive", () =>
+        {
+            string full = ResolveOutPath(RequireMapPath(map), out_path);
+            return WriteWith(full, Inputs(map), overwrite, expect_input_sha256,
+                temp => MpqRemoveCommand.ExecuteMany(map, names, temp));
+        });
 
     [McpServerTool(Name = "mpq_extract_all", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Extract every entry of a map archive to a directory, including unnamed protected "
@@ -2071,28 +2354,29 @@ public static class Wc3Tools
         + "Returns the output directory, the counts and the written file names.")]
     public static MpqExtractAllToolResult MpqExtractAll(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
-        [Description("Directory the entries are written under. Created if absent.")] string? out_dir)
+        [Description("Directory the entries are written under. Created if absent.")] string? out_dir,
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
         => Run(() =>
         {
             if (string.IsNullOrWhiteSpace(out_dir)) throw new McpException("out_dir is required");
             var r = MpqExtractAllCommand.Execute(LoadMap(map));
-            var root = Path.GetFullPath(out_dir);
-            var rootPrefix = root.EndsWith(Path.DirectorySeparatorChar) ? root : root + Path.DirectorySeparatorChar;
-            Directory.CreateDirectory(root);
-
-            var files = new List<string>();
-            foreach (var item in r.Items)
+            var w = WriteGate.WriteFolder(out_dir, Inputs(map), overwrite, expect_input_sha256, temp =>
             {
-                var relative = ExtractPaths.RelativePathFor(item);
-                var dest = Path.GetFullPath(Path.Combine(root, relative));
-                if (!dest.StartsWith(rootPrefix, StringComparison.OrdinalIgnoreCase))
-                    throw new McpException($"refusing to write outside the output directory, {item.Name}");
-                Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
-                File.WriteAllBytes(dest, item.Bytes);
-                files.Add(relative);
-            }
-            return new MpqExtractAllToolResult(root, r.TotalEntries, r.NamedEntries,
-                r.UnnamedEntries, r.TotalBytes, files);
+                var rootPrefix = temp.EndsWith(Path.DirectorySeparatorChar) ? temp : temp + Path.DirectorySeparatorChar;
+                foreach (var item in r.Items)
+                {
+                    var relative = ExtractPaths.RelativePathFor(item);
+                    var dest = Path.GetFullPath(Path.Combine(temp, relative));
+                    if (!dest.StartsWith(rootPrefix, StringComparison.OrdinalIgnoreCase))
+                        throw new McpException($"refusing to write outside the output directory, {item.Name}");
+                    Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+                    File.WriteAllBytes(dest, item.Bytes);
+                }
+            });
+            return new MpqExtractAllToolResult(w.SavedTo, r.TotalEntries, r.NamedEntries,
+                r.UnnamedEntries, r.TotalBytes, r.Items.Select(ExtractPaths.RelativePathFor).ToList(),
+                w.InputSha256, w.OutputSha256, w.FilesRewritten, w.BytesWritten);
         });
 
     [McpServerTool(Name = "file_list", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
@@ -2123,14 +2407,17 @@ public static class Wc3Tools
         [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map).")] string out_path,
         [Description("Internal archive path to replace or add, for example 'war3mapSkin.txt'.")] string internal_path,
-        [Description("Disk file whose exact bytes become the new payload.")] string from)
+        [Description("Disk file whose exact bytes become the new payload.")] string from,
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
         => Run(() =>
         {
             string full = ResolveOutPath(map, out_path);
             var doc = LoadMap(map);
             var r = FileEditCommand.AddOrReplace(doc, internal_path, File.ReadAllBytes(from));
-            doc.Save(full);
-            return new FileSetResult(full, r.Name, r.Replaced, r.SizeBytes);
+            var w = SaveDocAt(doc, full, map, overwrite, expect_input_sha256);
+            return new FileSetResult(w.SavedTo, r.Name, r.Replaced, r.SizeBytes,
+                w.InputSha256, w.OutputSha256, w.FilesRewritten, w.BytesWritten);
         });
 
     [McpServerTool(Name = "audit_map", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
@@ -2199,8 +2486,11 @@ public static class Wc3Tools
         [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Sound definition name (the label triggers/UI reference). Must be unique.")] string name,
-        [Description("Sound file path, e.g. 'Sound\\Ambient\\...'. Optional.")] string? file = null)
-        => Run(() => SaveSound(map, out_path, doc => SoundCommand.Add(doc, name, file)));
+        [Description("Sound file path, e.g. 'Sound\\Ambient\\...'. Optional.")] string? file = null,
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
+        => Run(() => SaveSound(map, out_path, overwrite, expect_input_sha256,
+            doc => SoundCommand.Add(doc, name, file)));
 
     [McpServerTool(Name = "sound_set", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Set a field on a sound definition and save the edited map to out_path. The input map is NEVER modified in place. Editable fields: " + SoundFieldValues + ".")]
@@ -2209,8 +2499,11 @@ public static class Wc3Tools
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Sound definition name to edit.")] string name,
         [Description("Field to set: " + SoundFieldValues + ".")] string field,
-        [Description("New value (parsed to the field's type: int/real/bool/string).")] string value)
-        => Run(() => SaveSound(map, out_path, doc => SoundCommand.Set(doc, name, field, value)));
+        [Description("New value (parsed to the field's type: int/real/bool/string).")] string value,
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
+        => Run(() => SaveSound(map, out_path, overwrite, expect_input_sha256,
+            doc => SoundCommand.Set(doc, name, field, value)));
 
     [McpServerTool(Name = "sound_remove", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = false)]
     [Description("Remove a sound definition from the map's sound catalog and save the edited map to out_path. The input map is NEVER modified in place.")]
@@ -2218,24 +2511,25 @@ public static class Wc3Tools
         [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk and writes a new file, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Sound definition name to remove.")] string name,
-        [Description("State the intent to destroy data. Without it the call is refused with CONFIRM_REQUIRED, naming what would be removed.")] bool confirm = false)
-        => RunConfirmed(confirm, "removes sound definition '" + name + "'", () => SaveSound(map, out_path, doc => SoundCommand.Remove(doc, name)));
+        [Description("State the intent to destroy data. Without it the call is refused with CONFIRM_REQUIRED, naming what would be removed.")] bool confirm = false,
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
+        => RunConfirmed(confirm, "removes sound definition '" + name + "'",
+            () => SaveSound(map, out_path, overwrite, expect_input_sha256, doc => SoundCommand.Remove(doc, name)));
 
     [McpServerTool(Name = "sound_optimize", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Shrink a sound file by decoding it, resampling to a target rate (default 22050 Hz), optionally setting the channel count and encoding it. The format comes from out_path's extension, .mp3 selects MP3 and anything else WAV. The input is never modified. Reads .wav natively and .mp3 through the Windows codecs. When no MP3 encoder is present the command writes WAV and reports a note rather than failing. Returns the before and after format, sample rate, channel count and byte size.")]
-    public static SoundOptimizeResult SoundOptimize(
+    public static object SoundOptimize(
         [Description("Path to a .wav or .mp3 sound file.")] string sound,
         [Description("Output path. Its extension picks the format, .mp3 for MP3, anything else for WAV. The input is never modified.")] string out_path,
         [Description("Target sample rate in Hz. Default 22050.")] int rate = SoundOptimizeCommand.DefaultRate,
         [Description("Output channels, source, mono or stereo. Default source keeps the source channel count.")] string channels = "source",
-        [Description("MP3 bitrate in kbps, default 128. Applies to .mp3 output only, ignored for WAV.")] int bitrate = SoundOptimizeCommand.DefaultBitrateKbps)
-        => Run(() =>
-        {
-            if (string.Equals(Path.GetFullPath(out_path), Path.GetFullPath(sound), StringComparison.OrdinalIgnoreCase))
-                throw new McpException("out_path must not be the input sound");
-            return SoundOptimizeCommand.ExecutePath(
-                sound, rate, SoundOptimizeCommand.ParseChannels(channels), bitrate, out_path);
-        });
+        [Description("MP3 bitrate in kbps, default 128. Applies to .mp3 output only, ignored for WAV.")] int bitrate = SoundOptimizeCommand.DefaultBitrateKbps,
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
+        => Run<object>(() => WriteWith(out_path, Inputs(sound), overwrite, expect_input_sha256,
+            temp => SoundOptimizeCommand.ExecutePath(
+                sound, rate, SoundOptimizeCommand.ParseChannels(channels), bitrate, temp), "path"));
 
     // ---- camera catalog (war3map.w3c) ------------------------------------
 
@@ -2304,16 +2598,18 @@ public static class Wc3Tools
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
         [Description("Name of the camera the tour starts at.")] string from,
         [Description("Name of the camera the tour ends at.")] string to,
-        [Description("How many cameras to interpolate between the two. Default 3.")] int count = 3)
+        [Description("How many cameras to interpolate between the two. Default 3.")] int count = 3,
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
         => Run(() =>
         {
             var doc = LoadMap(map);
             var r = CameraCommand.Tour(doc, from, to, count);
             if (!r.Ok) throw new McpException(r.Message);
             string full = ResolveOutPath(map, out_path);
-            if (Path.GetDirectoryName(full) is { Length: > 0 } dir) Directory.CreateDirectory(dir);
-            doc.Save(full);
-            return new CameraTourToolResult(full, r.Message, r.Names, r.Count);
+            var w = SaveDocAt(doc, full, map, overwrite, expect_input_sha256);
+            return new CameraTourToolResult(w.SavedTo, r.Message, r.Names, r.Count,
+                w.InputSha256, w.OutputSha256, w.FilesRewritten, w.BytesWritten);
         });
 
     // ---- pathing map (war3map.wpm) ---------------------------------------
@@ -2348,13 +2644,17 @@ public static class Wc3Tools
     [Description("Render a map's war3map.wpm pathing grid to a colour-coded PNG at out_path, one pixel per pathing cell with a legend strip of the pathing flags. The input map is never modified. The same file re-imports through pathing_import_png.")]
     public static PathingExportToolResult PathingExportPng(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
-        [Description("Output PNG path. Parent directories are created as needed.")] string out_path)
+        [Description("Output PNG path. Parent directories are created as needed.")] string out_path,
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
         => Run(() =>
         {
             var r = PathingExportPngCommand.Export(LoadMap(map));
             if (!r.Ok || r.Png is null) throw new McpException(r.Message);
-            string full = WritePngFile(map, out_path, r.Png);
-            return new PathingExportToolResult(full, r.Message, r.Width, r.Height, r.Png.Length, r.Legend ?? []);
+            var w = WriteGate.WriteBytes(ResolveOutPath(map, out_path), r.Png, Inputs(map),
+                overwrite, expect_input_sha256);
+            return new PathingExportToolResult(w.SavedTo, r.Message, r.Width, r.Height, r.Png.Length,
+                r.Legend ?? [], w.InputSha256, w.OutputSha256, w.FilesRewritten, w.BytesWritten);
         });
 
     [McpServerTool(Name = "pathing_import_png", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
@@ -2537,7 +2837,9 @@ public static class Wc3Tools
     public static EditToolResult NewMap(
         [Description("Output map file path to create.")] string out_path,
         [Description("Map name. Default 'Blank Map'.")] string? name = null,
-        [Description("Playable size in tiles per edge. Default 32.")] int? tiles = null)
+        [Description("Playable size in tiles per edge. Default 32.")] int? tiles = null,
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
         => Run(() =>
         {
             if (string.IsNullOrWhiteSpace(out_path)) throw new McpException("out_path is required");
@@ -2547,10 +2849,10 @@ public static class Wc3Tools
             byte[] bytes;
             try { bytes = BlankMap.CreateArchiveBytes(opts); }
             catch (Exception ex) { throw new McpException(ex.Message); }
-            string full = Path.GetFullPath(out_path);
-            if (Path.GetDirectoryName(full) is { Length: > 0 } dir) Directory.CreateDirectory(dir);
-            File.WriteAllBytes(full, bytes);
-            return new EditToolResult(full, $"created \"{opts.MapName}\" ({opts.TileEdge}x{opts.TileEdge} tiles, {bytes.Length} bytes)");
+            var w = WriteGate.WriteBytes(out_path, bytes, Array.Empty<string>(), overwrite, expect_input_sha256);
+            return new EditToolResult(w.SavedTo,
+                $"created \"{opts.MapName}\" ({opts.TileEdge}x{opts.TileEdge} tiles, {bytes.Length} bytes)",
+                w.InputSha256, w.OutputSha256, w.FilesRewritten, w.BytesWritten);
         });
 
     [McpServerTool(Name = "region_list", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
@@ -2707,26 +3009,41 @@ public static class Wc3Tools
 
     [McpServerTool(Name = "hero_generate", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Generate a multi-form hero from a JSON brief and save the result to out_path: one unit object per form derived from one base unit, one ability object per slot with its own Base Order ID, cooldown, cast time and tooltip per level, each form's own ability list in uabi, and a self-contained JASS block with one transform function per form and one timer driven damage stub per damaging ability. The whole brief is validated before the first object is created, so a brief that names an unknown base is refused with nothing written. The JASS is returned, not spliced into war3map.j. The input map is NEVER modified in place.")]
-    public static HeroGenerateResult HeroGenerate(
+    public static object HeroGenerate(
         [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder, that holds the base unit and ability bases. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). To make SEVERAL edits, pass this file as the next call's map argument.")] string out_path,
         [Description("The hero brief as a JSON string. Shape, { \"name\": \"Kurosaki Ichigo\", \"base_unit\": \"Hpal\", \"forms\": [ { \"id\": \"base\", \"abilities\": [ { \"slot\": \"Q\", \"name\": \"Getsuga Tenshou\", \"base\": \"ANcl\", \"cooldown\": [8,8,8,8], \"cast\": 0.35, \"damage\": 120 }, { \"slot\": \"R\", \"name\": \"Bankai\", \"kind\": \"transform\", \"to\": \"bankai\" } ] }, { \"id\": \"bankai\", \"abilities\": [ ... ] } ] }. Every form id must be a JASS identifier, and a transform must name a form in the same brief.")] string spec_json,
-        [Description("Warcraft III install directory, when the base unit or an ability base is not defined by the map itself and auto-detection fails.")] string? game_dir = null)
-        => Run(() =>
+        [Description("Warcraft III install directory, when the base unit or an ability base is not defined by the map itself and auto-detection fails.")] string? game_dir = null,
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
+        => Run<object>(() =>
         {
             string full = ResolveOutPath(map, out_path);
-            var r = HeroGenerateCommand.Execute(map, full, spec_json, game_dir);
-            if (!r.Ok) throw new McpException(r.Message);
-            return r;
+            return WriteWith(full, Inputs(map), overwrite, expect_input_sha256,
+                temp => HeroGenerateCommand.Execute(map, temp, spec_json, game_dir), "path");
         });
 
     [McpServerTool(Name = "content_scaffold", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Generate a playable content package into out_dir from a name alone: a body capsule model, a particle effect model, a 64 by 64 icon, a short 16 bit PCM impact sound, and a role manifest (package.json). Every file is loadable rather than a stub, and both models name the package's own icon, so the package has no dependency on art outside itself. Gameplay binds a role such as hero.alpha.body, never a filename, so replacing the placeholder with final art is one binding change. Returns the root, the name, every file with its role and size, and the manifest path.")]
-    public static ContentScaffoldResult ContentScaffold(
+    public static object ContentScaffold(
         [Description("Package name. Reduced to letters, digits, underscores and hyphens for file and role names, which is reported as a diagnostic when that changes anything.")] string name,
         [Description("Folder to write the package into. Created when it does not exist.")] string out_dir,
-        [Description("Texture map path both models name, for example war3mapImported\\glow.blp. Omit to use the package's own icon.")] string? texture_path = null)
-        => Run(() => ContentScaffoldCommand.Execute(name, out_dir, texture_path));
+        [Description("Texture map path both models name, for example war3mapImported\\glow.blp. Omit to use the package's own icon.")] string? texture_path = null,
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
+        => Run<object>(() =>
+        {
+            ContentScaffoldResult? r = null;
+            var w = WriteGate.WriteFolder(out_dir, Array.Empty<string>(), overwrite, expect_input_sha256,
+                temp => r = ContentScaffoldCommand.Execute(name, temp, texture_path));
+            var gated = Gated(r!, w);
+            gated["root"] = w.SavedTo;
+            gated["files"] = r!.Files
+                .Select(f => f with { Path = Path.Combine(w.SavedTo, Path.GetFileName(f.Path)) })
+                .ToList();
+            gated["manifestPath"] = Path.Combine(w.SavedTo, ContentScaffoldCommand.ManifestFileName);
+            return gated;
+        });
 
     [McpServerTool(Name = "repair_generated", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Repair a map that wc3ctl itself generated, whose preplaced-hero helper block is too narrow for the heroes installed into it, and save the repaired map to out_path. Widens the player slots, rewrites hero owners in the script, and brings war3map.w3i and the map header into line. This is NOT a general map repair: it looks for wc3ctl's own generated helper function and refuses any map that does not carry one. The input map is NEVER modified in place.")]
@@ -3225,21 +3542,19 @@ public static class Wc3Tools
 
     /// <summary>Load the map, apply a sound-catalog mutation, and save the edited copy to out_path.</summary>
     private static SoundToolResult SaveSound(
-        string map, string outPath, Func<MapDocument, SoundOpResult> edit)
+        string map, string outPath, bool overwrite, string? expectInputSha256,
+        Func<MapDocument, SoundOpResult> edit)
     {
         if (string.IsNullOrWhiteSpace(outPath))
             throw new McpException("out_path is required");
-        string full = Path.GetFullPath(outPath);
-        if (string.Equals(full, Path.GetFullPath(map), StringComparison.OrdinalIgnoreCase))
-            throw new McpException("out_path must not be the input map file itself");
 
         var doc = LoadMap(map);
         var r = edit(doc);
         if (!r.Ok) throw new McpException(r.Message);
 
-        if (Path.GetDirectoryName(full) is { Length: > 0 } dir) Directory.CreateDirectory(dir);
-        doc.Save(full);
-        return new SoundToolResult(full, r.Message);
+        var w = WriteGate.Save(doc, map, outPath, overwrite, expectInputSha256, LoadedShaOf(doc));
+        return new SoundToolResult(w.SavedTo, r.Message,
+            w.InputSha256, w.OutputSha256, w.FilesRewritten, w.BytesWritten);
     }
 
     /// <summary>Load the map, apply an (Ok, Message) mutation, and save the edited copy to
@@ -3567,11 +3882,14 @@ public static class Wc3Tools
 
     [McpServerTool(Name = "library_report", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Write one Markdown report over a folder of maps, a summary line, a per-map table and the aggregated findings, to out_path. The report is built from the same probes the scan, audit and validate sweeps use. Writes only out_path and never a map.")]
-    public static LibraryReportResult LibraryReport(
+    public static object LibraryReport(
         [Description("Folder of .w3x/.w3m maps, searched recursively.")] string folder,
         [Description("Path to write the Markdown report to.")] string out_path,
-        [Description("Warcraft III install directory for the checks that need game data. Omit to auto-detect.")] string? game_dir = null)
-        => Run(() => LibraryReportCommand.Execute(folder, out_path, ResolveGameDir(game_dir)));
+        [Description("Warcraft III install directory for the checks that need game data. Omit to auto-detect.")] string? game_dir = null,
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
+        => Run<object>(() => WriteWith(out_path, Inputs(folder), overwrite, expect_input_sha256,
+            temp => LibraryReportCommand.Execute(folder, temp, ResolveGameDir(game_dir)), "path"));
     [McpServerTool(Name = "gamedata_sources", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Return the dataset's provenance index. For every schema folder it reports the build, its era, the sections present, the SHA-256 of each section file, and the input hashes from the folder's manifest, so the whole dataset can be traced back to the game files it was derived from.")]
     public static GamedataSourcesResult GameDataSources(
@@ -3580,10 +3898,24 @@ public static class Wc3Tools
 
     [McpServerTool(Name = "gamedata_export_schemas", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Export the schema dataset. Copies every schema folder into a target directory, or packs the whole dataset into a single zip when out_path ends in .zip, for attaching to a release. Writes only under out_path. Returns the build folder names, file count and byte total.")]
-    public static GamedataExportResult GameDataExportSchemas(
+    public static object GameDataExportSchemas(
         [Description("Target directory for the dataset, or a path ending in .zip to pack it into one archive.")] string out_path,
-        [Description("Optional path to schemas directory containing schema folders with manifest.json.")] string? schemas_dir = null)
-        => Run(() => GamedataExportSchemasCommand.Execute(out_path, schemas_dir));
+        [Description("Optional path to schemas directory containing schema folders with manifest.json.")] string? schemas_dir = null,
+        [Description(OverwriteDoc)] bool overwrite = false,
+        [Description(ExpectShaDoc)] string? expect_input_sha256 = null)
+        => Run<object>(() =>
+        {
+            GamedataExportResult? r = null;
+            bool zipped = out_path.EndsWith(".zip", StringComparison.OrdinalIgnoreCase);
+            FileWriteOutcome w = zipped
+                ? WriteGate.WriteFile(out_path, Inputs(schemas_dir), overwrite, expect_input_sha256,
+                    temp => r = GamedataExportSchemasCommand.Execute(temp, schemas_dir))
+                : WriteGate.WriteFolder(out_path, Inputs(schemas_dir), overwrite, expect_input_sha256,
+                    temp => r = GamedataExportSchemasCommand.Execute(temp, schemas_dir));
+            var gated = Gated(r!, w);
+            gated["target"] = w.SavedTo;
+            return gated;
+        });
     /// <summary>
     /// A tool's game_dir argument, else WC3_GAME_DIR, else null (auto-detect). A value still holding
     /// an unfilled placeholder such as ${user_config.game_dir}, which an MCPB host may pass through
@@ -3616,27 +3948,32 @@ public static class Wc3Tools
 }
 
 /// <summary>render_model outcome: where the PNG landed and whether it was also inlined.</summary>
-public sealed record RenderModelToolResult(string SavedTo, int SizeBytes, bool ImageInline);
+public sealed record RenderModelToolResult(string SavedTo, int SizeBytes, bool ImageInline,
+    string? InputSha256 = null, string OutputSha256 = "", int FilesRewritten = 0, long BytesWritten = 0);
 
 /// <summary>asset_thumbnails outcome: where the PNGs landed, how many, their names and any skips.</summary>
 public sealed record AssetThumbnailsToolResult(
-    string OutDir, int Rendered, IReadOnlyList<string> Files, IReadOnlyList<string> Diagnostics);
+    string OutDir, int Rendered, IReadOnlyList<string> Files, IReadOnlyList<string> Diagnostics,
+    string? InputSha256 = null, string OutputSha256 = "", int FilesRewritten = 0, long BytesWritten = 0);
 
 /// <summary>mpq_extract_all outcome: where the entries landed, the counts, and the relative file names.</summary>
 public sealed record MpqExtractAllToolResult(
     string OutDir, int TotalEntries, int NamedEntries, int UnnamedEntries, long TotalBytes,
-    IReadOnlyList<string> Files);
+    IReadOnlyList<string> Files,
+    string? InputSha256 = null, string OutputSha256 = "", int FilesRewritten = 0, long BytesWritten = 0);
 
 /// <summary>asset_convert_batch outcome: where the copies landed, how many, the target extension,
 /// their relative paths and any skips.</summary>
 public sealed record AssetConvertBatchToolResult(
-    string OutDir, int Converted, string To, IReadOnlyList<string> Files, IReadOnlyList<string> Diagnostics);
+    string OutDir, int Converted, string To, IReadOnlyList<string> Files, IReadOnlyList<string> Diagnostics,
+    string? InputSha256 = null, string OutputSha256 = "", int FilesRewritten = 0, long BytesWritten = 0);
 
 /// <summary>asset_import_wire outcome: where the edited copy landed, the imported paths, the
 /// fields set and any skips.</summary>
 public sealed record AssetImportWireToolResult(
     string SavedTo, IReadOnlyList<string> Imported, IReadOnlyList<string> FieldsSet,
-    IReadOnlyList<string> Diagnostics);
+    IReadOnlyList<string> Diagnostics,
+    string? InputSha256 = null, string OutputSha256 = "", int FilesRewritten = 0, long BytesWritten = 0);
 
 /// <summary>model_export_obj outcome: where the .obj landed, its .mtl path and the texture names.</summary>
 public sealed record ModelExportObjToolResult(
@@ -3649,10 +3986,12 @@ public sealed record ModelImportToolResult(
     int Sequences, IReadOnlyList<string> SequenceNames, IReadOnlyList<string> TextureFiles);
 
 /// <summary>port_unit outcome: where the new .ported map was written plus the full port report.</summary>
-public sealed record PortUnitToolResult(string SavedTo, PortResult Report);
+public sealed record PortUnitToolResult(string SavedTo, PortResult Report,
+    string? InputSha256 = null, string OutputSha256 = "", int FilesRewritten = 0, long BytesWritten = 0);
 
 /// <summary>port_into_version outcome: where the downgraded map was written plus the report.</summary>
-public sealed record PortIntoVersionToolResult(string SavedTo, PortIntoVersionResult Report);
+public sealed record PortIntoVersionToolResult(string SavedTo, PortIntoVersionResult Report,
+    string? InputSha256 = null, string OutputSha256 = "", int FilesRewritten = 0, long BytesWritten = 0);
 
 /// <summary>bundle_merge outcome: where the merged bundle was written plus the merge result.</summary>
 public sealed record BundleMergeToolResult(string SavedTo, BundleMergeResult Merge);
@@ -3665,12 +4004,14 @@ public sealed record PlacementToolResult(string SavedTo, string Message, int Cre
 /// <summary>camera_tour outcome, where the edited map was written, the generated camera names
 /// in order, and the camera total after the op.</summary>
 public sealed record CameraTourToolResult(
-    string SavedTo, string Message, IReadOnlyList<string> Names, int Count);
+    string SavedTo, string Message, IReadOnlyList<string> Names, int Count,
+    string? InputSha256 = null, string OutputSha256 = "", int FilesRewritten = 0, long BytesWritten = 0);
 
 /// <summary>place_grid / place_scatter outcome, where the edited map was written, how many
 /// copies were placed, and each copy's creation number in placement order.</summary>
 public sealed record BulkPlacementToolResult(
-    string SavedTo, string Message, int Placed, IReadOnlyList<int> CreationNumbers);
+    string SavedTo, string Message, int Placed, IReadOnlyList<int> CreationNumbers,
+    string? InputSha256 = null, string OutputSha256 = "", int FilesRewritten = 0, long BytesWritten = 0);
 
 /// <summary>terrain_* edit outcome: where the edited map was written, a message, and tiles changed.</summary>
 public sealed record TerrainToolResult(
@@ -3678,12 +4019,14 @@ public sealed record TerrainToolResult(
     string? InputSha256 = null, string OutputSha256 = "", int FilesRewritten = 0, long BytesWritten = 0);
 
 /// <summary>terrain_export_heightmap outcome: where the PNG landed, its grid, and its byte size.</summary>
-public sealed record ImageExportToolResult(string SavedTo, string Message, int Width, int Height, int SizeBytes);
+public sealed record ImageExportToolResult(string SavedTo, string Message, int Width, int Height, int SizeBytes,
+    string? InputSha256 = null, string OutputSha256 = "", int FilesRewritten = 0, long BytesWritten = 0);
 
 /// <summary>pathing_export_png outcome: where the PNG landed, its grid and size, and the flag legend.</summary>
 public sealed record PathingExportToolResult(
     string SavedTo, string Message, int Width, int Height, int SizeBytes,
-    IReadOnlyList<PathingExportPngCommand.LegendEntry> Legend);
+    IReadOnlyList<PathingExportPngCommand.LegendEntry> Legend,
+    string? InputSha256 = null, string OutputSha256 = "", int FilesRewritten = 0, long BytesWritten = 0);
 
 /// <summary>object_set outcome: where the edited map was written, its digests, what was rewritten, a message, and any non-fatal warning.</summary>
 public sealed record ObjectSetToolResult(
@@ -3700,15 +4043,18 @@ public sealed record ObjectBatchSetToolResult(
     int Applied, string Message, string[] Warnings);
 
 /// <summary>object_new outcome: where the edited map was written, a message, and the newly allocated rawcode.</summary>
-public sealed record ObjectNewToolResult(string SavedTo, string Message, string? NewRawcode);
+public sealed record ObjectNewToolResult(string SavedTo, string Message, string? NewRawcode,
+    string? InputSha256 = null, string OutputSha256 = "", int FilesRewritten = 0, long BytesWritten = 0);
 
 /// <summary>object_clone outcome: where the edited map was written, a message, the new
 /// rawcode, and how many field values the clone received.</summary>
-public sealed record ObjectCloneToolResult(string SavedTo, string Message, string? NewRawcode, int FieldsCopied);
+public sealed record ObjectCloneToolResult(string SavedTo, string Message, string? NewRawcode, int FieldsCopied,
+    string? InputSha256 = null, string OutputSha256 = "", int FilesRewritten = 0, long BytesWritten = 0);
 
 /// <summary>object_migrate outcome: the saved map, the target build, and the field counts.</summary>
 public sealed record ObjectMigrateToolResult(
-    string SavedTo, string Message, string TargetBuild, int FieldsKept, int FieldsDropped, int Drops);
+    string SavedTo, string Message, string TargetBuild, int FieldsKept, int FieldsDropped, int Drops,
+    string? InputSha256 = null, string OutputSha256 = "", int FilesRewritten = 0, long BytesWritten = 0);
 
 /// <summary>object_bulk_set outcome: the saved map and how many objects matched and changed.</summary>
 public sealed record ObjectBulkSetToolResult(
@@ -3721,12 +4067,14 @@ public sealed record ObjectExportToolResult(
 
 /// <summary>object_import outcome: the saved map and the added, updated and field counts.</summary>
 public sealed record ObjectImportToolResult(
-    string SavedTo, string Message, string Kind, int Added, int Updated, int FieldsSet);
+    string SavedTo, string Message, string Kind, int Added, int Updated, int FieldsSet,
+    string? InputSha256 = null, string OutputSha256 = "", int FilesRewritten = 0, long BytesWritten = 0);
 
 /// <summary>object_rename outcome: the saved map, the old and new rawcodes, and the reference counts.</summary>
 public sealed record ObjectRenameToolResult(
     string SavedTo, string Message, string Kind, string OldRawcode, string NewRawcode,
-    int FieldsRewritten, int ScriptLiteralsRewritten);
+    int FieldsRewritten, int ScriptLiteralsRewritten,
+    string? InputSha256 = null, string OutputSha256 = "", int FilesRewritten = 0, long BytesWritten = 0);
 
 /// <summary>sound_* write outcome: where the edited map was written plus a human-readable message.</summary>
 /// <summary>sound_import_events outcome: where the map landed, its digests, how many events and
@@ -3736,14 +4084,16 @@ public sealed record SoundImportToolResult(
     int Events, int CatalogEntries, IReadOnlyList<string> MissingClips,
     IReadOnlyList<SoundImportRefusal> Refused, string Jass);
 
-public sealed record SoundToolResult(string SavedTo, string Message);
+public sealed record SoundToolResult(string SavedTo, string Message,
+    string? InputSha256 = null, string OutputSha256 = "", int FilesRewritten = 0, long BytesWritten = 0);
 
 /// <summary>file_get_text outcome, the internal path asked for and its decoded text.</summary>
 public sealed record FileTextResult(string Name, string Text);
 
 /// <summary>file_set outcome. Replaced is true when an existing entry's payload was
 /// superseded and false when a new entry was added, which the caller cannot otherwise tell.</summary>
-public sealed record FileSetResult(string SavedTo, string Name, bool Replaced, int SizeBytes);
+public sealed record FileSetResult(string SavedTo, string Name, bool Replaced, int SizeBytes,
+    string? InputSha256 = null, string OutputSha256 = "", int FilesRewritten = 0, long BytesWritten = 0);
 
 /// <summary>Generic write outcome for camera/pathing/map-info/player/force/new tools:
 /// where the edited (or created) map was written, the digests and counts where a write gate ran,

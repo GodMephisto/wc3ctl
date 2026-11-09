@@ -208,12 +208,98 @@ public sealed class McpWriteGateTests : IDisposable
         }
     }
 
-    /// <summary>
-    /// Make <paramref name="link"/> a directory link to <paramref name="target"/>. A symbolic link
-    /// needs Developer Mode or elevation, so a junction is the fallback. A junction is a reparse
-    /// point too, which is what the gate refuses. If neither can be made the test fails with both
-    /// errors rather than passing without exercising the refusal.
-    /// </summary>
+    // ---- the file level gate (SAF-15) ------------------------------------
+    // The same five refusals and the same digests the map path reports, for every writing tool
+    // whose output is not the map archive. Each test pins one clause of that contract.
+
+    [Fact]
+    public void A_new_file_lands_and_both_digests_are_reported()
+    {
+        string output = Path.Combine(_dir, "report.txt");
+        byte[] bytes = System.Text.Encoding.UTF8.GetBytes("hello gate");
+
+        var w = WriteGate.WriteBytes(output, bytes, new[] { _map }, overwrite: false, expectInputSha256: null);
+
+        Assert.True(File.Exists(output));
+        Assert.Equal(bytes, File.ReadAllBytes(output));
+        Assert.Equal(WriteGate.Sha256File(_map), w.InputSha256);
+        Assert.Equal(WriteGate.Sha256File(output), w.OutputSha256);
+        Assert.Equal(bytes.Length, w.BytesWritten);
+        Assert.Equal(1, w.FilesRewritten);
+        Assert.Single(w.Files);
+        Assert.Empty(Directory.GetFiles(_dir, "*.tmp*"));
+    }
+
+    [Fact]
+    public void An_existing_file_is_refused_without_overwrite_and_replaced_with_it()
+    {
+        string output = Path.Combine(_dir, "existing.txt");
+        File.WriteAllText(output, "old");
+
+        Assert.Equal("OUTPUT_EXISTS",
+            Code(() => WriteGate.WriteText(output, "new", Array.Empty<string>(), overwrite: false, null)));
+        Assert.Equal("old", File.ReadAllText(output));
+
+        var w = WriteGate.WriteText(output, "new", Array.Empty<string>(), overwrite: true, null);
+
+        Assert.Equal("new", File.ReadAllText(output));
+        Assert.Equal(WriteGate.Sha256File(output), w.OutputSha256);
+        Assert.Equal(3, w.BytesWritten);
+    }
+
+    [Fact]
+    public void A_file_output_equal_to_an_input_is_refused()
+    {
+        string output = Path.Combine(_dir, "same.txt");
+        File.WriteAllText(output, "x");
+
+        Assert.Equal("OUT_PATH_IS_INPUT",
+            Code(() => WriteGate.WriteText(output, "y", new[] { output }, overwrite: true, null)));
+        Assert.Equal("x", File.ReadAllText(output));
+    }
+
+    [Fact]
+    public void A_file_output_through_a_link_is_refused_and_names_the_link()
+    {
+        string real = Path.Combine(_dir, "file-real");
+        Directory.CreateDirectory(real);
+        string link = Path.Combine(_dir, "file-link");
+        CreateDirectoryLink(link, real);
+        try
+        {
+            string output = Path.Combine(link, "out.txt");
+
+            var ex = Assert.Throws<ToolError>(() =>
+                WriteGate.WriteText(output, "x", Array.Empty<string>(), overwrite: false, null));
+
+            Assert.Equal("OUTPUT_IS_LINK", ex.Code);
+            Assert.Contains(link, ex.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.False(File.Exists(Path.Combine(real, "out.txt")),
+                "a refused write must leave the link's target untouched");
+        }
+        finally
+        {
+            if (Directory.Exists(link)) Directory.Delete(link, recursive: false);
+        }
+    }
+
+    [Fact]
+    public void A_failure_between_stage_and_rename_leaves_no_partial_file()
+    {
+        string output = Path.Combine(_dir, "partial.txt");
+
+        Assert.Throws<InvalidOperationException>(() => WriteGate.WriteFile(output,
+            Array.Empty<string>(), overwrite: false, expectInputSha256: null, write: temp =>
+            {
+                File.WriteAllText(temp, "half");
+                throw new InvalidOperationException("the renderer failed mid stage");
+            }));
+
+        Assert.False(File.Exists(output));
+        Assert.Empty(Directory.GetFiles(_dir, "*.tmp*"));
+    }
+
+
     private static void CreateDirectoryLink(string link, string target)
     {
         try

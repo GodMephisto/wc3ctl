@@ -1,6 +1,8 @@
 // src/Wc3.Mcp/Wc3Context.cs
 using System.ComponentModel;
+using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using ModelContextProtocol;
 using ModelContextProtocol.Server;
@@ -8,6 +10,91 @@ using ModelContextProtocol.Protocol;
 using Wc3.Commands.Rag;
 
 namespace Wc3.Mcp;
+
+/// <summary>
+/// A resource backed by one string read at server start. The byte size and the SHA256 of the bytes
+/// are fixed once, so resources/list reports them without touching the disk again. The SDK options
+/// object carries Meta but no Size, so this subclass overrides ProtocolResource to set the protocol
+/// Size field and to put the digest in _meta under the key sha256.
+/// </summary>
+internal sealed class ServedTextResource : McpServerResource
+{
+    private readonly string _uri;
+    private readonly string _name;
+    private readonly string? _title;
+    private readonly string? _description;
+    private readonly string _mimeType;
+    private readonly string _text;
+    private readonly long _size;
+    private readonly string _sha256;
+
+    internal ServedTextResource(
+        string uri,
+        string name,
+        string? title,
+        string? description,
+        string mimeType,
+        string text,
+        byte[]? bytes = null)
+    {
+        _uri = uri;
+        _name = name;
+        _title = title;
+        _description = description;
+        _mimeType = mimeType;
+        _text = text;
+        byte[] content = bytes ?? Encoding.UTF8.GetBytes(text);
+        _size = content.LongLength;
+        _sha256 = Digest(content);
+    }
+
+    internal string Sha256 => _sha256;
+
+    internal static string Digest(byte[] bytes) =>
+        Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+
+    private JsonObject Meta() => new() { ["sha256"] = _sha256 };
+
+    public override ResourceTemplate ProtocolResourceTemplate => new()
+    {
+        UriTemplate = _uri,
+        Name = _name,
+        Title = _title,
+        Description = _description,
+        MimeType = _mimeType,
+        Meta = Meta(),
+    };
+
+    public override Resource? ProtocolResource => new Resource
+    {
+        Uri = _uri,
+        Name = _name,
+        Title = _title,
+        Description = _description,
+        MimeType = _mimeType,
+        Size = _size,
+        Meta = Meta(),
+    };
+
+    public override IReadOnlyList<object> Metadata => Array.Empty<object>();
+
+    public override bool IsMatch(string uri) =>
+        string.Equals(uri, _uri, StringComparison.OrdinalIgnoreCase);
+
+    public override ValueTask<ReadResourceResult> ReadAsync(
+        RequestContext<ReadResourceRequestParams> request,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return ValueTask.FromResult(new ReadResourceResult
+        {
+            Contents = new List<ResourceContents>
+            {
+                new TextResourceContents { Uri = _uri, MimeType = _mimeType, Text = _text },
+            },
+        });
+    }
+}
 
 /// <summary>
 /// Serves the Warcraft III reference documents under `context/` as MCP resources, and a
@@ -33,7 +120,11 @@ public static class Wc3Context
         catch { return null; }
     });
 
-    /// <summary>One resource per document folder under `context/`, the markdown read whole.</summary>
+    /// <summary>
+    /// One resource per document folder under `context/`, the markdown read whole, and one resource
+    /// per top level section of that markdown. Every resource carries the byte size and the digest
+    /// of what it serves, fixed at start so resources/list needs no disk read.
+    /// </summary>
     public static IReadOnlyList<McpServerResource> CreateResources()
     {
         var list = new List<McpServerResource>();
@@ -44,19 +135,107 @@ public static class Wc3Context
             if (IsSkillFolder(id)) continue;
             string? md = Directory.GetFiles(dir, "*.md").FirstOrDefault();
             if (md is null) continue;
-            string path = md;
-            list.Add(McpServerResource.Create(
-                () => File.ReadAllText(path),
-                new McpServerResourceCreateOptions
-                {
-                    UriTemplate = "wc3://context/" + id,
-                    Name = id.Replace('-', '_'),
-                    Description = Describe(id),
-                    MimeType = "text/markdown",
-                }));
+
+            // Read the exact bytes once. The size and the digest describe the file on disk, and the
+            // served text is decoded from those same bytes, so the three can never disagree.
+            byte[] bytes = File.ReadAllBytes(md);
+            string text = Encoding.UTF8.GetString(bytes);
+            list.Add(new ServedTextResource(
+                "wc3://context/" + id,
+                id.Replace('-', '_'),
+                null,
+                Describe(id),
+                "text/markdown",
+                text,
+                bytes));
+
+            var seen = new Dictionary<string, int>(StringComparer.Ordinal);
+            foreach (var (heading, body) in Sections(text))
+            {
+                string slug = Slug(heading);
+                int count = seen.TryGetValue(slug, out int prior) ? prior : 0;
+                seen[slug] = count + 1;
+                string unique = count == 0 ? slug : slug + "-" + (count + 1);
+                list.Add(new ServedTextResource(
+                    "wc3://context/" + id + "/" + unique,
+                    id.Replace('-', '_') + "_" + unique.Replace('-', '_'),
+                    heading,
+                    DescribeSection(heading, id),
+                    "text/markdown",
+                    body));
+            }
         }
         return list;
     }
+
+    /// <summary>
+    /// The top level sections of one document. Two shapes exist in the corpus. The UI-Frame
+    /// tutorial marks a section with a line of two hashes and puts the heading on the next line,
+    /// and the Ability Insight reference marks each entry with a dash before a capital letter.
+    /// A document is split by one shape only, so Lua comment lines that begin with two dashes in
+    /// the tutorial never become sections. Where it applies, the dash rule is
+    /// <see cref="RagText.Heading"/>, so a section means the same thing here as it does in the
+    /// index, the graph and docs_search.
+    /// </summary>
+    private static IEnumerable<(string Heading, string Text)> Sections(string text)
+    {
+        string[] lines = text.Split('\n');
+        for (int i = 0; i < lines.Length; i++) lines[i] = lines[i].TrimEnd((char)13);
+
+        // The tutorial uses a hash line as its section marker. The ability reference has no hash
+        // lines at all, so its entries are the dash headings.
+        bool marked = lines.Any(line => line.Trim() == "##");
+
+        var marks = new List<(int Start, string Heading)>();
+        for (int i = 0; i < lines.Length; i++)
+        {
+            if (marked)
+            {
+                if (lines[i].Trim() != "##") continue;
+                int j = i + 1;
+                while (j < lines.Length && lines[j].Trim().Length == 0) j++;
+                if (j < lines.Length && lines[j].Trim().Length > 0)
+                    marks.Add((i, lines[j].Trim()));
+                continue;
+            }
+
+            // Skip the document title and any hashed subheading. Only the dash entries are sections.
+            if (lines[i].TrimStart().StartsWith('#')) continue;
+            Match m = RagText.Heading.Match(lines[i]);
+            if (m.Success && m.Groups["h"].Success && m.Groups["h"].Value.Trim().Length > 0)
+                marks.Add((i, m.Groups["h"].Value.Trim()));
+        }
+
+        for (int k = 0; k < marks.Count; k++)
+        {
+            int end = k + 1 < marks.Count ? marks[k + 1].Start : lines.Length;
+            yield return (marks[k].Heading, string.Join("\n", lines, marks[k].Start, end - marks[k].Start));
+        }
+    }
+
+    /// <summary>A URI path segment for a heading, lowercase words joined by single hyphens.</summary>
+    private static string Slug(string heading)
+    {
+        var sb = new StringBuilder(heading.Length);
+        foreach (char c in heading.Trim().ToLowerInvariant())
+        {
+            if (c is >= 'a' and <= 'z' or >= '0' and <= '9') sb.Append(c);
+            else if (sb.Length > 0 && sb[^1] != '-') sb.Append('-');
+        }
+        string slug = sb.ToString().Trim('-');
+        return slug.Length == 0 ? "section" : slug;
+    }
+
+    private static string DescribeSection(string heading, string id) =>
+        heading + ". One top level section of " + LongTitle(id)
+            + ", served on its own so a client reads one part instead of the whole document.";
+
+    private static string LongTitle(string id) => id switch
+    {
+        "ui-frames" => "the Big UI-Frame Tutorial",
+        "abilities" => "the Warcraft 3 Editor Ability Insight reference",
+        _ => "the " + id + " reference document",
+    };
 
     private static string Describe(string id) => id switch
     {

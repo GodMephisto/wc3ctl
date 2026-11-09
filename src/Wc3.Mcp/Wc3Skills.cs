@@ -1,4 +1,5 @@
 // src/Wc3.Mcp/Wc3Skills.cs
+using System.Text;
 using ModelContextProtocol.Server;
 
 namespace Wc3.Mcp;
@@ -46,24 +47,31 @@ public static class Wc3Skills
                 + "before any step that would publish, mirror or push."),
     };
 
-    /// <summary>One read-only resource per skill, bound to the file behind it.</summary>
+    /// <summary>
+    /// One read-only resource per skill, bound to the file behind it. Each carries the byte size and
+    /// digest of the installed file, read once at start, so resources/list reports them and a
+    /// client can see the skill came from disk rather than from text embedded in the assembly.
+    /// </summary>
     public static IReadOnlyList<McpServerResource> CreateResources() =>
-        All.Select(skill => McpServerResource.Create(
-            () => Read(skill.Id),
-            new McpServerResourceCreateOptions
-            {
-                UriTemplate = skill.Uri,
-                Name = skill.Name,
-                Description = skill.Description,
-                MimeType = "text/markdown",
-            })).ToList();
+        All.Select(skill =>
+        {
+            byte[] bytes = File.ReadAllBytes(Locate(skill.Id));
+            return (McpServerResource)new ServedTextResource(
+                skill.Uri,
+                skill.Name,
+                null,
+                skill.Description,
+                "text/markdown",
+                Encoding.UTF8.GetString(bytes),
+                bytes);
+        }).ToList();
 
     /// <summary>
-    /// The skill's markdown, read from <c>docs/skills</c> beside the executable or from the
+    /// The installed path of a skill file, under <c>docs/skills</c> beside the executable or the
     /// <c>context/skills</c> copy when the first is not there. A missing file throws, so a client
     /// gets a refusal it can report rather than an empty skill that reads like a rule of nothing.
     /// </summary>
-    public static string Read(string id)
+    internal static string Locate(string id)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
         var looked = new List<string>();
@@ -72,10 +80,13 @@ public static class Wc3Skills
             string path = Path.Combine(AppContext.BaseDirectory,
                 folder.Replace('/', Path.DirectorySeparatorChar), id + ".md");
             looked.Add(path);
-            if (File.Exists(path)) return File.ReadAllText(path);
+            if (File.Exists(path)) return path;
         }
         throw new FileNotFoundException(
             "the skill " + id + " is missing. Looked in " + string.Join(" and ", looked)
                 + ". Reinstall the server so its skill files come with the executable.");
     }
+
+    /// <summary>The skill's markdown, read whole from the installed folder.</summary>
+    public static string Read(string id) => File.ReadAllText(Locate(id));
 }

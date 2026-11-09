@@ -21,6 +21,12 @@ public sealed record McpToolInfo(
     bool? OpenWorld,
     string? Family = null)
 {
+    /// <summary>Other names a caller may use for this tool. Empty until a tool declares one.</summary>
+    public IReadOnlyList<string> Aliases { get; init; } = Array.Empty<string>();
+
+    /// <summary>The JSON Schema of the tool arguments, copied from the served tool.</summary>
+    public JsonElement? InputSchema { get; init; }
+
     public bool Annotated =>
         ReadOnly is not null || Destructive is not null || Idempotent is not null || OpenWorld is not null;
 }
@@ -73,7 +79,11 @@ public static class McpToolCatalog
         return new McpToolInfo(
             tool.Name, tool.Description,
             a?.ReadOnlyHint, a?.DestructiveHint, a?.IdempotentHint, a?.OpenWorldHint,
-            McpToolFamilies.Of(tool.Name));
+            McpToolFamilies.Of(tool.Name))
+        {
+            Aliases = Array.Empty<string>(),
+            InputSchema = tool.InputSchema,
+        };
     }
 
     /// <summary>Every prompt, ordinal-sorted, with its title, description and argument names.</summary>
@@ -90,19 +100,21 @@ public static class McpToolCatalog
     /// <summary>
     /// The catalog as one read-only MCP resource, so a client can pull the whole surface in a
     /// single read instead of listing tools or prompts. Same reflection as the tools and the
-    /// prompts, so it cannot drift.
+    /// prompts, so it cannot drift. The JSON is serialized once at start, and the resource carries
+    /// its byte size and digest, so resources/list names what a read returns.
     /// </summary>
-    public static McpServerResource CreateCatalogResource() =>
-        McpServerResource.Create(
-            () => JsonSerializer.Serialize(
-                new McpCatalog(Describe(), DescribePrompts()), Wc3McpServer.JsonOptions),
-            new McpServerResourceCreateOptions
-            {
-                UriTemplate = "wc3://tools",
-                Name = "tool_catalog",
-                Description = "The MCP surface as JSON. Every tool with its description, its family and the four annotations, and every prompt with its title, description and argument names.",
-                MimeType = "application/json",
-            });
+    public static McpServerResource CreateCatalogResource()
+    {
+        var catalog = new McpCatalog(Describe(), DescribePrompts());
+        string json = JsonSerializer.Serialize(catalog, Wc3McpServer.JsonOptions);
+        return new ServedTextResource(
+            "wc3://tools",
+            "tool_catalog",
+            null,
+            "The MCP surface as JSON. Every tool with its description, its family, the four annotations, its aliases and its input schema, and every prompt with its title, description and argument names.",
+            "application/json",
+            json);
+    }
 }
 
 /// <summary>
