@@ -98,6 +98,15 @@ public static class McpToolCatalog
     }
 
     /// <summary>
+    /// SUR-02. The name the surface serves for a caller's name, read from the same table the call
+    /// filter uses, so the rewrite and the catalog cannot disagree about a rename. A name outside
+    /// the window comes back unchanged, which is what leaves an unknown tool to fail at the
+    /// protocol layer as it always has.
+    /// </summary>
+    public static string ServedName(string name, IReadOnlyDictionary<string, ToolAlias>? renames = null) =>
+        (renames ?? Renames).TryGetValue(name, out ToolAlias? alias) ? alias.CurrentName : name;
+
+    /// <summary>
     /// SUR-03. True when this build is at or past the entry's removal version, which is when the
     /// old name stops answering. Three numeric parts compared left to right, so 0.4.13 is inside a
     /// window that ends at 0.5.0 and outside one that ended at 0.4.12. A removal version that does

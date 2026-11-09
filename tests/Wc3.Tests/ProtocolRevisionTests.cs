@@ -65,7 +65,7 @@ public class ProtocolRevisionTests
     }
 
     [Fact]
-    public async Task The_negotiated_revision_lists_items_with_the_current_surface_and_no_output_schema_or_title()
+    public async Task The_negotiated_revision_lists_items_with_the_current_surface_and_a_title()
     {
         // The revision a real client lands on, before the raw pipe confirms it from the wire.
         await McpTestClient.WithClient((client, ct) =>
@@ -78,8 +78,19 @@ public class ProtocolRevisionTests
         Assert.Equal(Wc3McpServer.ProtocolRevision, session.Answered);
         Assert.Equal(Wc3McpServer.ToolCount(), session.Tools.Count);
 
+        // RES-02. The twelve tools whose result is a wrapper record publish their shape. Every
+        // other tool still publishes none, which is what makes the set worth asserting rather than
+        // the presence alone.
+        string[] wrapperRecords =
+        {
+            "audit_ability", "audit_hero", "audit_readiness", "camera_list", "file_list", "force_list",
+            "placed_doodads_list", "player_list", "region_list", "sound_list", "target_list",
+            "trigger_var_list",
+        };
+
         var gaps = new List<string>();
         var leaked = new List<string>();
+        var withSchema = new List<string>();
         foreach (JsonElement tool in session.Tools)
         {
             string name = tool.TryGetProperty("name", out JsonElement nameElement)
@@ -96,16 +107,23 @@ public class ProtocolRevisionTests
                 gaps.Add(label + " inputSchema");
             if (!tool.TryGetProperty("annotations", out JsonElement annotations) || annotations.ValueKind != JsonValueKind.Object)
                 gaps.Add(label + " annotations");
-            if (tool.TryGetProperty("outputSchema", out _))
-                leaked.Add(label + " outputSchema");
-            if (tool.TryGetProperty("title", out _))
-                leaked.Add(label + " title");
+            if (tool.TryGetProperty("outputSchema", out JsonElement outputSchema))
+            {
+                withSchema.Add(name);
+                if (!HasNonEmptyString(outputSchema, "type") || outputSchema.GetProperty("type").GetString() != "object")
+                    gaps.Add(label + " outputSchema is not an object schema");
+            }
+            // SUR-10 publishes a title on every tool, so a client reads a readable label from the
+            // inventory rather than parsing the snake case name.
+            if (!HasNonEmptyString(tool, "title"))
+                gaps.Add(label + " title");
         }
 
         Assert.True(gaps.Count == 0,
             "tools/list items missing a required member of the current surface. " + string.Join(", ", gaps));
         Assert.True(leaked.Count == 0,
             "tools/list items carry a member the current surface does not publish. " + string.Join(", ", leaked));
+        Assert.Equal(wrapperRecords, withSchema.OrderBy(n => n, StringComparer.Ordinal).ToArray());
     }
 
     [Theory]

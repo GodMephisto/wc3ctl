@@ -80,6 +80,30 @@ public class DocsReferenceTests
     }
 
     [Fact]
+    public void Mcp_reference_carries_the_family_parameters_result_and_errors_for_every_tool()
+    {
+        // DOC-01. The guard in the specification tree judges each clause per tool, so a render that
+        // dropped one on a single tool has to fail here as well. The labels start a line, which is
+        // what that guard reads.
+        var text = DocsCommand.BuildMcpMarkdown();
+        int tools = Wc3.Mcp.Wc3McpServer.CreateTools().Count;
+        Assert.True(tools > 0);
+        Assert.Equal(tools, Occurrences(text, "\nFamily. "));
+        Assert.Equal(tools, Occurrences(text, "\nParameters."));
+        Assert.Equal(tools, Occurrences(text, "\nResult. "));
+        Assert.Equal(tools, Occurrences(text, "\nErrors. "));
+    }
+
+    private static int Occurrences(string text, string token)
+    {
+        int count = 0;
+        for (int at = text.IndexOf(token, StringComparison.Ordinal); at >= 0;
+             at = text.IndexOf(token, at + token.Length, StringComparison.Ordinal))
+            count++;
+        return count;
+    }
+
+    [Fact]
     public void Diff_reports_identical_text_and_a_change()
     {
         var same = Wc3.Commands.DocsReference.Diff("a\nb\n", "a\r\nb\r\n");

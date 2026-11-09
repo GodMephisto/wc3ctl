@@ -106,9 +106,11 @@ public sealed class PermissionPolicyTests : IDisposable
         Assert.Null(byFamily.DeniedRule("map_info"));
 
         // The surface registers the policy filter on the call tool pipeline, so a client reaches it
-        // without naming a file and the same refusal is what a bug report sees.
+        // without naming a file and the same refusal is what a bug report sees. Four wrappers carry
+        // the aliases, the policy, the error result and the call clock, and ERR-06 adds the schema
+        // check.
         var options = Wc3McpServer.CreateOptions();
-        Assert.Equal(4, options.Filters.Request.CallToolFilters.Count);
+        Assert.Equal(5, options.Filters.Request.CallToolFilters.Count);
     }
 
     [Fact]

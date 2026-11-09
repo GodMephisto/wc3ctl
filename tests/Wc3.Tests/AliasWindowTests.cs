@@ -32,10 +32,7 @@ public class AliasWindowTests
         return path;
     }
 
-    // Skipped, and recorded as a defect rather than deleted. The rewrite replaces the name and the
-    // deferred tool collection then reports "Unknown tool" for the new name, so an alias cannot
-    // reach a deferred descriptor. SUR-02 stays a gap until the lookup builds on demand.
-    [Fact(Skip = "alias reaches a deferred descriptor as Unknown tool")]
+    [Fact]
     public async Task An_old_name_reaches_the_current_tool_and_the_reply_names_both()
     {
         // version_info takes no argument, so this proves the rewrite reaches a real tool and the

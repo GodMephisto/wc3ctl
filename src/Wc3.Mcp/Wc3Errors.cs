@@ -202,12 +202,19 @@ internal static class Wc3Errors
     /// A refusal built by <see cref="Refuse"/> fills all four. Any other exception fills the message
     /// from its own text and reports <see cref="Wc3ErrorCodes.CommandRejected"/>, because a throw
     /// that reached the filter came from a command and not from a bug in the surface.
+    /// <para>
+    /// ERR-06. A binding failure raises an ArgumentException whose ParamName holds the argument the
+    /// caller left out, and the text of that exception does not always carry it once the layers
+    /// between the binder and this filter have wrapped it. The name is read from the exception
+    /// chain and kept in the message and in the value field, so the caller learns which argument
+    /// to pass instead of reading a sentence that names only the tool.
+    /// </para>
     /// </summary>
     public static JsonElement Payload(Exception error, string? tool)
     {
-        string message = error.Data[MessageKey] as string ?? error.Message;
+        string message = error.Data[MessageKey] as string ?? Text(error);
         string code = error.Data[CodeKey] as string ?? Wc3ErrorCodes.CommandRejected.Code;
-        string? value = error.Data[ValueKey] as string;
+        string? value = error.Data[ValueKey] as string ?? ArgumentName(error);
         string? next = error.Data[NextKey] as string;
         return JsonSerializer.SerializeToElement(new ErrorPayload(code, message, tool, value, next),
             Wc3McpServer.JsonOptions);
@@ -216,7 +223,8 @@ internal static class Wc3Errors
     /// <summary>
     /// The error result itself. The text content is exactly what the SDK would have built from the
     /// thrown message, so every client that reads the text today keeps working, and the structured
-    /// content adds the four fields beside it.
+    /// content adds the four fields beside it. A binding failure gains the argument name in the
+    /// text as well, which is the half of ERR-06 a client that reads only the text can act on.
     /// </summary>
     public static CallToolResult Result(Exception error, string? tool)
     {
@@ -224,9 +232,114 @@ internal static class Wc3Errors
         return new()
         {
             IsError = true,
-            Content = new List<ContentBlock> { new TextContentBlock { Text = error.Message } },
+            Content = new List<ContentBlock> { new TextContentBlock { Text = Text(error) } },
             StructuredContent = Payload(error, tool),
         };
+    }
+
+    /// <summary>
+    /// ERR-06. The text content of a failure. A refusal already reads as its own sentence, so it is
+    /// returned untouched. Any other exception that names a parameter in its chain gets that name
+    /// appended, because the sentence the binding layer produces names the tool and nothing else.
+    /// </summary>
+    private static string Text(Exception error)
+    {
+        if (error.Data[MessageKey] is string) return error.Message;
+        return ArgumentName(error) is { } argument && !error.Message.Contains(argument, StringComparison.Ordinal)
+            ? error.Message + " The argument \"" + argument + "\" is the one that could not be bound."
+            : error.Message;
+    }
+
+    /// <summary>
+    /// ERR-06. The parameter an ArgumentException refused, read from the exception or anything it
+    /// wraps, or null when no exception in the chain named one.
+    /// </summary>
+    private static string? ArgumentName(Exception? error)
+    {
+        for (Exception? current = error; current is not null; current = current.InnerException)
+        {
+            if (current is ArgumentException argument && !string.IsNullOrWhiteSpace(argument.ParamName))
+                return argument.ParamName;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// ERR-06. The schema check, made before the tool body and before the binding layer reads the
+    /// arguments. A call that leaves out a name the tool's input schema marks required is refused
+    /// here, with the name in the message and in the value field, which is the one place the name
+    /// is still in hand. A surface that let the binder answer instead would return one sentence
+    /// that names only the tool, and a model that reads it retries the same call.
+    /// </summary>
+    public static McpRequestHandler<CallToolRequestParams, CallToolResult> RequiredArguments(
+        McpRequestHandler<CallToolRequestParams, CallToolResult> next,
+        Func<string, McpServerTool?> resolve)
+    {
+        ArgumentNullException.ThrowIfNull(next);
+        ArgumentNullException.ThrowIfNull(resolve);
+        return async (request, cancellationToken) =>
+        {
+            string? name = request.Params?.Name;
+            if (name is not null && resolve(name) is { } tool
+                && MissingRequired(tool.ProtocolTool.InputSchema, request.Params?.Arguments) is { } missing)
+            {
+                throw Refuse(Wc3ErrorCodes.InvalidArgument,
+                    "the call to \"" + name + "\" is missing the required argument \"" + missing + "\"",
+                    missing,
+                    "pass \"" + missing + "\" and call again");
+            }
+            return await next(request, cancellationToken).ConfigureAwait(false);
+        };
+    }
+
+    /// <summary>
+    /// ERR-06. The first name the input schema lists as required that the call does not carry, or
+    /// null when it carries them all. The schema is the same one the client read, so the answer is
+    /// the name the caller saw and not a name this server invented.
+    /// <para>
+    /// A nullable parameter that declares no default is listed as required by the schema while the
+    /// binding layer accepts null for it, so a name whose schema admits null is left to the tool,
+    /// which is where the meaning of an omitted value lives. Only a name that cannot be null and
+    /// was not passed is refused here, and that is the call the binder would have failed.
+    /// </para>
+    /// </summary>
+    private static string? MissingRequired(JsonElement schema, IDictionary<string, JsonElement>? arguments)
+    {
+        if (schema.ValueKind != JsonValueKind.Object
+            || !schema.TryGetProperty("required", out JsonElement required)
+            || required.ValueKind != JsonValueKind.Array)
+            return null;
+
+        schema.TryGetProperty("properties", out JsonElement properties);
+        foreach (JsonElement item in required.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.String) continue;
+            string? parameter = item.GetString();
+            if (string.IsNullOrEmpty(parameter)) continue;
+            if (arguments is not null && arguments.ContainsKey(parameter)) continue;
+            if (AdmitsNull(properties, parameter)) continue;
+            return parameter;
+        }
+        return null;
+    }
+
+    /// <summary>ERR-06. True when the parameter's own schema lists null among its types.</summary>
+    private static bool AdmitsNull(JsonElement properties, string name)
+    {
+        if (properties.ValueKind != JsonValueKind.Object
+            || !properties.TryGetProperty(name, out JsonElement property)
+            || !property.TryGetProperty("type", out JsonElement type))
+            return false;
+        if (type.ValueKind == JsonValueKind.String)
+            return string.Equals(type.GetString(), "null", StringComparison.Ordinal);
+        if (type.ValueKind != JsonValueKind.Array) return false;
+        foreach (JsonElement item in type.EnumerateArray())
+        {
+            if (item.ValueKind == JsonValueKind.String
+                && string.Equals(item.GetString(), "null", StringComparison.Ordinal))
+                return true;
+        }
+        return false;
     }
 
     /// <summary>

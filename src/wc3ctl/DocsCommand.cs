@@ -62,21 +62,10 @@ public static class DocsCommand
         return DocsReference.RenderCli(topLevel, globals.Select(ToDocOption).ToList());
     }
 
-    /// <summary>The MCP reference text, read from the reflected tool surface and its annotations.</summary>
-    public static string BuildMcpMarkdown()
-    {
-        var tools = Wc3.Mcp.Wc3McpServer.CreateTools()
-            .Select(t => t.ProtocolTool)
-            .Select(t =>
-            {
-                var a = t.Annotations;
-                return new DocTool(t.Name, t.Description,
-                    a?.ReadOnlyHint, a?.DestructiveHint, a?.IdempotentHint, a?.OpenWorldHint);
-            })
-            .OrderBy(t => t.Name, StringComparer.Ordinal)
-            .ToList();
-        return DocsReference.RenderMcp(tools);
-    }
+    /// <summary>The MCP reference text, read from the reflected tool surface, its families, its input
+    /// schemas and the return type behind each tool. <see cref="DocsMcpModel"/> does the walk, so this
+    /// is the same text the CI guard regenerates in memory.</summary>
+    public static string BuildMcpMarkdown() => DocsReference.RenderMcp(DocsMcpModel.Build());
 
     private static void WriteOne(string path, string text, bool force)
     {

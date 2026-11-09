@@ -76,7 +76,12 @@ public static class Wc3McpServer
         // the policy reads the name and before the tool body runs. A refusal by either the window
         // or the policy still answers through this filter, which is why the reply a client gets
         // names the name it used.
-        options.Filters.Request.CallToolFilters.Add(next => ServerRuntime.AliasToolCalls(next, aliases));
+        //
+        // SUR-02. The collection is handed over as well, because the SDK resolves the request
+        // against it before this filter runs and the dispatch that follows reads that one answer.
+        // The window re-resolves the name it rewrote, which is what lets an old name reach a
+        // descriptor that was never listed.
+        options.Filters.Request.CallToolFilters.Add(next => ServerRuntime.AliasToolCalls(next, aliases, tools));
 
         // SAF-17. The policy is read here, when the surface is built, and the filter refuses before
         // the tool body runs, so a denied call never opens a map or touches a file.
@@ -93,6 +98,13 @@ public static class Wc3McpServer
         // one sees the response after it reaches the transport, so a client that closed stdin mid
         // call still gets the bytes before the read side reports end of stream.
         options.Filters.Request.CallToolFilters.Add(ServerRuntime.ObserveToolCalls);
+
+        // ERR-06. The schema check sits closest to the tool, after the rewrite and after the clock
+        // starts, so a call that leaves out a required argument is refused with the name it left
+        // out and the refusal is reported like any other failed call. The SDK binds the arguments
+        // one layer further in, and it answers a binding failure with one sentence that names only
+        // the tool, so the name has to be read from the schema while it is still in hand.
+        options.Filters.Request.CallToolFilters.Add(next => Wc3Errors.RequiredArguments(next, tools.Find));
         options.Filters.Message.IncomingFilters.Add(ServerRuntime.ObserveIncomingMessages);
         options.Filters.Message.OutgoingFilters.Add(ServerRuntime.ObserveOutgoingResponses);
 
@@ -319,7 +331,9 @@ public static class Wc3McpServer
 /// <summary>
 /// PRF-01. The tool collection the server serves, built on first use. The reads the SDK makes, the
 /// enumeration behind tools/list and the name lookup behind tools/call, materialize the descriptors
-/// once and answer from the result. The base dictionary is left empty on purpose. Filling it would
+/// once and answer from the result. A name lookup builds the same way, so a call that arrives
+/// before anything has listed the surface still finds its tool and the build is not repeated. The
+/// base dictionary is left empty on purpose. Filling it would
 /// raise the collection's Changed event once per tool, and the server answers that event with a
 /// list_changed notification, so a first tools/list would put 276 notices on the pipe. Nothing the
 /// SDK reads for tools needs that dictionary, and <see cref="Count"/> is the one member it would
@@ -361,6 +375,16 @@ internal sealed class DeferredToolCollection : McpServerPrimitiveCollection<McpS
 
     public override bool TryGetPrimitive(string name, out McpServerTool? primitive) =>
         ByName.TryGetValue(name, out primitive);
+
+    /// <summary>
+    /// SUR-02. The same lookup, as a nullable answer, for the call path that needs a tool by name
+    /// rather than a hit. The SDK asks for the name the caller used before any filter runs, so a
+    /// rewritten name is looked up here a second time. A name that has never been asked for
+    /// materializes the surface on that call, which is what makes the answer independent of a
+    /// tools/list having happened first, and the one build per process is unchanged.
+    /// </summary>
+    internal McpServerTool? Find(string name) =>
+        ByName.TryGetValue(name, out McpServerTool? primitive) ? primitive : null;
 
     public override IEnumerator<McpServerTool> GetEnumerator() => Materialized.GetEnumerator();
 

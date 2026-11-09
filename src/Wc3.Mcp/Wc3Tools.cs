@@ -16,6 +16,17 @@ namespace Wc3.Mcp;
 /// The MCP tool surface: one thin wrapper per Wc3.Commands handler. Each tool
 /// loads the map(s), calls the shared command layer and returns its result POCO
 /// (the SDK serializes it to JSON), no map parsing or logic lives here.
+/// <para>
+/// RES-02. The twelve tools whose result is a wrapper record, <see cref="CappedItems{T}"/>
+/// with its cap, truncated flag, total and items, also publish an output schema. The attribute's
+/// <c>UseStructuredContent</c> is what turns it on, and SDK 1.4.1 then generates the schema from
+/// the method's return type and sends the same object as <c>structuredContent</c> beside the text
+/// block, so no schema is hand written here. At SDK 1.4.1 the attribute value wins over
+/// <c>McpServerToolCreateOptions.UseStructuredContent</c>, which is why this is declared per tool
+/// rather than once in the surface wiring. The text block still carries the same JSON, so a client
+/// that reads both pays for it twice, which is why the capped wrapper records are the set that
+/// carries one rather than every tool on the surface.
+/// </para>
 /// </summary>
 [McpServerToolType]
 public static class Wc3Tools
@@ -1289,7 +1300,7 @@ public static class Wc3Tools
             return SaveEdit(doc, map, out_path, overwrite, expect_input_sha256, r.Ok, r.Message);
         });
 
-    [McpServerTool(Name = "placed_doodads_list", Title = "List placed doodads", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [McpServerTool(Name = "placed_doodads_list", Title = "List placed doodads", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
     [Description("List every doodad and destructable already PLACED on the map (war3map.doo), each with the creation number needed to edit or remove it, plus its type rawcode, position, rotation, scale and variation.")]
     public static CappedItems<DoodadInstanceInfo> PlacedDoodadsList(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
@@ -1971,7 +1982,7 @@ public static class Wc3Tools
 
     // ---- audits (diagnostics over data already in the map) ---------------
 
-    [McpServerTool(Name = "audit_hero", Title = "Audit hero wiring", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [McpServerTool(Name = "audit_hero", Title = "Audit hero wiring", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
     [Description("Say whether a placed hero's abilities are wired up in the script, not merely present as object data. For every ability it walks the chain end to end, the ability object exists, something dispatches a cast on its id, that handler is attached to a trigger, the trigger's event reaches the hero's player, the handler body still has live statements, any identity array it gates on lists this hero, and the init that builds the trigger runs exactly once. A missing link is named, so a broken port can be fixed rather than only detected. Omit hero to audit every placed hero.")]
     public static CappedItems<HeroWiringResult> AuditHero(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
@@ -1994,7 +2005,7 @@ public static class Wc3Tools
         [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Sharpens the dependency closure crawl. Without it the crawl is still complete, only more permissive.")] string? game_dir = null)
         => Run(() => ObjectFidelityCommand.Compare(LoadMap(source_map), LoadMap(target_map), rawcode, ResolveGameDir(game_dir)));
 
-    [McpServerTool(Name = "audit_readiness", Title = "Audit script readiness", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [McpServerTool(Name = "audit_readiness", Title = "Audit script readiness", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
     [Description("Say whether a placed hero's script would run correctly, not merely fire, the gap audit_hero cannot see since it only proves a cast reaches a handler. Checks that InitGlobals and RunInitializationTriggers, the two World Editor entry points that set every custom starting value and run any Map Initialization trigger, are carried and actually called, and that every udg_ global the hero's carried code reads is assigned somewhere rather than left at its type default. A hero can audit clean on audit_hero and still do nothing worth playing. Omit hero to check every hero placed.")]
     public static CappedItems<RuntimeReadinessResult> AuditReadiness(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
@@ -2008,7 +2019,7 @@ public static class Wc3Tools
             return Wc3Limit.Cap(rows);
         });
 
-    [McpServerTool(Name = "audit_ability", Title = "Audit ability runtime chain", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [McpServerTool(Name = "audit_ability", Title = "Audit ability runtime chain", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
     [Description("Report PASS or the exact broken link, per ability, across a placed hero's runtime chain, deeper than audit_hero, which only proves a cast reaches a live trigger. Checks that the dispatch is reached exactly once (two live triggers make every affected spell fire twice), that handlers survive a port, that a follow-up TimerStart loop starts and its callback is declared, that every StartSpellUnit pause is matched by a live StopSpellUnit, that callbacks name a declared function, that globals read are assigned, and that named special effects still exist. Omit hero to audit every placed hero.")]
     public static CappedItems<AbilityAuditResult> AuditAbility(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
@@ -2030,24 +2041,30 @@ public static class Wc3Tools
         => Run(() => PaletteCommand.DoodadPalette(LoadMap(map), ResolveGameDir(game_dir)));
 
     [McpServerTool(Name = "place_doodad", Title = "Place a doodad", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
-    [Description("Place a doodad instance at (x, y) on the map's doodad layer (war3map.doo) and save the edited map to out_path. The input map is NEVER modified in place - out_path must differ from it. Returns the assigned creation number.")]
+    [Description("Place a doodad instance at (x, y) on the map's doodad layer (war3map.doo) and save the edited map to out_path. The input map is NEVER modified in place, so out_path must differ from it. Returns the assigned creation number. Pass the placement as one object, or the flattened type_rawcode, x, y, z, rotation, scale and variation arguments this tool shipped with, which stay for one version (SUR-08).")]
     public static PlacementToolResult PlaceDoodad(
         [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). Created/overwritten; parent directories are created as needed. To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
-        [Description("Four-character doodad type rawcode from palette_doodad, e.g. 'ATtr'.")] string type_rawcode,
-        [Description("World X coordinate.")] float x,
-        [Description("World Y coordinate.")] float y,
-        [Description("World Z height offset. Default 0.")] float z = 0f,
-        [Description("Facing angle in radians. Default 0.")] float rotation = 0f,
-        [Description("Uniform scale. Default 1.")] float scale = 1f,
-        [Description("Doodad variation index. Default 0.")] int variation = 0,
+        [Description("The placement as one object. typeRawcode, x and y are required inside it, z defaults 0, rotation 0, scale 1 and variation 0. Pass either this or the flattened arguments, never both (SUR-08).")] DoodadPlacement? placement = null,
+        [Description("Legacy flattened form of placement.typeRawcode. Required when placement is omitted. Default null, meaning placement was given instead.")] string? type_rawcode = null,
+        [Description("Legacy flattened form of placement.x. Required when placement is omitted. Default null, meaning placement was given instead.")] float? x = null,
+        [Description("Legacy flattened form of placement.y. Required when placement is omitted. Default null, meaning placement was given instead.")] float? y = null,
+        [Description("Legacy flattened form of placement.z. Default null, which means 0.")] float? z = null,
+        [Description("Legacy flattened form of placement.rotation. Default null, which means 0.")] float? rotation = null,
+        [Description("Legacy flattened form of placement.scale. Default null, which means 1.")] float? scale = null,
+        [Description("Legacy flattened form of placement.variation. Default null, which means 0.")] int? variation = null,
         [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
         [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
-        => Run(() => SavePlacement(map, out_path, overwrite, expect_input_sha256, doc =>
+        => Run(() =>
         {
-            var r = PlacementCommand.PlaceDoodad(doc, type_rawcode, x, y, z, rotation, scale, variation);
-            return (r.Ok, r.Message, r.CreationNumber);
-        }));
+            DoodadPlacement spec = DoodadPlacementOf(placement, type_rawcode, x, y, z, rotation, scale, variation);
+            return SavePlacement(map, out_path, overwrite, expect_input_sha256, doc =>
+            {
+                var r = PlacementCommand.PlaceDoodad(doc, spec.TypeRawcode, spec.X, spec.Y, spec.Z,
+                    spec.Rotation, spec.Scale, spec.Variation);
+                return (r.Ok, r.Message, r.CreationNumber);
+            });
+        });
 
     [McpServerTool(Name = "place_region", Title = "Create a region", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Define a rectangular region on the map's region layer (war3map.w3r) and save the edited map to out_path. The input map is NEVER modified in place - out_path must differ from it. Bounds need right>left and top>bottom. Returns the assigned creation number.")]
@@ -2068,24 +2085,30 @@ public static class Wc3Tools
         }));
 
     [McpServerTool(Name = "place_unit", Title = "Place a unit", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
-    [Description("Place a unit of the given type, owned by a player, at world (x, y) and save the edited map to out_path. The input map is NEVER modified in place. Returns the assigned creation number (the id triggers use to reference the unit).")]
+    [Description("Place a unit of the given type, owned by a player, at world (x, y) and save the edited map to out_path. The input map is NEVER modified in place, so out_path must differ from it. Returns the assigned creation number (the id triggers use to reference the unit). Pass the placement as one object, or the flattened type_rawcode, owner_id, x, y, z, rotation and scale arguments this tool shipped with, which stay for one version (SUR-08).")]
     public static PlacementToolResult PlaceUnit(
         [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the edited copy is written to out_path.")] string map,
         [Description("Output map file path (must differ from the input map). Created/overwritten; parent directories are created as needed. To make SEVERAL edits, pass this file as the next call's map argument. Each tool loads the map fresh from disk, so two edits both reading the ORIGINAL map produce two separate outputs and the first edit is lost.")] string out_path,
-        [Description("Four-character unit type rawcode, e.g. 'hfoo' or 'u000'.")] string type_rawcode,
-        [Description("Owning player id (0-based; 0 = red). Neutral players use the high ids (e.g. 24 = neutral hostile).")] int owner_id,
-        [Description("World X coordinate.")] float x,
-        [Description("World Y coordinate.")] float y,
-        [Description("Height above ground in world units. Default 0.")] float z = 0f,
-        [Description("Facing angle in radians. Default 0.")] float rotation = 0f,
-        [Description("Uniform scale. Default 1.")] float scale = 1f,
+        [Description("The placement as one object. typeRawcode, ownerId, x and y are required inside it, z defaults 0, rotation 0 and scale 1. Pass either this or the flattened arguments, never both (SUR-08).")] UnitPlacement? placement = null,
+        [Description("Legacy flattened form of placement.typeRawcode. Required when placement is omitted. Default null, meaning placement was given instead.")] string? type_rawcode = null,
+        [Description("Legacy flattened form of placement.ownerId. Required when placement is omitted. Default null, meaning placement was given instead.")] int? owner_id = null,
+        [Description("Legacy flattened form of placement.x. Required when placement is omitted. Default null, meaning placement was given instead.")] float? x = null,
+        [Description("Legacy flattened form of placement.y. Required when placement is omitted. Default null, meaning placement was given instead.")] float? y = null,
+        [Description("Legacy flattened form of placement.z. Default null, which means 0.")] float? z = null,
+        [Description("Legacy flattened form of placement.rotation. Default null, which means 0.")] float? rotation = null,
+        [Description("Legacy flattened form of placement.scale. Default null, which means 1.")] float? scale = null,
         [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
         [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
-        => Run(() => SavePlacement(map, out_path, overwrite, expect_input_sha256, doc =>
+        => Run(() =>
         {
-            var r = PlacementCommand.PlaceUnit(doc, type_rawcode, owner_id, x, y, z, rotation, scale);
-            return (r.Ok, r.Message, r.CreationNumber);
-        }));
+            UnitPlacement spec = UnitPlacementOf(placement, type_rawcode, owner_id, x, y, z, rotation, scale);
+            return SavePlacement(map, out_path, overwrite, expect_input_sha256, doc =>
+            {
+                var r = PlacementCommand.PlaceUnit(doc, spec.TypeRawcode, spec.OwnerId, spec.X, spec.Y,
+                    spec.Z, spec.Rotation, spec.Scale);
+                return (r.Ok, r.Message, r.CreationNumber);
+            });
+        });
 
     [McpServerTool(Name = "place_start_location", Title = "Place a start location", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Place or move a player's start location at world (x, y) and save the edited map to out_path. The input map is NEVER modified in place. A start location is stored as a preplaced 'sloc' unit owned by the player; the World Editor permits exactly one per player, so if this player already has one it is moved (its creation number preserved) rather than duplicated. Returns the start location's creation number.")]
@@ -2517,7 +2540,7 @@ public static class Wc3Tools
                 w.InputSha256, w.OutputSha256, w.FilesRewritten, w.BytesWritten);
         });
 
-    [McpServerTool(Name = "file_list", Title = "List internal files", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [McpServerTool(Name = "file_list", Title = "List internal files", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
     [Description("List the archive's internal entries with their CURRENT size, which reflects a "
         + "pending replacement rather than the stale original. Name is null for an unnamed entry, "
         + "which is what a protected map produces.")]
@@ -2709,7 +2732,7 @@ public static class Wc3Tools
                 r.Message, r.Events.Count, r.CatalogEntries.Count, r.MissingClips, r.Refused, r.Jass);
         });
 
-    [McpServerTool(Name = "sound_list", Title = "List sound definitions", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [McpServerTool(Name = "sound_list", Title = "List sound definitions", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
     [Description("List the map's sound catalog (war3map.w3s): each definition's name, file path, channel, flags, volume, pitch, priority and min/max distance.")]
     public static CappedItems<SoundFields> SoundList(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
@@ -2773,7 +2796,7 @@ public static class Wc3Tools
         "Name|TargetX|TargetY|ZOffset|Rotation|AngleOfAttack|TargetDistance|Roll|" +
         "FieldOfView|FarClippingPlane|NearClippingPlane|LocalPitch|LocalYaw|LocalRoll";
 
-    [McpServerTool(Name = "camera_list", Title = "List cameras", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [McpServerTool(Name = "camera_list", Title = "List cameras", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
     [Description("List the map's cameras (war3map.w3c): each camera's name, target position, rotation, angle of attack, distance and field of view.")]
     public static CappedItems<CameraFields> CameraList(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
@@ -2940,7 +2963,7 @@ public static class Wc3Tools
             return (true, $"set {field} = {value}");
         }));
 
-    [McpServerTool(Name = "player_list", Title = "List player slots", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [McpServerTool(Name = "player_list", Title = "List player slots", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
     [Description("List the map's player slots (war3map.w3i): each player's id, name, color, race, controller and whether its start position is fixed.")]
     public static CappedItems<PlayerInfo> PlayerList(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
@@ -2961,7 +2984,7 @@ public static class Wc3Tools
             return (r.Ok, r.Message);
         }));
 
-    [McpServerTool(Name = "force_list", Title = "List forces", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [McpServerTool(Name = "force_list", Title = "List forces", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
     [Description("List the map's forces/teams (war3map.w3i): each force's index, name, member player ids and alliance/sharing flags.")]
     public static CappedItems<ForceInfo> ForceList(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
@@ -3090,7 +3113,7 @@ public static class Wc3Tools
                 w.InputSha256, w.OutputSha256, w.FilesRewritten, w.BytesWritten);
         });
 
-    [McpServerTool(Name = "region_list", Title = "List regions", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [McpServerTool(Name = "region_list", Title = "List regions", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
     [Description("List the map's rectangular regions (war3map.w3r), each with its creation number, name, and bounds. Add regions with place_region.")]
     public static CappedItems<PlacementCommand.RegionInfo> RegionList(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
@@ -3498,7 +3521,7 @@ public static class Wc3Tools
             return (r.Ok, r.Message);
         }));
 
-    [McpServerTool(Name = "trigger_var_list", Title = "List global variables", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [McpServerTool(Name = "trigger_var_list", Title = "List global variables", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
     [Description("List the map's global variables (the .wtg Variables list), each with its name, type, array flag, declared size and initial value. Read-only.")]
     public static CappedItems<TriggerVariableFields> TriggerVarList(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
@@ -3977,6 +4000,58 @@ public static class Wc3Tools
         return map;
     }
 
+    /// <summary>SUR-08. The refusal a placement call gets when it passes the nested object and one
+    /// of the flattened arguments together. Half applying one form over the other is the failure
+    /// this refuses, because the caller cannot tell which field won.</summary>
+    private const string MixedPlacementForm =
+        "pass either placement or the flattened placement arguments, not both. The flattened form is "
+        + "kept for one version (SUR-08)";
+
+    /// <summary>SUR-08. The unit placement from either form. The nested object is returned as it
+    /// arrived, the flattened arguments are read into the same record, and a call that supplies
+    /// parts of both is refused rather than half applied. A missing required field is named, so a
+    /// caller that drops one learns which.</summary>
+    private static UnitPlacement UnitPlacementOf(
+        UnitPlacement? placement, string? typeRawcode, int? ownerId, float? x, float? y,
+        float? z, float? rotation, float? scale)
+    {
+        if (placement is not null)
+        {
+            if (typeRawcode is not null || ownerId is not null || x is not null || y is not null
+                || z is not null || rotation is not null || scale is not null)
+                throw Invalid(MixedPlacementForm, "placement");
+            return placement;
+        }
+
+        if (string.IsNullOrWhiteSpace(typeRawcode)) throw Missing("type_rawcode");
+        if (ownerId is null) throw Missing("owner_id");
+        if (x is null) throw Missing("x");
+        if (y is null) throw Missing("y");
+        return new UnitPlacement(typeRawcode, ownerId.Value, x.Value, y.Value,
+            z ?? 0f, rotation ?? 0f, scale ?? 1f);
+    }
+
+    /// <summary>SUR-08. The doodad placement from either form, the same contract as
+    /// <see cref="UnitPlacementOf"/> with the variation index in place of an owner.</summary>
+    private static DoodadPlacement DoodadPlacementOf(
+        DoodadPlacement? placement, string? typeRawcode, float? x, float? y,
+        float? z, float? rotation, float? scale, int? variation)
+    {
+        if (placement is not null)
+        {
+            if (typeRawcode is not null || x is not null || y is not null || z is not null
+                || rotation is not null || scale is not null || variation is not null)
+                throw Invalid(MixedPlacementForm, "placement");
+            return placement;
+        }
+
+        if (string.IsNullOrWhiteSpace(typeRawcode)) throw Missing("type_rawcode");
+        if (x is null) throw Missing("x");
+        if (y is null) throw Missing("y");
+        return new DoodadPlacement(typeRawcode, x.Value, y.Value,
+            z ?? 0f, rotation ?? 0f, scale ?? 1f, variation ?? 0);
+    }
+
     /// <summary>Load the map, apply a placement mutation, and save the edited copy to out_path.
     /// The input map is never modified in place (out_path must differ) - mirroring the no-clobber
     /// stance of render_model and port_unit. A rejected placement surfaces as a clean MCP error.</summary>
@@ -4202,7 +4277,7 @@ public static class Wc3Tools
                 inputSha, w.OutputSha256, w.FilesRewritten, w.BytesWritten);
         });
 
-    [McpServerTool(Name = "target_list", Title = "List available builds", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [McpServerTool(Name = "target_list", Title = "List available builds", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
     [Description("List all available builds in the schemas directory, with their sections. Use --full_only to skip scripts-only builds.")]
     public static CappedItems<BuildInfo> TargetList(
         [Description("Optional path to schemas directory containing schema folders with manifest.json.")] string? schemas_dir = null,
@@ -4533,6 +4608,30 @@ public sealed record BundleMergeToolResult(string SavedTo, BundleMergeResult Mer
 /// human-readable message, and the creation number assigned to the new instance.</summary>
 public sealed record PlacementToolResult(string SavedTo, string Message, int CreationNumber,
     string? InputSha256 = null, string OutputSha256 = "", int FilesRewritten = 0, long BytesWritten = 0);
+
+/// <summary>SUR-08. The placement half of <c>place_unit</c> as one object, so the tool keeps five
+/// top-level arguments instead of eleven. Every field carries its own description and its own
+/// default, which is what the schema a caller reads is built from. The flattened arguments the
+/// tool shipped with stay on the tool for one version and are refused alongside this object.</summary>
+public sealed record UnitPlacement(
+    [property: Description("Four-character unit type rawcode, e.g. 'hfoo' or 'u000'.")] string TypeRawcode,
+    [property: Description("Owning player id, 0-based, where 0 is red. Neutral players use the high ids, for example 24 is neutral hostile.")] int OwnerId,
+    [property: Description("World X coordinate.")] float X,
+    [property: Description("World Y coordinate.")] float Y,
+    [property: Description("Height above ground in world units. Default 0.")] float Z = 0f,
+    [property: Description("Facing angle in radians. Default 0.")] float Rotation = 0f,
+    [property: Description("Uniform scale. Default 1.")] float Scale = 1f);
+
+/// <summary>SUR-08. The placement half of <c>place_doodad</c> as one object. Same contract as
+/// <see cref="UnitPlacement"/>, with the variation index a doodad carries in place of an owner.</summary>
+public sealed record DoodadPlacement(
+    [property: Description("Four-character doodad type rawcode from palette_doodad, e.g. 'ATtr'.")] string TypeRawcode,
+    [property: Description("World X coordinate.")] float X,
+    [property: Description("World Y coordinate.")] float Y,
+    [property: Description("World Z height offset. Default 0.")] float Z = 0f,
+    [property: Description("Facing angle in radians. Default 0.")] float Rotation = 0f,
+    [property: Description("Uniform scale. Default 1.")] float Scale = 1f,
+    [property: Description("Doodad variation index. Default 0.")] int Variation = 0);
 
 /// <summary>camera_tour outcome, where the edited map was written, the generated camera names
 /// in order, and the camera total after the op.</summary>

@@ -193,10 +193,18 @@ internal static class ServerRuntime
     /// used, and an alias whose removal version has been reached is refused with a code naming
     /// that version instead of being dispatched. A name that is not in the table is left alone,
     /// so an unknown tool still reaches the protocol layer and fails there as it always has.
-    /// </summary>
+    /// <para>
+    /// SUR-02. The SDK matches the request against the tool collection before any call filter
+    /// runs, so the match it holds is the name the caller used and an old name matches nothing.
+    /// The rewrite therefore re-resolves the name it wrote, through the same collection, and the
+    /// dispatch that follows reaches the tool the alias names. That lookup materializes the
+    /// deferred surface if nothing has read it yet, so a rename works on a process that never
+    /// answered a tools/list.
+    /// </para></summary>
     public static McpRequestHandler<CallToolRequestParams, CallToolResult> AliasToolCalls(
         McpRequestHandler<CallToolRequestParams, CallToolResult> next,
-        IReadOnlyDictionary<string, ToolAlias>? renames = null)
+        IReadOnlyDictionary<string, ToolAlias>? renames = null,
+        DeferredToolCollection? tools = null)
     {
         ArgumentNullException.ThrowIfNull(next);
         IReadOnlyDictionary<string, ToolAlias> table = renames ?? McpToolCatalog.Renames;
@@ -211,12 +219,29 @@ internal static class ServerRuntime
 
             // The one rewrite. Everything after this point, the permission policy included, sees
             // the name the surface serves.
-            request.Params.Name = alias.CurrentName;
+            string served = McpToolCatalog.ServedName(called, table);
+            request.Params.Name = served;
+
+            // The match the SDK made before the filters ran still names the caller's name. Left in
+            // place, the dispatch finds no tool and answers Unknown tool for the name it has just
+            // been given. Resolving the served name here answers that lookup from the one deferred
+            // build, so the call lands on the tool the window points at.
+            request.MatchedPrimitive = tools?.Find(served) ?? FindTool(served);
+
             CallToolResult result = await next(request, cancellationToken).ConfigureAwait(false);
             NoteAlias(result, alias);
             return result;
         };
     }
+
+    /// <summary>
+    /// SUR-02. The same name lookup for a window that was built without the collection, which a
+    /// hand-built window can be. It reads the one memoized surface, so a rewrite always has a way
+    /// to resolve the name it wrote.
+    /// </summary>
+    private static McpServerTool? FindTool(string name) =>
+        Wc3McpServer.CreateTools()
+            .FirstOrDefault(t => string.Equals(t.ProtocolTool.Name, name, StringComparison.Ordinal));
 
     /// <summary>SUR-03. The code an alias past its removal version is refused with.</summary>
     internal const string AliasExpiredCode = "ALIAS_EXPIRED";
