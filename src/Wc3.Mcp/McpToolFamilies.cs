@@ -32,6 +32,7 @@ public static class McpToolFamilies
     private static readonly Dictionary<string, string> ByTool = new(StringComparer.Ordinal)
     {
         // map
+        ["file_extract"] = "map",
         ["file_get_text"] = "map",
         ["file_list"] = "map",
         ["file_set"] = "map",

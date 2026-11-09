@@ -30,6 +30,8 @@ public static class Wc3McpServer
     /// <summary>Server options with every wc3ctl tool registered.</summary>
     public static McpServerOptions CreateOptions()
     {
+        long started = System.Diagnostics.Stopwatch.GetTimestamp();
+
         var tools = new McpServerPrimitiveCollection<McpServerTool>();
         foreach (var tool in CreateTools())
             tools.Add(tool);
@@ -54,12 +56,16 @@ public static class Wc3McpServer
             ServerInstructions = Instructions.Value,
         };
 
-        // OBS-02, OBS-04 and TRN-03 ride the SDK 1.4.1 filter pipeline, which is built from these
-        // lists when the server starts. The request filter wraps the tool invocation and the
-        // message filter sees the response after it reaches the transport, so a client that closed
-        // stdin mid call still gets the bytes before the read side reports end of stream.
+        // OBS-02, OBS-04, PRF-01, PRF-04 and TRN-03 ride the SDK 1.4.1 filter pipeline, which is
+        // built from these lists when the server starts. The request filter wraps the tool
+        // invocation, the incoming message filter catches the initialize request and the outgoing
+        // one sees the response after it reaches the transport, so a client that closed stdin mid
+        // call still gets the bytes before the read side reports end of stream.
         options.Filters.Request.CallToolFilters.Add(ServerRuntime.ObserveToolCalls);
+        options.Filters.Message.IncomingFilters.Add(ServerRuntime.ObserveIncomingMessages);
         options.Filters.Message.OutgoingFilters.Add(ServerRuntime.ObserveOutgoingResponses);
+
+        ServerRuntime.ColdStart.SurfaceBuilt(started);
         return options;
     }
 
@@ -161,25 +167,41 @@ public static class Wc3McpServer
         return line;
     }
 
-    /// <summary>The methods that carry a tool, before any of them is turned into a handler.</summary>
-    private static IEnumerable<MethodInfo> ToolMethods() =>
-        new[] { typeof(Wc3Tools), typeof(Wc3Context) }
+    /// <summary>The methods that carry a tool, before any of them is turned into a handler. Scanned
+    /// once per process, because the start line needs the count before the host builds and the
+    /// surface then scans the same list. Two scans of 275 attributes cost part of the cold start
+    /// budget for no gain.</summary>
+    private static readonly Lazy<IReadOnlyList<MethodInfo>> ToolMethodList = new(
+        () => new[] { typeof(Wc3Tools), typeof(Wc3Context) }
             .SelectMany(t => t.GetMethods(BindingFlags.Public | BindingFlags.Static))
-            .Where(m => m.GetCustomAttribute<McpServerToolAttribute>() is not null);
+            .Where(m => m.GetCustomAttribute<McpServerToolAttribute>() is not null)
+            .ToList(),
+        LazyThreadSafetyMode.ExecutionAndPublication);
 
-    /// <summary>Every [McpServerTool] method on <see cref="Wc3Tools"/> and <see cref="Wc3Context"/>, bound with our JSON options.</summary>
-    public static IReadOnlyList<McpServerTool> CreateTools() =>
-        ToolMethods()
+    /// <summary>The methods that carry a tool.</summary>
+    private static IEnumerable<MethodInfo> ToolMethods() => ToolMethodList.Value;
+
+    /// <summary>
+    /// Every tool, bound once per process. Binding is a schema build per method, so a second
+    /// session in the same process was paying for the whole surface again. The bound tools hold no
+    /// state, so one list serves every session.
+    /// </summary>
+    private static readonly Lazy<IReadOnlyList<McpServerTool>> ToolList = new(
+        () => ToolMethodList.Value
             .Select(m => McpServerTool.Create(m, target: null,
                 new McpServerToolCreateOptions { SerializerOptions = JsonOptions }))
-            .ToList();
+            .ToList(),
+        LazyThreadSafetyMode.ExecutionAndPublication);
+
+    /// <summary>Every [McpServerTool] method on <see cref="Wc3Tools"/> and <see cref="Wc3Context"/>, bound with our JSON options.</summary>
+    public static IReadOnlyList<McpServerTool> CreateTools() => ToolList.Value;
 
     /// <summary>
     /// How many tools the surface holds, counted without building a handler for each one. The start
-    /// line needs the number before the host builds the surface, and building it twice costs more
-    /// than a reflection scan.
+    /// line needs the number before the host builds the surface, and the count comes from the one
+    /// method scan rather than a second one.
     /// </summary>
-    public static int ToolCount() => ToolMethods().Count();
+    public static int ToolCount() => ToolMethodList.Value.Count;
 
     /// <summary>Every [McpServerPrompt] method on <see cref="Wc3Prompts"/>, bound with our JSON options.</summary>
     public static IReadOnlyList<McpServerPrompt> CreatePrompts() =>
@@ -196,18 +218,24 @@ public static class Wc3McpServer
     /// client receives, ServerInstructions included. Copying the fields by hand instead is what left
     /// the instructions off the initialize reply.
     /// </summary>
-    public static void ApplyTo(McpServerOptions options)
+    public static void ApplyTo(McpServerOptions options) => ApplyTo(options, CreateOptions());
+
+    /// <summary>
+    /// The same copy from a surface that was already built. PRF-01 uses it so the tool collection is
+    /// built on the thread pool while the host builds, rather than one phase after the other.
+    /// </summary>
+    public static void ApplyTo(McpServerOptions options, McpServerOptions configured)
     {
         ArgumentNullException.ThrowIfNull(options);
-        var configured = CreateOptions();
+        ArgumentNullException.ThrowIfNull(configured);
         options.ServerInfo = configured.ServerInfo;
         options.Capabilities = configured.Capabilities;
         options.ServerInstructions = configured.ServerInstructions;
         options.ToolCollection = configured.ToolCollection;
         options.PromptCollection = configured.PromptCollection;
         options.ResourceCollection = configured.ResourceCollection;
-        // The filters carry OBS-02, OBS-04 and TRN-03. Copying them by hand like the rest is what
-        // keeps a host that calls ApplyTo from running without them.
+        // The filters carry OBS-02, OBS-04, PRF-01, PRF-04 and TRN-03. Copying them by hand like the
+        // rest is what keeps a host that calls ApplyTo from running without them.
         options.Filters = configured.Filters;
     }
 }

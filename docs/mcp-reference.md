@@ -2,7 +2,7 @@
 
 Generated from the live tool surface by `wc3ctl docs mcp`. Do not edit by hand. Regenerate with `wc3ctl docs mcp --force`, and the CI guard fails when this file is stale.
 
-The server exposes 275 tool(s).
+The server exposes 276 tool(s).
 
 ## asset_audit
 
@@ -48,7 +48,7 @@ Annotations. read-only no, destructive no, idempotent no, open-world no.
 
 ## asset_report
 
-One report over every imported file in a map. Lists every entry with its size and whether anything references it, and every fault the asset checks and the model scan can find: core (empty entry), audit (oversized, non power of two texture, model without source, empty), unused (referenced nowhere), duplicates (byte-identical groups), and model lint (geoset without material, missing texture, zero duration sequence, bounding box out of range). The engine does not log what it loads and its loading screen runs before the script, so this static report is the complete answer a map gives about its own contents. Note that ModelWithoutSource fires for nearly every .mdx in a compiled map and MissingTexture may be a case-insensitive base-game path, so read those two as leads. Read-only. Pass model_lint false to skip the slow per-model scan.
+One report over every imported file in a map. Lists each entry with its size and whether anything references it, plus every fault the asset checks and the model scan find, an empty entry, an oversized or non power of two texture, a model without source, an import referenced nowhere, byte identical duplicate groups, and model lint faults (geoset without material, missing texture, zero duration sequence, bounding box out of range). The engine logs nothing about what it loads, so this is the full answer a map gives. ModelWithoutSource fires for nearly every compiled .mdx, so read it as a lead.
 
 Annotations. read-only yes, destructive no, idempotent yes, open-world no.
 
@@ -66,13 +66,13 @@ Annotations. read-only no, destructive no, idempotent no, open-world no.
 
 ## asset_unused
 
-List the map's imported files that nothing references, each with the size it holds. A file is referenced when an object-data field value, a war3mapSkin.txt or war3mapMisc.txt value, a script string literal, an imported model's own texture chunk (.mdx TEXS, .mdl Bitmap), any path embedded in an imported model's bytes (a particle emitter spawn model included), an imported .fdf or .toc interface file, or a map-format file names it. The map-format scan is essential: the w3i names the loading screen model, the w3e names every terrain tile, and the w3s names every sound, so without it a loading screen or a custom terrain tile reads as unused. A lead to review before deleting an import, since the base game can also load a file none of those name. Use mpq_remove_many to act on the list in one rebuild.
+List the map's imported files that nothing references, each with its size. A file counts as referenced when an object field, a war3mapSkin.txt or war3mapMisc.txt value, a script literal, an imported model's texture chunk, a path embedded in a model's bytes, an imported .fdf or .toc, or a map format file names it. The map format scan matters, since the w3i names the loading screen, the w3e every terrain tile and the w3s every sound, so without it those read as unused. Treat the list as leads, as the base game can load a file none of these name.
 
 Annotations. read-only yes, destructive no, idempotent yes, open-world no.
 
 ## audit_ability
 
-Tells you, per ability, PASS or the exact broken link across a placed hero's whole runtime chain, far deeper than audit_hero, which only proves a cast reaches a live trigger. Checks whether the dispatch is reached exactly once (two independently live triggers for the same ability is the double-registration bug that makes every affected spell fire twice), whether its handler is carried and not gutted by porting, whether a follow-up ability's TimerStart loop actually starts and its callback is declared, whether anything in its closure deals damage and names the call, whether every StartSpellUnit pause is matched by a live StopSpellUnit (an imbalance can leave the caster paused forever), whether a timer or trigger callback still points at a declared, live function, whether a global it reads is ever really assigned, and whether a special-effect asset it names still exists in the map. A hero can read '8 of 8 wired' on audit_hero and still be unplayable, this is built to catch exactly that gap. Omit hero to audit every hero placed on the map.
+Report PASS or the exact broken link, per ability, across a placed hero's runtime chain, deeper than audit_hero, which only proves a cast reaches a live trigger. Checks that the dispatch is reached exactly once (two live triggers make every affected spell fire twice), that handlers survive a port, that a follow-up TimerStart loop starts and its callback is declared, that every StartSpellUnit pause is matched by a live StopSpellUnit, that callbacks name a declared function, that globals read are assigned, and that named special effects still exist. Omit hero to audit every placed hero.
 
 Annotations. read-only yes, destructive no, idempotent yes, open-world no.
 
@@ -90,19 +90,19 @@ Annotations. read-only yes, destructive no, idempotent yes, open-world no.
 
 ## audit_hero
 
-Tells you whether a placed hero's abilities are actually wired up in the map's script, not merely present as object data. For every ability it verifies the whole chain end to end, the ability object exists, something dispatches a cast on its id, that handler is attached to a trigger, the trigger's event reaches the hero's player, the handler body still has live statements (not commented out by porting), any per-player identity array it gates on lists this hero, and the init that builds the trigger runs exactly once. When a link is missing the result names exactly which one, so a broken port can be fixed rather than only detected. Omit hero to audit every hero type placed on the map.
+Say whether a placed hero's abilities are wired up in the script, not merely present as object data. For every ability it walks the chain end to end, the ability object exists, something dispatches a cast on its id, that handler is attached to a trigger, the trigger's event reaches the hero's player, the handler body still has live statements, any identity array it gates on lists this hero, and the init that builds the trigger runs exactly once. A missing link is named, so a broken port can be fixed rather than only detected. Omit hero to audit every placed hero.
 
 Annotations. read-only yes, destructive no, idempotent yes, open-world no.
 
 ## audit_map
 
-Behavioural audit of a map's object data, read-only. Where 'validate' answers whether a map can LOAD, this answers whether its abilities do what they CLAIM, by comparing the author's own tooltips against the data and by resolving every object reference. Checks: level-gap, level-tooltip, tooltip-claim, orphan-ability, requirement, portrait-risk, dangling-reference, missing-model (model paths in the script or object data that load no file, which the engine logs and retries on every creation). 'requirement' and 'dangling-reference' need an installed game and say so in a diagnostic rather than reporting a false clean. It CANNOT see a trigger's damage formula, whether a status effect lands, or timing, so a clean result means no claim in the map contradicts its data, not that the map is correct.
+Behavioural audit of a map's object data, read-only. Where validate asks whether a map loads, this asks whether its abilities do what they claim, by comparing the author's tooltips against the data and resolving every object reference. Checks level gap, level tooltip, tooltip claim, orphan ability, requirement, portrait risk, dangling reference and missing model, the last being a path that loads no file, which the engine logs and retries on every creation. Requirement and dangling reference need an installed game and report a diagnostic rather than a false clean.
 
 Annotations. read-only yes, destructive no, idempotent yes, open-world no.
 
 ## audit_readiness
 
-Tells you whether a placed hero's script would actually RUN correctly, not just fire, the gap audit_hero cannot see since it only proves a cast reaches a handler, never what that handler computes. Checks that InitGlobals and RunInitializationTriggers, the two World Editor entry points that set every custom starting value (damage, range, duration, a dummy id) and run any Map Initialization trigger, are both carried and actually called, and that every udg_ global this hero's own carried code reads is assigned somewhere in the script rather than stuck at its type default. A hero can audit clean on audit_hero and still do nothing worth playing if these were dropped by a port. Omit hero to check every hero placed on the map.
+Say whether a placed hero's script would run correctly, not merely fire, the gap audit_hero cannot see since it only proves a cast reaches a handler. Checks that InitGlobals and RunInitializationTriggers, the two World Editor entry points that set every custom starting value and run any Map Initialization trigger, are carried and actually called, and that every udg_ global the hero's carried code reads is assigned somewhere rather than left at its type default. A hero can audit clean on audit_hero and still do nothing worth playing. Omit hero to check every hero placed.
 
 Annotations. read-only yes, destructive no, idempotent yes, open-world no.
 
@@ -298,9 +298,15 @@ List the World Editor's catalog names from UI\WorldEditData.txt with entry count
 
 Annotations. read-only yes, destructive no, idempotent yes, open-world no.
 
+## file_extract
+
+Write one internal archive entry to out_path exactly as the archive holds it, so a binary entry, or one whose text decode would be lossy, can be read without corruption. The map is never modified. Refuses an out_path equal to the input map, and an out_path that already exists without overwrite. Returns where it landed, the entry name, its size and its digest.
+
+Annotations. read-only no, destructive no, idempotent yes, open-world no.
+
 ## file_get_text
 
-Read one internal file decoded as UTF-8, with any leading BOM stripped. Use it for the override text files, war3mapSkin.txt and friends, that carry a map's string and art overrides.
+Read one internal file as text, naming the encoding it used and whether a byte order mark declared that encoding or it was assumed. Reports how many bytes the decoder had to replace and refuses a lossy decode with LOSSY_DECODE unless allow_lossy is true, so a binary entry is never handed back as corrupt text. Use file_extract to write the raw bytes instead.
 
 Annotations. read-only yes, destructive no, idempotent yes, open-world no.
 
@@ -414,7 +420,7 @@ Annotations. read-only yes, destructive no, idempotent yes, open-world no.
 
 ## hero_generate
 
-Generate a multi-form hero from a JSON brief and save the result to out_path: one unit object per form derived from one base unit, one ability object per slot with its own Base Order ID, cooldown, cast time and tooltip per level, each form's own ability list in uabi, and a self-contained JASS block with one transform function per form and one timer driven damage stub per damaging ability. The whole brief is validated before the first object is created, so a brief that names an unknown base is refused with nothing written. The JASS is returned, not spliced into war3map.j. The input map is NEVER modified in place.
+Generate a multi-form hero from a JSON brief and save the result to out_path, with one unit object per form derived from one base unit, one ability object per slot carrying its own Base Order ID, cooldown, cast time and per level tooltip, each form's ability list in uabi, and a self contained JASS block with one transform function per form and one timer driven damage stub per damaging ability. The whole brief is validated before the first object is created, so a brief naming an unknown base is refused with nothing written.
 
 Annotations. read-only no, destructive no, idempotent no, open-world no.
 
@@ -432,7 +438,7 @@ Annotations. read-only yes, destructive no, idempotent yes, open-world no.
 
 ## hero_roster
 
-List the playable heroes a map registers, with each hero's rawcode, display name, the string tags from its registration call (typically a role and a portrait path), and which trigger's custom-text body holds its code. A HERO IS NOT A TRIGGER and counting one does not count the other: measured on a real map, 170 registered heroes are spread across 39 Character triggers, because a few grouped triggers each bundle many heroes while a minority get a trigger of their own. Use this rather than counting triggers when asked how many heroes a map has. Returns Ok=false for maps that create heroes inline instead of registering them, since those have no roster to read.
+List the playable heroes a map registers, each with its rawcode, display name, the string tags from its registration call (typically a role and a portrait path), and which trigger's custom-text body holds its code. A hero is not a trigger, and counting one does not count the other, a measured map held 170 registered heroes across 39 Character triggers because a few grouped triggers bundle many heroes. Use this rather than counting triggers when asked how many heroes a map has. A map that creates heroes inline returns Ok=false.
 
 Annotations. read-only yes, destructive no, idempotent yes, open-world no.
 
@@ -528,7 +534,7 @@ Annotations. read-only yes, destructive no, idempotent yes, open-world no.
 
 ## map_compat
 
-Check a Warcraft III map against a target build (a schema folder path or build name). Reports compile-time incompatibilities (missing natives, globals, types, functions used by the map but absent from the target's scripts/common.j and scripts/blizzard.j) and display-time incompatibilities (object fields modified in the map but not defined in the target's object data). Returns IdentifiersChecked and FieldsChecked so you can tell 'checked and fine' from 'no script section to check'. Omit target to use the configured default from settings, environment, or the newest available schema. Pass schemas_dir to override the schemas location.
+Check a map against a target build, given as a schema folder path or a build name. Reports compile time incompatibilities (natives, globals, types or functions the map uses and the target scripts do not declare) and display time ones (object fields the map modifies and the target does not define). IdentifiersChecked and FieldsChecked tell checked and fine apart from nothing to check. Omit target to use the configured default from settings, then the environment, then the newest schema. Never writes.
 
 Annotations. read-only yes, destructive no, idempotent yes, open-world no.
 
@@ -552,7 +558,7 @@ Annotations. read-only no, destructive no, idempotent no, open-world no.
 
 ## map_optimize
 
-Shrink every imported texture inside a map in one pass and write a new map to out_path with only those files replaced, everything else byte for byte. By default models are left untouched and each texture is scaled to fit max_texture on its longest side; pass ratio below 1 to also decimate models, which is NOT safe by default because decimation is known to produce a model the game crashes on in some maps (a 3,091 model build hit an ACCESS_VIOLATION on load at ratio 0.9, while the same map with original models loaded). When decimating, load-test the result before shipping. A file whose optimised bytes are not smaller is left untouched. Reports the per-file before and after sizes, the per-kind counts, bytesSaved (the output size subtracted from the input's) and contentBytesSaved (the per-file sum, which is larger when the archive was patched in place rather than rebuilt). The input map is NEVER modified.
+Shrink every imported texture in a map in one pass and write a new map to out_path, replacing only those files and keeping the rest byte for byte. Models are left untouched by default and each texture is scaled to fit max_texture on its longest side. Pass ratio below 1 to decimate models too, which is unsafe by default because a decimated model once crashed the game on load with an ACCESS_VIOLATION, so load-test the result. A file whose optimised bytes are not smaller is left as it was. The input map is never modified.
 
 Annotations. read-only no, destructive no, idempotent yes, open-world no.
 
@@ -594,7 +600,7 @@ Annotations. read-only no, destructive no, idempotent yes, open-world no.
 
 ## model_import
 
-Import a foreign model file into a Warcraft III MDX at out_path. Accepts Wavefront OBJ (.obj), glTF 2.0 (.gltf and .glb), STL (.stl, binary and ASCII), PLY (.ply, ASCII and binary little-endian) and FBX ASCII (.fbx). Binary FBX is not supported. The format is detected from the file content, so a correct extension is not required. Builds one v800 geoset per source primitive with normals and UVs, triangulating an n-gon face as a fan, computing a per-face normal when the source carries none and zeroing UVs when it has none. Each glTF material's baseColorTexture image is converted to .blp beside the MDX and referenced by a texture entry, one entry per distinct texture, so a multi-material model keeps every material. A model that names no material keeps the single default texture. Every glTF animation becomes a named MDX SEQS sequence whose integer frame interval is its time range scaled by fps, 30 by default. Bone keyframe tracks are not written. The input is never modified. Returns the output path, the geoset, vertex, face, texture and material counts, the sequence count and names, and the texture files written.
+Import a foreign model into a Warcraft III MDX at out_path. Reads OBJ, glTF and GLB, STL, PLY and ASCII FBX, detecting the format from content so the extension does not matter, and refuses binary FBX. One geoset is built per source primitive with normals and UVs, each glTF base colour texture becomes a .blp beside the MDX with one entry per distinct texture, and each glTF animation becomes a named sequence. Bone keyframes are not written. The input is never modified, and an existing output is refused without overwrite.
 
 Annotations. read-only no, destructive no, idempotent yes, open-world no.
 
@@ -606,7 +612,7 @@ Annotations. read-only yes, destructive no, idempotent yes, open-world no.
 
 ## model_lod
 
-Generate a level-of-detail chain for a .mdx or .mdl model, writing one decimated MDX per ratio into out_dir by running the optimiser once per ratio. ratios is a comma-separated list of target fractions of faces to keep, each between 0 and 1, for example 1,0.5,0.25, processed in the order given so a descending list produces a descending chain. Each level keeps the model's materials, textures, sequences, bones, emitters and cameras byte for byte and shrinks only the geometry. Ratio 1 is the original geometry and its file is byte identical to the input. The input is never modified. Returns one level per ratio with its vertex and face count and byte size, plus the total bytes written.
+Generate a level-of-detail chain for a .mdx or .mdl model, writing one decimated MDX per ratio into out_dir. ratios is a comma separated list of face fractions to keep, each between 0 and 1, processed in order, so a descending list gives a descending chain. Every level keeps the model's materials, textures, sequences, bones, emitters and cameras byte for byte and shrinks only geometry. Ratio 1 is the original and its file is byte identical to the input. The input is never modified. Returns each level's counts and byte size.
 
 Annotations. read-only no, destructive no, idempotent yes, open-world no.
 
@@ -1242,7 +1248,7 @@ Annotations. read-only yes, destructive no, idempotent yes, open-world no.
 
 ## script_to_lua
 
-Convert a JASS map to a Lua map and save it to out_path. The script becomes war3map.lua, which keeps the JASS rules Lua lacks (32 bit integer wrap, integer division toward zero, division by zero gives zero, a null string concatenates as empty, unset array slots read their type default), and the w3i script language is set to Lua so the game runs it. war3map.j is left as a one line stub. Warnings name untyped calls, and custom text triggers the World Editor would regenerate as JASS. Lua maps are refused. The input map is NEVER modified. Pass strict_reals to also round real arithmetic back to the 32 bit float the JASS runtime holds, since Lua numbers are 64 bit doubles and a converted real expression otherwise drifts. A script generated by WurstScript is refused because its package runtime does not survive the conversion and the map then fails in game with "Could not initialize package" when a spell runs; allow_wurst overrides that refusal.
+Convert a JASS map to a Lua map and save it to out_path. The script becomes war3map.lua and keeps the JASS rules Lua lacks (32 bit integer wrap, integer division toward zero, divide by zero gives zero, a null string concatenates as empty, unset array slots read their type default), war3map.j becomes a stub, and the w3i language is set to Lua so the game runs it. Lua maps are refused, as is a WurstScript script, whose package runtime does not survive conversion, unless allow_wurst is true. Pass strict_reals to round real arithmetic back to 32 bit.
 
 Annotations. read-only no, destructive no, idempotent yes, open-world no.
 
@@ -1404,7 +1410,7 @@ Annotations. read-only no, destructive no, idempotent yes, open-world no.
 
 ## terrain_fill
 
-Apply a terrain tool over an inclusive RECTANGLE of corners and save the edited map to out_path, instead of one brush dab at a time. Corners may be given in any order and a rectangle that runs off the grid is clipped rather than refused. tool is one of Raise, Lower, SetHeight, Flatten, Paint, CliffRaise, CliffLower, CliffSet, Ramp, RampOff, Water, WaterRemove, Blight, BlightOff. value means height for Raise/Lower/SetHeight/Water, a ground tile index for Paint (see terrain_info for the map's tile list), and a step count for the Cliff tools; it is ignored by Flatten, Ramp, RampOff, WaterRemove, Blight and BlightOff. The input map is NEVER modified in place.
+Apply a terrain tool over an inclusive rectangle of corners and save the edited map to out_path, instead of one brush dab at a time. Corners may be given in any order and a rectangle that runs off the grid is clipped rather than refused. tool is one of Raise, Lower, SetHeight, Flatten, Paint, CliffRaise, CliffLower, CliffSet, Ramp, RampOff, Water, WaterRemove, Blight, BlightOff. value is a height for Raise, Lower, SetHeight and Water, a tile index for Paint (see terrain_info), and a step count for the cliff tools, and is ignored by Flatten, Ramp, RampOff, WaterRemove, Blight and BlightOff.
 
 Annotations. read-only no, destructive no, idempotent no, open-world no.
 
@@ -1470,7 +1476,7 @@ Annotations. read-only no, destructive no, idempotent yes, open-world no.
 
 ## trigger_add
 
-Add a trigger to a category in the map's GUI trigger tree and save the edited map to out_path. The new trigger is created enabled and initially on, matching the World Editor, and has no events, conditions or actions yet. IMPORTANT: this edits war3map.wtg, the World Editor's trigger SOURCE, not the compiled war3map.j that Warcraft III runs, so the trigger is inert in game until the map is opened and saved in the World Editor. Custom-text (script) triggers cannot be added, because their body lives in war3map.wct, which has a lossy decoder and so is never rewritten. The input map is NEVER modified in place. Writes war3map.wtg only.
+Add a trigger to a category in the map's GUI trigger tree and save the edited map to out_path. The new trigger is created enabled and initially on, matching the World Editor, with no events, conditions or actions yet. This edits war3map.wtg, the World Editor's trigger source, not the compiled war3map.j the game runs, so the trigger is inert until the map is opened and saved in the World Editor. A custom-text trigger cannot be added, since its body lives in war3map.wct. The input map is never modified in place.
 
 Annotations. read-only no, destructive no, idempotent no, open-world no.
 
@@ -1482,7 +1488,7 @@ Annotations. read-only no, destructive no, idempotent no, open-world no.
 
 ## trigger_add_eca
 
-Add an event, condition or action to a GUI trigger and save the edited map to out_path. Parameters are given in the order the function declares them; any left off are filled from the World-Editor table's own defaults. This matters more than it looks: war3map.wtg stores a function's parameters but NOT how many there are, so a function written with the wrong number of parameters yields a map that nothing, including this tool, can read afterwards. Use trigger_catalog_list and trigger_catalog_describe to find a function name and its arguments. Custom-text (script) triggers are refused, since their body is JASS rather than a list of functions. IMPORTANT: this edits war3map.wtg, the World Editor's trigger SOURCE, not war3map.j, the compiled script Warcraft III actually runs. wc3ctl does not regenerate the compiled script, so a trigger authored this way is inert in game until the map is opened and saved in the World Editor. The input map is NEVER modified in place.
+Add an event, condition or action to a GUI trigger and save the edited map to out_path. Parameters follow the order the function declares, and any left off are filled from the World Editor table's own defaults. war3map.wtg stores a function's parameters but not how many there are, so a line written with the wrong count yields a map nothing can read afterwards. Custom-text triggers are refused. This edits the World Editor's trigger source, not the compiled script the game runs, so the line is inert until the map is opened and saved there.
 
 Annotations. read-only no, destructive no, idempotent no, open-world no.
 
@@ -1530,7 +1536,7 @@ Annotations. read-only no, destructive no, idempotent yes, open-world no.
 
 ## trigger_recover_from_script
 
-Rebuild a browsable GUI trigger tree (war3map.wtg) for a map that has NONE, by decompiling the compiled script the game runs, and save the result to out_path. The script itself is never modified, so this only ever ADDS a tree. It REFUSES any map that already carries a trigger tree, because a decompiled tree cannot be trusted to replace a real one: measured across the map library the decompiler reported success on a map holding 626 trigger items while producing 1, at zero percent name recall. Use this on protected or stripped maps whose trigger tree was removed but whose compiled script survives. The recovered tree DESCRIBES the script, it does not drive it, so editing the tree afterwards changes what the World Editor shows and not what the game runs. The input map is NEVER modified in place.
+Rebuild a browsable GUI trigger tree (war3map.wtg) for a map that has none, by decompiling the script the game runs, and save it to out_path. It only ever adds a tree and leaves the script alone. A map that already carries a tree is refused, because a decompiled tree cannot replace a real one, the decompiler reported success on a map holding 626 trigger items while producing 1 at zero name recall. Use it on protected or stripped maps whose tree was removed but whose script survives. The tree describes the script and does not drive it.
 
 Annotations. read-only no, destructive no, idempotent yes, open-world no.
 
@@ -1554,7 +1560,7 @@ Annotations. read-only no, destructive no, idempotent yes, open-world no.
 
 ## trigger_set_code
 
-Set the custom-text JASS body of a custom-text trigger and save the edited map to out_path. The body is written into war3map.wct at the byte level, replacing only that trigger's slot so every other slot's bytes survive verbatim. This is a deliberate change of direction from the rest of the trigger surface, which never rewrites war3map.wct, and it is safe here because only the one slot is spliced rather than the whole file re-encoded. A GUI trigger is refused. IMPORTANT: this edits the World Editor's trigger source, not the compiled war3map.j the game runs, so the body is inert in game until the map is opened and saved in the World Editor. The input map is NEVER modified in place.
+Set the custom-text JASS body of a custom-text trigger and save the edited map to out_path. Only that trigger's slot in war3map.wct is spliced, so every other slot's bytes survive verbatim, which is why this one write into war3map.wct is safe where the rest of the trigger surface refuses it. A GUI trigger is refused. This edits the World Editor's trigger source, not the compiled war3map.j the game runs, so the body is inert until the map is opened and saved in the World Editor.
 
 Annotations. read-only no, destructive no, idempotent yes, open-world no.
 
@@ -1632,7 +1638,7 @@ Annotations. read-only yes, destructive no, idempotent yes, open-world no.
 
 ## unit_abilities
 
-Every ability a unit has, each tagged with where it comes from. ObjectNormal and ObjectHero are the unit type's own lists (uabi, uhab). Spellbook is inside a spellbook the unit has (passives often hide there). PlacedUnit is set on one placed unit, with its level. MorphForm comes from a form the unit turns into. Script is given by war3map.j at runtime, found where a statement names the unit type and the ability, or where an add-ability call sits inside an if that tests for the unit type. Script entries are inferred and carry their line number. Use this rather than object_get when asking what abilities a unit really has.
+Every ability a unit has, each tagged with where it comes from. ObjectNormal and ObjectHero are the unit type's own uabi and uhab lists. Spellbook is inside a spellbook the unit holds, where passives often hide. PlacedUnit is set on one placed unit, with its level. MorphForm comes from a form the unit turns into. Script is given by the script at runtime, found where a statement names both the unit type and the ability, and those entries are inferred and carry a line number. Use this rather than object_get when asking what a unit really has.
 
 Annotations. read-only yes, destructive no, idempotent yes, open-world no.
 
