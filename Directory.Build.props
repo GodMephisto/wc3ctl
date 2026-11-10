@@ -1,8 +1,16 @@
 <Project>
-  <!-- One version for the CLI, Studio and the MCP server inside them. A release tag vX.Y.Z must
-       match it, which the release workflow checks against what the published exe reports. -->
+  <!-- One version for the CLI, Studio and the MCP server inside them, and the single source every
+       other statement of the product version is checked against. A release tag vX.Y.Z must match
+       it, which the release workflow checks against what the published exe reports.
+
+       The exe, the Studio, 'wc3ctl version', 'wc3ctl mcp version' and the MCP 'version_info' tool
+       all read the assembly version that MSBuild derives from the Version element below, so none
+       of them carries a literal. The files that cannot read it are the npm launcher manifest in
+       this tree and the npm package, the .mcpb manifest, server.json and the Directory.Build.props
+       of the wc3-mcp checkout, which is a separate repository. A person sets those, and
+       VersionStatementTests fails until they carry this value. -->
   <PropertyGroup>
-    <Version>0.4.13</Version>
+    <Version>0.5.20</Version>
   </PropertyGroup>
 
   <!-- Build stamp: bake the git short hash and the UTC build time into assembly metadata for every

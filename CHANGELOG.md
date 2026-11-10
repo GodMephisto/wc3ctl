@@ -2,10 +2,10 @@
 
 All notable changes to wc3ctl, newest first. Each release has its own file under `changelog/`.
 
-## 0.5.16 - 2026-11-10
+## 0.5.20 - 2026-11-10
 
 One version, every statement derived from `Directory.Build.props`. Titles, error codes, output
-schemas, caps, the placement object and a working stdin drain. See `changelog/0.5.16.md`.
+schemas, caps, the placement object and a working stdin drain. See `changelog/0.5.20.md`.
 
 All notable changes to wc3ctl. One file per release lives under
 [`changelog/`](changelog/), and this file shows the latest one. The format
