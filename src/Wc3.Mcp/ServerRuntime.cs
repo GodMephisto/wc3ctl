@@ -19,7 +19,10 @@ namespace Wc3.Mcp;
 ///
 /// PRF-04 adds two behaviours at the same request filter. A tool in the long families gets a
 /// progress heartbeat when the client asked for one, and every call records a client cancel so the
-/// line names the tool that was stopped. PRF-05 refuses a folder call over an entry ceiling before
+/// line names the tool that was stopped. The two tools that can say where they are send their own
+/// reports from the tool body, through <see cref="ReportProgress"/> and the IProgress the SDK binds
+/// for the call, so the client sees a map count and a file count rather than only a beat.
+/// PRF-05 refuses a folder call over an entry ceiling before
 /// a single map opens, and PRF-09 refuses an input whose measured projection is past the stated
 /// memory budget. PRF-01 records the four cold start phases and writes them as one line, and the
 /// descriptor build that the initialize reply no longer waits for gets its own line when it runs.
@@ -81,6 +84,35 @@ internal static class ServerRuntime
 
     /// <summary>PRF-04. True when the tool is in a family the specification names as slow.</summary>
     public static bool IsLongCall(string tool) => LongCallTools.Contains(tool);
+
+    /// <summary>
+    /// PRF-04. One progress report from inside a tool body, which is the half of the requirement
+    /// the request filter cannot answer. SDK 1.4.1 binds a parameter of type
+    /// <c>IProgress&lt;ProgressNotificationValue&gt;</c> to a forwarder
+    /// made for the call, and that forwarder sends notifications/progress under the progress token
+    /// the request named. A call that named no token gets an instance that drops every report, so a
+    /// tool that reports unconditionally still works and still says nothing to a client that did not
+    /// ask. The message always starts with the tool name, because that is what the client shows.
+    /// A report that cannot be written, because the pipe is gone, is dropped rather than failing a
+    /// sweep that is otherwise making progress.
+    /// </summary>
+    public static void ReportProgress(
+        IProgress<ProgressNotificationValue>? progress,
+        string tool,
+        string phrase,
+        int done = 0,
+        int total = 0)
+    {
+        if (progress is null) return;
+        var value = new ProgressNotificationValue
+        {
+            Progress = done,
+            Message = tool + " " + phrase,
+            Total = total > 0 ? total : null,
+        };
+        try { progress.Report(value); }
+        catch (Exception) { /* the client is gone, the tool keeps working */ }
+    }
 
     /// <summary>
     /// PRF-04. The two long family tools whose command reads the token itself. The library scan

@@ -75,23 +75,29 @@ public sealed class McpResultSizeTests : IDisposable
 
         Assert.Equal(families.Count, measured.Count);
 
-        // The paged half. list_files brief answers with the total and one page, so a caller learns
-        // how big a list is without paying for every entry. The row names the two counts
-        // returnedCount and totalCount. The served JSON carries "total" and the page array beside a
-        // "truncated" flag, and the page length is the returned count, so the same two facts are
-        // asserted here under the names the tool really emits.
+        // The paged half. list_files brief answers with one page and the four names every paged
+        // result shares, returnedCount, totalCount, hasMore and nextOffset, so a caller learns how
+        // big a list is without paying for every entry and cannot read the page size as the total.
         string paged = ArchivePath(60);
         var brief = Parse(await Call("list_files", Args(("map", paged), ("brief", true))));
 
-        int totalCount = brief.GetProperty("total").GetInt32();
-        int returnedCount = brief.GetProperty("files").GetArrayLength();
-        bool truncated = brief.GetProperty("truncated").GetBoolean();
+        int totalCount = brief.GetProperty("totalCount").GetInt32();
+        int returnedCount = brief.GetProperty("returnedCount").GetInt32();
+        bool hasMore = brief.GetProperty("hasMore").GetBoolean();
+        int nextOffset = brief.GetProperty("nextOffset").GetInt32();
 
         Assert.True(totalCount > BriefListing.PageSize,
             "the paged map holds " + totalCount + " entries, which is not more than one page");
         Assert.Equal(BriefListing.PageSize, returnedCount);
+        Assert.Equal(BriefListing.PageSize, brief.GetProperty("files").GetArrayLength());
         Assert.True(returnedCount < totalCount, "the page is not smaller than the total");
-        Assert.True(truncated, "a cut page must say so");
+        Assert.True(hasMore, "a cut page must say so");
+        Assert.Equal(returnedCount, nextOffset);
+
+        // RES-10, the alias this release keeps. list_files served total and truncated before the
+        // page names, so both stay for one minor release and carry the same two facts.
+        Assert.Equal(totalCount, brief.GetProperty("total").GetInt32());
+        Assert.True(brief.GetProperty("truncated").GetBoolean());
     }
 
     /// <summary>A blank 32 tile map, synthesized in process and written once for the whole test.</summary>

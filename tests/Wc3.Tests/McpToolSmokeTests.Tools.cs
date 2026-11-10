@@ -25,7 +25,9 @@ public sealed class McpSmokeToolsTests : McpSmokeBase
         var page = await Call("quickstart", Args());
         var all = Rows(Prop(page, "items"));
         Assert.Equal(12, all.Count);
-        Assert.Equal(12, Prop(page, "count").GetInt32());
+        Assert.Equal(12, Prop(page, "totalCount").GetInt32());
+        Assert.Equal(12, Prop(page, "returnedCount").GetInt32());
+        Assert.False(Prop(page, "hasMore").GetBoolean());
         Assert.All(all, w => Assert.False(string.IsNullOrWhiteSpace(Prop(w, "id").GetString())));
         Assert.All(all, w => Assert.False(string.IsNullOrWhiteSpace(Prop(w, "title").GetString())));
         Assert.All(all, w => Assert.False(string.IsNullOrWhiteSpace(Prop(w, "prompt").GetString())));

@@ -42,7 +42,11 @@ public sealed record LibraryScanResult(
 /// </summary>
 public static class LibraryScanCommand
 {
-    public static LibraryScanResult Execute(string folder, CancellationToken cancellationToken = default)
+    /// <param name="progress">PRF-04. Called once per map with how many are done and how many there
+    /// are, so the tool in front of this command can report where the sweep is. Null reports
+    /// nothing, which is what the CLI passes.</param>
+    public static LibraryScanResult Execute(string folder, CancellationToken cancellationToken = default,
+        Action<int, int>? progress = null)
     {
         var paths = BenchMapFolder.Enumerate(folder);
         var maps = new List<LibraryScanMap>(paths.Count);
@@ -65,6 +69,7 @@ public static class LibraryScanCommand
             {
                 maps.Add(Fail(name, bytes, e.Message));
             }
+            progress?.Invoke(maps.Count, paths.Count);
         }
         return Summarize(maps);
     }

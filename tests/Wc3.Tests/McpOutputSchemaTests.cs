@@ -13,7 +13,7 @@ namespace Wc3.Tests;
 
 public sealed class McpOutputSchemaTests : IDisposable
 {
-    /// <summary>The twelve tools whose result is a CappedItems wrapper record (RES-02). The list is
+    /// <summary>The twelve tools whose result is a CappedPage wrapper record (RES-02). The list is
     /// written out rather than derived from the return type, so a tool that stops publishing one
     /// fails here instead of shrinking the expected set along with the measured one.</summary>
     private static readonly string[] WrapperRecordTools =
@@ -87,13 +87,18 @@ public sealed class McpOutputSchemaTests : IDisposable
             "structuredContent and the text content are not the same object");
 
         var wrapper = Assert.IsType<JsonObject>(fromStructured);
-        foreach (string field in new[] { "cap", "truncated", "total", "items" })
+        foreach (string field in new[]
+                 {
+                     "returnedCount", "totalCount", "hasMore", "nextOffset", "items",
+                     "cap", "truncated", "total",
+                 })
             Assert.True(wrapper.ContainsKey(field), "structuredContent has no " + field);
     }
 
     /// <summary>Why a published schema is unusable, or null when it describes the wrapper record.
     /// The MCP revision this server speaks requires an object schema, and a caller that reads the
-    /// schema needs the four fields it will find in the result.</summary>
+    /// schema needs the fields it will find in the result, the four RES-10 page names, the array and
+    /// the three names this release keeps as aliases.</summary>
     private static string? Problem(JsonElement schema)
     {
         if (schema.ValueKind != JsonValueKind.Object)
@@ -105,7 +110,10 @@ public sealed class McpOutputSchemaTests : IDisposable
             return "schema has no properties";
 
         var named = properties.EnumerateObject().Select(p => p.Name).OrderBy(n => n, StringComparer.Ordinal).ToArray();
-        string[] expected = { "cap", "items", "total", "truncated" };
+        string[] expected =
+        {
+            "cap", "hasMore", "items", "nextOffset", "returnedCount", "total", "totalCount", "truncated",
+        };
         return named.SequenceEqual(expected)
             ? null
             : "schema properties are " + string.Join(",", named);

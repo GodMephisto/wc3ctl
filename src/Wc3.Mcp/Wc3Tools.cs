@@ -17,8 +17,8 @@ namespace Wc3.Mcp;
 /// loads the map(s), calls the shared command layer and returns its result POCO
 /// (the SDK serializes it to JSON), no map parsing or logic lives here.
 /// <para>
-/// RES-02. The twelve tools whose result is a wrapper record, <see cref="CappedItems{T}"/>
-/// with its cap, truncated flag, total and items, also publish an output schema. The attribute's
+/// RES-02. The twelve tools whose result is a wrapper record, <see cref="CappedPage{T}"/>
+/// with its page counts and items, also publish an output schema. The attribute's
 /// <c>UseStructuredContent</c> is what turns it on, and SDK 1.4.1 then generates the schema from
 /// the method's return type and sends the same object as <c>structuredContent</c> beside the text
 /// block, so no schema is hand written here. At SDK 1.4.1 the attribute value wins over
@@ -61,17 +61,22 @@ public static class Wc3Tools
 
     [McpServerTool(Name = "list_files", Title = "List map files", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("List the map archive's internal files, each with its name (null = unnamed/protected entry), size in bytes, whether wc3ctl knows/parses the format, and for unnamed entries the content type sniffed from their leading bytes ('BLP texture', 'MDX model', 'empty', ...). Pass brief true to get the total and only the first 50 files when the full list would be too large for the context.")]
-    public static object ListFiles(
+    public static PagedFiles ListFiles(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Recover unnamed entries' names from the map's own script and object data before listing (worth paying for on a protected map). Recovered names are flagged nameFromHarvest.")] bool harvest = false,
         [Description("Return the total file count and only the first 50 files instead of the full list. Default false.")] bool brief = false)
-        => Run<object>(() =>
+        => Run(() =>
         {
             var doc = LoadMap(map);
             if (harvest) doc.HarvestAssetNames();
-            return brief
-                ? ListCommand.ExecuteBrief(doc, typeUnnamed: true)
-                : ListCommand.Execute(doc, typeUnnamed: true);
+            if (!brief)
+            {
+                var all = ListCommand.Execute(doc, typeUnnamed: true).Files;
+                return new PagedFiles(all.Count, all.Count, false, null, all, false, all.Count);
+            }
+            var page = ListCommand.ExecuteBrief(doc, typeUnnamed: true);
+            return new PagedFiles(page.Files.Count, page.Total, page.Truncated,
+                page.Truncated ? page.Files.Count : null, page.Files, page.Truncated, page.Total);
         });
 
     [McpServerTool(Name = "map_overview", Title = "Map overview", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
@@ -117,7 +122,7 @@ public static class Wc3Tools
         => Run(() =>
         {
             var items = QuickstartCommand.Execute(goal);
-            return new QuickstartPage(items, items.Count);
+            return new QuickstartPage(items.Count, items.Count, false, null, items);
         });
 
     [McpServerTool(Name = "mcp_export_verify", Title = "Verify MCP export", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
@@ -348,12 +353,12 @@ public static class Wc3Tools
 
     [McpServerTool(Name = "object_list", Title = "List custom objects", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("List the map's custom/modified objects of one Object Editor kind: rawcode, base rawcode (null = created from scratch) and resolved name. Pass brief true to get the total and only the first 50 objects when the full list would be too large for the context.")]
-    public static object ObjectList(
+    public static PagedObjects ObjectList(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Object kind: " + KindValues + ".")] string kind = "unit",
         [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var). Used to resolve base-game names.")] string? game_dir = null,
         [Description("Return the total object count and only the first 50 objects instead of the full list. Default false.")] bool brief = false)
-        => Run<object>(() =>
+        => Run(() =>
         {
             ObjectKind parsed;
             try { parsed = ParseKind(kind); }
@@ -363,9 +368,14 @@ public static class Wc3Tools
                 throw Wc3Errors.Refuse(Wc3ErrorCodes.InvalidArgument, ex.Message
                     + ". A trigger and a script are not object kinds, and triggers_read returns both", kind);
             }
-            return brief
-                ? ObjectListCommand.ExecuteBrief(LoadMap(map), parsed, ResolveGameDir(game_dir))
-                : ObjectListCommand.Execute(LoadMap(map), parsed, ResolveGameDir(game_dir));
+            if (!brief)
+            {
+                var all = ObjectListCommand.Execute(LoadMap(map), parsed, ResolveGameDir(game_dir)).Items;
+                return new PagedObjects(all.Count, all.Count, false, null, all, false, all.Count);
+            }
+            var page = ObjectListCommand.ExecuteBrief(LoadMap(map), parsed, ResolveGameDir(game_dir));
+            return new PagedObjects(page.Items.Count, page.Total, page.Truncated,
+                page.Truncated ? page.Items.Count : null, page.Items, page.Truncated, page.Total);
         });
 
     [McpServerTool(Name = "object_get", Title = "Get an object", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
@@ -964,7 +974,8 @@ public static class Wc3Tools
         [Description("Frames per second used to convert a glTF animation's time range into a sequence frame interval. The Warcraft III default is 30.")] double fps = 30,
         [Description(OverwriteDoc)] bool overwrite = false,
         [Description(ExpectShaDoc)] string? expect_input_sha256 = null,
-        [Description("Cancels the call at the next check point. The import reads the token before the file it writes, so it stops at that file, removes what it wrote and publishes nothing.")] CancellationToken cancellationToken = default)
+        [Description("Cancels the call at the next check point. The import reads the token before the file it writes, so it stops at that file, removes what it wrote and publishes nothing.")] CancellationToken cancellationToken = default,
+        IProgress<ProgressNotificationValue>? progress = null)
         => Run<object>(() =>
         {
             string full = Path.GetFullPath(out_path);
@@ -973,8 +984,11 @@ public static class Wc3Tools
             try
             {
                 CheckPoint(cancellationToken, "the import start");
+                ServerRuntime.ReportProgress(progress, "model_import", "started, reading the input");
                 var r = ModelImportCommand.ExecutePath(obj, Path.Combine(staging, Path.GetFileName(full)),
-                    texture, fps, cancellationToken);
+                    texture, fps, cancellationToken,
+                    (done, total) => ServerRuntime.ReportProgress(
+                        progress, "model_import", "wrote " + done + " of " + total + " files", done, total));
                 CheckPoint(cancellationToken, "the publish");
                 var w = WriteGate.Publish(
                     StagedPairs(staging, Path.GetDirectoryName(full) ?? ".", Path.GetFileName(full)),
@@ -1252,12 +1266,20 @@ public static class Wc3Tools
 
     [McpServerTool(Name = "placed_units_list", Title = "List placed units", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("List every unit already PLACED on the map (war3mapUnits.doo), each with the creation number needed to edit or remove it, plus its type rawcode, owner, position and hero stats. Start locations appear here too. Call this before placed_unit_set or placed_unit_remove. Pass brief true to get the total and only the first 50 units when the full list would be too large for the context.")]
-    public static object PlacedUnitsList(
+    public static PagedUnits PlacedUnitsList(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Return the total unit count and only the first 50 units instead of the full list. Default false.")] bool brief = false)
-        => Run<object>(() => brief
-            ? UnitInstanceCommand.ListBrief(LoadMap(map))
-            : UnitInstanceCommand.List(LoadMap(map)));
+        => Run(() =>
+        {
+            if (!brief)
+            {
+                var all = UnitInstanceCommand.List(LoadMap(map));
+                return new PagedUnits(all.Count, all.Count, false, null, all, false, all.Count);
+            }
+            var page = UnitInstanceCommand.ListBrief(LoadMap(map));
+            return new PagedUnits(page.Units.Count, page.Total, page.Truncated,
+                page.Truncated ? page.Units.Count : null, page.Units, page.Truncated, page.Total);
+        });
 
     [McpServerTool(Name = "placed_unit_get", Title = "Get a placed unit", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Show one placed unit's full state by creation number: type, owner, position, facing, scale, hero level and attributes, hit points and mana percentages, gold and target acquisition range.")]
@@ -1302,9 +1324,9 @@ public static class Wc3Tools
 
     [McpServerTool(Name = "placed_doodads_list", Title = "List placed doodads", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
     [Description("List every doodad and destructable already PLACED on the map (war3map.doo), each with the creation number needed to edit or remove it, plus its type rawcode, position, rotation, scale and variation.")]
-    public static CappedItems<DoodadInstanceInfo> PlacedDoodadsList(
+    public static CappedPage<DoodadInstanceInfo> PlacedDoodadsList(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
-        => Run(() => Wc3Limit.Cap(DoodadInstanceCommand.List(LoadMap(map))));
+        => Run(() => Page(Wc3Limit.Cap(DoodadInstanceCommand.List(LoadMap(map)))));
 
     [McpServerTool(Name = "placed_doodad_get", Title = "Get a placed doodad", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Show one placed doodad's full state by creation number: type, position, rotation, scale, variation and life percentage.")]
@@ -1984,7 +2006,7 @@ public static class Wc3Tools
 
     [McpServerTool(Name = "audit_hero", Title = "Audit hero wiring", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
     [Description("Say whether a placed hero's abilities are wired up in the script, not merely present as object data. For every ability it walks the chain end to end, the ability object exists, something dispatches a cast on its id, that handler is attached to a trigger, the trigger's event reaches the hero's player, the handler body still has live statements, any identity array it gates on lists this hero, and the init that builds the trigger runs exactly once. A missing link is named, so a broken port can be fixed rather than only detected. Omit hero to audit every placed hero.")]
-    public static CappedItems<HeroWiringResult> AuditHero(
+    public static CappedPage<HeroWiringResult> AuditHero(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Hero rawcode to audit, e.g. 'H001'. Omit to audit every hero placed on the map.")] string? hero = null)
         => Run(() =>
@@ -1993,7 +2015,7 @@ public static class Wc3Tools
             IReadOnlyList<HeroWiringResult> rows = hero is null
                 ? HeroWiringAudit.AuditPlacedHeroes(doc)
                 : new[] { HeroWiringAudit.Audit(doc, hero, ownerId: 0) };
-            return Wc3Limit.Cap(rows);
+            return Page(Wc3Limit.Cap(rows));
         });
 
     [McpServerTool(Name = "audit_fidelity", Title = "Audit port fidelity", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
@@ -2007,7 +2029,7 @@ public static class Wc3Tools
 
     [McpServerTool(Name = "audit_readiness", Title = "Audit script readiness", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
     [Description("Say whether a placed hero's script would run correctly, not merely fire, the gap audit_hero cannot see since it only proves a cast reaches a handler. Checks that InitGlobals and RunInitializationTriggers, the two World Editor entry points that set every custom starting value and run any Map Initialization trigger, are carried and actually called, and that every udg_ global the hero's carried code reads is assigned somewhere rather than left at its type default. A hero can audit clean on audit_hero and still do nothing worth playing. Omit hero to check every hero placed.")]
-    public static CappedItems<RuntimeReadinessResult> AuditReadiness(
+    public static CappedPage<RuntimeReadinessResult> AuditReadiness(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Hero rawcode to check, e.g. 'H001'. Omit to check every hero placed on the map.")] string? hero = null)
         => Run(() =>
@@ -2016,12 +2038,12 @@ public static class Wc3Tools
             IReadOnlyList<RuntimeReadinessResult> rows = hero is null
                 ? RuntimeReadinessCommand.CheckPlacedHeroes(doc)
                 : new[] { RuntimeReadinessCommand.Check(doc, hero, ownerId: 0) };
-            return Wc3Limit.Cap(rows);
+            return Page(Wc3Limit.Cap(rows));
         });
 
     [McpServerTool(Name = "audit_ability", Title = "Audit ability runtime chain", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
     [Description("Report PASS or the exact broken link, per ability, across a placed hero's runtime chain, deeper than audit_hero, which only proves a cast reaches a live trigger. Checks that the dispatch is reached exactly once (two live triggers make every affected spell fire twice), that handlers survive a port, that a follow-up TimerStart loop starts and its callback is declared, that every StartSpellUnit pause is matched by a live StopSpellUnit, that callbacks name a declared function, that globals read are assigned, and that named special effects still exist. Omit hero to audit every placed hero.")]
-    public static CappedItems<AbilityAuditResult> AuditAbility(
+    public static CappedPage<AbilityAuditResult> AuditAbility(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Hero rawcode to audit, e.g. 'H001'. Omit to audit every hero placed on the map.")] string? hero = null)
         => Run(() =>
@@ -2030,7 +2052,7 @@ public static class Wc3Tools
             IReadOnlyList<AbilityAuditResult> rows = hero is null
                 ? AbilityAuditCommand.AuditPlacedHeroes(doc)
                 : new[] { AbilityAuditCommand.Audit(doc, hero, ownerId: 0) };
-            return Wc3Limit.Cap(rows);
+            return Page(Wc3Limit.Cap(rows));
         });
 
     [McpServerTool(Name = "palette_doodad", Title = "List placeable doodads", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
@@ -2544,9 +2566,9 @@ public static class Wc3Tools
     [Description("List the archive's internal entries with their CURRENT size, which reflects a "
         + "pending replacement rather than the stale original. Name is null for an unnamed entry, "
         + "which is what a protected map produces.")]
-    public static CappedItems<FileState> FileList(
+    public static CappedPage<FileState> FileList(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
-        => Run(() => Wc3Limit.Cap(FileEditCommand.ListFiles(LoadMap(map))));
+        => Run(() => Page(Wc3Limit.Cap(FileEditCommand.ListFiles(LoadMap(map)))));
 
     [McpServerTool(Name = "file_get_text", Title = "Read an internal text file", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Read one internal file as text, naming the encoding it used and whether a byte order mark declared that encoding or it was assumed. Reports how many bytes the decoder had to replace and refuses a lossy decode with LOSSY_DECODE unless allow_lossy is true, so a binary entry is never handed back as corrupt text. Use file_extract to write the raw bytes instead.")]
@@ -2734,9 +2756,9 @@ public static class Wc3Tools
 
     [McpServerTool(Name = "sound_list", Title = "List sound definitions", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
     [Description("List the map's sound catalog (war3map.w3s): each definition's name, file path, channel, flags, volume, pitch, priority and min/max distance.")]
-    public static CappedItems<SoundFields> SoundList(
+    public static CappedPage<SoundFields> SoundList(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
-        => Run(() => Wc3Limit.Cap(SoundCommand.List(LoadMap(map))));
+        => Run(() => Page(Wc3Limit.Cap(SoundCommand.List(LoadMap(map)))));
 
     [McpServerTool(Name = "sound_add", Title = "Add a sound definition", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Add a new sound definition (keyed by name) to the map's sound catalog and save the edited map to out_path. The input map is NEVER modified in place.")]
@@ -2798,9 +2820,9 @@ public static class Wc3Tools
 
     [McpServerTool(Name = "camera_list", Title = "List cameras", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
     [Description("List the map's cameras (war3map.w3c): each camera's name, target position, rotation, angle of attack, distance and field of view.")]
-    public static CappedItems<CameraFields> CameraList(
+    public static CappedPage<CameraFields> CameraList(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
-        => Run(() => Wc3Limit.Cap(CameraCommand.List(LoadMap(map))));
+        => Run(() => Page(Wc3Limit.Cap(CameraCommand.List(LoadMap(map)))));
 
     [McpServerTool(Name = "camera_add", Title = "Add a camera", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Add a camera at a target position and save the edited map to out_path. The input map is NEVER modified in place. Rejects a blank or duplicate name.")]
@@ -2965,9 +2987,9 @@ public static class Wc3Tools
 
     [McpServerTool(Name = "player_list", Title = "List player slots", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
     [Description("List the map's player slots (war3map.w3i): each player's id, name, color, race, controller and whether its start position is fixed.")]
-    public static CappedItems<PlayerInfo> PlayerList(
+    public static CappedPage<PlayerInfo> PlayerList(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
-        => Run(() => Wc3Limit.Cap(PlayerForceCommand.GetPlayers(LoadMap(map))));
+        => Run(() => Page(Wc3Limit.Cap(PlayerForceCommand.GetPlayers(LoadMap(map)))));
 
     [McpServerTool(Name = "player_set_force", Title = "Move a player to a force", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Move a player into a force (team) and save the edited map to out_path. The input map is NEVER modified in place.")]
@@ -2986,9 +3008,9 @@ public static class Wc3Tools
 
     [McpServerTool(Name = "force_list", Title = "List forces", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
     [Description("List the map's forces/teams (war3map.w3i): each force's index, name, member player ids and alliance/sharing flags.")]
-    public static CappedItems<ForceInfo> ForceList(
+    public static CappedPage<ForceInfo> ForceList(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
-        => Run(() => Wc3Limit.Cap(PlayerForceCommand.GetForces(LoadMap(map))));
+        => Run(() => Page(Wc3Limit.Cap(PlayerForceCommand.GetForces(LoadMap(map)))));
 
     [McpServerTool(Name = "force_set_flags", Title = "Set force alliance flags", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Set a force's alliance/sharing flags and save the edited map to out_path. The input map is NEVER modified in place.")]
@@ -3115,9 +3137,9 @@ public static class Wc3Tools
 
     [McpServerTool(Name = "region_list", Title = "List regions", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
     [Description("List the map's rectangular regions (war3map.w3r), each with its creation number, name, and bounds. Add regions with place_region.")]
-    public static CappedItems<PlacementCommand.RegionInfo> RegionList(
+    public static CappedPage<PlacementCommand.RegionInfo> RegionList(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
-        => Run(() => Wc3Limit.Cap(PlacementCommand.ListRegions(LoadMap(map))));
+        => Run(() => Page(Wc3Limit.Cap(PlacementCommand.ListRegions(LoadMap(map)))));
 
     [McpServerTool(Name = "region_remove", Title = "Remove a region", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = false)]
     [Description("Remove a region by name and save the edited map to out_path. The input map is NEVER modified in place.")]
@@ -3523,9 +3545,9 @@ public static class Wc3Tools
 
     [McpServerTool(Name = "trigger_var_list", Title = "List global variables", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
     [Description("List the map's global variables (the .wtg Variables list), each with its name, type, array flag, declared size and initial value. Read-only.")]
-    public static CappedItems<TriggerVariableFields> TriggerVarList(
+    public static CappedPage<TriggerVariableFields> TriggerVarList(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
-        => Run(() => Wc3Limit.Cap(TriggerCommand.ListVariables(LoadMap(map))));
+        => Run(() => Page(Wc3Limit.Cap(TriggerCommand.ListVariables(LoadMap(map)))));
 
     [McpServerTool(Name = "trigger_var_add", Title = "Add a global variable", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Add a global variable to the map's wtg and save the edited map to out_path. Provides a name, a type (for example integer, real, string, boolean, unit, group, trigger) and, for an array, the array flag and size. An initial value marks the variable initialized. Refuses a blank name or type and a name that already exists, because the wtg keys variables by name. IMPORTANT: this edits war3map.wtg, the World Editor's trigger SOURCE, not war3map.j, so a variable it defines is visible in the World Editor and inert in game until that editor saves the map. The input map is NEVER modified in place.")]
@@ -3942,6 +3964,14 @@ public static class Wc3Tools
         catch (Exception ex) { throw Failed(ex); }
     }
 
+    /// <summary>RES-10. One capped collection under the page names every list result shares, with
+    /// the three names these twelve tools served before kept as aliases for one minor release. A
+    /// capped list has no offset argument, so <c>nextOffset</c> is the index the next page would
+    /// start at when the cap cut anything, and null when it did not.</summary>
+    private static CappedPage<T> Page<T>(CappedItems<T> capped) =>
+        new(capped.Items.Count, capped.Total, capped.Truncated,
+            capped.Truncated ? capped.Cap : null, capped.Items, capped.Cap, capped.Truncated, capped.Total);
+
     private static MapDocument LoadMap(string map)
     {
         if (string.IsNullOrWhiteSpace(map))
@@ -4281,10 +4311,10 @@ public static class Wc3Tools
 
     [McpServerTool(Name = "target_list", Title = "List available builds", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
     [Description("List all available builds in the schemas directory, with their sections. Use --full_only to skip scripts-only builds.")]
-    public static CappedItems<BuildInfo> TargetList(
+    public static CappedPage<BuildInfo> TargetList(
         [Description("Optional path to schemas directory containing schema folders with manifest.json.")] string? schemas_dir = null,
         [Description("When true, skip scripts-only builds that have no object data.")] bool full_only = false)
-        => Run(() => Wc3Limit.Cap(TargetBuildSettings.List(schemasDir: schemas_dir, fullOnly: full_only)));
+        => Run(() => Page(Wc3Limit.Cap(TargetBuildSettings.List(schemasDir: schemas_dir, fullOnly: full_only))));
 
     [McpServerTool(Name = "gamedata_schema_diff", Title = "Diff two schema folders", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Compare two schema folders (produced by gamedata schema) and report added, removed and changed object fields, trigger functions, script types and natives, and enumerated field option sets. Groups output by section (objects, triggers, script, enums) then by file or category. A section only one build has is listed as not compared rather than everything added or removed. Use this to track what a patch changes across builds, or to check whether two maps targeting different patches are compatible.")]
@@ -4429,11 +4459,15 @@ public static class Wc3Tools
     [Description("Open every map in a folder through the loader and report per map its size in bytes, the build it targets if known, whether it loads, its archive entry count and its diagnostic count, plus the loaded, failed and byte totals. Opens one map at a time. Read-only.")]
     public static LibraryScanResult LibraryScan(
         [Description("Folder of .w3x/.w3m maps, searched recursively.")] string folder,
-        [Description("Cancels the call at the next check point. The sweep reads the token before each map opens, so it stops at the next file rather than at the end of the folder.")] CancellationToken cancellationToken = default)
+        [Description("Cancels the call at the next check point. The sweep reads the token before each map opens, so it stops at the next file rather than at the end of the folder.")] CancellationToken cancellationToken = default,
+        IProgress<ProgressNotificationValue>? progress = null)
         => Run(() =>
         {
             CheckPoint(cancellationToken, "the scan start");
-            return LibraryScanCommand.Execute(folder, cancellationToken);
+            ServerRuntime.ReportProgress(progress, "library_scan", "started, sweeping the folder");
+            return LibraryScanCommand.Execute(folder, cancellationToken,
+                (done, total) => ServerRuntime.ReportProgress(
+                    progress, "library_scan", "scanned " + done + " of " + total + " maps", done, total));
         });
 
     [McpServerTool(Name = "library_audit", Title = "Audit a folder of maps", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
@@ -4752,7 +4786,48 @@ public sealed record EditToolResult(
     string SavedTo, string Message,
     string? InputSha256 = null, string OutputSha256 = "", int FilesRewritten = 0, long BytesWritten = 0);
 
+/// <summary>
+/// RES-10. The page a capped collection returns. Every paged result names the page size
+/// <c>returnedCount</c>, the size of the whole list <c>totalCount</c>, whether anything is left
+/// <c>hasMore</c> and where a next page would start <c>nextOffset</c>, and never a bare
+/// <c>count</c>. This is the shape the twelve <c>UseStructuredContent</c> list tools return.
+/// <para>
+/// The last three fields are the names those twelve tools served before this version, kept for one
+/// minor release so a caller that already reads them keeps working. <c>truncated</c> is the same
+/// fact as <c>hasMore</c> and <c>total</c> the same fact as <c>totalCount</c>; <c>cap</c> is how
+/// many items the result may carry. A tool with no offset argument reports
+/// <c>nextOffset</c> as the index the next page would start at, so a caller learns where the cut
+/// fell even though this version offers no argument to ask for it.
+/// </para>
+/// </summary>
+public sealed record CappedPage<T>(
+    int ReturnedCount, int TotalCount, bool HasMore, int? NextOffset,
+    IReadOnlyList<T> Items, int Cap, bool Truncated, int Total);
+
+/// <summary>RES-10. The <c>list_files</c> page. The array keeps the name it has always had,
+/// <c>files</c>, and the counts use the names every paged result uses.</summary>
+public sealed record PagedFiles(
+    int ReturnedCount, int TotalCount, bool HasMore, int? NextOffset,
+    IReadOnlyList<FileEntryInfo> Files, bool Truncated, int Total);
+
+/// <summary>RES-10. The <c>object_list</c> page, the same shape as <see cref="PagedFiles"/> with
+/// the array under <c>items</c>.</summary>
+public sealed record PagedObjects(
+    int ReturnedCount, int TotalCount, bool HasMore, int? NextOffset,
+    IReadOnlyList<ObjectListItem> Items, bool Truncated, int Total);
+
+/// <summary>RES-10. The <c>placed_units_list</c> page, the same shape with the array under
+/// <c>units</c>.</summary>
+public sealed record PagedUnits(
+    int ReturnedCount, int TotalCount, bool HasMore, int? NextOffset,
+    IReadOnlyList<UnitInstanceInfo> Units, bool Truncated, int Total);
+
 /// <summary>The quickstart tool's answer. A read tool returns an object, not a bare array, so the
-/// workflows ride under items with their count beside them (the same shape the brief listing
-/// uses).</summary>
-public sealed record QuickstartPage(IReadOnlyList<QuickstartWorkflow> Items, int Count);
+/// workflows ride under items with the RES-10 page names beside them. The twelve workflows are
+/// always returned whole, so <c>hasMore</c> is false and <c>nextOffset</c> is null. The <c>count</c>
+/// field this tool used to serve is gone rather than aliased, because RES-10 forbids a bare
+/// <c>count</c> on a page and this is the tool the CMP-04 renames list records the removal for.
+/// </summary>
+public sealed record QuickstartPage(
+    int ReturnedCount, int TotalCount, bool HasMore, int? NextOffset,
+    IReadOnlyList<QuickstartWorkflow> Items);

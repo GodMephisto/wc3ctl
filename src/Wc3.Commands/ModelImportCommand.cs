@@ -68,9 +68,14 @@ public static class ModelImportCommand
     /// removes the files this call wrote and then throws, so a cancelled import leaves no partial
     /// model and no orphaned texture beside it.
     /// </para>
+    /// <para>
+    /// PRF-04. <paramref name="progress"/> is called after each file is written, with how many are
+    /// written and how many the call will write, so the tool in front of this command can report
+    /// where the import is. Null reports nothing, which is what the CLI passes.
+    /// </para>
     /// </summary>
     public static ModelImportResult ExecutePath(string modelPath, string outPath, string? texturePath = null, double fps = 30,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, Action<int, int>? progress = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelPath);
         // PRF-04. Before the input is opened, so a cancel that arrived before the call writes
@@ -99,6 +104,7 @@ public static class ModelImportCommand
         {
             File.WriteAllBytes(outPath, output);
             written.Add(outPath);
+            progress?.Invoke(written.Count, textures.Count + 1);
             foreach (var texture in textures)
             {
                 // PRF-04. The next file. A cancel between two textures stops here rather than
@@ -109,6 +115,7 @@ public static class ModelImportCommand
                 string path = Path.Combine(target, texture.FileName);
                 File.WriteAllBytes(path, texture.Bytes);
                 written.Add(path);
+                progress?.Invoke(written.Count, textures.Count + 1);
             }
         }
         catch (OperationCanceledException)

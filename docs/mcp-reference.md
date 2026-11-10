@@ -219,7 +219,7 @@ Family. triggers
 
 Report PASS or the exact broken link, per ability, across a placed hero's runtime chain, deeper than audit_hero, which only proves a cast reaches a live trigger. Checks that the dispatch is reached exactly once (two live triggers make every affected spell fire twice), that handlers survive a port, that a follow-up TimerStart loop starts and its callback is declared, that every StartSpellUnit pause is matched by a live StopSpellUnit, that callbacks name a declared function, that globals read are assigned, and that named special effects still exist. Omit hero to audit every placed hero.
 
-Result. one JSON object with the fields cap, truncated, total and items, where items is an array of objects with the fields hero (string), name (string), ownerId (integer), abilities (array), passed (integer), total (integer)
+Result. one JSON object with the fields returnedCount (integer), totalCount (integer), hasMore (boolean), nextOffset (integer), items (array), cap (integer), truncated (boolean), total (integer)
 
 Errors. Every call can return POLICY_DENIED and COMMAND_REJECTED, and this tool's own text names no other code.
 
@@ -272,7 +272,7 @@ Family. triggers
 
 Say whether a placed hero's abilities are wired up in the script, not merely present as object data. For every ability it walks the chain end to end, the ability object exists, something dispatches a cast on its id, that handler is attached to a trigger, the trigger's event reaches the hero's player, the handler body still has live statements, any identity array it gates on lists this hero, and the init that builds the trigger runs exactly once. A missing link is named, so a broken port can be fixed rather than only detected. Omit hero to audit every placed hero.
 
-Result. one JSON object with the fields cap, truncated, total and items, where items is an array of objects with the fields hero (string), name (string), ownerId (integer), abilities (array), wired (integer), notCastable (integer), problems (array)
+Result. one JSON object with the fields returnedCount (integer), totalCount (integer), hasMore (boolean), nextOffset (integer), items (array), cap (integer), truncated (boolean), total (integer)
 
 Errors. Every call can return POLICY_DENIED and COMMAND_REJECTED, and this tool's own text names no other code.
 
@@ -307,7 +307,7 @@ Family. triggers
 
 Say whether a placed hero's script would run correctly, not merely fire, the gap audit_hero cannot see since it only proves a cast reaches a handler. Checks that InitGlobals and RunInitializationTriggers, the two World Editor entry points that set every custom starting value and run any Map Initialization trigger, are carried and actually called, and that every udg_ global the hero's carried code reads is assigned somewhere rather than left at its type default. A hero can audit clean on audit_hero and still do nothing worth playing. Omit hero to check every hero placed.
 
-Result. one JSON object with the fields cap, truncated, total and items, where items is an array of objects with the fields hero (string), name (string), ownerId (integer), findings (array), diagnostics (array), errors (integer), ready (boolean)
+Result. one JSON object with the fields returnedCount (integer), totalCount (integer), hasMore (boolean), nextOffset (integer), items (array), cap (integer), truncated (boolean), total (integer)
 
 Errors. Every call can return POLICY_DENIED and COMMAND_REJECTED, and this tool's own text names no other code.
 
@@ -503,7 +503,7 @@ Family. placed
 
 List the map's cameras (war3map.w3c): each camera's name, target position, rotation, angle of attack, distance and field of view.
 
-Result. one JSON object with the fields cap, truncated, total and items, where items is an array of objects with the fields name (string), targetX (number), targetY (number), zOffset (number), rotation (number), angleOfAttack (number), targetDistance (number), roll (number), fieldOfView (number), farClippingPlane (number), nearClippingPlane (number), localPitch (number), and 2 more
+Result. one JSON object with the fields returnedCount (integer), totalCount (integer), hasMore (boolean), nextOffset (integer), items (array), cap (integer), truncated (boolean), total (integer)
 
 Errors. Every call can return POLICY_DENIED and COMMAND_REJECTED, and this tool's own text names no other code.
 
@@ -960,7 +960,7 @@ Family. map
 
 List the archive's internal entries with their CURRENT size, which reflects a pending replacement rather than the stale original. Name is null for an unnamed entry, which is what a protected map produces.
 
-Result. one JSON object with the fields cap, truncated, total and items, where items is an array of objects with the fields sizeBytes (integer), isDirty (boolean), hasOverride (boolean)
+Result. one JSON object with the fields returnedCount (integer), totalCount (integer), hasMore (boolean), nextOffset (integer), items (array), cap (integer), truncated (boolean), total (integer)
 
 Errors. Every call can return POLICY_DENIED and COMMAND_REJECTED, and this tool's own text names no other code.
 
@@ -997,7 +997,7 @@ Family. placed
 
 List the map's forces/teams (war3map.w3i): each force's index, name, member player ids and alliance/sharing flags.
 
-Result. one JSON object with the fields cap, truncated, total and items, where items is an array of objects with the fields index (integer), name (string), playerIds (array), allied (boolean), alliedVictory (boolean), sharedVision (boolean), sharedUnitControl (boolean), sharedAdvUnitControl (boolean)
+Result. one JSON object with the fields returnedCount (integer), totalCount (integer), hasMore (boolean), nextOffset (integer), items (array), cap (integer), truncated (boolean), total (integer)
 
 Errors. Every call can return POLICY_DENIED and COMMAND_REJECTED, and this tool's own text names no other code.
 
@@ -1612,7 +1612,7 @@ Family. map
 
 List the map archive's internal files, each with its name (null = unnamed/protected entry), size in bytes, whether wc3ctl knows/parses the format, and for unnamed entries the content type sniffed from their leading bytes ('BLP texture', 'MDX model', 'empty', ...). Pass brief true to get the total and only the first 50 files when the full list would be too large for the context.
 
-Result. any JSON value, the method is typed object so the shape is chosen by the arguments
+Result. one JSON object with the fields returnedCount (integer), totalCount (integer), hasMore (boolean), nextOffset (integer), files (array), truncated (boolean), total (integer)
 
 Errors. Every call can return POLICY_DENIED and COMMAND_REJECTED, and this tool's own text names no other code.
 
@@ -2385,7 +2385,7 @@ Family. objects
 
 List the map's custom/modified objects of one Object Editor kind: rawcode, base rawcode (null = created from scratch) and resolved name. Pass brief true to get the total and only the first 50 objects when the full list would be too large for the context.
 
-Result. any JSON value, the method is typed object so the shape is chosen by the arguments
+Result. one JSON object with the fields returnedCount (integer), totalCount (integer), hasMore (boolean), nextOffset (integer), items (array), truncated (boolean), total (integer)
 
 Errors. Every call can return POLICY_DENIED and COMMAND_REJECTED, and this tool's own text names no other code.
 
@@ -2876,7 +2876,7 @@ Family. placed
 
 List every doodad and destructable already PLACED on the map (war3map.doo), each with the creation number needed to edit or remove it, plus its type rawcode, position, rotation, scale and variation.
 
-Result. one JSON object with the fields cap, truncated, total and items, where items is an array of objects with the fields creationNumber (integer), typeRawcode (string), name (string), x (number), y (number), z (number), rotation (number), scale (object), variation (integer), lifePercent (integer)
+Result. one JSON object with the fields returnedCount (integer), totalCount (integer), hasMore (boolean), nextOffset (integer), items (array), cap (integer), truncated (boolean), total (integer)
 
 Errors. Every call can return POLICY_DENIED and COMMAND_REJECTED, and this tool's own text names no other code.
 
@@ -3009,7 +3009,7 @@ Family. placed
 
 List every unit already PLACED on the map (war3mapUnits.doo), each with the creation number needed to edit or remove it, plus its type rawcode, owner, position and hero stats. Start locations appear here too. Call this before placed_unit_set or placed_unit_remove. Pass brief true to get the total and only the first 50 units when the full list would be too large for the context.
 
-Result. any JSON value, the method is typed object so the shape is chosen by the arguments
+Result. one JSON object with the fields returnedCount (integer), totalCount (integer), hasMore (boolean), nextOffset (integer), units (array), truncated (boolean), total (integer)
 
 Errors. Every call can return POLICY_DENIED and COMMAND_REJECTED, and this tool's own text names no other code.
 
@@ -3025,7 +3025,7 @@ Family. placed
 
 List the map's player slots (war3map.w3i): each player's id, name, color, race, controller and whether its start position is fixed.
 
-Result. one JSON object with the fields cap, truncated, total and items, where items is an array of objects with the fields id (integer), name (string), color (object), race (string), controller (string), fixedStartPosition (boolean)
+Result. one JSON object with the fields returnedCount (integer), totalCount (integer), hasMore (boolean), nextOffset (integer), items (array), cap (integer), truncated (boolean), total (integer)
 
 Errors. Every call can return POLICY_DENIED and COMMAND_REJECTED, and this tool's own text names no other code.
 
@@ -3211,7 +3211,7 @@ Family. product
 
 Route a broad request to the right workflow. Returns the ten core workflows a map task usually falls into (inspect, port-hero, reforged-3-fix, black-portraits, shrink-map, hunt-leaks, edit-objects, terrain-and-placement, lua-conversion, patch-compat), each naming the MCP tools and the wc3ctl commands that carry it out. Pass a goal (a substring such as 'portrait', 'leak' or 'shrink') to narrow the list. With more than two hundred tools on this server, call this first when the caller states an outcome rather than a tool. Read-only, it touches no map.
 
-Result. one JSON object with the fields items (array), count (integer)
+Result. one JSON object with the fields returnedCount (integer), totalCount (integer), hasMore (boolean), nextOffset (integer), items (array)
 
 Errors. Every call can return POLICY_DENIED and COMMAND_REJECTED, and this tool's own text names no other code.
 
@@ -3283,7 +3283,7 @@ Family. placed
 
 List the map's rectangular regions (war3map.w3r), each with its creation number, name, and bounds. Add regions with place_region.
 
-Result. one JSON object with the fields cap, truncated, total and items, where items is an array of objects with the fields creationNumber (integer), name (string), left (number), bottom (number), right (number), top (number)
+Result. one JSON object with the fields returnedCount (integer), totalCount (integer), hasMore (boolean), nextOffset (integer), items (array), cap (integer), truncated (boolean), total (integer)
 
 Errors. Every call can return POLICY_DENIED and COMMAND_REJECTED, and this tool's own text names no other code.
 
@@ -4031,7 +4031,7 @@ Family. assets
 
 List the map's sound catalog (war3map.w3s): each definition's name, file path, channel, flags, volume, pitch, priority and min/max distance.
 
-Result. one JSON object with the fields cap, truncated, total and items, where items is an array of objects with the fields name (string), filePath (string), channel (string), flags (string), volume (integer), pitch (number), priority (integer), minDistance (number), maxDistance (number)
+Result. one JSON object with the fields returnedCount (integer), totalCount (integer), hasMore (boolean), nextOffset (integer), items (array), cap (integer), truncated (boolean), total (integer)
 
 Errors. Every call can return POLICY_DENIED and COMMAND_REJECTED, and this tool's own text names no other code.
 
@@ -4232,7 +4232,7 @@ Family. repair
 
 List all available builds in the schemas directory, with their sections. Use --full_only to skip scripts-only builds.
 
-Result. one JSON object with the fields cap, truncated, total and items, where items is an array of objects with the fields build (string), sections (array)
+Result. one JSON object with the fields returnedCount (integer), totalCount (integer), hasMore (boolean), nextOffset (integer), items (array), cap (integer), truncated (boolean), total (integer)
 
 Errors. Every call can return POLICY_DENIED and COMMAND_REJECTED, and this tool's own text names no other code.
 
@@ -5085,7 +5085,7 @@ Family. triggers
 
 List the map's global variables (the .wtg Variables list), each with its name, type, array flag, declared size and initial value. Read-only.
 
-Result. one JSON object with the fields cap, truncated, total and items, where items is an array of objects with the fields id (integer), parentId (integer), name (string), type (string), isArray (boolean), arraySize (integer), isInitialized (boolean), initialValue (string)
+Result. one JSON object with the fields returnedCount (integer), totalCount (integer), hasMore (boolean), nextOffset (integer), items (array), cap (integer), truncated (boolean), total (integer)
 
 Errors. Every call can return POLICY_DENIED and COMMAND_REJECTED, and this tool's own text names no other code.
 

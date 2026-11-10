@@ -104,10 +104,12 @@ public class ToolCancellationTests : IDisposable
         Assert.Equal(before, ServerRuntime.CancelledCalls);
     }
 
-    // Skipped, and recorded rather than deleted. The eleven slow tools name a progress token and
-    // the host never forwards one, so a client that asks receives no notification. PRF-04 keeps
-    // its progress half open until the token travels through the request handler.
-    [Fact(Skip = "progress notifications are not forwarded to the client")]
+    // Unskipped when PRF-04 grew the body side. The tool method declares an
+    // IProgress<ProgressNotificationValue>, the SDK binds it to a forwarder that carries the
+    // request's progress token, and library_scan reports before the sweep and once per map, so a
+    // client that asks receives notifications. An empty folder still gets the start report, which
+    // is why this test does not depend on the sweep taking any time.
+    [Fact]
     public void A_long_family_call_reports_progress_when_the_client_asks_for_it()
     {
         string folder = Path.Combine(Path.GetTempPath(), "wc3ctl-progress-" + Guid.NewGuid().ToString("N"));
