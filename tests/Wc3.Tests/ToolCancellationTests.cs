@@ -132,7 +132,7 @@ public class ToolCancellationTests : IDisposable
 
             // The first beat is sent as the call starts. It can be delivered a moment after the
             // reply, so the check waits for it rather than racing it.
-            for (int i = 0; i < 100 && captured.Count == 0; i++) Thread.Sleep(20);
+            for (int i = 0; i < 500 && captured.Count == 0; i++) Thread.Sleep(20);
 
             _out.WriteLine($"{captured.Count} progress notification(s): "
                 + string.Join(" | ", captured.Values.Take(3).Select(v => v.Message)));

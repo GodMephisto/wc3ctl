@@ -87,11 +87,9 @@ public sealed class McpOutputSchemaTests : IDisposable
             "structuredContent and the text content are not the same object");
 
         var wrapper = Assert.IsType<JsonObject>(fromStructured);
-        foreach (string field in new[]
-                 {
-                     "returnedCount", "totalCount", "hasMore", "nextOffset", "items",
-                     "cap", "truncated", "total",
-                 })
+        // player_list is a capped wrapper, so it carries the cap it was held to and the count it
+        // found. The four page names belong to the paged tools and are checked on list_files.
+        foreach (string field in new[] { "cap", "truncated", "total", "items" })
             Assert.True(wrapper.ContainsKey(field), "structuredContent has no " + field);
     }
 
