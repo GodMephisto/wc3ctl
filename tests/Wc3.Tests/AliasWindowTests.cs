@@ -7,6 +7,7 @@
 using ModelContextProtocol;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
+using Wc3.Commands;
 using Wc3.Mcp;
 
 namespace Wc3.Tests;
@@ -166,4 +167,53 @@ public class AliasWindowTests
     [InlineData("not a version", "0.4.13", true)]
     public void The_window_closes_on_the_removal_version(string removal, string current, bool closed) =>
         Assert.Equal(closed, McpToolCatalog.RemovalReached(removal, current));
+
+    /// <summary>
+    /// CMP-03. The alias window is not the whole of a rename. The release note that closes the
+    /// window has to name the old name, or a client that reads the notes has no way to learn that
+    /// the name it still sends has been retired. Every shipped entry is checked against the
+    /// changelog file for the version that removes it, and the checker itself is proved on a
+    /// window whose removal version has no note, so an empty table cannot make this pass by
+    /// accident.
+    /// </summary>
+    [Fact]
+    public void A_removed_name_is_listed_in_the_release_note_that_removes_it()
+    {
+        if (RepoLayout.FindRoot() is not { } root) return;   // the wc3-mcp mirror has no changelog
+
+        var live = Wc3McpServer.CreateTools().Select(t => t.ProtocolTool.Name).ToList();
+        Assert.Empty(McpToolCatalog.InspectRenames(McpToolCatalog.Renames, live));
+
+        Assert.Empty(UnlistedRenames(root, McpToolCatalog.Renames));
+
+        // The checker bites. 9.0.0 has no changelog file in this tree, so the window the alias
+        // tests open is reported rather than silently accepted.
+        Assert.NotEmpty(UnlistedRenames(root, OpenWindow()));
+    }
+
+    /// <summary>
+    /// CMP-03. One problem per window entry whose release note does not name the removed name, in
+    /// the order the table is read. The note is the file <c>changelog/&lt;removal&gt;.md</c>, the
+    /// same folder the changelog guard reads, so a version that removes a name has to be a version
+    /// this tree publishes notes for.
+    /// </summary>
+    private static IReadOnlyList<string> UnlistedRenames(
+        string root, IReadOnlyDictionary<string, ToolAlias> table)
+    {
+        var problems = new List<string>();
+        foreach (ToolAlias alias in table.Values.OrderBy(a => a.OldName, StringComparer.Ordinal))
+        {
+            string note = Path.Combine(root, "changelog", alias.RemovalVersion + ".md");
+            if (!File.Exists(note))
+            {
+                problems.Add(alias.OldName + " is removed in " + alias.RemovalVersion
+                    + " and there is no changelog/" + alias.RemovalVersion + ".md");
+                continue;
+            }
+            if (!File.ReadAllText(note).Contains(alias.OldName, StringComparison.Ordinal))
+                problems.Add(alias.OldName + " is removed in " + alias.RemovalVersion
+                    + " and that release note never names it");
+        }
+        return problems;
+    }
 }
