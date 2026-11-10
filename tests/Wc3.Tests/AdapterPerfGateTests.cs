@@ -6,6 +6,7 @@ using System.Diagnostics;
 using ModelContextProtocol.Client;
 using Wc3.Commands;
 using Xunit.Abstractions;
+using Wc3.Model;
 
 namespace Wc3.Tests;
 
@@ -38,8 +39,10 @@ public class AdapterPerfGateTests
     [Fact]
     public void One_read_only_call_stays_within_the_stated_multiple_of_the_baseline()
     {
-        string map = Path.Combine(RepoLayout.FindRoot(), ReferenceMap);
-        Assert.True(File.Exists(map), "the reference map is missing from the repository root");
+        // Built here rather than read from the tree, because a checked in archive is one more thing
+        // a clean checkout can be missing, and the gate is about the adapter rather than the file.
+        string map = Path.Combine(Path.GetTempPath(), "wc3perf-" + Guid.NewGuid().ToString("N") + ".w3x");
+        File.WriteAllBytes(map, BlankMap.CreateArchiveBytes());
 
         var times = new List<double>();
         bool served = false;

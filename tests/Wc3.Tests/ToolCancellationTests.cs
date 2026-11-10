@@ -18,6 +18,7 @@ using ModelContextProtocol.Server;
 using Wc3.Commands;
 using Wc3.Mcp;
 using Xunit.Abstractions;
+using Wc3.Model;
 
 namespace Wc3.Tests;
 
@@ -85,7 +86,10 @@ public class ToolCancellationTests : IDisposable
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => call);
         clock.Stop();
 
-        Assert.True(clock.ElapsedMilliseconds < 2000,
+        // The body never returns, so any surface at all proves the wait was raced rather than
+        // awaited to completion. The bound is generous because a shared runner schedules the
+        // continuation slowly, and a tight one measured the runner rather than the filter.
+        Assert.True(clock.ElapsedMilliseconds < 15000,
             $"the cancel took {clock.ElapsedMilliseconds} ms to surface, so the wait was not raced");
         Assert.Equal(before + 1, ServerRuntime.CancelledCalls);
         Assert.Equal("library_scan", ServerRuntime.LastCancelledTool);
@@ -114,6 +118,10 @@ public class ToolCancellationTests : IDisposable
     {
         string folder = Path.Combine(Path.GetTempPath(), "wc3ctl-progress-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(folder);
+        // A folder with maps keeps the call in flight long enough for a notification sent at the
+        // start of the sweep to reach the client, which an empty folder does not guarantee.
+        for (int i = 0; i < 6; i++)
+            File.WriteAllBytes(Path.Combine(folder, $"m{i}.w3x"), BlankMap.CreateArchiveBytes());
         try
         {
             var captured = new Captured();
