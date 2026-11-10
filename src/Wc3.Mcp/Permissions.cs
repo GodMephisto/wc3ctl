@@ -121,6 +121,9 @@ internal sealed class Permissions
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(action);
         if (Fault is not null) throw Faulted();
+        // No file means no restriction, which is the shipped behaviour and what SAF-17 states.
+        // A file that exists grants only what it lists, so an empty file restricts everything.
+        if (!File.Exists(PathName)) return true;
         return _switches.TryGetValue(action.Trim(), out bool granted) && granted;
     }
 

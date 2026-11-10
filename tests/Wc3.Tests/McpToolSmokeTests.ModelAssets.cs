@@ -337,7 +337,7 @@ public sealed class McpSmokeModelAssetTests : McpSmokeBase
         string outPath = Path.Combine(Path.GetTempPath(), "wc3-extract-" + Guid.NewGuid().ToString("N") + ".j");
         try
         {
-            var result = await Call("file_extract", Args(("map", Fixture), ("entry", "war3map.j"), ("out_path", outPath)));
+            var result = await Call("file_extract", Args(("map", Fixture), ("internal_path", "war3map.j"), ("out_path", outPath)));
 
             Assert.Contains("sha256", result.GetRawText(), StringComparison.OrdinalIgnoreCase);
             Assert.True(File.Exists(outPath), "the entry was not written to out_path");

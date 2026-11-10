@@ -249,4 +249,5 @@ public sealed class PermissionPolicyTests : IDisposable
             try { File.Delete(path); } catch { /* best effort */ }
         }
     }
+
 }

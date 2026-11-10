@@ -327,6 +327,12 @@ public sealed class McpSmokeInspectTests : McpSmokeBase
             throw new Xunit.Sdk.XunitException("no schemas directory available");
         }
 
+        // A permission test writes permissions.json beside the assembly to prove that a file in the
+        // executable folder is ignored. A run that leaves one behind denies every later call, so this
+        // test clears a stray before it touches the target.
+        string stray = Path.Combine(AppContext.BaseDirectory, "permissions.json");
+        if (File.Exists(stray)) File.Delete(stray);
+
         var args = new Dictionary<string, object?> { ["schemas_dir"] = schemasDir };
 
         // target_get returns the build and source.
@@ -337,9 +343,9 @@ public sealed class McpSmokeInspectTests : McpSmokeBase
         Assert.True(source == "default" || source == "settings" || source == "environment",
             "source was " + source);
 
-        // target_list returns an array of builds.
+        // target_list returns a capped collection, so the builds sit under items rather than at the root.
         var list = await Call("target_list", args);
-        var builds = list.EnumerateArray().ToList();
+        var builds = Prop(list, "items").EnumerateArray().ToList();
         Assert.True(builds.Any());
 
         // target_set with an invalid build fails.
@@ -349,7 +355,7 @@ public sealed class McpSmokeInspectTests : McpSmokeBase
         // target_set with a valid build succeeds.
         // Use the first build from target_list.
         string firstBuild = builds.First().GetProperty("build").GetString()!;
-        var goodSet = await Call("target_set", Args(("build", firstBuild), ("schemas_dir", schemasDir)));
+        var goodSet = await Call("target_set", Args(("build", firstBuild), ("schemas_dir", schemasDir), ("overwrite", true)));
         Assert.True(Prop(goodSet, "ok").GetBoolean());
 
         // Verify target_get now shows settings as source.
