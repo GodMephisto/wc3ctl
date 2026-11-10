@@ -327,12 +327,14 @@ public sealed class McpSmokeInspectTests : McpSmokeBase
             throw new Xunit.Sdk.XunitException("no schemas directory available");
         }
 
-        // A permission test writes permissions.json beside the assembly to prove that a file in the
-        // executable folder is ignored. A run that leaves one behind denies every later call, so this
-        // test clears a stray before it touches the target.
-        string stray = Path.Combine(AppContext.BaseDirectory, "permissions.json");
-        if (File.Exists(stray)) File.Delete(stray);
-
+        // The write gate is fail closed, so replacing an existing settings file needs a grant. This
+        // test supplies one for its own duration rather than relying on the machine having none.
+        string grant = Path.Combine(Path.GetTempPath(), "wc3target-" + Guid.NewGuid().ToString("N") + ".json");
+        File.WriteAllText(grant, "{\"overwrite\": true}");
+        string? saved = Environment.GetEnvironmentVariable(Wc3.Mcp.Permissions.EnvironmentVariable);
+        Environment.SetEnvironmentVariable(Wc3.Mcp.Permissions.EnvironmentVariable, grant);
+        try
+        {
         var args = new Dictionary<string, object?> { ["schemas_dir"] = schemasDir };
 
         // target_get returns the build and source.
@@ -361,6 +363,12 @@ public sealed class McpSmokeInspectTests : McpSmokeBase
         // Verify target_get now shows settings as source.
         var get2 = await Call("target_get", args);
         Assert.Equal("settings", Prop(get2, "source").GetString());
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(Wc3.Mcp.Permissions.EnvironmentVariable, saved);
+            if (File.Exists(grant)) File.Delete(grant);
+        }
     }
 
     [Fact, Covers("validate_strict")]
