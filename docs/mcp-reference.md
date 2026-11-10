@@ -3226,7 +3226,7 @@ Parameters.
 
 Family. product
 
-Install the local semantic index and graph over the Warcraft III corpus. Fetches the embedding model and the corpus dataset, verifies each, and builds the index and the graph, after which docs_search is semantic and the graph tools work. Needs network on the first run. It writes many files under the user's local app data, in the rag root the answer names, and never into a map folder, so it is not gated like a single artifact and reports the root and how many files it wrote instead. The corpus is fixed to the bundled dataset, never a folder named by the caller, so this cannot read arbitrary local files.
+Install the local semantic index and graph over the Warcraft III corpus. Fetches the embedding model and the corpus dataset, verifies each, and builds the index and the graph, after which docs_search is semantic and the graph tools work. Needs network on the first run. It writes many files under the user's local app data, in the rag root the answer names, and never into a map folder, so it is not gated like a single artifact and reports the root and how many files it wrote instead. The corpus is the bundled dataset, never a caller named folder, so this cannot read arbitrary local files.
 
 Result. any JSON value, the method is typed object so the shape is chosen by the arguments
 
