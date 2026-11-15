@@ -2,7 +2,7 @@
 
 Generated from the live tool surface by `wc3ctl docs mcp`. Do not edit by hand. Regenerate with `wc3ctl docs mcp --force`, and the CI guard fails when this file is stale.
 
-The server exposes 278 tool(s) in 11 families.
+The server exposes 280 tool(s) in 11 families.
 
 Each entry carries the tool's family, its parameters with their type and default, the shape of its result and the error codes it can return, then the four annotation hints. A parameter line reads `name` and its type, then `required` or `optional`, then `default value` where the schema declares one. The Errors line lists the codes the tool's own description or a parameter description names, and the two codes every call passes through, `POLICY_DENIED` from the permission file's deny list and `COMMAND_REJECTED` when a shared command refuses and states its own reason. A tool whose method is typed `object` reports any JSON value, because no tool publishes an output schema and the shape is chosen by the arguments.
 
@@ -3262,6 +3262,22 @@ Errors. Every call can return POLICY_DENIED and COMMAND_REJECTED, and this tool'
 
 Annotations. read-only yes, destructive no, idempotent yes, open-world no.
 
+## reforged3_check
+
+Parameters.
+
+- `map` string, required.
+
+Family. repair
+
+Report what Warcraft III 3.0 build 24268 refuses or misreads in a legacy SLK map, without writing anything. Counts the obsolete SLK file columns, the model paths still carrying a file value there, numeric cells that are not numbers, empty button positions, unmatched FDF comment terminators and abilities whose declared levels have no level 5 or 6 column. The repair is repair_reforged3, and it needs no external tool, no game install and no name dictionary.
+
+Result. one JSON object with the fields ok (boolean), message (string), applied (boolean), fileColumnsRemoved (integer), modelsMoved (integer), numericCellsNormalized (integer), buttonPositionsCompleted (integer), strayCommentTerminatorsRemoved (integer), abilityLevelColumnsAdded (integer), changedFiles (array), issueCount (integer)
+
+Errors. Every call can return POLICY_DENIED and COMMAND_REJECTED, and this tool's own text names no other code.
+
+Annotations. read-only yes, destructive no, idempotent yes, open-world no.
+
 ## region_create
 
 Parameters.
@@ -3429,6 +3445,25 @@ Parameters.
 Family. repair
 
 Remove the pre-900 camera chunk from every at-risk model so the portrait pane renders under 3.0.0 and later, and save the repaired map to out_path. Camera removal only. The version re-stamp is refused because it was measured to crash the map on load. The input map is NEVER modified in place.
+
+Result. one JSON object with the fields savedTo (string), message (string), inputSha256 (string), outputSha256 (string), filesRewritten (integer), bytesWritten (integer)
+
+Errors. OUTPUT_EXISTS, STALE_INPUT. Every call can also return POLICY_DENIED and COMMAND_REJECTED.
+
+Annotations. read-only no, destructive no, idempotent yes, open-world no.
+
+## repair_reforged3
+
+Parameters.
+
+- `map` string, required.
+- `out_path` string, required.
+- `overwrite` boolean, optional, default false.
+- `expect_input_sha256` string|null, optional, default null.
+
+Family. repair
+
+Repair a legacy SLK-mode map so Warcraft III 3.0 build 24268 renders it, and save the result to out_path. Model paths move out of the obsolete file column of unitUI.slk and ItemData.slk into merged UnitSkin.txt and ItemSkin.txt profiles, numeric cells and button positions are normalized, unmatched FDF comment terminators are removed, and abilities that declare more levels than they have columns gain level 5 and 6 columns inheriting the level 4 value. Every object keeps its rawcode and its text, and no model is renamed or dropped. This is the same repair doctor_fix performs through Devo's Map Doctor, done here in code, so it works with no doctor installed and no game install. The input map is NEVER modified in place.
 
 Result. one JSON object with the fields savedTo (string), message (string), inputSha256 (string), outputSha256 (string), filesRewritten (integer), bytesWritten (integer)
 

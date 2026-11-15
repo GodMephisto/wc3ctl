@@ -80,6 +80,8 @@ public class CliMcpParityTests
         ["repair_generated"] = "repair-generated",
         ["repair_audit_errors"] = "repair audit-errors",
         ["repair_portraits"] = "repair portraits",
+        ["repair_reforged3"] = "repair reforged-3",
+        ["reforged3_check"] = "repair reforged-3",
         ["hero_lint"] = "hero lint",
         ["hero_generate"] = "hero generate",
         ["hero_install"] = "hero install",
