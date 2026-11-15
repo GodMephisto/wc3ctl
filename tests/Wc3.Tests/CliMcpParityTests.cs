@@ -82,6 +82,7 @@ public class CliMcpParityTests
         ["repair_portraits"] = "repair portraits",
         ["repair_reforged3"] = "repair reforged-3",
         ["game_file_shadows"] = "repair game-files",
+        ["texture_audit"] = "texture audit",
         ["repair_game_files"] = "repair game-files",
         ["reforged3_check"] = "repair reforged-3",
         ["hero_lint"] = "hero lint",

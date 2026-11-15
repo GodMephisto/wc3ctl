@@ -2,7 +2,7 @@
 
 Generated from the live command tree by `wc3ctl docs cli`. Do not edit by hand. Regenerate with `wc3ctl docs cli --force`, and the CI guard fails when this file is stale.
 
-The tree holds 70 top level verb(s) and 362 command path(s) in total.
+The tree holds 70 top level verb(s) and 363 command path(s) in total.
 
 ## Global options
 
@@ -671,6 +671,7 @@ wc3ctl texture
 Subcommands
 
 - `optimize`. Shrink a texture to fit a maximum side, preserving aspect ratio, and write it back in the same format. The other half of making a model compact.
+- `audit`. Read every texture header in a map and report the bytes the engine reads past the end of, the JPEG headers above 624 bytes, the missing mip levels and the headers that do not parse. Read-only, needs no game install, never decodes a pixel.
 - `atlas`. Pack two or more textures into one power-of-two atlas and report each input's pixel rectangle. The atlas is written in the first input's format.
 
 ### texture optimize
@@ -691,6 +692,24 @@ Options
 
 - `-o, --out <out>` (required). Output path. The input is never modified.
 - `--max <max>`. Maximum side length in pixels. A texture larger than this on either side is scaled down. Default `256`.
+
+### texture audit
+
+Read every texture header in a map and report the bytes the engine reads past the end of, the JPEG headers above 624 bytes, the missing mip levels and the headers that do not parse. Read-only, needs no game install, never decodes a pixel.
+
+Usage
+
+```
+wc3ctl texture audit [<map>] [options]
+```
+
+Arguments
+
+- `[<map>]` (optional). Path to a .w3x/.w3m map. Omit when --dir lists extracted files instead.
+
+Options
+
+- `--dir <dir>`. Directory of extracted files to audit instead of a map.
 
 ### texture atlas
 

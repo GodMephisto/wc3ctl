@@ -4,6 +4,7 @@ using System.CommandLine.Parsing;
 using Wc3.Commands;
 using Wc3.Commands.Rag;
 using Wc3.Model;
+using Wc3.Modeling;
 
 namespace Wc3Ctl;
 
@@ -3702,8 +3703,52 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
                 p.GetValueForOption(textureAtlasOut)!);
             Emit(p.GetValueForOption(jsonOption), r, () => Render.TextureAtlas(r));
         }));
+        var textureAuditMap = new Argument<string>("map", () => "", "Path to a .w3x/.w3m map. Omit when --dir lists extracted files instead.");
+        var textureAuditDir = new Option<string?>("--dir", "Directory of extracted files to audit instead of a map.");
+        var textureAudit = new Command("audit",
+            "Read every texture header in a map and report the bytes the engine reads past the end of, "
+            + "the JPEG headers above 624 bytes, the missing mip levels and the headers that do not parse. "
+            + "Read-only, needs no game install, never decodes a pixel.")
+            { textureAuditMap, textureAuditDir, jsonOption };
+        textureAudit.SetHandler(
+            (string mapPath, string? dir, bool json) => RunSafely(() =>
+            {
+                TextureAuditResult r;
+                if (!string.IsNullOrWhiteSpace(dir))
+                {
+                    var items = new List<BlpFinding>();
+                    var kinds = new SortedDictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                    int n = 0;
+                    long bytes = 0;
+                    foreach (var f in Directory.EnumerateFiles(dir, "*.blp", SearchOption.AllDirectories))
+                    {
+                        n++;
+                        var buf = File.ReadAllBytes(f);
+                        bytes += buf.LongLength;
+                        var problem = BlpAudit.Inspect(buf, buf.LongLength, out var w, out var h, out var kind);
+                        if (problem is null) continue;
+                        string label = kind.ToString();
+                        kinds.TryGetValue(label, out var c);
+                        kinds[label] = c + 1;
+                        items.Add(new BlpFinding(Path.GetRelativePath(dir, f), problem, w, h, buf.LongLength));
+                    }
+                    var msg = items.Count == 0
+                        ? $"all {n} textures carry a header the engine reads correctly"
+                        : $"{items.Count} of {n} textures carry a header the engine mishandles";
+                    r = new TextureAuditResult(true, msg, n, items.Count, bytes, items, kinds);
+                }
+                else
+                {
+                    if (string.IsNullOrWhiteSpace(mapPath))
+                        throw new ArgumentException("pass a map path or --dir");
+                    r = TextureAuditCommand.Execute(MapDocument.Load(mapPath));
+                }
+                Emit(json, r, () => Render.TextureAudit(r));
+            }),
+            textureAuditMap, textureAuditDir, jsonOption);
         var texture = new Command("texture", "Texture asset operations.");
         texture.AddCommand(textureOptimize);
+        texture.AddCommand(textureAudit);
         texture.AddCommand(textureAtlas);
         root.AddCommand(texture);
 

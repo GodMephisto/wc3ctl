@@ -839,6 +839,22 @@ public static class Render
         return sb.ToString().TrimEnd();
     }
 
+    public static string TextureAudit(TextureAuditResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine(r.Message);
+        foreach (var (kind, count) in r.Problems)
+            sb.AppendLine($"  {count,4}  {kind}");
+        int shown = 0;
+        foreach (var f in r.Items)
+        {
+            if (shown++ == 40) { sb.AppendLine($"  ... {r.Items.Count - 40} more"); break; }
+            sb.AppendLine($"  {f.Name}  ({f.Length:N0} bytes)");
+            sb.AppendLine($"      {f.Problem}");
+        }
+        return sb.ToString().TrimEnd();
+    }
+
     public static string TextureOptimize(TextureOptimizeResult r)
     {
         var sb = new StringBuilder();
