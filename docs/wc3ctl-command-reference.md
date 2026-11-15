@@ -2,7 +2,7 @@
 
 Generated from the live command tree by `wc3ctl docs cli`. Do not edit by hand. Regenerate with `wc3ctl docs cli --force`, and the CI guard fails when this file is stale.
 
-The tree holds 70 top level verb(s) and 360 command path(s) in total.
+The tree holds 70 top level verb(s) and 361 command path(s) in total.
 
 ## Global options
 
@@ -141,7 +141,8 @@ wc3ctl doctor
 Subcommands
 
 - `check`. Will the map run on Reforged 3.0, and what stops it. Read-only, never starts the game.
-- `inspect`. A read-only doctor report: protection and editor needs (diag), files, card, rawcodes or recipes.
+- `inspect`. A read-only doctor report: protection and editor needs (diag), files, card, rawcodes, recipes, qol, cheatpacks or script.
+- `schema`. The installed doctor's own --json contract: every command, its options, the fix steps and extras, and the result keys, versioned by the schema number each answer carries.
 - `compare`. What differs between two versions of a map, with names recovered on protected archives.
 - `fix`. Repair a COPY of the map for Reforged 3.0 with the doctor's Fix map. The original is never written.
 
@@ -165,7 +166,7 @@ Options
 
 ### doctor inspect
 
-A read-only doctor report: protection and editor needs (diag), files, card, rawcodes or recipes.
+A read-only doctor report: protection and editor needs (diag), files, card, rawcodes, recipes, qol, cheatpacks or script.
 
 Usage
 
@@ -179,7 +180,17 @@ Arguments
 
 Options
 
-- `--report <report>`. One of diag, files, card, rawcodes, recipes. Default `diag`.
+- `--report <report>`. One of diag, files, card, rawcodes, recipes, qol, cheatpacks, script. Default `diag`.
+
+### doctor schema
+
+The installed doctor's own --json contract: every command, its options, the fix steps and extras, and the result keys, versioned by the schema number each answer carries.
+
+Usage
+
+```
+wc3ctl doctor schema
+```
 
 ### doctor compare
 
@@ -212,7 +223,7 @@ Arguments
 
 Options
 
-- `--step <step>`. A fix step or extra, such as listfile, data, portraits, uabi. Repeatable. Prefix no- to drop a default step. None applies the steps the doctor picks for this map.
+- `--step <step>`. A fix step or extra, such as listfile, data, uabi, remove-game-files, portraits=stamp. Repeatable. Prefix no- to drop a default step. None applies the steps the doctor picks for this map. doctor schema lists what the installed build accepts.
 - `-o, --out <out>`. Where to write the repaired copy. Default <map>_doctor.<ext>. Never overwritten.
 
 ## asset

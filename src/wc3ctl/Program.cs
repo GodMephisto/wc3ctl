@@ -2692,9 +2692,10 @@ public static class Program
 
         var docInspectMap = new Argument<string>("map", "Path to a .w3x/.w3m map.");
         var docInspectReport = new Option<string>("--report", () => "diag",
-            "One of diag, files, card, rawcodes, recipes.");
+            "One of diag, files, card, rawcodes, recipes, qol, cheatpacks, script.");
         var docInspect = new Command("inspect",
-            "A read-only doctor report: protection and editor needs (diag), files, card, rawcodes or recipes.")
+            "A read-only doctor report: protection and editor needs (diag), files, card, rawcodes, "
+            + "recipes, qol, cheatpacks or script.")
         { docInspectMap, docInspectReport };
         docInspect.SetHandler(ctx => RunSafely(() =>
         {
@@ -2702,6 +2703,12 @@ public static class Program
             EmitDoctor(p, MapDoctorCommand.ReadOnly(p.GetValueForOption(docInspectReport)!, p.GetValueForArgument(docInspectMap)));
         }));
         doctor.AddCommand(docInspect);
+
+        var docSchema = new Command("schema",
+            "The installed doctor's own --json contract: every command, its options, the fix steps and "
+            + "extras, and the result keys, versioned by the schema number each answer carries.");
+        docSchema.SetHandler(ctx => RunSafely(() => EmitDoctor(ctx.ParseResult, MapDoctorCommand.Schema())));
+        doctor.AddCommand(docSchema);
 
         var docCompareA = new Argument<string>("map", "The first map.");
         var docCompareB = new Argument<string>("other", "The map to compare it with.");
@@ -2717,8 +2724,9 @@ public static class Program
 
         var docFixMap = new Argument<string>("map", "Path to a .w3x/.w3m map.");
         var docFixSteps = new Option<string[]>("--step",
-            "A fix step or extra, such as listfile, data, portraits, uabi. Repeatable. Prefix no- to drop "
-            + "a default step. None applies the steps the doctor picks for this map.")
+            "A fix step or extra, such as listfile, data, uabi, remove-game-files, portraits=stamp. "
+            + "Repeatable. Prefix no- to drop a default step. None applies the steps the doctor picks for "
+            + "this map. doctor schema lists what the installed build accepts.")
         { AllowMultipleArgumentsPerToken = true };
         var docFixOut = new Option<string?>(new[] { "-o", "--out" },
             "Where to write the repaired copy. Default <map>_doctor.<ext>. Never overwritten.");

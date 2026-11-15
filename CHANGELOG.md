@@ -2,6 +2,10 @@
 
 All notable changes to wc3ctl, newest first. Each release has its own file under `changelog/`.
 
+## 0.5.41 - 2026-11-16
+
+Devo's Map Doctor pinned to 2.3.2, which reads the obfuscated names a protected archive hides, and a `doctor schema` that returns the installed doctor's own JSON contract instead of a list baked into the wrapper. See `changelog/0.5.41.md`.
+
 ## 0.5.20 - 2026-11-10
 
 One version, every statement derived from `Directory.Build.props`. Titles, error codes, output

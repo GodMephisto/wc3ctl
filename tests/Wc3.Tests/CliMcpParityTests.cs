@@ -159,6 +159,7 @@ public class CliMcpParityTests
         ["uabi_profile"] = "uabi-profile",
         ["doctor_check"] = "doctor check",
         ["doctor_inspect"] = "doctor inspect",
+        ["doctor_schema"] = "doctor schema",
         ["doctor_compare"] = "doctor compare",
         ["doctor_fix"] = "doctor fix",
         ["script_leaks"] = "script leaks",
