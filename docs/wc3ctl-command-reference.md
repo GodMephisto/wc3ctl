@@ -2,7 +2,7 @@
 
 Generated from the live command tree by `wc3ctl docs cli`. Do not edit by hand. Regenerate with `wc3ctl docs cli --force`, and the CI guard fails when this file is stale.
 
-The tree holds 70 top level verb(s) and 361 command path(s) in total.
+The tree holds 70 top level verb(s) and 362 command path(s) in total.
 
 ## Global options
 
@@ -4653,6 +4653,7 @@ Subcommands
 
 - `generated-heroes`. Repair the generated preplaced-hero helper block so finalized heroes use distinct owner slots and owner-aware spell wiring.
 - `reforged-3`. Detect or repair legacy SLK-map incompatibilities introduced by Reforged 3.0.0 (build 24268).
+- `game-files`. Report, and with --apply remove, map files that sit on a path the installed game already ships, so the engine reads the map's copy in place of its own. Two maps closed the game in LAN and HD graphics this way. A shadow may be intentional (a retexture), so detection is a separate read and --apply prints every name it drops. Needs --game-dir or WC3_GAME_DIR.
 - `portraits`. Remove the camera chunk from models below version 900, which is what makes Reforged 3.0.0 render a black portrait pane. Models with no camera already render correctly. Camera removal alone is safe; version stamping is refused because it crashes on load.
 - `data-pointers`. Correct a levelled field whose data pointer is 0 on some levels and a real DataA to DataF selector on others, which makes those levels name a different column than the author meant. Caused by a level ADDED by an earlier version of this tool.
 - `model-paths`. Find model paths in the script and object data that resolve to no file, which the engine logs as 'model creation failed' and retries on every creation. Fixes the ones with a single obvious target, reports the rest.
@@ -4695,6 +4696,25 @@ Arguments
 Options
 
 - `--apply`. Apply the detected Warcraft III 3.0.0 compatibility repairs and save a new map.
+- `-o, --out <out>`. Output map path. Default: '<map>.edited.<ext>' next to the input - the original is never overwritten.
+
+### repair game-files
+
+Report, and with --apply remove, map files that sit on a path the installed game already ships, so the engine reads the map's copy in place of its own. Two maps closed the game in LAN and HD graphics this way. A shadow may be intentional (a retexture), so detection is a separate read and --apply prints every name it drops. Needs --game-dir or WC3_GAME_DIR.
+
+Usage
+
+```
+wc3ctl repair game-files <map> [options]
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+
+Options
+
+- `--apply`. Write a copy of the map without the shadowed files. Without it this is a read-only check.
 - `-o, --out <out>`. Output map path. Default: '<map>.edited.<ext>' next to the input - the original is never overwritten.
 
 ### repair portraits

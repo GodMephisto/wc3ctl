@@ -10,7 +10,7 @@
        of the wc3-mcp checkout, which is a separate repository. A person sets those, and
        VersionStatementTests fails until they carry this value. -->
   <PropertyGroup>
-    <Version>0.5.42</Version>
+    <Version>0.5.43</Version>
   </PropertyGroup>
 
   <!-- Build stamp: bake the git short hash and the UTC build time into assembly metadata for every

@@ -2,7 +2,7 @@
 
 Generated from the live tool surface by `wc3ctl docs mcp`. Do not edit by hand. Regenerate with `wc3ctl docs mcp --force`, and the CI guard fails when this file is stale.
 
-The server exposes 280 tool(s) in 11 families.
+The server exposes 282 tool(s) in 11 families.
 
 Each entry carries the tool's family, its parameters with their type and default, the shape of its result and the error codes it can return, then the four annotation hints. A parameter line reads `name` and its type, then `required` or `optional`, then `default value` where the schema declares one. The Errors line lists the codes the tool's own description or a parameter description names, and the two codes every call passes through, `POLICY_DENIED` from the permission file's deny list and `COMMAND_REJECTED` when a shared command refuses and states its own reason. A tool whose method is typed `object` reports any JSON value, because no tool publishes an output schema and the shape is chosen by the arguments.
 
@@ -1084,6 +1084,23 @@ Result. one JSON object with the fields savedTo (string), message (string), inpu
 Errors. OUTPUT_EXISTS, STALE_INPUT. Every call can also return POLICY_DENIED and COMMAND_REJECTED.
 
 Annotations. read-only no, destructive no, idempotent no, open-world no.
+
+## game_file_shadows
+
+Parameters.
+
+- `map` string, required.
+- `game_dir` string|null, optional, default null.
+
+Family. assets
+
+Find map files that sit on a path the installed game already ships, so the engine reads the map's copy in place of its own. Two maps closed the game in LAN and HD graphics this way, one with UI minimap textures and one with 1,486 repacked game textures, and removing the files fixed both. Read-only. The editor's own object data (SLK and text tables) shares paths with the game by construction and is excluded, so what comes back is art only. Needs an installed game to read its file list, and the list is that build's, so a map aimed at a classic build can override a path this build has renamed.
+
+Result. one JSON object with the fields ok (boolean), message (string), gameDir (string), mapEntries (integer), gameFiles (integer), conflicts (integer), files (array), folders (array)
+
+Errors. Every call can return POLICY_DENIED and COMMAND_REJECTED, and this tool's own text names no other code.
+
+Annotations. read-only yes, destructive no, idempotent yes, open-world no.
 
 ## gamedata_bounds
 
@@ -3411,6 +3428,25 @@ Repair the object-data defects audit reports. Fills ability level gaps (a field 
 Result. one JSON object with the fields savedTo (string), message (string), inputSha256 (string), outputSha256 (string), filesRewritten (integer), bytesWritten (integer)
 
 Errors. OUTPUT_EXISTS, STALE_INPUT. Every call can also return POLICY_DENIED and COMMAND_REJECTED.
+
+Annotations. read-only no, destructive no, idempotent yes, open-world no.
+
+## repair_game_files
+
+Parameters.
+
+- `map` string, required.
+- `out_path` string, required.
+- `names` array|null, optional, default null.
+- `game_dir` string|null, optional, default null.
+
+Family. repair
+
+Write a copy of the map with the game-overriding files removed, which is the repair for the shadows game_file_shadows reports. The archive is rebuilt from disk, so every other entry is carried over byte for byte, and the input map is NEVER modified in place. A shadow can be deliberate, a retexture for instance, so read the list first. With names left empty every detected shadow is dropped, otherwise only the ones named.
+
+Result. one JSON object with the fields ok (boolean), message (string), savedTo (string), requested (integer), dropped (integer), inputEntries (integer), outputEntries (integer), outputBytes (integer)
+
+Errors. Every call can return POLICY_DENIED and COMMAND_REJECTED, and this tool's own text names no other code.
 
 Annotations. read-only no, destructive no, idempotent yes, open-world no.
 

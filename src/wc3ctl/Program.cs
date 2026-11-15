@@ -5082,6 +5082,69 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
                 () => Render.Reforged3Repair(r, savedTo));
         }));
         repair.AddCommand(repairReforged3);
+
+        var gameFilesApply = new Option<bool>("--apply",
+            "Write a copy of the map without the shadowed files. Without it this is a read-only check.");
+        var repairGameFiles = new Command("game-files",
+            "Report, and with --apply remove, map files that sit on a path the installed game already "
+            + "ships, so the engine reads the map's copy in place of its own. Two maps closed the game "
+            + "in LAN and HD graphics this way. A shadow may be intentional (a retexture), so detection "
+            + "is a separate read and --apply prints every name it drops. Needs --game-dir or WC3_GAME_DIR.")
+        { mapArg, gameFilesApply, setOut, gameDirOption };
+        repairGameFiles.SetHandler(ctx => RunSafely(() =>
+        {
+            var p = ctx.ParseResult;
+            string map = p.GetValueForArgument(mapArg);
+            bool apply = p.GetValueForOption(gameFilesApply);
+            string? requestedOut = p.GetValueForOption(setOut);
+            string? install = Wc3.GameData.GameInstall.Locate(p.GetValueForOption(gameDirOption));
+
+            if (!apply && requestedOut is not null)
+            {
+                const string message = "--out requires --apply; without --apply this command is a read-only check";
+                Emit(p.GetValueForOption(jsonOption), new { Ok = false, Message = message }, () => message);
+                exitCode[0] = 1;
+                return;
+            }
+
+            var report = GameFileShadowCommand.Detect(MapDocument.Load(map), install);
+            GameFileShadowApplyResult? applied = null;
+            if (apply && report.Conflicts > 0)
+            {
+                string outPath = requestedOut ?? Path.Combine(
+                    Path.GetDirectoryName(map) ?? "",
+                    Path.GetFileNameWithoutExtension(map) + ".game-files-removed" + Path.GetExtension(map));
+                applied = GameFileShadowCommand.Apply(map, report.Files.Select(f => f.Name).ToList(), outPath);
+            }
+
+            Emit(p.GetValueForOption(jsonOption),
+                new
+                {
+                    report.Ok,
+                    report.Message,
+                    report.GameDir,
+                    report.MapEntries,
+                    report.GameFiles,
+                    report.Conflicts,
+                    report.Folders,
+                    Files = report.Files,
+                    SavedTo = applied?.SavedTo,
+                    Dropped = applied?.Dropped,
+                    applied?.OutputEntries,
+                    applied?.OutputBytes,
+                },
+                () =>
+                {
+                    var sb = new System.Text.StringBuilder();
+                    sb.AppendLine(report.Message);
+                    foreach (var f in report.Files)
+                        sb.AppendLine($"  {f.Size,10:N0}  {f.Name}");
+                    if (applied is not null) sb.AppendLine(applied.Message + "\nsaved: " + applied.SavedTo);
+                    else if (report.Conflicts > 0) sb.AppendLine("re-run with --apply to write a copy without them");
+                    return sb.ToString().TrimEnd();
+                });
+        }));
+        repair.AddCommand(repairGameFiles);
         repair.AddCommand(repairPortraits);
         repair.AddCommand(repairPointers);
         repair.AddCommand(repairModels);
