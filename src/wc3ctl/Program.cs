@@ -5139,7 +5139,10 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
                     sb.AppendLine(report.Message);
                     foreach (var f in report.Files)
                         sb.AppendLine($"  {f.Size,10:N0}  {f.Name}");
-                    if (applied is not null) sb.AppendLine(applied.Message + "\nsaved: " + applied.SavedTo);
+                    if (applied is not null)
+                        sb.AppendLine(applied.Ok
+                            ? applied.Message + "\nsaved: " + applied.SavedTo
+                            : applied.Message);
                     else if (report.Conflicts > 0) sb.AppendLine("re-run with --apply to write a copy without them");
                     return sb.ToString().TrimEnd();
                 });
