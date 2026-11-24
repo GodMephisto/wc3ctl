@@ -752,25 +752,38 @@ internal static class ServerRuntime
     /// PRF-09. The stated memory budget. The measured anchor is the reference machine on 2026-11-10,
     /// where map_overview peaked at 201 MB of working set for a 38 MB archive and 204 MB for the
     /// 767 KB reference map, so the fixed part is the surface itself and the parsed sections grow
-    /// with the archive. Eight bytes of working set per input byte is that growth rounded up.
+    /// with the archive. Eight bytes of working set per input byte is that growth rounded up. A fixed
+    /// 1 GiB admitted 88 MiB of input and refused a 331 MB map, so the budget follows the host now,
+    /// an eighth of the memory it reports, and a 32 GB machine admits about 472 MiB of input.
     /// </summary>
     public static class MemoryBudget
     {
         /// <summary>
         /// The variable that sets the budget for this process, in bytes, with an optional K, M or G
-        /// suffix. A value that does not parse leaves the default in force.
+        /// suffix. A value that does not parse leaves the derived budget in force.
         /// </summary>
         public const string BudgetEnvVar = "WC3_MCP_MEMORY_BUDGET";
 
-        /// <summary>The working set one call may reach on the reference machine.</summary>
-        public const long DefaultBudgetBytes = 1024L * 1024 * 1024;
+        /// <summary>The share of physical memory one call may reach, so a bigger host admits bigger maps.</summary>
+        public const int MemoryShare = 8;
+
+        /// <summary>The floor, so a small or unreported host still opens a map.</summary>
+        public const long FloorBytes = 1024L * 1024 * 1024;
 
         /// <summary>
-        /// The budget in force for this call. The default is the measured reference machine; a host
-        /// with more memory raises it through <see cref="BudgetEnvVar"/> rather than rebuilding, so
-        /// the refusal a client reads names the number that actually applied.
+        /// The budget in force for this call. It follows the host, an eighth of physical memory with
+        /// a 1 GiB floor, and <see cref="BudgetEnvVar"/> overrides it. Deriving it rather than fixing
+        /// it keeps one number out of the build and lets the refusal name the figure that applied.
         /// </summary>
-        public static long BudgetBytes => Read(BudgetEnvVar) ?? DefaultBudgetBytes;
+        public static long BudgetBytes => Read(BudgetEnvVar) ?? BudgetFor(TotalMemoryBytes());
+
+        /// <summary>The physical memory the runtime reports for this host, or 0 when it reports none.</summary>
+        public static long TotalMemoryBytes() => GC.GetGCMemoryInfo().TotalAvailableMemoryBytes;
+
+        /// <summary>The budget a host with this much memory gets, an eighth of it or the floor.</summary>
+        public static long BudgetFor(long totalMemoryBytes) => totalMemoryBytes <= 0
+            ? FloorBytes
+            : Math.Max(FloorBytes, totalMemoryBytes / MemoryShare);
 
         /// <summary>The surface and the runtime, measured at 204 MB and rounded up for headroom.</summary>
         public const long FixedBytes = 320L * 1024 * 1024;
@@ -778,7 +791,7 @@ internal static class ServerRuntime
         /// <summary>Working set added per byte of input archive, rounded up from the measurement.</summary>
         public const int BytesPerInputByte = 8;
 
-        /// <summary>The largest archive this budget supports, which the default projection puts at 88 MiB.</summary>
+        /// <summary>The largest archive this budget supports, worked out from the budget each call.</summary>
         public static long LargestSupportedInputBytes => (BudgetBytes - FixedBytes) / BytesPerInputByte;
 
         /// <summary>What a call on an input of this size is projected to need.</summary>
@@ -800,8 +813,8 @@ internal static class ServerRuntime
 
         /// <summary>Where the budget in force came from, so a refusal names the number that applied.</summary>
         private static string Basis() => Read(BudgetEnvVar) is null
-            ? " on the reference machine (Windows 10 x64, 32 GB, the win-x64 self contained build,"
-              + " measured 201 MB peak for a 38 MB map on 2026-11-10)"
+            ? " on this host, an eighth of the " + TotalMemoryBytes() + " bytes of memory it reports"
+              + " (the growth rate is the 201 MB peak measured for a 38 MB map on 2026-11-10)"
             : " set by " + BudgetEnvVar;
 
         /// <summary>
