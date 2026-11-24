@@ -11,6 +11,7 @@
 # previously made this look impossible.
 import hashlib
 import io
+import os
 import pathlib
 import struct
 import sys
@@ -22,6 +23,21 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 CDN = "http://level3.blizzard.com/tpr/war3"
 CACHE = pathlib.Path(__file__).with_name("tactcache")
 CACHE.mkdir(exist_ok=True)
+
+
+def game_data_dir() -> pathlib.Path:
+    """The install's Data folder, wherever the game sits on this system.
+
+    WC3_DATA wins, then the folder each platform installs into by default.
+    """
+    named = os.environ.get("WC3_DATA")
+    if named:
+        return pathlib.Path(named)
+    for candidate in (pathlib.Path(r"C:\Warcraft III\Data"),
+                      pathlib.Path("/Applications/Warcraft III/Data")):
+        if candidate.is_dir():
+            return candidate
+    raise SystemExit("set WC3_DATA to the Warcraft III Data folder")
 
 
 def fetch(ekey, kind="data"):

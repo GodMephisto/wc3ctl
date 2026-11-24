@@ -21,12 +21,12 @@ from concurrent.futures import ThreadPoolExecutor
 
 HERE = pathlib.Path(__file__).parent
 sys.path.insert(0, str(HERE))
-from tact import CDN, blte_decode, fetch, parse_build_config, parse_encoding
+from tact import CDN, blte_decode, fetch, game_data_dir, parse_build_config, parse_encoding
 from archidx import build_map
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-CFG = pathlib.Path(r"C:\Warcraft III\Data\config")
+CFG = game_data_dir() / "config"
 BUILDS = {
     "2.0.4": CFG / "9a/94/9a94ff7d25781db6c09190cd69d52458",
     "3.0.0": CFG / "3a/9d/3a9d8f26806936764d2d9ad526a65e04",
