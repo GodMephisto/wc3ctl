@@ -57,4 +57,61 @@ public sealed class MemoryBudgetTests : IDisposable
         Assert.Contains(ServerRuntime.MemoryBudget.BudgetBytes.ToString(), text);
         Assert.Contains("Windows 10 x64", text);
     }
+
+    [Fact]
+    public void The_variable_raises_the_budget_so_a_big_map_is_admitted()
+    {
+        // The 331 MB map this was asked for projects to 3.02 GiB, past the 1 GiB default.
+        long big = 346_903_449;
+        Assert.True(ServerRuntime.MemoryBudget.WouldExceed(big));
+
+        RunWith("4G", () =>
+        {
+            Assert.Equal(4L * 1024 * 1024 * 1024, ServerRuntime.MemoryBudget.BudgetBytes);
+            Assert.False(ServerRuntime.MemoryBudget.WouldExceed(big));
+            Assert.True(ServerRuntime.MemoryBudget.WouldExceed(600L * 1024 * 1024));
+            Assert.Contains(ServerRuntime.MemoryBudget.BudgetEnvVar, ServerRuntime.MemoryBudget.Explain(big));
+        });
+
+        // The guard is back to the default once the variable is gone, so one raised process does
+        // not leave the ceiling open for the next call.
+        Assert.Equal(ServerRuntime.MemoryBudget.DefaultBudgetBytes, ServerRuntime.MemoryBudget.BudgetBytes);
+        Assert.True(ServerRuntime.MemoryBudget.WouldExceed(big));
+    }
+
+    [Theory]
+    [InlineData("banana")]
+    [InlineData("0")]
+    [InlineData("-2048")]
+    [InlineData("99999999999999999999")]
+    public void A_value_that_does_not_parse_leaves_the_default_in_force(string value)
+    {
+        RunWith(value, () =>
+        {
+            Assert.Equal(ServerRuntime.MemoryBudget.DefaultBudgetBytes, ServerRuntime.MemoryBudget.BudgetBytes);
+            Assert.Contains("Windows 10 x64", ServerRuntime.MemoryBudget.Explain(300L * 1024 * 1024));
+        });
+    }
+
+    [Theory]
+    [InlineData("4096M", 4096L * 1024 * 1024)]
+    [InlineData("1G", 1024L * 1024 * 1024)]
+    public void A_prefix_suffix_value_is_read_as_bytes(string value, long expected) =>
+        RunWith(value, () => Assert.Equal(expected, ServerRuntime.MemoryBudget.BudgetBytes));
+
+    /// <summary>Set the variable for one test body and restore what was there before.</summary>
+    private static void RunWith(string? value, Action body)
+    {
+        string variable = ServerRuntime.MemoryBudget.BudgetEnvVar;
+        string? previous = Environment.GetEnvironmentVariable(variable);
+        try
+        {
+            Environment.SetEnvironmentVariable(variable, value);
+            body();
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(variable, previous);
+        }
+    }
 }

@@ -756,8 +756,21 @@ internal static class ServerRuntime
     /// </summary>
     public static class MemoryBudget
     {
+        /// <summary>
+        /// The variable that sets the budget for this process, in bytes, with an optional K, M or G
+        /// suffix. A value that does not parse leaves the default in force.
+        /// </summary>
+        public const string BudgetEnvVar = "WC3_MCP_MEMORY_BUDGET";
+
         /// <summary>The working set one call may reach on the reference machine.</summary>
-        public const long BudgetBytes = 1024L * 1024 * 1024;
+        public const long DefaultBudgetBytes = 1024L * 1024 * 1024;
+
+        /// <summary>
+        /// The budget in force for this call. The default is the measured reference machine; a host
+        /// with more memory raises it through <see cref="BudgetEnvVar"/> rather than rebuilding, so
+        /// the refusal a client reads names the number that actually applied.
+        /// </summary>
+        public static long BudgetBytes => Read(BudgetEnvVar) ?? DefaultBudgetBytes;
 
         /// <summary>The surface and the runtime, measured at 204 MB and rounded up for headroom.</summary>
         public const long FixedBytes = 320L * 1024 * 1024;
@@ -765,8 +778,8 @@ internal static class ServerRuntime
         /// <summary>Working set added per byte of input archive, rounded up from the measurement.</summary>
         public const int BytesPerInputByte = 8;
 
-        /// <summary>The largest archive this budget supports, which the projection puts at 88 MiB.</summary>
-        public const long LargestSupportedInputBytes = (BudgetBytes - FixedBytes) / BytesPerInputByte;
+        /// <summary>The largest archive this budget supports, which the default projection puts at 88 MiB.</summary>
+        public static long LargestSupportedInputBytes => (BudgetBytes - FixedBytes) / BytesPerInputByte;
 
         /// <summary>What a call on an input of this size is projected to need.</summary>
         public static long ProjectedBytes(long inputBytes) => FixedBytes + inputBytes * BytesPerInputByte;
@@ -782,9 +795,34 @@ internal static class ServerRuntime
         public static string Explain(long inputBytes) =>
             "This call is refused rather than attempted. The input is " + inputBytes + " bytes and the"
             + " projection is " + ProjectedBytes(inputBytes) + " bytes of working set, against a budget of "
-            + BudgetBytes + " bytes per call on the reference machine (Windows 10 x64, 32 GB, the win-x64"
-            + " self contained build, measured 201 MB peak for a 38 MB map on 2026-11-10). The largest"
+            + BudgetBytes + " bytes per call" + Basis() + ". The largest"
             + " supported input is " + LargestSupportedInputBytes + " bytes.";
+
+        /// <summary>Where the budget in force came from, so a refusal names the number that applied.</summary>
+        private static string Basis() => Read(BudgetEnvVar) is null
+            ? " on the reference machine (Windows 10 x64, 32 GB, the win-x64 self contained build,"
+              + " measured 201 MB peak for a 38 MB map on 2026-11-10)"
+            : " set by " + BudgetEnvVar;
+
+        /// <summary>
+        /// The variable's value, or null when it is absent, unparseable or not positive. A typo
+        /// leaves the default in force rather than opening the guard or closing it at zero.
+        /// </summary>
+        private static long? Read(string variable)
+        {
+            string? text = Environment.GetEnvironmentVariable(variable)?.Trim();
+            if (string.IsNullOrEmpty(text)) return null;
+            long scale = char.ToUpperInvariant(text[^1]) switch
+            {
+                'K' => 1024L,
+                'M' => 1024L * 1024,
+                'G' => 1024L * 1024 * 1024,
+                _ => 1L,
+            };
+            if (scale != 1L) text = text[..^1];
+            if (!long.TryParse(text, out long value) || value <= 0) return null;
+            return value > long.MaxValue / scale ? null : value * scale;
+        }
     }
 
     /// <summary>
