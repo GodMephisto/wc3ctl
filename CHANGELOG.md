@@ -2,6 +2,12 @@
 
 All notable changes to wc3ctl, newest first. Each release has its own file under `changelog/`.
 
+## 0.5.45 - 2026-11-26
+
+The memory guard follows the host rather than a fixed 1 GiB, every decode in the render path goes
+through `SafeImages`, the evidence scripts find the game data on any platform, and the lint findings
+are cleared at their cause. See `changelog/0.5.45.md`.
+
 ## 0.5.44 - 2026-11-16
 
 `texture_audit` reports the texture headers the engine mishandles. See `changelog/0.5.44.md`.
