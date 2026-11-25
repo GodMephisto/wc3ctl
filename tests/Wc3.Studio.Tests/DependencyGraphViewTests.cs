@@ -36,7 +36,7 @@ public class DependencyGraphViewTests
     private static readonly string GggaPath =
         TestCorpus.Map(@"GGGA_V0.02b.w3x");
 
-    /// <summary>The first load may open CASC (seconds); bounded so a hang still fails.</summary>
+    /// <summary>The first load may open CASC (seconds). Bounded so a hang still fails.</summary>
     private static readonly TimeSpan LoadTimeout = TimeSpan.FromSeconds(120);
 
     [CorpusAvaloniaFact("Anime_WOS2_0.32I.w3x")]

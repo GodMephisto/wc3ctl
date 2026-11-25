@@ -4,7 +4,7 @@ namespace Wc3.Tests;
 
 public class ExtractCommandTests
 {
-    // Files shaped like the spec's example map: a model, a texture, a sound, a script,
+    // Files shaped like the spec's example map, a model, a texture, a sound, a script,
     // plus one unnamed (protected-style) entry.
     private static MapDocument Doc() => MapDocument.Load(SyntheticMap.Build(
         new Dictionary<string, byte[]>

@@ -17,13 +17,13 @@ using Wc3.Render;
 
 namespace Wc3.Studio.Panels;
 
-/// <summary>A ray-pick hit on a placed widget: the widget's creation number plus which
+/// <summary>A ray-pick hit on a placed widget, the widget's creation number plus which
 /// file it identifies (unit and doodad creation-number spaces can overlap, so the kind
 /// bit tells the workspace which instance editor the number belongs to).</summary>
 public readonly record struct PlacementPick(int CreationNumber, bool IsUnit);
 
 /// <summary>
-/// Experimental GPU terrain viewport: renders the map's heightmap as a lit,
+/// Experimental GPU terrain viewport, renders the map's heightmap as a lit,
 /// per-terrain-type coloured mesh via Silk.NET on Avalonia's
 /// <see cref="OpenGlControlBase"/>. The mesh is built on the UI thread by
 /// <see cref="TerrainMeshBuilder"/> and uploaded lazily on the GL thread.
@@ -55,11 +55,11 @@ public sealed class TerrainGlView : OpenGlControlBase
     private int _waterIndexCount;
     private bool _waterDirty;
 
-    // Water surface tint: the 2D perspective renderer's water colour (48, 96, 168)
+    // Water surface tint, the 2D perspective renderer's water colour (48, 96, 168)
     // normalized to 0..1, drawn at the same 0.55 alpha, so both views agree.
     private const float WaterR = 48f / 255f, WaterG = 96f / 255f, WaterB = 168f / 255f, WaterA = 0.55f;
 
-    // Placement scene (units/doodads as real textured models, box fallback): each unique
+    // Placement scene (units/doodads as real textured models, box fallback), each unique
     // mesh + its textures upload to the GPU once and draw per instance with a per-instance
     // world transform + owner colour, honoring each section's material filter mode
     // (alpha-cutout only for Transparent, additive blending for glows) and painting
@@ -73,7 +73,7 @@ public sealed class TerrainGlView : OpenGlControlBase
     private readonly Dictionary<string, List<PlacementInstance>> _instanceGroups = new();
 
     // Creation numbers of the selected units (set by a viewport click/marquee or by a
-    // panel via SetSelectedUnits); matching instances draw highlighted. Empty = no
+    // panel via SetSelectedUnits). Matching instances draw highlighted. Empty = no
     // selection. The reference is swapped whole (never mutated) so the render pass can
     // read it without locking, the same idiom as _scene.
     private HashSet<int> _selectedUnits = new();
@@ -82,7 +82,7 @@ public sealed class TerrainGlView : OpenGlControlBase
     // Kept separate from _selectedUnits because the two creation-number spaces overlap.
     private int? _selectedDoodad;
 
-    // Anisotropy to apply to textures: min(8, GL max), lazily queried once per context;
+    // Anisotropy to apply to textures, min(8, GL max), lazily queried once per context.
     // 0 = unsupported (no-op), -1 = not queried yet.
     private float _anisotropy = -1f;
 
@@ -91,7 +91,7 @@ public sealed class TerrainGlView : OpenGlControlBase
 
     // Source document + height field, kept so placements can be re-read (RefreshPlacements)
     // and GL clicks ray-picked against the terrain (PickGround). The resolver maps a
-    // placement type (rawcode, isUnit) to its render model; null falls back to boxes.
+    // placement type (rawcode, isUnit) to its render model. Null falls back to boxes.
     private Wc3.Model.MapDocument? _doc;
     private TerrainHeightField? _heights;
     private Func<string, bool, PlacementModel?>? _modelResolver;
@@ -107,12 +107,12 @@ public sealed class TerrainGlView : OpenGlControlBase
     private Vector3 _center;
     private float _radius = 512f;
 
-    // Look-target offset from the mesh centre (world units); driven by the input overlay.
+    // Look-target offset from the mesh centre (world units). Driven by the input overlay.
     private Vector3 _pan;
 
     /// <summary>Loads a map's terrain + placements into the viewport (safe to call off the
     /// GL thread). <paramref name="modelResolver"/> supplies real render models per placement
-    /// type ((rawcode, isUnit) → model, null = kind-colored box); it should cache per type.</summary>
+    /// type ((rawcode, isUnit) → model, null = kind-colored box). It should cache per type.</summary>
     // Bumped on every SetMap so a build that finishes after a newer map was opened is discarded.
     private int _buildGen;
     // Model resolution reads the shared game-data (CASC), which is not thread-safe, so at most one
@@ -245,7 +245,7 @@ public sealed class TerrainGlView : OpenGlControlBase
 
     /// <summary>
     /// Ray-picks the placed widget (unit or doodad) under a viewport point (same
-    /// camera/ray as <see cref="PickGround"/>): tests the ray against every instance's
+    /// camera/ray as <see cref="PickGround"/>), tests the ray against every instance's
     /// world-space AABB (its mesh's local bounds carried through the instance transform)
     /// and returns the creation number of the nearest hit along the ray, tagged with
     /// whether it is a unit or a doodad, or null when the click hits nothing.
@@ -268,7 +268,7 @@ public sealed class TerrainGlView : OpenGlControlBase
                 !meshByKey.TryGetValue(inst.MeshKey, out var mesh))
                 continue;
 
-            // Local AABB -> world AABB: transform all 8 corners so rotation/scale in the
+            // Local AABB -> world AABB, transform all 8 corners so rotation/scale in the
             // instance transform still yields a conservative axis-aligned box.
             var min = new Vector3(float.MaxValue);
             var max = new Vector3(float.MinValue);
@@ -300,12 +300,12 @@ public sealed class TerrainGlView : OpenGlControlBase
         var next = new HashSet<int>(creationNumbers);
         if (next.SetEquals(_selectedUnits))
             return;
-        _selectedUnits = next; // swap, don't mutate: the render pass reads the old set lock-free
+        _selectedUnits = next; // swap, don't mutate, the render pass reads the old set lock-free
         Log(next.Count > 0 ? $"selected {next.Count} unit(s)" : "selection cleared");
         RequestNextFrameRendering();
     }
 
-    /// <summary>Single-unit convenience over <see cref="SetSelectedUnits"/>: highlights
+    /// <summary>Single-unit convenience over <see cref="SetSelectedUnits"/>, highlights
     /// exactly that unit (null clears the highlight).</summary>
     public void SetSelectedUnit(int? creationNumber) =>
         SetSelectedUnits(creationNumber is int cn ? new[] { cn } : Array.Empty<int>());
@@ -324,10 +324,10 @@ public sealed class TerrainGlView : OpenGlControlBase
 
     /// <summary>
     /// Picks every placed unit whose screen position falls inside the marquee rectangle
-    /// (viewport logical coordinates; any two opposite corners). Each unit instance's
+    /// (viewport logical coordinates. Any two opposite corners). Each unit instance's
     /// representative point, its mesh-AABB centre carried through the instance
     /// transform, or the raw world translation for meshes not in the scene, is
-    /// projected with the exact camera the last frame rendered with; units behind the
+    /// projected with the exact camera the last frame rendered with. Units behind the
     /// camera never match. Doodads are excluded, the marquee is a unit multi-select
     /// (a doodad is picked one at a time via <see cref="PickPlacement"/>).
     /// </summary>
@@ -412,7 +412,7 @@ public sealed class TerrainGlView : OpenGlControlBase
         if (w <= 0 || h <= 0)
             return false;
 
-        // Same camera as OnOpenGlRender (logical units: aspect and pixel angles match).
+        // Same camera as OnOpenGlRender (logical units, aspect and pixel angles match).
         float yaw = _yaw * (MathF.PI / 180f);
         float pitch = Math.Clamp(_pitch, 2f, 89f) * (MathF.PI / 180f);
         var eyeDir = new Vector3(
@@ -435,7 +435,7 @@ public sealed class TerrainGlView : OpenGlControlBase
     }
 
     /// <summary>Slab-tests a ray against a world-space AABB. On a hit, <paramref name="t"/>
-    /// is the entry distance along the ray (0 when the eye starts inside the box); only
+    /// is the entry distance along the ray (0 when the eye starts inside the box). Only
     /// hits in front of the eye count.</summary>
     private static bool RayHitsAabb(Vector3 origin, Vector3 dir, Vector3 min, Vector3 max, out float t)
     {
@@ -454,7 +454,7 @@ public sealed class TerrainGlView : OpenGlControlBase
     private static bool SlabHit(float o, float d, float min, float max, ref float tMin, ref float tMax)
     {
         if (MathF.Abs(d) < 1e-8f)
-            return o >= min && o <= max; // ray parallel to the slab: inside it or a miss
+            return o >= min && o <= max; // ray parallel to the slab, inside it or a miss
         float t1 = (min - o) / d, t2 = (max - o) / d;
         if (t1 > t2) (t1, t2) = (t2, t1);
         tMin = MathF.Max(tMin, t1);
@@ -480,7 +480,7 @@ public sealed class TerrainGlView : OpenGlControlBase
 
     private void PanBy(double dx, double dy)
     {
-        // Screen-parallel pan; scale by distance so it feels consistent at any zoom.
+        // Screen-parallel pan. Scale by distance so it feels consistent at any zoom.
         float dist = _radius / MathF.Max(_zoom, 0.05f) * 2.4f;
         float scale = dist * 0.0015f;
         var (right, _, up) = CameraBasis();
@@ -489,7 +489,7 @@ public sealed class TerrainGlView : OpenGlControlBase
 
     private void PanWorld(float rightAmt, float fwdAmt)
     {
-        // Ground-plane pan (arrow keys): move target along camera's ground axes.
+        // Ground-plane pan (arrow keys), move target along camera's ground axes.
         var (right, groundFwd, _) = CameraBasis();
         _pan += right * rightAmt + groundFwd * fwdAmt;
     }
@@ -510,7 +510,7 @@ public sealed class TerrainGlView : OpenGlControlBase
     /// <summary>Dolly the camera in/out by a wheel notch (positive = zoom in).</summary>
     public void DriveZoom(double wheelDelta)
     {
-        if (wheelDelta == 0) return; // horizontal / trackpad-X scroll: don't drift zoom out
+        if (wheelDelta == 0) return; // horizontal / trackpad-X scroll, don't drift zoom out
         float factor = wheelDelta > 0 ? 1.1f : 1f / 1.1f;
         _zoom = Math.Clamp(_zoom * factor, 0.05f, 20f);
         RequestNextFrameRendering();
@@ -618,15 +618,15 @@ public sealed class TerrainGlView : OpenGlControlBase
             _vbo = _gl.GenBuffer();
             _ebo = _gl.GenBuffer();
 
-            // Placement program: unique meshes (real textured models / fallback boxes)
+            // Placement program, unique meshes (real textured models / fallback boxes)
             // drawn once per instance with a world-transform uniform. Textured sections
             // sample the geoset's texture UV-mapped, alpha-cutting ONLY when the
             // material's filter mode is Transparent (WC3 foliage/hair), opaque modes
-            // must not discard or unit bodies get holes; Additive sections blend onto
+            // must not discard or unit bodies get holes. Additive sections blend onto
             // the frame (handled by GL blend state in the draw loop). Team-colour
-            // sections paint the owning player's colour; other untextured sections use
-            // the flat vertex color; the selected unit draws brightened with a warm
-            // tint. Lighting is two-sided lambert (|dot|) like the CPU ModelRenderer , 
+            // sections paint the owning player's colour. Other untextured sections use
+            // the flat vertex color. The selected unit draws brightened with a warm
+            // tint. Lighting is two-sided lambert (|dot|) like the CPU ModelRenderer ,
             // WC3 materials are frequently two-sided and culling is off.
             string pvsSrc = header +
                 "layout(location=0) in vec3 aPos;\n" +
@@ -647,10 +647,10 @@ public sealed class TerrainGlView : OpenGlControlBase
                 "uniform vec3 uLight;\n" +
                 "uniform sampler2D uTex;\n" +
                 "uniform int uUseTex;\n" +
-                "uniform int uFilter;\n" +      // Wc3.Modeling.FilterMode ordinal: 1=Transparent 2=Blend 3=Additive 4=AddAlpha 5=Modulate 6=Modulate2x
+                "uniform int uFilter;\n" +      // Wc3.Modeling.FilterMode ordinal, 1=Transparent 2=Blend 3=Additive 4=AddAlpha 5=Modulate 6=Modulate2x
                 "uniform int uTeamColor;\n" +   // untextured section painted with the owner's colour
                 "uniform vec3 uOwnerColor;\n" +
-                "uniform int uHighlight;\n" +   // selected unit: brighten + warm tint
+                "uniform int uHighlight;\n" +   // selected unit, brighten + warm tint
                 "out vec4 fragColor;\n" +
                 "void main(){\n" +
                 "  vec3 base = (uTeamColor == 1) ? uOwnerColor : vColor;\n" +
@@ -667,7 +667,7 @@ public sealed class TerrainGlView : OpenGlControlBase
                 "  vec3 rgb = base * shade;\n" +
                 "  if (uHighlight == 1) rgb = mix(rgb * 1.4, vec3(1.0, 0.82, 0.25), 0.28);\n" +
                 // Blend(2)/Additive(3)/AddAlpha(4) modulate by the texture alpha through the
-                // per-section GL blend func; opaque modes (0/1) and Modulate(5/6, which blend on
+                // per-section GL blend func. Opaque modes (0/1) and Modulate(5/6, which blend on
                 // colour) output alpha 1.
                 "  float outA = (uFilter == 2 || uFilter == 3 || uFilter == 4) ? alpha : 1.0;\n" +
                 "  fragColor = vec4(rgb, outA);\n" +
@@ -695,7 +695,7 @@ public sealed class TerrainGlView : OpenGlControlBase
             _uPlaceOwnerColor = _gl.GetUniformLocation(_placeProgram, "uOwnerColor");
             _uPlaceHighlight = _gl.GetUniformLocation(_placeProgram, "uHighlight");
 
-            // Water program: bare positions through the same MVP, one flat translucent
+            // Water program, bare positions through the same MVP, one flat translucent
             // colour. The terrain shader wants normals, UVs and the tile texture array,
             // none of which a flat water sheet carries, so a tiny dedicated program is
             // cleaner than reusing it.
@@ -800,7 +800,7 @@ public sealed class TerrainGlView : OpenGlControlBase
                 _gl.BindVertexArray(0);
             }
 
-            // Placements: every unique mesh drawn once per instance, depth-tested so
+            // Placements, every unique mesh drawn once per instance, depth-tested so
             // hills occlude units behind them. Loop nesting binds each section's
             // texture + filter state once and then stamps all instances of the mesh
             // through it, with per-instance owner colour and selection highlight.
@@ -810,9 +810,9 @@ public sealed class TerrainGlView : OpenGlControlBase
                 if (_uPlaceVP >= 0)
                     _gl.UniformMatrix4(_uPlaceVP, 1, false, MemoryMarshal.CreateReadOnlySpan(ref mvp.M11, 16));
                 if (_uPlaceLight >= 0) _gl.Uniform3(_uPlaceLight, light.X, light.Y, light.Z);
-                if (_uPlaceTex >= 0) _gl.Uniform1(_uPlaceTex, 1); // unit 1; terrain array owns unit 0
+                if (_uPlaceTex >= 0) _gl.Uniform1(_uPlaceTex, 1); // unit 1. Terrain array owns unit 0
 
-                var selected = _selectedUnits; // snapshot: SetSelectedUnits swaps the reference
+                var selected = _selectedUnits; // snapshot, SetSelectedUnits swaps the reference
                 var selectedDoodad = _selectedDoodad;
                 foreach (var (key, instances) in _instanceGroups)
                 {
@@ -832,7 +832,7 @@ public sealed class TerrainGlView : OpenGlControlBase
 
                         // Non-opaque sections (glows, capes, soft foliage, shadows) must blend,
                         // not overwrite, otherwise they render as a hard "weird polygon". Each
-                        // WC3 filter mode maps to its GL blend func; all are depth-tested but not
+                        // WC3 filter mode maps to its GL blend func. All are depth-tested but not
                         // depth-written so geometry behind them still draws. None(0)/Transparent(1)
                         // stay opaque (Transparent alpha-tests in the shader).
                         var fm = section.FilterMode;
@@ -876,7 +876,7 @@ public sealed class TerrainGlView : OpenGlControlBase
                                 _gl.Uniform3(_uPlaceOwnerColor, r / 255f, g / 255f, b / 255f);
                             }
                             // Unit and doodad creation numbers overlap, so the highlight
-                            // match is kind-aware: units against the selected set, doodads
+                            // match is kind-aware, units against the selected set, doodads
                             // against the single selected doodad.
                             bool highlit = inst.CreationNumber is int icn
                                 && (inst.IsUnit ? selected.Contains(icn) : icn == selectedDoodad);
@@ -898,7 +898,7 @@ public sealed class TerrainGlView : OpenGlControlBase
                 _gl.ActiveTexture(TextureUnit.Texture0); // restore the terrain's unit
             }
 
-            // Water: translucent sheet drawn after the opaque terrain and the placements
+            // Water, translucent sheet drawn after the opaque terrain and the placements
             // so it tints whatever sits below the surface. Depth-tested against the
             // terrain (ground rising above the level still occludes it) but not
             // depth-written (the ground under shallow water stays visible through the
@@ -985,7 +985,7 @@ public sealed class TerrainGlView : OpenGlControlBase
     }
 
     /// <summary>
-    /// Brings the GPU in line with the current placement scene: uploads meshes for
+    /// Brings the GPU in line with the current placement scene, uploads meshes for
     /// types not yet on the GPU (each unique model uploads exactly once), frees meshes
     /// no longer referenced, and regroups the per-instance transforms by mesh.
     /// </summary>
@@ -1012,7 +1012,7 @@ public sealed class TerrainGlView : OpenGlControlBase
             {
                 if (!_instanceGroups.TryGetValue(inst.MeshKey, out var list))
                     _instanceGroups[inst.MeshKey] = list = new List<PlacementInstance>();
-                list.Add(inst); // whole instance: the draw loop needs owner + creation number
+                list.Add(inst); // whole instance, the draw loop needs owner + creation number
             }
         }
 
@@ -1059,8 +1059,8 @@ public sealed class TerrainGlView : OpenGlControlBase
 
         _gl.BindVertexArray(0);
 
-        // The mesh's decoded textures, one GL texture each (mipmapped; Repeat matches
-        // the CPU renderer's `u -= floor(u)` wrap; rows upload as-is, WC3 v=0 is row 0).
+        // The mesh's decoded textures, one GL texture each (mipmapped. Repeat matches
+        // the CPU renderer's `u -= floor(u)` wrap. Rows upload as-is, WC3 v=0 is row 0).
         var textures = new uint[mesh.Textures.Count];
         for (int i = 0; i < textures.Length; i++)
         {
@@ -1117,7 +1117,7 @@ public sealed class TerrainGlView : OpenGlControlBase
     /// <summary>
     /// Sets GL_TEXTURE_MAX_ANISOTROPY (EXT_texture_filter_anisotropic / GL 4.6) on the
     /// currently bound texture to min(8, the implementation max). The max is queried once
-    /// per context; when the extension is unsupported the query yields 0 (or throws) and
+    /// per context. When the extension is unsupported the query yields 0 (or throws) and
     /// this becomes a permanent no-op.
     /// </summary>
     private void ApplyAnisotropy(TextureTarget target)

@@ -7,7 +7,7 @@ using Wc3.Studio.Controls;
 namespace Wc3.Studio.Panels;
 
 /// <summary>
-/// Region editor (war3map.w3r) over <see cref="PlacementCommand"/>: an add form (name + the
+/// Region editor (war3map.w3r) over <see cref="PlacementCommand"/>, an add form (name + the
 /// four bounds) plus one <see cref="CatalogCard"/> per region showing its extent and a Remove
 /// button. Rebuilds from the command layer after every edit. Bounds editing is add/remove for
 /// now (drag-on-terrain is a later pass). Composes <see cref="CatalogEditorView"/> for chrome.

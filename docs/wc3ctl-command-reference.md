@@ -2,7 +2,7 @@
 
 Generated from the live command tree by `wc3ctl docs cli`. Do not edit by hand. Regenerate with `wc3ctl docs cli --force`, and the CI guard fails when this file is stale.
 
-The tree holds 70 top level verb(s) and 360 command path(s) in total.
+The tree holds 70 top level verb(s) and 363 command path(s) in total.
 
 ## Global options
 
@@ -141,7 +141,8 @@ wc3ctl doctor
 Subcommands
 
 - `check`. Will the map run on Reforged 3.0, and what stops it. Read-only, never starts the game.
-- `inspect`. A read-only doctor report: protection and editor needs (diag), files, card, rawcodes or recipes.
+- `inspect`. A read-only doctor report: protection and editor needs (diag), files, card, rawcodes, recipes, qol, cheatpacks or script.
+- `schema`. The installed doctor's own --json contract: every command, its options, the fix steps and extras, and the result keys, versioned by the schema number each answer carries.
 - `compare`. What differs between two versions of a map, with names recovered on protected archives.
 - `fix`. Repair a COPY of the map for Reforged 3.0 with the doctor's Fix map. The original is never written.
 
@@ -165,7 +166,7 @@ Options
 
 ### doctor inspect
 
-A read-only doctor report: protection and editor needs (diag), files, card, rawcodes or recipes.
+A read-only doctor report: protection and editor needs (diag), files, card, rawcodes, recipes, qol, cheatpacks or script.
 
 Usage
 
@@ -179,7 +180,17 @@ Arguments
 
 Options
 
-- `--report <report>`. One of diag, files, card, rawcodes, recipes. Default `diag`.
+- `--report <report>`. One of diag, files, card, rawcodes, recipes, qol, cheatpacks, script. Default `diag`.
+
+### doctor schema
+
+The installed doctor's own --json contract: every command, its options, the fix steps and extras, and the result keys, versioned by the schema number each answer carries.
+
+Usage
+
+```
+wc3ctl doctor schema
+```
 
 ### doctor compare
 
@@ -212,7 +223,7 @@ Arguments
 
 Options
 
-- `--step <step>`. A fix step or extra, such as listfile, data, portraits, uabi. Repeatable. Prefix no- to drop a default step. None applies the steps the doctor picks for this map.
+- `--step <step>`. A fix step or extra, such as listfile, data, uabi, remove-game-files, portraits=stamp. Repeatable. Prefix no- to drop a default step. None applies the steps the doctor picks for this map. doctor schema lists what the installed build accepts.
 - `-o, --out <out>`. Where to write the repaired copy. Default <map>_doctor.<ext>. Never overwritten.
 
 ## asset
@@ -660,6 +671,7 @@ wc3ctl texture
 Subcommands
 
 - `optimize`. Shrink a texture to fit a maximum side, preserving aspect ratio, and write it back in the same format. The other half of making a model compact.
+- `audit`. Read every texture header in a map and report the bytes the engine reads past the end of, the JPEG headers above 624 bytes, the missing mip levels and the headers that do not parse. Read-only, needs no game install, never decodes a pixel.
 - `atlas`. Pack two or more textures into one power-of-two atlas and report each input's pixel rectangle. The atlas is written in the first input's format.
 
 ### texture optimize
@@ -680,6 +692,24 @@ Options
 
 - `-o, --out <out>` (required). Output path. The input is never modified.
 - `--max <max>`. Maximum side length in pixels. A texture larger than this on either side is scaled down. Default `256`.
+
+### texture audit
+
+Read every texture header in a map and report the bytes the engine reads past the end of, the JPEG headers above 624 bytes, the missing mip levels and the headers that do not parse. Read-only, needs no game install, never decodes a pixel.
+
+Usage
+
+```
+wc3ctl texture audit [<map>] [options]
+```
+
+Arguments
+
+- `[<map>]` (optional). Path to a .w3x/.w3m map. Omit when --dir lists extracted files instead.
+
+Options
+
+- `--dir <dir>`. Directory of extracted files to audit instead of a map.
 
 ### texture atlas
 
@@ -4642,6 +4672,7 @@ Subcommands
 
 - `generated-heroes`. Repair the generated preplaced-hero helper block so finalized heroes use distinct owner slots and owner-aware spell wiring.
 - `reforged-3`. Detect or repair legacy SLK-map incompatibilities introduced by Reforged 3.0.0 (build 24268).
+- `game-files`. Report, and with --apply remove, map files that sit on a path the installed game already ships, so the engine reads the map's copy in place of its own. Two maps closed the game in LAN and HD graphics this way. A shadow may be intentional (a retexture), so detection is a separate read and --apply prints every name it drops. Needs --game-dir or WC3_GAME_DIR.
 - `portraits`. Remove the camera chunk from models below version 900, which is what makes Reforged 3.0.0 render a black portrait pane. Models with no camera already render correctly. Camera removal alone is safe; version stamping is refused because it crashes on load.
 - `data-pointers`. Correct a levelled field whose data pointer is 0 on some levels and a real DataA to DataF selector on others, which makes those levels name a different column than the author meant. Caused by a level ADDED by an earlier version of this tool.
 - `model-paths`. Find model paths in the script and object data that resolve to no file, which the engine logs as 'model creation failed' and retries on every creation. Fixes the ones with a single obvious target, reports the rest.
@@ -4684,6 +4715,25 @@ Arguments
 Options
 
 - `--apply`. Apply the detected Warcraft III 3.0.0 compatibility repairs and save a new map.
+- `-o, --out <out>`. Output map path. Default: '<map>.edited.<ext>' next to the input - the original is never overwritten.
+
+### repair game-files
+
+Report, and with --apply remove, map files that sit on a path the installed game already ships, so the engine reads the map's copy in place of its own. Two maps closed the game in LAN and HD graphics this way. A shadow may be intentional (a retexture), so detection is a separate read and --apply prints every name it drops. Needs --game-dir or WC3_GAME_DIR.
+
+Usage
+
+```
+wc3ctl repair game-files <map> [options]
+```
+
+Arguments
+
+- `<map>` (required). Path to a .w3x/.w3m map.
+
+Options
+
+- `--apply`. Write a copy of the map without the shadowed files. Without it this is a read-only check.
 - `-o, --out <out>`. Output map path. Default: '<map>.edited.<ext>' next to the input - the original is never overwritten.
 
 ### repair portraits

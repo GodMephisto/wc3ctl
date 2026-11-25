@@ -9,12 +9,12 @@ namespace Wc3.Studio.Panels;
 
 /// <summary>
 /// Trigger browser and editor over <see cref="TriggerReadCommand"/> and
-/// <see cref="TriggerCommand"/>: a World-Editor style tree of categories and their triggers
+/// <see cref="TriggerCommand"/>, a World-Editor style tree of categories and their triggers
 /// (plus the global variables) on the left, and the selected trigger's detail on the right.
 /// GUI triggers show their event/condition/action tree with nested blocks indented,
 /// custom-text triggers show their war3map.wct script body in the shared JASS editor.
 ///
-/// Editable here: a category or trigger's name, a trigger's enabled / initially-on /
+/// Editable here, a category or trigger's name, a trigger's enabled / initially-on /
 /// run-on-map-init flags, and adding or removing categories and triggers. Every one of those
 /// goes through <see cref="TriggerCommand"/>, so the refusals it computes (orphaning a
 /// category's children, or shifting a war3map.wct code body onto the wrong trigger) arrive
@@ -23,7 +23,7 @@ namespace Wc3.Studio.Panels;
 /// Events, conditions and actions are editable too, added by name against the World-Editor
 /// function table, removed by position, and enabled or disabled one at a time.
 ///
-/// NOT editable here: a custom-text trigger's body, which is JASS in war3map.wct, a file whose
+/// NOT editable here, a custom-text trigger's body, which is JASS in war3map.wct, a file whose
 /// decoder loses bytes it cannot interpret and which is therefore never written.
 ///
 /// And nothing here compiles. Warcraft III runs war3map.j, the World Editor generates it from
@@ -136,7 +136,7 @@ public partial class TriggerView : UserControl, IMapPanel
         BuildTree(model);
     }
 
-    /// <summary>Left tree: one node per category (wtg order) holding its triggers,
+    /// <summary>Left tree, one node per category (wtg order) holding its triggers,
     /// an extra bucket for triggers whose category id resolves to nothing, and a
     /// Variables node at the bottom.</summary>
     private void BuildTree(TriggerModel model)
@@ -242,7 +242,7 @@ public partial class TriggerView : UserControl, IMapPanel
         return _globalsCount;
     }
 
-    /// <summary>One trigger row: its name plus a dim state hint. A GUI trigger with
+    /// <summary>One trigger row, its name plus a dim state hint. A GUI trigger with
     /// no functions shows "empty" (World-Editor comments also land here, the wtg
     /// read does not distinguish them).</summary>
     private static TreeViewItem MakeTriggerItem(TriggerInfo trig)
@@ -309,7 +309,7 @@ public partial class TriggerView : UserControl, IMapPanel
         TriggerTree.SelectedItem is TreeViewItem { Tag: TriggerInfo t } ? t : null;
 
     /// <summary>The id and name of whichever item is selected, for rename and remove. A
-    /// variable row is deliberately excluded: wtg variables are a separate list from the item
+    /// variable row is deliberately excluded, wtg variables are a separate list from the item
     /// tree and TriggerCommand does not edit them.</summary>
     private (int Id, string Name)? SelectedItem =>
         SelectedCategory is { } c ? (c.Id, c.Name)
@@ -595,7 +595,7 @@ public partial class TriggerView : UserControl, IMapPanel
         FlagsText.Text = variable.IsArray ? $"{variable.Type} array" : variable.Type;
     }
 
-    /// <summary>Right tree: the trigger's functions grouped World-Editor style into
+    /// <summary>Right tree, the trigger's functions grouped World-Editor style into
     /// Events / Conditions / Actions sections (all three always shown, with counts),
     /// nested blocks as expandable children. Anything with an unexpected kind lands
     /// in an Other section instead of being dropped.</summary>
@@ -644,7 +644,7 @@ public partial class TriggerView : UserControl, IMapPanel
         }
     }
 
-    /// <summary>One ECA node rendered as "Kind: Name(params)" using the readable
+    /// <summary>One ECA node rendered as "Kind, Name(params)" using the readable
     /// parameter strings the command layer produced, recursing into nested blocks
     /// (if/then/else, loops, and/or). Long rows trim with the full text on the
     /// tooltip.</summary>
@@ -665,7 +665,7 @@ public partial class TriggerView : UserControl, IMapPanel
         ToolTip.SetTip(label, text);
 
         var item = new TreeViewItem { Header = label, IsExpanded = true };
-        // Only top-level functions carry a position, because only those can be removed: a nested
+        // Only top-level functions carry a position, because only those can be removed, a nested
         // block's children belong to their parent rather than to the trigger's list.
         if (indexOf is not null && indexOf.TryGetValue(fn, out int at)) item.Tag = at;
         foreach (var child in fn.Children)

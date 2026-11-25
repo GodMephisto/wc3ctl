@@ -77,7 +77,7 @@ public class AuditCommandTests
         return ms.ToArray();
     }
 
-    /// <summary>A minimal MDX: MDLX, a VERS chunk, and optionally a CAMS chunk.</summary>
+    /// <summary>A minimal MDX, MDLX, a VERS chunk, and optionally a CAMS chunk.</summary>
     private static byte[] Mdx(int version, bool camera)
     {
         using var ms = new MemoryStream();

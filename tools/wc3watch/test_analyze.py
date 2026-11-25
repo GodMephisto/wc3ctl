@@ -153,7 +153,7 @@ class TestChart(Base):
 
     def test_chart_without_samples_is_still_svg(self):
         folder = os.path.join(self.root, "empty")
-        os.makedirs(folder)
+        os.makedirs(folder, exist_ok=True)
         open(os.path.join(folder, "samples.csv"), "w").close()
         svg = analyze.render_chart(folder)
         doc = minidom.parseString(svg)
@@ -197,7 +197,7 @@ class TestSummary(Base):
 
     def test_summary_without_frames_says_so(self):
         folder = os.path.join(self.root, "noframes")
-        os.makedirs(folder)
+        os.makedirs(folder, exist_ok=True)
         open(os.path.join(folder, "samples.csv"), "w").close()
         text = analyze.render_summary(folder)
         self.assertIn("nothing to summarise", text)

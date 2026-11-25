@@ -14,7 +14,7 @@ public sealed record AppearanceScore(
     double Ssim, double SilhouetteIou, double CoverageA, double CoverageB);
 
 /// <summary>
-/// A small perceptual gate: global SSIM and silhouette intersection-over-union between two
+/// A small perceptual gate, global SSIM and silhouette intersection-over-union between two
 /// PNG renders. Both are cheap, both are deterministic, and together they catch the two ways
 /// a lossy model step goes wrong, shading that drifts and geometry that shrinks or tears.
 /// Computed only over the union of the two masks so an empty background does not flatter the
@@ -27,8 +27,8 @@ public static class AppearanceMetric
 
     public static AppearanceScore Compare(byte[] pngA, byte[] pngB)
     {
-        using var a = Image.Load<Rgba32>(pngA);
-        using var b = Image.Load<Rgba32>(pngB);
+        using var a = SafeImages.Load<Rgba32>(pngA);
+        using var b = SafeImages.Load<Rgba32>(pngB);
         return Compare(a, b);
     }
 

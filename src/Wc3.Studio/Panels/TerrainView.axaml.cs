@@ -31,16 +31,16 @@ public partial class TerrainView : UserControl, IMapPanel
     private MapSession? _session;
     private PaletteRow? _brush;
 
-    // Sculpt mode: the terrain brush that reshapes war3map.w3e through the
+    // Sculpt mode, the terrain brush that reshapes war3map.w3e through the
     // TerrainCommand area ops. Mutually exclusive with the placement brush and with
     // pointer selection, all three own the left click. A sculpt stroke is journaled in
-    // BOTH the 2D minimap and the 3D GL viewport: BeginSculptStroke snapshots the grid
+    // BOTH the 2D minimap and the 3D GL viewport, BeginSculptStroke snapshots the grid
     // on press, the stroke applies live, and CommitSculptStroke diffs on release into
     // ONE TerrainSculptEdit on _history, so Ctrl+Z reverts a whole stroke at once.
     private bool _sculpt;
     private bool _sculptDrag2D;                 // a left-drag stroke is live on the 2D minimap
-    private (int Col, int Row)? _sculptLastCorner; // drag throttle: re-apply only on a new corner
-    // Full tile snapshot taken when a sculpt stroke starts; diffed against the grid on
+    private (int Col, int Row)? _sculptLastCorner; // drag throttle, re-apply only on a new corner
+    // Full tile snapshot taken when a sculpt stroke starts. Diffed against the grid on
     // release to record ONE undo entry for the whole stroke (null when no stroke is live).
     private Wc3.Commands.Editing.TerrainSculptEdit.TileState[]? _strokeBefore;
     private bool _glTerrainStale;               // sculpted while 2D showed, GL mesh needs a rebuild
@@ -61,7 +61,7 @@ public partial class TerrainView : UserControl, IMapPanel
     public event Action<IReadOnlyList<int>>? UnitsSelected;
 
     /// <summary>Raised when the user asks to remove the selected units (Delete/Backspace
-    /// in pointer mode). The host owns the actual delete (command layer + refresh); the
+    /// in pointer mode). The host owns the actual delete (command layer + refresh). The
     /// list is a snapshot of the selection at the time of the request.</summary>
     public event Action<IReadOnlyList<int>>? RemoveUnitsRequested;
 
@@ -80,7 +80,7 @@ public partial class TerrainView : UserControl, IMapPanel
 
     /// <summary>Highlights placed units in the GL viewport by creation number (an empty
     /// list clears the highlight). For the workspace host to mirror selection made
-    /// elsewhere; does not raise <see cref="UnitsSelected"/>.</summary>
+    /// elsewhere. Does not raise <see cref="UnitsSelected"/>.</summary>
     public void SelectUnits(IReadOnlyList<int> creationNumbers)
     {
         _selection.Clear();
@@ -157,7 +157,7 @@ public partial class TerrainView : UserControl, IMapPanel
             // The GL build runs off the UI thread now, so frame the camera once it is ready
             // (DriveReset needs the built mesh's center and radius).
             GlView.SetMap(session.Current, BuildModelResolver(session), onReady: () => GlView.DriveReset());
-            // Placement owner: keep the user's pick when one is set, else Player 1.
+            // Placement owner, keep the user's pick when one is set, else Player 1.
             PlaceOwnerPicker.Load(session.Current, PlaceOwnerPicker.SelectedOwnerId ?? 0);
         }
         catch (Exception ex)
@@ -236,11 +236,11 @@ public partial class TerrainView : UserControl, IMapPanel
     }
 
     /// <summary>
-    /// Builds the GL viewport's per-type model resolver: model path from the merged
-    /// object data (map deltas win; Reforged skin-profile fallback), geometry + decoded
+    /// Builds the GL viewport's per-type model resolver, model path from the merged
+    /// object data (map deltas win. Reforged skin-profile fallback), geometry + decoded
     /// textures via <see cref="RenderModelCommand.Prepare(Wc3.Model.MapDocument, string, Wc3.GameData.GameDataContext?)"/>
     /// (map imports first, then base game via CASC), posed at "Stand", the viewport
-    /// UV-maps each geoset with its real texture. Results, including failures, as null , 
+    /// UV-maps each geoset with its real texture. Results, including failures, as null ,
     /// are cached per type, so each distinct rawcode is resolved at most once per map.
     /// </summary>
     private static Func<string, bool, Wc3.Render.PlacementModel?> BuildModelResolver(MapSession session)
@@ -294,7 +294,7 @@ public partial class TerrainView : UserControl, IMapPanel
             : $"● Placing: {row.Display}, click to place · ✋ Stop placing (or Esc / right-click) to cancel";
     }
 
-    /// <summary>Toolbar "Stop placing": disarm the brush → pointer mode. Works in both the
+    /// <summary>Toolbar "Stop placing", disarm the brush → pointer mode. Works in both the
     /// 2D and GL views (unlike Esc/right-click which are GL-only), so it's the reliable exit.</summary>
     private void OnStopPlacingClick(object? sender, RoutedEventArgs e) =>
         ClearPlacementBrush("Pointer mode, click a unit to select.");
@@ -447,7 +447,7 @@ public partial class TerrainView : UserControl, IMapPanel
     };
 
     /// <summary>
-    /// Applies the active sculpt tool at world (wx, wy): converts to the nearest
+    /// Applies the active sculpt tool at world (wx, wy), converts to the nearest
     /// terrain corner and runs the matching TerrainCommand area brush with the chosen
     /// radius/amount/tile, then refreshes whichever terrain view is showing and flags
     /// the map dirty (MapEdited enables Save in the host). The stroke is applied live,
@@ -477,10 +477,10 @@ public partial class TerrainView : UserControl, IMapPanel
             return;
         }
 
-        // Water: the Amount box is a DEPTH in cliff-layers above the brushed ground, not a raw
+        // Water, the Amount box is a DEPTH in cliff-layers above the brushed ground, not a raw
         // stored level. Convert to the stored water level through the renderer's own datum
         // (WaterZOffset) so the surface sits Amount layers over the terrain and is never hidden
-        // beneath it. This is why a fresh Water stroke used to look like nothing happened: the
+        // beneath it. This is why a fresh Water stroke used to look like nothing happened, the
         // old code stored Amount directly, and small values sat below the ground plane.
         float waterLevel = amount;
         if (tool == SculptTool.Water)
@@ -533,7 +533,7 @@ public partial class TerrainView : UserControl, IMapPanel
     }
 
     /// <summary>Snapshots the terrain grid at the start of a sculpt stroke so the whole
-    /// stroke can be recorded as one undo entry on release. Cheap transient copy; discarded
+    /// stroke can be recorded as one undo entry on release. Cheap transient copy. Discarded
     /// once the stroke is committed or abandoned.</summary>
     private void BeginSculptStroke(Wc3.Model.MapDocument doc)
     {
@@ -547,7 +547,7 @@ public partial class TerrainView : UserControl, IMapPanel
         _strokeBefore = snap;
     }
 
-    /// <summary>Ends a sculpt stroke: diffs the grid against the pre-stroke snapshot and, if
+    /// <summary>Ends a sculpt stroke, diffs the grid against the pre-stroke snapshot and, if
     /// anything changed, records ONE TerrainSculptEdit on the undo journal (the stroke has
     /// already been applied live, so its Apply is an idempotent no-op here). One stroke =
     /// one undo/redo step.</summary>
@@ -621,7 +621,7 @@ public partial class TerrainView : UserControl, IMapPanel
         RedrawMarkers();
     }
 
-    /// <summary>Click on the 2D minimap: with sculpt on, start a terrain brush stroke.
+    /// <summary>Click on the 2D minimap, with sculpt on, start a terrain brush stroke.
     /// Otherwise map the click to world (x,y) and place the armed brush.</summary>
     private void OnTerrainPressed(object? sender, PointerPressedEventArgs e)
     {
@@ -632,7 +632,7 @@ public partial class TerrainView : UserControl, IMapPanel
         double srcX = p.X / _zoom, srcY = p.Y / _zoom;
         var (wx, wy) = _xform.PixelToWorld(srcX, srcY);
 
-        // Sculpt mode: a left press starts a brush stroke instead of placing or
+        // Sculpt mode, a left press starts a brush stroke instead of placing or
         // selecting. Dragging keeps sculpting (OnTerrainMoved) until release.
         if (_sculpt)
         {
@@ -669,7 +669,7 @@ public partial class TerrainView : UserControl, IMapPanel
         e.Handled = true;
     }
 
-    /// <summary>Continuous 2D sculpting: while a stroke is live, re-apply the brush each
+    /// <summary>Continuous 2D sculpting, while a stroke is live, re-apply the brush each
     /// time the pointer crosses into a new terrain corner (a cheap throttle that also
     /// keeps a stationary pointer from stacking repeat hits on one corner).</summary>
     private void OnTerrainMoved(object? sender, PointerEventArgs e)
@@ -705,15 +705,15 @@ public partial class TerrainView : UserControl, IMapPanel
 
     /// <summary>Applies the armed brush at world (wx,wy) through the undo journal so the
     /// placement can be reverted, honoring the toolbar brush options (random rotation,
-    /// scale variance). Returns (ok, message): on failure the message is the placement
-    /// diagnostic; on success it is the edit's label. Shared by the 2D and GL click paths
+    /// scale variance). Returns (ok, message), on failure the message is the placement
+    /// diagnostic. On success it is the edit's label. Shared by the 2D and GL click paths
     /// so both get undo (and live GL markers) for free.</summary>
     private (bool ok, string msg) PlaceViaHistory(Wc3.Model.MapDocument doc, float wx, float wy)
     {
         if (_brush is null)
             return (false, "Select a placeable in the Palette tab first.");
 
-        // Brush options: random facing (radians, as the .doo format stores) and a
+        // Brush options, random facing (radians, as the .doo format stores) and a
         // uniform scale jitter of ±variance around 1.0.
         float rotation = RandomRotButton.IsChecked == true
             ? (float)(_rng.NextDouble() * 2.0 * Math.PI)
@@ -725,7 +725,7 @@ public partial class TerrainView : UserControl, IMapPanel
 
         try
         {
-            // Route by kind: units carry the toolbar's "Place as" owner, items go to the
+            // Route by kind, units carry the toolbar's "Place as" owner, items go to the
             // item slot, doodads and destructables share war3map.doo (both have no owner).
             Wc3.Commands.Editing.IMapEdit edit = _brush.Kind switch
             {
@@ -767,7 +767,7 @@ public partial class TerrainView : UserControl, IMapPanel
         AfterHistoryEdit();
     }
 
-    /// <summary>Repaints after an undo/redo: the click-breadcrumb dots no longer map to the
+    /// <summary>Repaints after an undo/redo, the click-breadcrumb dots no longer map to the
     /// changed object set, so clear them, refresh the GL markers, re-render the 2D view when
     /// it is showing, and flag the map dirty.</summary>
     private void AfterHistoryEdit()
@@ -775,7 +775,7 @@ public partial class TerrainView : UserControl, IMapPanel
         _markers.Clear();
         MarkerCanvas?.Children.Clear();
         GlView.RefreshPlacements();
-        // An undone/redone edit may be a terrain sculpt, so rebuild the terrain too: the GL
+        // An undone/redone edit may be a terrain sculpt, so rebuild the terrain too, the GL
         // mesh in 3D, or the 2D minimap render otherwise (RenderCurrent repaints terrain).
         if (_is3D)
             GlView.RefreshTerrain();
@@ -809,7 +809,7 @@ public partial class TerrainView : UserControl, IMapPanel
     }
 
     /// <summary>Swaps the GL viewport in front of (or back behind) the 2D minimap. The GL
-    /// camera keeps its state across toggles; leaving 3D re-renders the minimap.</summary>
+    /// camera keeps its state across toggles. Leaving 3D re-renders the minimap.</summary>
     private void ShowGlViewport(bool show)
     {
         _is3D = show;
@@ -824,7 +824,7 @@ public partial class TerrainView : UserControl, IMapPanel
             if (_glTerrainStale)
             {
                 _glTerrainStale = false;
-                GlView.RefreshTerrain(); // sculpted while hidden: rebuilds mesh, heights, and placements
+                GlView.RefreshTerrain(); // sculpted while hidden, rebuilds mesh, heights, and placements
             }
             else
             {
@@ -841,17 +841,17 @@ public partial class TerrainView : UserControl, IMapPanel
 
     // --- GL viewport input (via the transparent GlInput catcher) --------------
     // OpenGlControlBase can't receive pointer input, so GlInput catches it here.
-    // Camera (all modes): RIGHT-drag orbits, MIDDLE-drag pans, wheel zooms, arrow
-    // keys pan, PageUp/Down zoom, Home resets. LEFT belongs to the tools: with a
-    // brush armed a left click places; in pointer mode a left click selects (Shift
+    // Camera (all modes), RIGHT-drag orbits, MIDDLE-drag pans, wheel zooms, arrow
+    // keys pan, PageUp/Down zoom, Home resets. LEFT belongs to the tools, with a
+    // brush armed a left click places. In pointer mode a left click selects (Shift
     // toggles) and a left DRAG sweeps a marquee box (Shift adds to the selection).
     // With sculpt mode on, a left press or drag runs the terrain brush instead.
     // A press that never moves more than a few pixels counts as a click.
     private enum GlDrag { None, Orbit, Pan, Marquee, PlaceClick, Sculpt, Move, Rotate }
     private GlDrag _glDrag;
     private bool _glDragMoved;
-    private bool _glShift; // Shift state at press: additive marquee / click-toggle
-    private bool _glAlt;   // Alt state at press: a widget drag rotates instead of moving
+    private bool _glShift; // Shift state at press, additive marquee / click-toggle
+    private bool _glAlt;   // Alt state at press, a widget drag rotates instead of moving
     private Avalonia.Point _glLast;
     private Avalonia.Point _glPressPos;
     private readonly List<int> _selection = new();
@@ -878,7 +878,7 @@ public partial class TerrainView : UserControl, IMapPanel
             _glDrag = GlDrag.Pan;
         else if (_sculpt && p.Properties.IsLeftButtonPressed)
         {
-            // Sculpt stroke: apply at the press point now, then keep applying as the
+            // Sculpt stroke, apply at the press point now, then keep applying as the
             // drag crosses new corners (OnGlInputMoved). Camera stays on right/middle.
             _glDrag = GlDrag.Sculpt;
             _sculptLastCorner = null;
@@ -891,7 +891,7 @@ public partial class TerrainView : UserControl, IMapPanel
         }
         else if (_brush is null)
         {
-            // Pointer mode. If the press lands on a placed widget, grab it: a drag then
+            // Pointer mode. If the press lands on a placed widget, grab it, a drag then
             // MOVES it (Alt = ROTATE), and a plain click (no drag) selects it. On empty
             // ground a drag sweeps a marquee box. Click vs drag is decided on release.
             var picked = GlView.PickPlacement(p.Position.X, p.Position.Y);
@@ -906,7 +906,7 @@ public partial class TerrainView : UserControl, IMapPanel
                 _glDrag = GlDrag.Marquee;
         }
         else
-            _glDrag = GlDrag.PlaceClick; // brush armed: click places, a drag does nothing
+            _glDrag = GlDrag.PlaceClick; // brush armed, click places, a drag does nothing
         e.Pointer.Capture(GlInput);
         e.Handled = true;
     }
@@ -936,7 +936,7 @@ public partial class TerrainView : UserControl, IMapPanel
                 break;
             case GlDrag.Sculpt:
             {
-                // Continuous sculpt: re-apply when the drag crosses into a new corner.
+                // Continuous sculpt, re-apply when the drag crosses into a new corner.
                 var (hit, wx, wy) = GlView.PickGround(pos.X, pos.Y);
                 if (hit && !SameSculptCorner(wx, wy) && _session?.Current is { } doc)
                     ApplySculptAt(doc, wx, wy);
@@ -958,7 +958,7 @@ public partial class TerrainView : UserControl, IMapPanel
         if (kind == GlDrag.None || _session?.Current is not { } doc)
             return;
 
-        // Sculpt strokes apply live on press and on drag; the release records the whole
+        // Sculpt strokes apply live on press and on drag. The release records the whole
         // stroke as one undo entry.
         if (kind == GlDrag.Sculpt)
         {
@@ -968,7 +968,7 @@ public partial class TerrainView : UserControl, IMapPanel
 
         var p = e.GetPosition(GlInput);
 
-        // Marquee drag finished: select every unit inside the box (Shift ADDS to the
+        // Marquee drag finished, select every unit inside the box (Shift ADDS to the
         // current selection instead of replacing it).
         if (kind == GlDrag.Marquee && moved)
         {
@@ -984,7 +984,7 @@ public partial class TerrainView : UserControl, IMapPanel
             return;
         }
 
-        // Move/Rotate drag finished: apply to the grabbed widget (a Move also drags the
+        // Move/Rotate drag finished, apply to the grabbed widget (a Move also drags the
         // rest of a multi-unit selection by the same delta). Applied on release with one
         // scene rebuild, a live per-frame preview is a follow-up.
         if ((kind == GlDrag.Move || kind == GlDrag.Rotate) && moved && _dragTarget is { } tgt)
@@ -994,9 +994,9 @@ public partial class TerrainView : UserControl, IMapPanel
         }
 
         if (moved)
-            return; // camera drag: no click action
+            return; // camera drag, no click action
 
-        // Right CLICK cancels the armed tool (WC3-style); middle click is camera only.
+        // Right CLICK cancels the armed tool (WC3-style). Middle click is camera only.
         if (e.InitialPressMouseButton == MouseButton.Right)
         {
             if (_brush is not null)
@@ -1008,7 +1008,7 @@ public partial class TerrainView : UserControl, IMapPanel
         if (e.InitialPressMouseButton != MouseButton.Left)
             return;
 
-        // Brush armed, plain left click: ray-pick the ground and place.
+        // Brush armed, plain left click, ray-pick the ground and place.
         if (_brush is not null)
         {
             var (ok, wx, wy) = GlView.PickGround(p.X, p.Y);
@@ -1026,11 +1026,11 @@ public partial class TerrainView : UserControl, IMapPanel
             return;
         }
 
-        // Pointer-mode left click (no drag): select the widget under the cursor.
+        // Pointer-mode left click (no drag), select the widget under the cursor.
         SelectAtClick(GlView.PickPlacement(p.X, p.Y));
     }
 
-    /// <summary>The pointer-mode click selection: a unit joins (Shift toggles) the unit
+    /// <summary>The pointer-mode click selection, a unit joins (Shift toggles) the unit
     /// selection, a doodad becomes THE selected doodad, empty space clears.</summary>
     private void SelectAtClick(PlacementPick? picked)
     {
@@ -1102,7 +1102,7 @@ public partial class TerrainView : UserControl, IMapPanel
                 CaptionText.Text = $"Moved doodad #{tgt.CreationNumber} to ({wx:0}, {wy:0})";
             }
         }
-        else // Rotate: face the widget toward the release point.
+        else // Rotate, face the widget toward the release point.
         {
             float ox, oy;
             if (tgt.IsUnit)
@@ -1132,7 +1132,7 @@ public partial class TerrainView : UserControl, IMapPanel
         MapEdited?.Invoke(this, EventArgs.Empty);
     }
 
-    /// <summary>Capture can vanish mid-drag (alt-tab, window deactivation); drop the drag
+    /// <summary>Capture can vanish mid-drag (alt-tab, window deactivation). Drop the drag
     /// so the next pointer move doesn't keep orbiting without a button held. A live sculpt
     /// stroke is committed first, so a capture loss still records one undo entry.</summary>
     private void OnGlInputCaptureLost(object? sender, PointerCaptureLostEventArgs e)
@@ -1205,7 +1205,7 @@ public partial class TerrainView : UserControl, IMapPanel
             case Key.Home:     GlView.DriveReset(); break;
             case Key.Delete:
             case Key.Back:
-                // Pointer mode with a selection: ask the host to remove those units
+                // Pointer mode with a selection, ask the host to remove those units
                 // (it owns the command call + refresh + selection clear).
                 if (_brush is null && _selection.Count > 0)
                     RemoveUnitsRequested?.Invoke(_selection.ToArray());
@@ -1265,7 +1265,7 @@ public partial class TerrainView : UserControl, IMapPanel
             cursor.X, cursor.Y, factor, MinZoom, MaxZoom);
         _zoom = zoom;
         ApplyZoom();
-        // The Image was just resized; run layout so the ScrollViewer's extent grows
+        // The Image was just resized. Run layout so the ScrollViewer's extent grows
         // before the new offset is coerced against it.
         ScrollHost.UpdateLayout();
         ScrollHost.Offset = new Vector(offsetX, offsetY);

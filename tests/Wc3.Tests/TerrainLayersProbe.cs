@@ -9,7 +9,7 @@ using Xunit.Abstractions;
 namespace Wc3.Tests;
 
 /// <summary>
-/// Machine-gated probe: confirms <see cref="TerrainArtCatalog.BuildLayersForMap"/> assembles a
+/// Machine-gated probe, confirms <see cref="TerrainArtCatalog.BuildLayersForMap"/> assembles a
 /// real map's terrain-type layers end-to-end (env extraction → CASC → BLP → RGBA) and that at
 /// least one layer is a real, non-uniform texture rather than a flat-colour fallback. Self-locates
 /// the first loadable map under the local WC3 Maps directory, so it needs no hard-coded map path.
@@ -24,7 +24,7 @@ public class TerrainLayersProbe
     [Fact]
     public void BuildLayersForMap_resolves_real_textures()
     {
-        if (!Directory.Exists(MapsRoot)) return; // gated: only runs where local maps are present
+        if (!Directory.Exists(MapsRoot)) return; // gated, only runs where local maps are present
 
         // CASC needs the game install as well as the maps. On a machine with the map library but no
         // install every layer comes out as a flat-colour fallback and the assertion below failed,

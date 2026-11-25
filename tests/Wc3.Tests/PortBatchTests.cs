@@ -12,7 +12,7 @@ using Wc3.Model;
 namespace Wc3.Tests;
 
 /// <summary>
-/// Batch porting: several units into the SAME target in one operation. The used-rawcode
+/// Batch porting, several units into the SAME target in one operation. The used-rawcode
 /// set accumulates across bundles (later units can't collide with earlier ports), shared
 /// custom dependencies are ported once and reused, and the merged script closure is
 /// spliced a single time.
@@ -75,7 +75,7 @@ public class PortBatchTests
     public void Batch_accumulates_remaps_and_reuses_shared_dependencies()
     {
         var source = SourceMap();
-        // Target already defines H000 and the shared ability A002 → both remap; the
+        // Target already defines H000 and the shared ability A002 → both remap. The
         // second hero must avoid the first hero's freshly allocated codes too.
         var target = TargetMap(new[] { "H000" }, new[] { "A002" });
         var bundles = new[] { "H000", "H001" }
@@ -85,12 +85,12 @@ public class PortBatchTests
         Assert.Equal(2, r.Units.Count);
         var (u0, u1) = (r.Units[0], r.Units[1]);
 
-        // Distinct, non-colliding root codes: H000 collided with the target; whatever it
+        // Distinct, non-colliding root codes, H000 collided with the target. Whatever it
         // was remapped to, the second hero must land somewhere else.
         Assert.NotEqual("H000", u0.RootPortedTo);
         Assert.NotEqual(u0.RootPortedTo, u1.RootPortedTo);
 
-        // The shared ability was remapped ONCE: both units agree on its new code, and the
+        // The shared ability was remapped ONCE, both units agree on its new code, and the
         // second unit reused (not re-injected) it.
         string shared0 = u0.Remaps.Single(m => m.From == "A002" && m.Kind == ObjectKind.Ability).To;
         string shared1 = u1.Remaps.Single(m => m.From == "A002" && m.Kind == ObjectKind.Ability).To;
@@ -100,14 +100,14 @@ public class PortBatchTests
 
         var reloaded = MapDocument.Load(target.SaveToBytes());
 
-        // Units: the target's own H000 plus the two ported heroes.
+        // Units, the target's own H000 plus the two ported heroes.
         var w3u = (UnitObjectData)reloaded.GetFile("war3map.w3u")!.Model!;
         Assert.Equal(3, w3u.NewUnits.Count);
         Assert.Contains(w3u.NewUnits, u => u.NewId == "H000".FromRawcode());
         Assert.Contains(w3u.NewUnits, u => u.NewId == u0.RootPortedTo!.FromRawcode());
         Assert.Contains(w3u.NewUnits, u => u.NewId == u1.RootPortedTo!.FromRawcode());
 
-        // Abilities: target's own A002 + A's two + B's one (shared NOT duplicated).
+        // Abilities, target's own A002 + A's two + B's one (shared NOT duplicated).
         var w3a = (AbilityObjectData)reloaded.GetFile("war3map.w3a")!.Model!;
         Assert.Equal(4, w3a.NewAbilities.Count);
         Assert.Single(w3a.NewAbilities, a => a.NewId == shared0.FromRawcode());
@@ -118,7 +118,7 @@ public class PortBatchTests
         var uhab = (string)ported1.Modifications.Single(m => m.Id == "uhab".FromRawcode()).Value!;
         Assert.Equal($"{a1To},{shared0}", uhab);
 
-        // The shared icon copied once: unit A copied it, unit B saw it already in target.
+        // The shared icon copied once, unit A copied it, unit B saw it already in target.
         Assert.Contains(u0.CopiedFiles, f => f.EndsWith("sharedicon.blp", StringComparison.OrdinalIgnoreCase));
         Assert.Empty(u1.CopiedFiles);
         Assert.Contains(u1.SkippedFiles, f => f.Contains("already in target"));
@@ -156,7 +156,7 @@ endfunction
     public void Batch_carries_a_shared_script_dispatcher_once_with_all_remaps_applied()
     {
         var source = SourceMap(DispatcherScript);
-        // Both hero codes collide → both remapped; the one carried dispatcher copy must
+        // Both hero codes collide → both remapped. The one carried dispatcher copy must
         // reference BOTH new codes.
         var target = TargetMap(new[] { "H000", "H001" }, Array.Empty<string>(), TargetScript);
         var bundles = new[] { "H000", "H001" }
@@ -180,7 +180,7 @@ endfunction
         Assert.Single(Regex.Matches(j, @"function Trig_Dispatch_Actions takes"));
         Assert.Single(Regex.Matches(j, @"call InitTrig_Dispatch\(\)"));
 
-        // Every ported unit's rawcode literal follows its remap; no original survives.
+        // Every ported unit's rawcode literal follows its remap. No original survives.
         string h0To = r.Units[0].Remaps.Single(m => m.From == "H000").To;
         string h1To = r.Units[1].Remaps.Single(m => m.From == "H001").To;
         Assert.Contains($"'{h0To}'", j);
@@ -209,7 +209,7 @@ endfunction
         Assert.Equal(AsJson(real), AsJson(preview));
         Assert.NotNull(preview.Script); // the merged script closure was summarized too
 
-        // The previewed target is untouched: its own unit only, no icon, script identical.
+        // The previewed target is untouched, its own unit only, no icon, script identical.
         var reloaded = MapDocument.Load(previewTarget.SaveToBytes());
         Assert.Single(((UnitObjectData)reloaded.GetFile("war3map.w3u")!.Model!).NewUnits);
         Assert.Null(reloaded.GetFile("war3mapImported\\sharedicon.blp"));
@@ -227,7 +227,7 @@ endfunction
         File.WriteAllBytes(tgtPath, TargetMap(new[] { "H000" }, new[] { "A002" }).SaveToBytes());
         try
         {
-            // Dry run first: full batch report, nothing written.
+            // Dry run first, full batch report, nothing written.
             var sw = new StringWriter();
             var console = Console.Out;
             Console.SetOut(sw);
@@ -239,7 +239,7 @@ endfunction
             Assert.Contains("DRY RUN - nothing written", sw.ToString());
             Assert.False(File.Exists(portedPath), "dry run must not write the ported map");
 
-            // Real batch: one <target>.ported.w3x containing both heroes.
+            // Real batch, one <target>.ported.w3x containing both heroes.
             sw = new StringWriter();
             Console.SetOut(sw);
             code = await Wc3Ctl.Program.Main(new[]

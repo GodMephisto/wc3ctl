@@ -12,23 +12,23 @@ using Wc3.Studio.Controls;
 namespace Wc3.Studio.Panels;
 
 /// <summary>
-/// Dependency graph for one object of any Object Editor kind: the panel
+/// Dependency graph for one object of any Object Editor kind, the panel
 /// resolves its full closure (abilities, buffs, items, model, textures,
 /// icons, strings) via <see cref="BundleCommand.ResolveObject"/>, then
-/// renders it two ways - a layered node-link graph on an interactive canvas
+/// renders it two ways, a layered node-link graph on an interactive canvas
 /// (drag empty space to pan, wheel to zoom about the cursor, drag nodes to
-/// rearrange - edges follow) and a structured tree + files/strings lists
-/// beside it. Two ways in: the
+/// rearrange, edges follow) and a structured tree + files/strings lists
+/// beside it. Two ways in, the
 /// workspace pushes the Objects tab's selection through
 /// <see cref="ShowObject"/> (auto-resolving immediately), or the user picks
 /// manually from the combo, which lists the current kind's map objects.
 /// The selection is exposed through <see cref="SelectedRawcode"/> (any kind)
-/// and <see cref="SelectedUnitRawcode"/> (units only - the port seam) with
+/// and <see cref="SelectedUnitRawcode"/> (units only, the port seam) with
 /// <see cref="SelectionChanged"/> notifications.
 /// </summary>
 public partial class DependencyGraphView : UserControl, IMapPanel
 {
-    // Palette shared by the canvas and the detail lists: gold accent = custom
+    // Palette shared by the canvas and the detail lists, gold accent = custom
     // to this map (matches the object editor's modified-field highlight),
     // grey = base game, steel blue = file assets, red tint = not in the map.
     private static readonly IBrush AccentText = StudioPalette.Accent;
@@ -63,8 +63,8 @@ public partial class DependencyGraphView : UserControl, IMapPanel
     private const double FileGapX = 26, FileGapY = 26;
     private const double BandGap = 100;
 
-    // Canvas interaction (tldraw-style): the canvas carries scale-then-translate
-    // render transforms; wheel zooms about the cursor, dragging empty space pans,
+    // Canvas interaction (tldraw-style), the canvas carries scale-then-translate
+    // render transforms. Wheel zooms about the cursor, dragging empty space pans,
     // dragging a node repositions it (its edges re-anchor live).
     private const double MinScale = 0.2, MaxScale = 3.0;
     private const double WheelZoomStep = 1.1, ButtonZoomStep = 1.25;
@@ -104,7 +104,7 @@ public partial class DependencyGraphView : UserControl, IMapPanel
     private int _generation;
     /// <summary>At most one ResolveObject runs at a time (they share the MapDocument).</summary>
     private bool _resolveInFlight;
-    /// <summary>Selection changed mid-resolve; run one trailing resolve when it lands.</summary>
+    /// <summary>Selection changed mid-resolve. Run one trailing resolve when it lands.</summary>
     private bool _resolveQueued;
     /// <summary>The kind the combo's object list was (or is being) loaded for.</summary>
     private ObjectKind _listKind = ObjectKind.Unit;
@@ -143,9 +143,9 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         ZoomResetButton.Click += (_, _) => ResetView();
     }
 
-    // --- canvas interaction: pan / zoom / node drag ---
+    // --- canvas interaction, pan / zoom / node drag ---
 
-    /// <summary>A press that no node claimed (nodes mark theirs handled): start a pan.</summary>
+    /// <summary>A press that no node claimed (nodes mark theirs handled), start a pan.</summary>
     private void OnViewportPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         if (!e.GetCurrentPoint(GraphViewport).Properties.IsLeftButtonPressed)
@@ -156,7 +156,7 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         e.Pointer.Capture(GraphViewport);
     }
 
-    /// <summary>A press on a node Border: start dragging that node instead of panning.</summary>
+    /// <summary>A press on a node Border, start dragging that node instead of panning.</summary>
     private void OnNodePointerPressed(object? sender, PointerPressedEventArgs e)
     {
         if (sender is not Border node
@@ -180,7 +180,7 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         {
             if (!_dragMoved && delta.X * delta.X + delta.Y * delta.Y > ClickMoveThreshold * ClickMoveThreshold)
                 _dragMoved = true;
-            // Viewport delta → canvas delta: divide out the zoom (pan cancels).
+            // Viewport delta → canvas delta, divide out the zoom (pan cancels).
             double scale = _zoomTransform.ScaleX;
             Canvas.SetLeft(node, _pressOrigin.X + delta.X / scale);
             Canvas.SetTop(node, _pressOrigin.Y + delta.Y / scale);
@@ -279,8 +279,8 @@ public partial class DependencyGraphView : UserControl, IMapPanel
 
     /// <summary>
     /// Scale by <paramref name="factor"/> (clamped) keeping the canvas point under
-    /// <paramref name="viewportPoint"/> fixed: with viewport = canvas * s + t, the
-    /// new translate is t' = p - (p - t) * s'/s.
+    /// <paramref name="viewportPoint"/> fixed, with viewport = canvas * s + t, the
+    /// new translate is t' = p, (p, t) * s'/s.
     /// </summary>
     private void ZoomAt(Point viewportPoint, double factor)
     {
@@ -301,7 +301,7 @@ public partial class DependencyGraphView : UserControl, IMapPanel
     {
         double w = GraphCanvas.Width, h = GraphCanvas.Height;
         var viewport = GraphViewport.Bounds;
-        // Positive-form guard: Width/Height are NaN before the first render.
+        // Positive-form guard, Width/Height are NaN before the first render.
         if (!(w > 0 && h > 0 && viewport.Width > 0 && viewport.Height > 0))
             return;
         double scale = Math.Clamp(
@@ -338,12 +338,12 @@ public partial class DependencyGraphView : UserControl, IMapPanel
     /// <summary>"Name · kind (rawcode)" of the selected object, for button/tooltip text.</summary>
     public string? SelectedDisplay { get; private set; }
 
-    /// <summary>Port seam (porting is unit-rooted): the selected rawcode when it is a
-    /// unit, null for any other kind - non-unit graphs render but cannot port.</summary>
+    /// <summary>Port seam (porting is unit-rooted), the selected rawcode when it is a
+    /// unit, null for any other kind, non-unit graphs render but cannot port.</summary>
     public string? SelectedUnitRawcode =>
         SelectedObjectKind == ObjectKind.Unit ? SelectedRawcode : null;
 
-    /// <summary>Port seam: display of the selected unit; null when a non-unit is shown.</summary>
+    /// <summary>Port seam, display of the selected unit. Null when a non-unit is shown.</summary>
     public string? SelectedUnitDisplay =>
         SelectedObjectKind == ObjectKind.Unit ? SelectedDisplay : null;
 
@@ -392,11 +392,11 @@ public partial class DependencyGraphView : UserControl, IMapPanel
     }
 
     /// <summary>
-    /// Smart entry point: show <paramref name="rawcode"/>'s dependency closure,
+    /// Smart entry point, show <paramref name="rawcode"/>'s dependency closure,
     /// resolving immediately (off the UI thread). The workspace calls this when
-    /// the Objects tab's selection should drive this panel; re-showing the object
+    /// the Objects tab's selection should drive this panel. Re-showing the object
     /// already displayed is a no-op, so tab switches never re-resolve. Fully
-    /// initializes the panel - it works even before any <see cref="ShowMap"/>.
+    /// initializes the panel, it works even before any <see cref="ShowMap"/>.
     /// </summary>
     public void ShowObject(MapSession session, ObjectKind kind, string rawcode)
     {
@@ -408,7 +408,7 @@ public partial class DependencyGraphView : UserControl, IMapPanel
             return;
         }
 
-        // Already showing (or loading toward) exactly this object: nothing to do.
+        // Already showing (or loading toward) exactly this object, nothing to do.
         if (ReferenceEquals(doc, _listDoc) && kind == _listKind
             && (rawcode == SelectedRawcode || rawcode == _pendingSelect))
             return;
@@ -418,7 +418,7 @@ public partial class DependencyGraphView : UserControl, IMapPanel
 
         if (!ReferenceEquals(doc, _listDoc) || kind != _listKind)
         {
-            // New kind or a fresh map: reload the picker, then select + resolve.
+            // New kind or a fresh map, reload the picker, then select + resolve.
             _pendingSelect = rawcode;
             LoadObjectList(doc, kind, ++_generation);
         }
@@ -428,12 +428,12 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         }
         else
         {
-            _pendingSelect = rawcode; // list still loading for this kind; retarget it
+            _pendingSelect = rawcode; // list still loading for this kind. Retarget it
         }
     }
 
     /// <summary>
-    /// Populate the object picker for one kind off the UI thread - the first
+    /// Populate the object picker for one kind off the UI thread, the first
     /// game-data query per install opens CASC, which can take seconds. The
     /// generation stamp drops results that land after the target changed.
     /// </summary>
@@ -480,13 +480,13 @@ public partial class DependencyGraphView : UserControl, IMapPanel
                 ObjectCombo.SetItems(items, selectFirstWhenNoMatch: false);
                 if (_pendingSelect is { } pending)
                 {
-                    // An incoming selection is waiting on this list: resolve it now.
+                    // An incoming selection is waiting on this list, resolve it now.
                     _pendingSelect = null;
                     SelectAndResolve(pending);
                 }
                 else
                 {
-                    // No auto-select: resolving a closure is heavy, wait for a deliberate pick.
+                    // No auto-select, resolving a closure is heavy, wait for a deliberate pick.
                     SummaryText.Text = items.Count == 0
                         ? $"This map has no custom {KindSingular(kind).ToLowerInvariant()} data."
                         : $"{items.Count} {kindWord} - pick one to analyze.";
@@ -500,8 +500,8 @@ public partial class DependencyGraphView : UserControl, IMapPanel
     {
         var option = _options?.FirstOrDefault(o => o.Id == rawcode);
         ObjectCombo.Select(rawcode, raiseEvent: false);
-        // Objects pushed from the editor are always in the list; if one ever is
-        // not, resolve the bare rawcode anyway - the resolver reports diagnostics.
+        // Objects pushed from the editor are always in the list. If one ever is
+        // not, resolve the bare rawcode anyway, the resolver reports diagnostics.
         UpdateSelection(rawcode, option?.Display ?? rawcode);
         RequestResolve();
     }
@@ -525,7 +525,7 @@ public partial class DependencyGraphView : UserControl, IMapPanel
 
     /// <summary>
     /// Resolve the selected object's closure off the UI thread with at most one
-    /// resolve in flight: selections arriving mid-resolve collapse into a
+    /// resolve in flight, selections arriving mid-resolve collapse into a
     /// single trailing resolve of whatever is selected by then (mirrors the
     /// object editor's preview render pattern), so rapid switching never
     /// cross-renders and never runs two resolves against the same document.
@@ -561,7 +561,7 @@ public partial class DependencyGraphView : UserControl, IMapPanel
             Dispatcher.UIThread.Post(() =>
             {
                 _resolveInFlight = false;
-                // A newer selection supersedes this result - re-resolve, even if
+                // A newer selection supersedes this result, re-resolve, even if
                 // the map changed underneath (RequestResolve re-reads everything).
                 if (_resolveQueued)
                 {
@@ -618,7 +618,7 @@ public partial class DependencyGraphView : UserControl, IMapPanel
     }
 
     /// <summary>
-    /// Structured fallback view: root object → object deps grouped by kind, each
+    /// Structured fallback view, root object → object deps grouped by kind, each
     /// with a custom/base badge and the field codes ("via") that pull it in. Each
     /// ability additionally nests the trigger functions attributed to it (and
     /// whatever helpers those pulled in), so the script closure reads as "this
@@ -849,7 +849,7 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         var realStrings = BundleStructure.RealStrings(bundle);
         var shown = bundle.Strings.Where(realStrings.Contains).ToList();
         StringsExpander.Header = $"Strings ({shown.Count})";
-        StringsExpander.IsExpanded = false; // usually the longest list; opt-in
+        StringsExpander.IsExpanded = false; // usually the longest list. Opt-in
         foreach (var s in shown)
         {
             var row = new TextBlock
@@ -993,8 +993,8 @@ public partial class DependencyGraphView : UserControl, IMapPanel
             }
         }
 
-        // --- files band: wrapped rows under the object area (case-insensitive
-        //     keys - WC3 paths compare case-insensitively) ---
+        // --- files band, wrapped rows under the object area (case-insensitive
+        //     keys, WC3 paths compare case-insensitively) ---
         // Only the object's real dependencies appear as file nodes. What the closure carries is
         // listed separately in the panel and would just swamp the graph.
         var objectDeps = BundleStructure.RealFiles(bundle);
@@ -1034,7 +1034,7 @@ public partial class DependencyGraphView : UserControl, IMapPanel
             GraphCanvas.Children.Add(bandLabel);
         }
 
-        // --- node visuals: created and positioned first so edges can anchor to
+        // --- node visuals, created and positioned first so edges can anchor to
         //     them, but added to the canvas after the edges (nodes draw on top).
         //     Tagged with their own BundleNode/BundleFile and restyled through the
         //     current exclusion state, so a click later only ever touches one node. ---
@@ -1065,7 +1065,7 @@ public partial class DependencyGraphView : UserControl, IMapPanel
             if (!TryGetVisual(group.Key.From, _objVisuals, _fileVisuals, out var from, out _)
                 || !TryGetVisual(group.Key.To, _objVisuals, _fileVisuals, out var to, out var toIsFile))
             {
-                continue; // endpoint we didn't lay out; resolver guarantees make this rare
+                continue; // endpoint we didn't lay out. Resolver guarantees make this rare
             }
 
             var edge = new GraphEdge(
@@ -1099,7 +1099,7 @@ public partial class DependencyGraphView : UserControl, IMapPanel
         GraphCanvas.Height = bottom + Pad;
     }
 
-    /// <summary>One rendered edge: live endpoint visuals plus the line/label drawn
+    /// <summary>One rendered edge, live endpoint visuals plus the line/label drawn
     /// for it, so a node drag re-anchors exactly the edges touching that node.</summary>
     private sealed record GraphEdge(Border From, Border To, bool ToIsFile, Line Line, TextBlock Label);
 

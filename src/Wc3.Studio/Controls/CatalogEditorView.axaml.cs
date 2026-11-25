@@ -4,10 +4,10 @@ using Avalonia.Controls;
 namespace Wc3.Studio.Controls;
 
 /// <summary>
-/// Shared chrome for a "catalog" panel: a titled, scrollable list of code-built cards with
+/// Shared chrome for a "catalog" panel, a titled, scrollable list of code-built cards with
 /// an add-form slot on top, a status line at the bottom, and a swappable empty/error hint.
 /// The regions, cameras and sounds panels all compose this instead of each re-declaring the
-/// same header / scroll / status / empty-state markup - one place owns the layout, the panels
+/// same header / scroll / status / empty-state markup, one place owns the layout, the panels
 /// only supply their per-entry cards and their add form.
 /// </summary>
 public partial class CatalogEditorView : UserControl
@@ -41,7 +41,7 @@ public partial class CatalogEditorView : UserControl
     }
 
     /// <summary>The "add new entry" form shown above the list. Set in code by the owning
-    /// panel; hidden when null. (Deliberately NOT the [Content] property - this control
+    /// panel. Hidden when null. (Deliberately NOT the [Content] property, this control
     /// derives from ContentControl, whose own Content holds the shell's visual tree.)</summary>
     public object? AddContent
     {

@@ -1,5 +1,5 @@
 // tests/Wc3.Tests/McpServerTests.cs
-// Hermetic MCP protocol tests: the real server wiring (Wc3McpServer.CreateOptions,
+// Hermetic MCP protocol tests, the real server wiring (Wc3McpServer.CreateOptions,
 // exactly what the stdio exe serves) driven by the SDK's own client over in-memory
 // pipes, no processes, no network, no WC3 install.
 using System.IO.Pipelines;
@@ -13,7 +13,7 @@ namespace Wc3.Tests;
 
 public class McpServerTests
 {
-    // Ordinal-sorted: the test compares against tools.OrderBy(..., StringComparer.Ordinal).
+    // Ordinal-sorted, the test compares against tools.OrderBy(..., StringComparer.Ordinal).
     // Underscore (0x5F) sorts before lowercase letters, so families group naturally.
     private static readonly string[] ExpectedTools =
     {
@@ -26,10 +26,10 @@ public class McpServerTests
         "ci_all", "ci_compat", "ci_lint", "ci_schema", "ci_validate",
         "compat_explain",
         "compat_matrix", "content_scaffold", "deprotect_map", "diff", "docs_search", "doctor_check", "doctor_compare", "doctor_fix",
-        "doctor_inspect", "editor_catalog_get", "editor_catalog_list", "error_codes",
+        "doctor_inspect", "doctor_schema", "editor_catalog_get", "editor_catalog_list", "error_codes",
         "file_extract", "file_get_text", "file_list", "file_set", "force_list", "force_rename",
         "force_set_flags", "force_set_players",
-        "gamedata_bounds", "gamedata_changelog", "gamedata_coverage", "gamedata_enum", "gamedata_export_schemas",
+        "game_file_shadows", "gamedata_bounds", "gamedata_changelog", "gamedata_coverage", "gamedata_enum", "gamedata_export_schemas",
         "gamedata_field_lookup", "gamedata_history", "gamedata_schema_diff", "gamedata_sources",
         "graph_hubs", "graph_neighbors", "graph_path",
         "hero_generate", "hero_install", "hero_lint", "hero_roster",
@@ -63,10 +63,11 @@ public class McpServerTests
         "placed_unit_get", "placed_unit_remove", "placed_unit_set", "placed_units_list",
         "player_list", "player_set_color", "player_set_force", "player_set_name", "player_set_race",
         "port_deps", "port_into_version", "port_preview",
-        "port_unit", "quickstart", "rag_install", "rag_status", "region_create", "region_list", "region_remove",
+        "port_unit", "quickstart", "rag_install", "rag_status", "reforged3_check", "region_create", "region_list", "region_remove",
         "region_to_rect",
         "region_validate",
-        "render_model", "repair_audit_errors", "repair_generated", "repair_portraits",
+        "render_model", "repair_audit_errors", "repair_game_files", "repair_generated", "repair_portraits",
+        "repair_reforged3",
         "replay_diff", "replay_find_map", "replay_players",
         "replay_stats", "replay_summary", "replay_timeline", "roundtrip",
         "script_api_usage", "script_bench", "script_callgraph",
@@ -83,7 +84,7 @@ public class McpServerTests
         "terrain_audit", "terrain_blight", "terrain_cliff", "terrain_corner_get", "terrain_corner_set",
         "terrain_deform", "terrain_export_heightmap", "terrain_fill", "terrain_import_heightmap",
         "terrain_info", "terrain_optimize", "terrain_paint", "terrain_ramp", "terrain_smooth",
-        "terrain_stats", "terrain_water", "texture_atlas", "texture_optimize", "trigger_add", "trigger_add_category",
+        "terrain_stats", "terrain_water", "texture_atlas", "texture_audit", "texture_optimize", "trigger_add", "trigger_add_category",
         "trigger_add_eca", "trigger_catalog_describe", "trigger_catalog_list", "trigger_dead",
         "trigger_diff", "trigger_export", "trigger_lint", "trigger_move", "trigger_recover_from_script",
         "trigger_remove", "trigger_remove_eca", "trigger_rename",

@@ -204,12 +204,17 @@ public sealed class ResultFieldStabilityTests
     }
 
     /// <summary>The repository root, found by walking up from the test binary to the solution.</summary>
+    /// <remarks>
+    /// Any solution at the root counts, not one fixed name. This file is exported into the wc3-mcp
+    /// checkout, whose solution is wc3-mcp.sln, and a hardcoded Wc3.sln made every migrated test
+    /// throw before it asserted anything.
+    /// </remarks>
     private static string RepoRoot()
     {
         var dir = AppContext.BaseDirectory;
         while (dir is { Length: > 0 })
         {
-            if (File.Exists(Path.Combine(dir, "Wc3.sln"))) return dir;
+            if (Directory.EnumerateFiles(dir, "*.sln").Any()) return dir;
             var parent = Directory.GetParent(dir);
             if (parent is null) break;
             dir = parent.FullName;

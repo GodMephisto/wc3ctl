@@ -839,6 +839,22 @@ public static class Render
         return sb.ToString().TrimEnd();
     }
 
+    public static string TextureAudit(TextureAuditResult r)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine(r.Message);
+        foreach (var (kind, count) in r.Problems)
+            sb.AppendLine($"  {count,4}  {kind}");
+        int shown = 0;
+        foreach (var f in r.Items)
+        {
+            if (shown++ == 40) { sb.AppendLine($"  ... {r.Items.Count - 40} more"); break; }
+            sb.AppendLine($"  {f.Name}  ({f.Length:N0} bytes)");
+            sb.AppendLine($"      {f.Problem}");
+        }
+        return sb.ToString().TrimEnd();
+    }
+
     public static string TextureOptimize(TextureOptimizeResult r)
     {
         var sb = new StringBuilder();
@@ -1175,15 +1191,15 @@ public static class Render
 
     public static string DoodadPalette(DoodadPaletteResult r)
     {
-        // A base doodad the map edits in place carries BaseRawcode == its own code; suppress
-        // the "(base: self)" noise there, the [source] tag already says "map-modified".
+        // A base doodad the map edits in place carries BaseRawcode == its own code. Suppress
+        // the "(base, self)" noise there, the [source] tag already says "map-modified".
         var lines = r.Entries.Select(e =>
             Headline(e.Rawcode, e.Name, e.BaseRawcode == e.Rawcode ? null : e.BaseRawcode) + $"  [{e.Source}]");
         var notes = r.Diagnostics.Select(d => $"note: {d}");
         return string.Join("\n", new[] { r.Message }.Concat(lines).Concat(notes));
     }
 
-    // e.g. H000  "Paladin"  (base: Hpal)
+    // e.g. H000  "Paladin"  (base, Hpal)
     private static string Headline(string rawcode, string? name, string? baseRawcode) =>
         string.Join("  ", new[]
         {
@@ -1194,7 +1210,7 @@ public static class Render
 
     /// <summary>
     /// Indented dependency tree (root → deps, each line "code \"name\" [custom kind]
-    /// (via field)"; repeats collapse), then the file and string lists.
+    /// (via field)". Repeats collapse), then the file and string lists.
     /// </summary>
     public static string BundleUnit(UnitBundle r)
     {
@@ -1310,7 +1326,7 @@ public static class Render
             .ThenBy(g => g.Key, StringComparer.Ordinal)
             .Select(g => $"{g.Count()} {g.Key}"));
 
-    /// <summary>One port report; a null <paramref name="outPath"/> marks a dry run.</summary>
+    /// <summary>One port report. A null <paramref name="outPath"/> marks a dry run.</summary>
     public static string Port(PortResult r, string? outPath)
     {
         var sb = new StringBuilder();
@@ -1319,7 +1335,7 @@ public static class Render
         return sb.ToString().TrimEnd('\r', '\n');
     }
 
-    /// <summary>Combined batch report; a null <paramref name="outPath"/> marks a dry run.</summary>
+    /// <summary>Combined batch report. A null <paramref name="outPath"/> marks a dry run.</summary>
     public static string PortBatch(BatchPortResult r, string? outPath)
     {
         var sb = new StringBuilder();
@@ -1431,7 +1447,7 @@ public static class Render
         return sb.ToString().TrimEnd('\r', '\n');
     }
 
-    /// <summary>The port report plus the downgrade: fields removed and identifiers flagged.</summary>
+    /// <summary>The port report plus the downgrade, fields removed and identifiers flagged.</summary>
     public static string PortIntoVersion(PortIntoVersionResult r, string? outPath)
     {
         var sb = new StringBuilder();

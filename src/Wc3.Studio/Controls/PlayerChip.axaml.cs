@@ -6,7 +6,7 @@ using Wc3.Commands;
 namespace Wc3.Studio.Controls;
 
 /// <summary>
-/// A player's color swatch + label, inline: a 12x12 rounded square tinted by
+/// A player's color swatch + label, inline, a 12x12 rounded square tinted by
 /// <see cref="PlayerColors"/> from <see cref="PlayerId"/> (out-of-range ids fall back
 /// to gray there, so any owner id renders), then <see cref="Text"/>. The text trims
 /// with an ellipsis when the container is narrower than the label, so rows in a
@@ -26,7 +26,7 @@ public partial class PlayerChip : UserControl
         UpdateVisuals();
     }
 
-    /// <summary>Player slot id (0..27); drives the swatch color.</summary>
+    /// <summary>Player slot id (0..27). Drives the swatch color.</summary>
     public int PlayerId
     {
         get => GetValue(PlayerIdProperty);

@@ -25,7 +25,7 @@ namespace Wc3.Render;
 /// </summary>
 public static class PathingPng
 {
-    /// <summary>Channel step for one flag-byte nibble; 15 * 17 = 255 covers a full nibble.</summary>
+    /// <summary>Channel step for one flag-byte nibble. 15 * 17 = 255 covers a full nibble.</summary>
     private const int Step = 17;
 
     /// <summary>Legend swatch edge, in pixels.</summary>
@@ -146,7 +146,7 @@ public static class PathingPng
         }
 
         Image<Rgba32> image;
-        try { image = Image.Load<Rgba32>(png); }
+        try { image = SafeImages.Load<Rgba32>(png); }
         catch (Exception ex) { error = $"could not decode pathing PNG ({ex.Message})"; return false; }
 
         using (image)

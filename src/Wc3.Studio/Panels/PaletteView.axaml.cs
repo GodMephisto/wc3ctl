@@ -18,7 +18,7 @@ public sealed class PaletteRow : INotifyPropertyChanged
     public string Source { get; init; } = "";
     /// <summary>Icon art path from the palette entry (null = no icon for this row).</summary>
     public string? IconPath { get; init; }
-    /// <summary>Loader shared by every row of one catalog load; null when icons are off (tests).</summary>
+    /// <summary>Loader shared by every row of one catalog load. Null when icons are off (tests).</summary>
     internal PaletteIconLoader? IconLoader { get; init; }
 
     private Bitmap? _icon;
@@ -26,8 +26,8 @@ public sealed class PaletteRow : INotifyPropertyChanged
 
     /// <summary>
     /// The row's decoded icon, or null (no/undecodable icon, the tile simply stays an
-    /// empty box). Lazy: the first read, which happens when the grid realizes the tile
-    /// and binds it, kicks off an off-thread decode; the binding refreshes via
+    /// empty box). Lazy, the first read, which happens when the grid realizes the tile
+    /// and binds it, kicks off an off-thread decode. The binding refreshes via
     /// PropertyChanged when it lands. Never blocks the UI thread, never throws.
     /// </summary>
     public Bitmap? Icon
@@ -44,7 +44,7 @@ public sealed class PaletteRow : INotifyPropertyChanged
                     else
                         IconLoader.Load(IconPath, bmp =>
                         {
-                            if (bmp is null) return; // graceful fallback: empty tile
+                            if (bmp is null) return; // graceful fallback, empty tile
                             _icon = bmp;
                             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Icon)));
                         });
@@ -72,19 +72,19 @@ public sealed class PaletteRow : INotifyPropertyChanged
 
     /// <summary>How many times this type is actually placed on the map (0 if unplaced).</summary>
     public int PlacedCount { get; init; }
-    /// <summary>Whether the map's script (war3map.j) references this rawcode - the "in use"
+    /// <summary>Whether the map's script (war3map.j) references this rawcode, the "in use"
     /// signal for maps that spawn characters at runtime instead of pre-placing them.</summary>
     public bool InScript { get; init; }
 
     /// <summary>Used = placed on the map or referenced by the script. Among look-alike rawcodes,
-    /// the used one is the real character; unused ones are stale/duplicate leftovers.</summary>
+    /// the used one is the real character. Unused ones are stale/duplicate leftovers.</summary>
     public bool IsUsed => PlacedCount > 0 || InScript;
-    /// <summary>Corner badge: the placement count when placed, else a tick for script-referenced.</summary>
+    /// <summary>Corner badge, the placement count when placed, else a tick for script-referenced.</summary>
     public string UsageBadge => PlacedCount > 0 ? $"×{PlacedCount}" : (InScript ? "✓" : "");
 
     public string Display => $"{Name ?? "(unnamed)"} ({Rawcode})";
     public string Detail => $"{Kind.ToString().ToLowerInvariant()} · {Source}";
-    /// <summary>Hover label: identity plus why this rawcode is (or is not) in use.</summary>
+    /// <summary>Hover label, identity plus why this rawcode is (or is not) in use.</summary>
     public string Tooltip
     {
         get
@@ -100,17 +100,17 @@ public sealed class PaletteRow : INotifyPropertyChanged
     /// variants) have none, WC3 lists those by name, not icon, so those tiles show
     /// <see cref="TileText"/> instead of an empty box.</summary>
     public bool HasIconArt => !string.IsNullOrWhiteSpace(IconPath);
-    /// <summary>Fallback tile caption when there's no icon: the name, or the rawcode.</summary>
+    /// <summary>Fallback tile caption when there's no icon, the name, or the rawcode.</summary>
     public string TileText => Name is { Length: > 0 } ? Name : Rawcode;
 }
 
 /// <summary>
 /// Decodes palette icon art to Avalonia bitmaps off the UI thread, cached per path.
-/// Resolution and decoding are the command layer's (<see cref="PaletteCommand.IconPng"/>:
+/// Resolution and decoding are the command layer's (<see cref="PaletteCommand.IconPng"/>,
 /// map imports first, then base-game CASC, BLP/DDS/TGA sniffed), this class only adds
 /// caching, request coalescing, and thread marshalling. Both dictionaries are touched on
-/// the UI thread only (requests originate from bindings; completions are posted back),
-/// so no locking is needed. One instance per catalog load: replacing it wholesale when
+/// the UI thread only (requests originate from bindings. Completions are posted back),
+/// so no locking is needed. One instance per catalog load, replacing it wholesale when
 /// the map changes means a stale decode can never leak into a newer palette.
 /// </summary>
 internal sealed class PaletteIconLoader
@@ -130,7 +130,7 @@ internal sealed class PaletteIconLoader
     public bool TryGetCached(string iconPath, out Bitmap? bitmap) =>
         _done.TryGetValue(iconPath, out bitmap);
 
-    /// <summary>Requests an off-thread decode; <paramref name="onLoaded"/> runs later on
+    /// <summary>Requests an off-thread decode. <paramref name="onLoaded"/> runs later on
     /// the UI thread (null bitmap = unresolvable/undecodable). Concurrent requests for
     /// the same path share one decode.</summary>
     public void Load(string iconPath, Action<Bitmap?> onLoaded)
@@ -160,7 +160,7 @@ internal sealed class PaletteIconLoader
     }
 }
 
-/// <summary>One palette group: a visible collapsible header (kind · source) plus its
+/// <summary>One palette group, a visible collapsible header (kind · source) plus its
 /// icon tiles. Rendered in PaletteView.axaml as a full-width <c>SectionHeader</c> stacked
 /// over a <c>WrapPanel</c> of tiles, the header is a normal vertical child, so it is
 /// ALWAYS visible (unlike the old mixed-item WrapPanel hack where it vanished).</summary>
@@ -176,7 +176,7 @@ public sealed class PaletteGroup
 }
 
 /// <summary>
-/// Browse/search the things placeable on a map: the union of the base-game unit and
+/// Browse/search the things placeable on a map, the union of the base-game unit and
 /// doodad catalogs with the map's own object-data, via <see cref="PaletteCommand"/>.
 /// The catalog is built off the UI thread (the first game-data open per install hits
 /// CASC/SLK and can take seconds) and presented as an icon grid grouped under visible
@@ -192,7 +192,7 @@ public partial class PaletteView : UserControl, IMapPanel
     private PaletteRow? _selected;
     /// <summary>Stamp that invalidates an in-flight catalog load when the map changes.</summary>
     private int _generation;
-    /// <summary>True from ShowMap until its load lands; filter events wait for real data.</summary>
+    /// <summary>True from ShowMap until its load lands. Filter events wait for real data.</summary>
     private bool _loading;
     /// <summary>Group keys (kind·source) the user has collapsed, their tiles are hidden until
     /// re-expanded. The base catalog is collapsed by default (it's the ~thousands-tile bulk).</summary>
@@ -226,7 +226,7 @@ public partial class PaletteView : UserControl, IMapPanel
         PaletteGroups.ItemsSource = null;
         StatusText.Text = "Loading palette…";
 
-        // Build the catalog off the UI thread - the first game-data query per install
+        // Build the catalog off the UI thread, the first game-data query per install
         // opens CASC, which can take seconds. The generation stamp drops results that
         // land after the map changed.
         string? gameDir = session.GameDir;
@@ -246,8 +246,8 @@ public partial class PaletteView : UserControl, IMapPanel
                 var doodads = PaletteCommand.DoodadPalette(doc, gameDir);
                 var items = PaletteCommand.ItemPalette(doc, gameDir);
                 var destructables = PaletteCommand.DestructablePalette(doc, gameDir);
-                // How many times each unit type is actually placed on the map: the signal for
-                // "which of these look-alike rawcodes is the real one" - the placed one is in use.
+                // How many times each unit type is actually placed on the map, the signal for
+                // "which of these look-alike rawcodes is the real one", the placed one is in use.
                 var placed = UnitInstanceCommand.List(doc)
                     .GroupBy(u => u.TypeRawcode, StringComparer.OrdinalIgnoreCase)
                     .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
@@ -307,7 +307,7 @@ public partial class PaletteView : UserControl, IMapPanel
         };
 
     /// <summary>The set of 4-character rawcodes the map script references, from its 'xxxx'
-    /// FourCC literals. One scan yields an O(1) "is this type used by the script" lookup - the
+    /// FourCC literals. One scan yields an O(1) "is this type used by the script" lookup, the
     /// usage signal for maps that spawn units at runtime rather than pre-placing them.</summary>
     private static HashSet<string> ScriptRawcodes(Wc3.Model.MapDocument doc)
     {
@@ -328,7 +328,7 @@ public partial class PaletteView : UserControl, IMapPanel
     private void OnSearchChanged(object? sender, TextChangedEventArgs e) => ApplyFilter();
     private void OnKindChanged(object? sender, SelectionChangedEventArgs e) => ApplyFilter();
 
-    /// <summary>Map content first - it's what a mapper places most - then the base bulk.</summary>
+    /// <summary>Map content first, it's what a mapper places most, then the base bulk.</summary>
     private static int SourceRank(string source) => source switch
     {
         "map-custom" => 0,
@@ -358,7 +358,7 @@ public partial class PaletteView : UserControl, IMapPanel
 
     /// <summary>Re-apply the search text and kind filter to the full catalog, then regroup
     /// the survivors under kind · source headers (empty groups simply don't appear). A
-    /// search expands everything (matches are never hidden inside a collapsed group); with
+    /// search expands everything (matches are never hidden inside a collapsed group). With
     /// no search, the user's collapse choices are honoured.</summary>
     private void ApplyFilter()
     {

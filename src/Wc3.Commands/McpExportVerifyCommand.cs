@@ -17,7 +17,7 @@ public sealed record McpExportVerifyResult(
     string? Message);
 
 /// <summary>
-/// Verifies that a public wc3-mcp checkout holds the same server source that scripts/export-wc3-mcp.py
+/// Verifies that a public wc3-mcp checkout holds the same server source that scripts/export_wc3_mcp.py
 /// would export from this repository, reporting every file that differs and writing nothing. It
 /// applies the same rules the export script does, so the comparison matches what a real export would
 /// produce. The exported projects, the exported test folder, and the file the checkout owns all live

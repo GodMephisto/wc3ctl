@@ -83,7 +83,7 @@ public class FilesPanelNamelessCostTests
                 $"Files panel blocked the UI thread for {blocked}ms on {Path.GetFileName(path)}, "
                 + "the nameless-entry typing pass belongs off the UI thread");
             // Measured on ORDR_S2_2.323[R]_english.w3x, 64,748 entries and 64,738 nameless, the
-            // worst map in the library: the background sniff is about 18s (the same sweep as
+            // worst map in the library, the background sniff is about 18s (the same sweep as
             // `wc3ctl ls`, 18.3s) and the UI row rebuild that follows is about 15s, so 33.4s total.
             // The budget guards against the pass moving onto the UI thread or going quadratic, not
             // against the linear cost of typing 65,000 entries, which is why it sits above that
@@ -91,7 +91,7 @@ public class FilesPanelNamelessCostTests
             // that catches the symptom a user feels.
             //
             // Two minutes, not forty-five seconds. At 45s this policed the machine's load rather
-            // than an order of magnitude, and it failed twice: measured 33.4s alone, then 116s
+            // than an order of magnitude, and it failed twice, measured 33.4s alone, then 116s
             // when run right after the 25 minute Wc3.Tests corpus sweep, which triples the sniff.
             // A quadratic pass over 65,000 entries is minutes or worse, so two minutes still
             // catches the regression this exists for.

@@ -63,9 +63,9 @@ equals `Is playing`.
 
 Measured in game with an instrumented build.
 
-```
+```text
 [FVH] FiJ swept 1 player(s), added 1        <- force built correctly, Red in it
-Hunter Assistant(s): 4
+Hunter Assistant(s), 4
 [FVH] leave fired, Eu=0 triggerPlayerId=0   <- four times
 [FVH] force holds 0 player(s) at spawn time <- force emptied before the spawn
 ```

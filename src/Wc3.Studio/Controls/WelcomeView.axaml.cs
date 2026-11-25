@@ -143,7 +143,7 @@ public partial class WelcomeView : UserControl
             || ext.Equals(".w3m", StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <summary>The folders discovery looks in: the user's chosen map folder, then the default
+    /// <summary>The folders discovery looks in, the user's chosen map folder, then the default
     /// Warcraft III Maps folder under Documents.</summary>
     private static IEnumerable<string> CandidateMapDirs(string? mapsDir)
     {

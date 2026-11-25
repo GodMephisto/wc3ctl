@@ -271,7 +271,7 @@ SOFTWARE.
 
 The Studio's user interface (Avalonia, Avalonia.Desktop, Avalonia.Themes.Fluent). AvaloniaUI OU and contributors, MIT, https://github.com/AvaloniaUI/Avalonia
 
-```
+```text
 The MIT License (MIT)
 
 Copyright (c) AvaloniaUI OÜ
@@ -300,7 +300,7 @@ SOFTWARE.
 
 The Studio's JASS editor. Eli Arbel and contributors, MIT, https://github.com/AvaloniaUI/AvaloniaEdit
 
-```
+```text
 MIT License
 
 Copyright (c) 2017 Eli Arbel
@@ -328,7 +328,7 @@ SOFTWARE.
 
 The Studio's interface font, shipped inside Avalonia.Fonts.Inter. The Inter Project Authors, SIL Open Font License 1.1, https://github.com/rsms/inter
 
-```
+```text
 Copyright (c) 2016 The Inter Project Authors (https://github.com/rsms/inter)
 
 This Font Software is licensed under the SIL Open Font License, Version 1.1.
@@ -427,7 +427,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
 
 Sound preview in the Studio. Mark Heath and contributors, MIT, https://github.com/naudio/NAudio
 
-```
+```text
 Copyright 2008-2026 Mark Heath
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
@@ -441,7 +441,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 OpenGL bindings for the Studio's map viewport. .NET Foundation and contributors, MIT, https://github.com/dotnet/Silk.NET
 
-```
+```text
 MIT License
 
 - Copyright (c) 2019-2020 Ultz Limited
@@ -470,7 +470,7 @@ SOFTWARE.
 
 The wc3ctl command line parser. .NET Foundation and contributors, MIT, https://github.com/dotnet/command-line-api
 
-```
+```text
 The MIT License (MIT)
 
 Copyright © .NET Foundation and Contributors
@@ -500,7 +500,7 @@ SOFTWARE.
 
 The Lua 5.3 lexer, parser and printer under src/Wc3.Commands/Lua are ported from its lua_ast.py, the JASS to Lua converter (src/Wc3.Commands/Lua/JassToLua.cs) from its jass2lua.py at commit 80efaf6, the Lua 5.3 bytecode reader and translator (LuaBytecode.cs, Lua53Translate.cs) from its lua_bytecode.py and lua53_translate.py at the same commit, and the doctor tools run its release as an external program. devoltzz, MIT, https://github.com/devoltzz/devos-map-doctor
 
-```
+```text
 MIT License
 
 Copyright (c) 2026 devoltzz

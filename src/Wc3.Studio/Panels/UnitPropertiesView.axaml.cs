@@ -10,7 +10,7 @@ namespace Wc3.Studio.Panels;
 /// <summary>
 /// World-Editor-style properties editor for ONE placed unit (war3mapUnits.doo),
 /// opened by clicking a unit in the 3D viewport (the workspace routes the pick here).
-/// Thin shell over <see cref="UnitInstanceCommand"/>: read-only identity rows, then the
+/// Thin shell over <see cref="UnitInstanceCommand"/>, read-only identity rows, then the
 /// fields the Reforged editor shows, Player, a hero block (Level/Str/Agi/Int) that appears
 /// only for heroes, Health/Mana/Target as a Default checkbox plus a stepper, Gold, and an
 /// Advanced fold for scale/facing. Apply writes only the fields that actually changed. The
@@ -31,7 +31,7 @@ public partial class UnitPropertiesView : UserControl, IMapPanel
     /// <summary>The multi-select view's creation numbers (2+ when MultiRoot is visible).</summary>
     private IReadOnlyList<int> _multiSelection = Array.Empty<int>();
 
-    /// <summary>Raised after Apply wrote at least one edit to the in-memory map; the argument is the
+    /// <summary>Raised after Apply wrote at least one edit to the in-memory map. The argument is the
     /// unit's creation number. The workspace re-renders the viewport and enables Save.</summary>
     public event Action<int>? UnitEdited;
 
@@ -46,7 +46,7 @@ public partial class UnitPropertiesView : UserControl, IMapPanel
         InitializeComponent();
     }
 
-    /// <summary>IMapPanel entry: a (re)opened map invalidates creation numbers, so reset to the
+    /// <summary>IMapPanel entry, a (re)opened map invalidates creation numbers, so reset to the
     /// "pick a unit" hint until the viewport routes a selection here.</summary>
     public void ShowMap(MapSession session)
     {
@@ -102,7 +102,7 @@ public partial class UnitPropertiesView : UserControl, IMapPanel
         Load();
     }
 
-    /// <summary>Routes a viewport selection here by size: 0 = the empty hint, 1 = the full
+    /// <summary>Routes a viewport selection here by size, 0 = the empty hint, 1 = the full
     /// single-unit editor, 2+ = the compact multi-select view.</summary>
     public void ShowUnits(MapSession session, IReadOnlyList<int> creationNumbers)
     {
@@ -231,7 +231,7 @@ public partial class UnitPropertiesView : UserControl, IMapPanel
         ContentRoot.IsVisible = true;
     }
 
-    /// <summary>"Team N: name" forwarder (the builder lives in <see cref="OwnerTeamPicker"/>).</summary>
+    /// <summary>"Team N, name" forwarder (the builder lives in <see cref="OwnerTeamPicker"/>).</summary>
     internal static string ForceLabel(ForceInfo force) => OwnerTeamPicker.ForceLabel(force);
 
     // Default checkbox toggles just enable/disable the paired stepper (the value is read at Apply).
@@ -331,7 +331,7 @@ public partial class UnitPropertiesView : UserControl, IMapPanel
             UnitEdited?.Invoke(cn);
     }
 
-    /// <summary>Multi-select "Apply": sets the picked owner on every selected unit in one write.</summary>
+    /// <summary>Multi-select "Apply", sets the picked owner on every selected unit in one write.</summary>
     private void OnMultiApplyOwnerClick(object? sender, RoutedEventArgs e)
     {
         if (_session?.Current is not { } doc || _multiSelection.Count == 0)
@@ -351,7 +351,7 @@ public partial class UnitPropertiesView : UserControl, IMapPanel
             UnitsEdited?.Invoke(_multiSelection);
     }
 
-    /// <summary>Multi-select "Remove selected": deletes every selected unit from the in-memory map.</summary>
+    /// <summary>Multi-select "Remove selected", deletes every selected unit from the in-memory map.</summary>
     private void OnMultiRemoveClick(object? sender, RoutedEventArgs e)
     {
         if (_session?.Current is not { } doc || _multiSelection.Count == 0)

@@ -10,7 +10,7 @@ CELL = re.compile(r"^C;(.*)$")
 
 
 def parse(text):
-    """Return (rows, header) where rows is {row_index: {col_index: value}} and header maps
+    """Return (rows, header). rows maps a row index to a column value map, header maps
     a column index to the field name that row 1 gives it."""
     rows, x, y = {}, 0, 0
     for line in text.splitlines():

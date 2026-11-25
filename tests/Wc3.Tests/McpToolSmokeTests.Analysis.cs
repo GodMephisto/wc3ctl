@@ -387,6 +387,34 @@ public sealed class McpSmokeAnalysisTests : McpSmokeBase
         Assert.NotNull(Prop(bench, "functions"));
     }
 
+    [Fact, Covers("game_file_shadows", "repair_game_files")]
+    public async Task Game_file_shadows_answers_without_a_game_and_names_the_reason()
+    {
+        var r = await Call("game_file_shadows", Args(("map", Fixture)));
+        Assert.NotNull(r);
+        Assert.NotNull(Prop(r, "conflicts"));
+    }
+
+    [Fact, Covers("texture_audit")]
+    public async Task Texture_audit_counts_every_texture_and_reports_its_kinds()
+    {
+        var r = await Call("texture_audit", Args(("map", Fixture)));
+        Assert.NotNull(r);
+        Assert.NotNull(Prop(r, "textures"));
+        Assert.NotNull(Prop(r, "findings"));
+        Assert.NotNull(Prop(r, "problems"));
+    }
+
+    [Fact, Covers("reforged3_check", "repair_reforged3")]
+    public async Task Reforged3_repair_reports_its_counts_and_writes_a_copy()
+    {
+        var check = await Call("reforged3_check", Args(("map", Fixture)));
+        Assert.NotNull(check);
+        Assert.NotNull(Prop(check, "issueCount"));
+        var repaired = await Call("repair_reforged3", Args(("map", Fixture), ("out_path", NewOut("reforged3"))));
+        Assert.NotNull(repaired);
+    }
+
     [Fact, Trait("Category", "GameData"), Covers("repair_audit_errors", "repair_portraits")]
     public async Task Repairs_write_a_copy_and_leave_the_input_alone()
     {

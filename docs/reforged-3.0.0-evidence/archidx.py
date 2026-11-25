@@ -10,9 +10,11 @@ import pathlib
 import struct
 import sys
 
+from tact import game_data_dir
+
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-IDX_DIR = pathlib.Path(r"C:\Warcraft III\Data\indices")
+IDX_DIR = game_data_dir() / "indices"
 
 
 def parse_index(path):
@@ -56,8 +58,7 @@ def parse_index(path):
     return meta, out
 
 
-CDN_CFG = pathlib.Path(
-    r"C:\Warcraft III\Data\config\ef\e6\efe632141fdb1c7388bb77959cc1851b")
+CDN_CFG = game_data_dir() / "config" / "ef" / "e6" / "efe632141fdb1c7388bb77959cc1851b"
 
 
 def real_archives():

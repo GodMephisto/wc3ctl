@@ -3,7 +3,7 @@
 ## The report
 
 Units carrying about 2,000 **distinct** ability ids in the Object Editor field
-**Abilities - Normal** (`uabi`) disconnect players very frequently, often every game.
+**Abilities, Normal** (`uabi`) disconnect players very frequently, often every game.
 20 distinct ids spread over the same 2,000 units does not, and adding the abilities by
 trigger at runtime does not either. The common workaround has been converting the map
 from object data to SLK.
@@ -36,7 +36,7 @@ uabiRuntime and Isolate do not, `uabi` is the cause and this fix removes it.
 
 Three read-only commands. None of them writes, and the map's hash is the same afterwards.
 
-```
+```text
 wc3ctl validate      map.w3x   # does it load at all
 wc3ctl uabi-profile  map.w3x   # the unit ability lists, by the numbers
 wc3ctl audit         map.w3x   # every behaviour check, errors first
@@ -51,9 +51,9 @@ MEASURED on the original, `GGGA_V0.07b.w3x`, 2026-09-26.
   so the variants below test exactly this map's shape.
 - **audit.** Two error-level findings. `wc3ctl repair audit-errors` fixes both with the same
   detection, see "Fixed copies" below.
-  - `dangling-reference`, 144. The 43 dead `uabi` entries, plus one ability, `A1A3`, whose
+ , `dangling-reference`, 144. The 43 dead `uabi` entries, plus one ability, `A1A3`, whose
     101 levels each name buff `B06H`, which does not exist.
-  - `requirement`, 101. Abilities inheriting a requirement the map never defines, 64 of them
+ , `requirement`, 101. Abilities inheriting a requirement the map never defines, 64 of them
     the Berserker upgrade `Robk`. This is the 3.0.0 inherited-requirement problem in
     [`docs/reforged-3.0.0-blizzard-bug-report.md`](../docs/reforged-3.0.0-blizzard-bug-report.md).
     It locks abilities in single player too, so it cannot be a disconnect cause.
@@ -104,7 +104,7 @@ players left with the disconnect result, and `wc3ctl replay --map Base05` limits
 Every original in `maps/` and `maps/_extracted/` has a `_fixed` copy in `maps/fixed/`, made on
 2026-09-26 with two commands in this order, and the originals are unchanged (hash checked).
 
-```
+```text
 wc3ctl repair audit-errors map.w3x --apply -o step1.w3x     # dead ids, missing buffs, locked requirements
 wc3ctl repair uabi-runtime step1.w3x --apply -o map_fixed.w3x
 ```
@@ -133,7 +133,7 @@ with two Battle.net accounts. One player alone cannot reproduce it.
    nobody downloads a different copy from the lobby.
 2. **Restart Warcraft III before every game.** Switching between maps without a restart is
    itself a known desync cause (Hive, "Known Causes of Desync"), and it would blur the result.
-3. **Play each map 5 times**, alternating so no map gets all its games early or late:
+3. **Play each map 5 times**, alternating so no map gets all its games early or late.
    Repro, Repro uabiRuntime, Isolate, Control, then again.
 4. **Each game lasts 10 minutes** or until someone disconnects, whichever comes first.
 5. **Record each game** in the table below. The host can also run `tools\wc3watch` to keep
@@ -161,7 +161,7 @@ split happens by chance only about 1 time in 250 when the two maps behave the sa
 
 ## With wc3ctl
 
-```
+```text
 wc3ctl repair uabi-runtime map.w3x                          # counts only, changes nothing
 wc3ctl repair uabi-runtime map.w3x --apply -o fixed.w3x     # writes the fixed copy
 ```
@@ -188,7 +188,7 @@ all four basemaps pass `wc3ctl validate` afterwards.
 This is the same fix done by hand. It suits a map with a few dozen unit types, or an author
 who wants the fix to live in the triggers, where it survives saving in the World Editor.
 
-### What the file gives you
+### # What the file gives you
 
 [`uabi-runtime-header.j`](uabi-runtime-header.j) holds two JASS functions.
 
@@ -200,7 +200,7 @@ who wants the fix to live in the triggers, where it survives saving in the World
 Both keep their data in a hashtable variable called `UabiTable`, which you create in step 1.
 The file is JASS, so it works on a JASS map. A Lua map needs the same logic written in Lua.
 
-### Before you start
+### # Before you start
 
 Make a copy of the map and work on the copy.
 
@@ -208,20 +208,20 @@ Turn on raw data in the Object Editor with **View, Display Values As Raw Data** 
 Unit types and abilities then show as four character codes such as `h000` and `A000`, which
 is what the script needs.
 
-### Step 1. Create the variable
+### # Step 1. Create the variable
 
 **Trigger Editor, Variables** (Ctrl+B). Add a variable named `UabiTable` of type
 **Hashtable**. The editor stores it as `udg_UabiTable`, which is the name the header uses.
 
-### Step 2. Paste the header
+### # Step 2. Paste the header
 
 In the **Trigger Editor**, click the map's name at the top of the trigger list. The right side
 shows **Custom Script Code**. Paste the whole of `uabi-runtime-header.j` there. Everything in
 that box is placed above every trigger, so any trigger can call the two functions.
 
-### Step 3. Write down every ability list
+### # Step 3. Write down every ability list
 
-For each unit type whose **Abilities - Normal** is not empty, write down the unit's code and
+For each unit type whose **Abilities, Normal** is not empty, write down the unit's code and
 every ability code in that field. With raw data on, the field reads like `A000,A001,AInv`.
 
 Do this BEFORE step 6. The editor cannot export the lists as text, and once a field is cleared
@@ -229,13 +229,13 @@ nothing can read it back.
 
 Leave out the three kinds listed in "Leave these in the Object Editor" below.
 
-### Step 4. Trigger "Uabi Setup"
+### # Step 4. Trigger "Uabi Setup"
 
 Create a trigger named `Uabi Setup` and drag it to the TOP of the trigger list. Map
 initialization triggers run in list order, and this one has to run before anything that
 creates units.
 
-```
+```text
 Uabi Setup
     Events
         Map initialization
@@ -257,18 +257,18 @@ abilities, because those exist before any trigger runs.
 A long list can hit the limit on how much one trigger may do at once, and the trigger then
 stops silently partway. Keep each trigger to about 500 `UabiReg` lines. For more, make
 `Uabi Setup 2`, `Uabi Setup 3` and so on, with no event, holding the next 500 lines each. Run
-them from `Uabi Setup` right after `InitHashtable`, one **Trigger - Run (ignoring
+them from `Uabi Setup` right after `InitHashtable`, one **Trigger, Run (ignoring
 conditions)** action each, and keep the pick at the end of `Uabi Setup`.
 
 ### Step 5. Trigger "Uabi Enter"
 
-```
+```text
 Uabi Enter
     Events
-        Unit - A unit enters (Entire map)
+        Unit, A unit enters (Entire map)
     Conditions
     Actions
-        Custom script:   call UabiAdd(GetTriggerUnit())
+        Custom script,   call UabiAdd(GetTriggerUnit())
 ```
 
 This gives every unit created later its abilities, whether trained, summoned, revived or
@@ -277,7 +277,7 @@ and reads its abilities on the next line still finds them.
 
 ### Step 6. Clear the fields
 
-In the Object Editor, clear **Abilities - Normal** on every unit type you registered in step 4.
+In the Object Editor, clear **Abilities, Normal** on every unit type you registered in step 4.
 This is the step that removes the ids from the object data, and it is what the fix is for.
 
 ### Step 7. Check it

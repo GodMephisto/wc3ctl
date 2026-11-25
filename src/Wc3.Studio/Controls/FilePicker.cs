@@ -8,7 +8,7 @@ namespace Wc3.Studio.Controls;
 /// <summary>
 /// One shared entry point for every OS file dialog in the app. Wraps the top-level
 /// <see cref="IStorageProvider"/> and remembers the last folder the user browsed to (across
-/// ALL pickers - open map, import, save, the FilePathBox Browse buttons), so a dialog reopens
+/// ALL pickers, open map, import, save, the FilePathBox Browse buttons), so a dialog reopens
 /// where they left off instead of the home folder every time. The picker plumbing lives here
 /// once rather than being re-written in every panel (Principle #3).
 /// </summary>
@@ -48,7 +48,7 @@ public static class FilePicker
         return null;
     }
 
-    /// <summary>Shows a save-file dialog starting at the remembered folder; returns the chosen
+    /// <summary>Shows a save-file dialog starting at the remembered folder. Returns the chosen
     /// local path, or null if cancelled. Updates the remembered folder.</summary>
     public static async Task<string?> PickSaveAsync(
         Visual owner, string title, string? suggestedName = null, string? defaultExtension = null)
@@ -71,7 +71,7 @@ public static class FilePicker
         return null;
     }
 
-    /// <summary>Shows a folder-picker dialog starting at the remembered folder; returns the
+    /// <summary>Shows a folder-picker dialog starting at the remembered folder. Returns the
     /// chosen folder path, or null if cancelled. Remembers the picked folder itself, so the
     /// next dialog opens there (used for the Warcraft III and map folder settings).</summary>
     public static async Task<string?> PickFolderAsync(Visual owner, string title)

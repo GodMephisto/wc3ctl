@@ -10,7 +10,7 @@ public sealed class MapSession
     /// <summary>
     /// The schemas directory the target-aware panels resolve builds from, or null to
     /// auto-resolve the way the command layer does. Tests point this at a temp folder so a
-    /// panel can be driven without a game install; the shell leaves it null.
+    /// panel can be driven without a game install. The shell leaves it null.
     /// </summary>
     public string? SchemasDir { get; set; }
 }

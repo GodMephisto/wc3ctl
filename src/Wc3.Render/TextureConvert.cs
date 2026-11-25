@@ -17,27 +17,12 @@ namespace Wc3.Render;
 /// Converts image bytes between WC3's .blp/.dds and standard formats
 /// (.png/.jpg/.jpeg/.bmp/.tga, plus any source format ImageSharp sniffs).
 /// DDS is source-only (no encoder), decoded via <see cref="DdsDecoder"/>.
-/// Produced .blp files are BLP1 JPEG-content with mipmaps; WC3 stores the JPEG
+/// Produced .blp files are BLP1 JPEG-content with mipmaps. WC3 stores the JPEG
 /// channels as BGRA, so RGBA pixels are swapped before encoding (round-trip
 /// through <see cref="BlpDecoder"/> is proven in tests).
 /// </summary>
 public static class TextureConvert
 {
-    /// <summary>
-    /// Decodes only the five formats this converter documents, and skips embedded metadata.
-    /// ImageSharp 3.1.12, the pinned version, has advisories in its TIFF decoder and its ICC
-    /// profile parser (GHSA-wmxv-xphr-5c9g, GHSA-gwg2-r3hj-4w44) that are fixed only in 4.1.2,
-    /// which carries a license gate. The default configuration sniffs TIFF and reads ICC
-    /// profiles from any input, so neither is registered or read here.
-    /// </summary>
-    internal static readonly DecoderOptions SafeDecode = new()
-    {
-        Configuration = new Configuration(
-            new PngConfigurationModule(), new JpegConfigurationModule(), new BmpConfigurationModule(),
-            new TgaConfigurationModule(), new GifConfigurationModule()),
-        SkipMetadata = true,
-    };
-
     public static byte[] Convert(byte[] data, string fromExt, string toExt)
     {
         ArgumentNullException.ThrowIfNull(data);
@@ -112,7 +97,7 @@ public static class TextureConvert
         }
         try
         {
-            return Image.Load<Rgba32>(SafeDecode, data);
+            return SafeImages.Load<Rgba32>(data);
         }
         catch (UnknownImageFormatException ex)
         {
