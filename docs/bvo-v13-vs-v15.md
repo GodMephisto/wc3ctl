@@ -72,9 +72,9 @@ proceeds from v15, which is what BVO17 is.
 
 ## How to reproduce
 
-```
+```text
 wc3ctl audit "...\BleachVsOnepiece13.w3x" --json
 wc3ctl audit "...\BleachVsOnepiece15.w3x" --json
 wc3ctl object list --kind ability "...\BleachVsOnepiece13.w3x" --json
 dotnet test --filter "Category=Corpus"
-```
+```text

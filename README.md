@@ -44,7 +44,7 @@ You can use it three ways, and one install gives you all three.
 
    ```powershell
    irm https://raw.githubusercontent.com/GodMephisto/wc3ctl/master/install.ps1 | iex
-   ```
+   ```text
 
 3. Click inside the PowerShell window, right-click once to paste it, and press
    **Enter**.
@@ -73,7 +73,7 @@ one or more switches.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\install.ps1 -NoStudio -NoRegister -NoPath
-```
+```text
 
 `-NoStudio` skips the editor, `-NoRegister` skips the AI app setup and `-NoPath`
 leaves your PATH alone.
@@ -176,7 +176,7 @@ Type a command and press **Enter**.
 
 ```powershell
 wc3ctl --help
-```
+```text
 
 That lists every command. Add `--help` after any command to see what it takes,
 for example `wc3ctl object set --help`.
@@ -225,7 +225,7 @@ wc3ctl port unit "Source.w3x" H000 "Target.w3x"
 
 # Make a new empty map the World Editor can open
 wc3ctl new "Blank.w3x" --name "My Arena"
-```
+```text
 
 The command groups, by job.
 
@@ -264,14 +264,14 @@ The supported apps are Claude Code, Claude Desktop, Cursor, VS Code (GitHub
 Copilot), Windsurf, Gemini CLI, Codex CLI, Cline, LM Studio and Zed. These
 commands manage the setup.
 
-```
+```text
 wc3ctl mcp install --all            set up every supported app found on this PC
 wc3ctl mcp install cursor vscode    set up only the apps named
 wc3ctl mcp uninstall --all          remove it from every app
 wc3ctl mcp config <app>             print the settings, to paste in by hand
 wc3ctl mcp clients                  list the supported apps and whether each is set up
 wc3ctl mcp doctor                   check the install, the game folder and the apps
-```
+```text
 
 Setup changes only its own `wc3ctl` entry and keeps a copy of each settings file
 as `NAME.wc3ctl.bak`. A settings file with comments in it (common in Zed and
@@ -297,7 +297,7 @@ Close Studio and quit your AI apps, then in PowerShell run
 wc3ctl mcp uninstall --all
 Remove-Item "$env:LOCALAPPDATA\Programs\wc3ctl" -Recurse -Force
 Remove-Item "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\wc3ctl Studio.lnk"
-```
+```text
 
 The first line removes wc3ctl from your AI apps and from your PATH, the second
 deletes the program, and the third removes the Start menu entry. Your maps are
@@ -404,7 +404,7 @@ dotnet test --filter "Category!=Corpus&Category!=GameData&Category!=Doctor"   # 
 dotnet test --filter "Category=GameData"                     # needs a Warcraft III install
 dotnet test --filter "Category=Corpus"                       # needs real maps on disk
 dotnet test --filter "Category=Doctor"                       # needs Devo's Map Doctor installed
-```
+```text
 
 Corpus tests read maps from `Documents\Warcraft III\Maps\Download`, or from the
 folder in `WC3_CORPUS_DIR`. Round-trip comparisons leave out the MPQ bookkeeping
