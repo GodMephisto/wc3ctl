@@ -40,7 +40,7 @@ Three read-only commands. None of them writes, and the map's hash is the same af
 wc3ctl validate      map.w3x   # does it load at all
 wc3ctl uabi-profile  map.w3x   # the unit ability lists, by the numbers
 wc3ctl audit         map.w3x   # every behaviour check, errors first
-```text
+```
 
 MEASURED on the original, `GGGA_V0.07b.w3x`, 2026-09-26.
 
@@ -107,7 +107,7 @@ Every original in `maps/` and `maps/_extracted/` has a `_fixed` copy in `maps/fi
 ```text
 wc3ctl repair audit-errors map.w3x --apply -o step1.w3x     # dead ids, missing buffs, locked requirements
 wc3ctl repair uabi-runtime step1.w3x --apply -o map_fixed.w3x
-```text
+```
 
 `fix-results.csv` beside them records, per map, how many fields the first step changed, how many
 references the second moved, and the checks run on the result. All 29 have 0 `dangling-reference`
@@ -164,7 +164,7 @@ split happens by chance only about 1 time in 250 when the two maps behave the sa
 ```text
 wc3ctl repair uabi-runtime map.w3x                          # counts only, changes nothing
 wc3ctl repair uabi-runtime map.w3x --apply -o fixed.w3x     # writes the fixed copy
-```text
+```
 
 The original is never modified. The dry run prints how many unit types and references move
 and the distinct id count in `uabi` before and after. Measured on real maps, GGGA goes from
@@ -269,7 +269,7 @@ Uabi Enter
     Conditions
     Actions
         Custom script,   call UabiAdd(GetTriggerUnit())
-```text
+```
 
 This gives every unit created later its abilities, whether trained, summoned, revived or
 spawned by triggers. The event fires inside unit creation, so a trigger that creates a unit

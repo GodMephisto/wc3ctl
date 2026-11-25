@@ -18,7 +18,7 @@ git clone https://github.com/GodMephisto/wc3ctl
 cd wc3ctl
 dotnet build
 dotnet test --filter "Category!=Corpus&Category!=GameData&Category!=Doctor"
-```text
+```
 
 Tests marked `GameData` need a Warcraft III install, and `Corpus` tests need
 real maps in your Documents\Warcraft III\Maps folder (or set `WC3_CORPUS_DIR`).

@@ -42,7 +42,7 @@ classifier couldn't parse its I/O, and every command was blocked with,
 ```text
 Auto mode could not evaluate this action and is blocking it for safety
 Stage 2 classifier error, blocking based on stage 1 assessment
-```text
+```
 
 It looks intermittent (retries "sometimes work") because occasionally a parse squeaks through.
 
@@ -62,7 +62,7 @@ It looks intermittent (retries "sometimes work") because occasionally a parse sq
    commands skip the classifier entirely,
    ```json
    { "permissions", { "allow", [ "Bash(git:*)", "PowerShell(git:*)", "Bash(dotnet:*)", "PowerShell(dotnet:*)" ] } }
-   ```text
+   ```
    Both tool prefixes because commands may run through either the Bash or PowerShell tool.
 
 **After changing pxpipe config, restart pxpipe (and Claude Code), then verify.** Run a trivial

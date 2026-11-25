@@ -15,7 +15,7 @@ assumes a triggering player exists in both.
 31520  call TriggerRegisterPlayerEvent(LQ,FQ,EVENT_PLAYER_LEAVE)
 31521  call Z7(pr,"Eu",GREATER_THAN,0.)                            // TriggerRegisterVariableEvent
 31522  call TriggerAddAction(pr,up)                                // up = function GX (set at 26898)
-```text
+```
 
 A variable event has no triggering player, so `GetTriggerPlayer()` returns null and
 `GetPlayerId(null)` reads as **0**, which is Red.
@@ -28,13 +28,13 @@ anyone left.
 6099      call DisplayTextToForce(... "|r has left the game.")
 ...
 6120  call SmJ(PX)
-```text
+```
 
 `SmJ` at line 6045 then removes that player from the farmer force.
 
 ```jass
 6055  call ForceRemovePlayerSimple(Ht,Yt)     // Yt is the farmer force
-```text
+```
 
 Four assistants means four spurious fires, so the force goes from one member to zero before the
 spawn. `ForForce` over an empty force is a silent no-op, which is why nothing errors.
@@ -48,7 +48,7 @@ set PX=GetTriggerPlayer()
 if PX==null or GetPlayerSlotState(PX)==PLAYER_SLOT_STATE_PLAYING then
     return
 endif
-```text
+```
 
 A player still playing has not left. This cannot suppress a real departure, because the engine
 moves a genuine leaver out of `PLAYER_SLOT_STATE_PLAYING` before `EVENT_PLAYER_LEAVE` fires.
@@ -68,6 +68,6 @@ Measured in game with an instrumented build.
 Hunter Assistant(s), 4
 [FVH] leave fired, Eu=0 triggerPlayerId=0   <- four times
 [FVH] force holds 0 player(s) at spawn time <- force emptied before the spawn
-```text
+```
 
 Confirmed fixed by a build carrying the guard above and nothing else changed.

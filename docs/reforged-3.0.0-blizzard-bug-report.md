@@ -195,7 +195,7 @@ breaking, listed so the cause is not mistaken for something else.
   7  ITEM_TYPE_UNKNOWN           7  ITEM_TYPE_EQUIPMENT   <- inserted
   8  ITEM_TYPE_ANY               8  ITEM_TYPE_UNKNOWN     <- shifted
                                  9  ITEM_TYPE_ANY         <- shifted
-```text
+```
 
 A map that references the constant by name recompiles correctly. A map that was optimised or
 obfuscated, which is standard practice for published custom maps, has the integer inlined and
@@ -216,7 +216,7 @@ those builds `common.j` loses exactly **three** lines and nothing else.
 -TypeDefine('framehandle', 'handle')
 -ITEM_TYPE_UNKNOWN = ConvertItemType(7)
 -ITEM_TYPE_ANY = ConvertItemType(8)
-```text
+```
 
 The cause of the enum shift is now named rather than inferred. `ITEM_TYPE_EQUIPMENT` was
 **inserted at position 7** for the new equipment system, which pushed `ITEM_TYPE_UNKNOWN`
@@ -249,7 +249,7 @@ On a portrait model of 52,811 bytes the entire file differs in exactly three pla
 ```text
 VERS  b0040000 -> 08070000      1200 -> 1800
 CAMS  78000000 -> 78000003      the record header gains 0x03 in its top byte
-```text
+```
 
 All 8,778 `.mdx` files shared by both builds were re-stamped. Every model a custom map
 imported is still stamped 800 or 1200 and is now rendered by 1800 camera logic. The camera
@@ -348,7 +348,7 @@ mechanic rather than tuning.
 ```text
 + CriticalStrikeHealTextColor  = 255,0,255,0
 + CriticalStrikeSpellTextColor = 255,0,0,255
-```text
+```
 
 A separate colour for **heal** crits and for **spell** crits means critical strike now applies
 to healing and to spell damage, not only to attacks. `BaseSpellCritDamage` exists for the same
