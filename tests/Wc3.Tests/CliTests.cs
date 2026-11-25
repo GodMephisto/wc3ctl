@@ -93,7 +93,7 @@ public class CliTests
     [Fact]
     public async Task Object_get_unknown_rawcode_is_clean_exit0()
     {
-        // Bad --game-dir must degrade to deltas-only (hermetic: never falls back
+        // Bad --game-dir must degrade to deltas-only (hermetic, never falls back
         // to a real install), and an unknown rawcode is a clean "not found".
         var map = SyntheticMap.Build(new Dictionary<string, byte[]> { ["war3map.j"] = new byte[] { 1 } });
         var path = Path.Combine(Path.GetTempPath(), $"wc3ctl_og_{System.Guid.NewGuid():N}.w3x");
@@ -134,7 +134,7 @@ public class CliTests
     [Fact]
     public async Task Bundle_unit_json_emits_closure_with_string_kinds()
     {
-        // Hermetic: bad --game-dir degrades to map-deltas-only resolution.
+        // Hermetic, bad --game-dir degrades to map-deltas-only resolution.
         var w3u = new War3Net.Build.Object.UnitObjectData(War3Net.Build.Object.ObjectDataFormatVersion.v2);
         var unit = new War3Net.Build.Object.SimpleObjectModification
         {

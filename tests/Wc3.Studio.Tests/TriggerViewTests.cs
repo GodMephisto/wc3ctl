@@ -14,7 +14,7 @@ using Wc3.Studio.Panels;
 namespace Wc3.Studio.Tests;
 
 /// <summary>
-/// Headless drive of the Trigger panel's rename and flag controls: select a trigger or
+/// Headless drive of the Trigger panel's rename and flag controls, select a trigger or
 /// category in the tree, change the controls exactly like a user would, and verify that
 /// the war3map.wtg mutation reached the command layer, that the panel raised its edited
 /// event, and that the workspace reports the map as edited.

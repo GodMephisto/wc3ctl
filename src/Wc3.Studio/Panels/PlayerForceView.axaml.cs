@@ -9,12 +9,12 @@ using Wc3.Studio.Controls;
 namespace Wc3.Studio.Panels;
 
 /// <summary>
-/// Scenario → Players / Forces editor (war3map.w3i) over <see cref="PlayerForceCommand"/>:
+/// Scenario → Players / Forces editor (war3map.w3i) over <see cref="PlayerForceCommand"/>,
 /// one <see cref="Card"/> per force (team) showing its alliance/sharing flag checkboxes
 /// (applied on toggle via SetForceFlags) and its player rows (a <see cref="PlayerChip"/>
 /// swatch+name plus a team dropdown that moves the player via SetPlayerForce). Cards
 /// rebuild from the command layer after every edit, so the panel always shows file
-/// truth. All controls are built in code with no virtualization - the
+/// truth. All controls are built in code with no virtualization, the
 /// editable-control-in-recycled-item pitfall cannot occur.
 /// </summary>
 public partial class PlayerForceView : UserControl, IMapPanel
@@ -22,11 +22,11 @@ public partial class PlayerForceView : UserControl, IMapPanel
     private static readonly IBrush DimBrush = StudioPalette.Muted;
 
     private MapSession? _session;
-    /// <summary>True while (re)building the cards - checkbox/dropdown handlers no-op so
+    /// <summary>True while (re)building the cards, checkbox/dropdown handlers no-op so
     /// programmatic initialization never writes to the map.</summary>
     private bool _building;
 
-    /// <summary>Raised after an edit mutated the in-memory map; the workspace reacts by
+    /// <summary>Raised after an edit mutated the in-memory map. The workspace reacts by
     /// enabling Save.</summary>
     public event EventHandler? MapEdited;
 
@@ -92,14 +92,14 @@ public partial class PlayerForceView : UserControl, IMapPanel
         foreach (var force in forces)
             ForceList.Children.Add(BuildForceCard(force, byId, teamNames, placed));
 
-        // Players whose bit is set in no force still exist in the map; list them so
+        // Players whose bit is set in no force still exist in the map. List them so
         // their team dropdown can move them into one.
         var loose = players.Where(p => !placed.Contains(p.Id)).ToList();
         if (loose.Count > 0)
             ForceList.Children.Add(BuildLooseCard(loose, teamNames));
     }
 
-    /// <summary>One force card: header, flag checkboxes, then a row per member.</summary>
+    /// <summary>One force card, header, flag checkboxes, then a row per member.</summary>
     private Border BuildForceCard(ForceInfo force, IReadOnlyDictionary<int, PlayerInfo> byId,
                                   IReadOnlyList<string> teamNames, HashSet<int> placed)
     {
@@ -110,7 +110,7 @@ public partial class PlayerForceView : UserControl, IMapPanel
             FontWeight = FontWeight.SemiBold,
         });
 
-        // Alliance/sharing flags: any toggle re-writes all five, read live from the
+        // Alliance/sharing flags, any toggle re-writes all five, read live from the
         // checkboxes (SetForceFlags takes the full set).
         var flagsPanel = new WrapPanel();
         var boxes = new List<CheckBox>();
@@ -171,7 +171,7 @@ public partial class PlayerForceView : UserControl, IMapPanel
     }
 
     /// <summary>Card for players that belong to no force (their team dropdown starts
-    /// empty; picking one moves them into it).</summary>
+    /// empty. Picking one moves them into it).</summary>
     private Border BuildLooseCard(IReadOnlyList<PlayerInfo> loose, IReadOnlyList<string> teamNames)
     {
         var body = new StackPanel { Spacing = 6 };
@@ -187,10 +187,10 @@ public partial class PlayerForceView : UserControl, IMapPanel
         return new Card { Child = body };
     }
 
-    /// <summary>One player row: a PlayerChip (swatch + "Player N (Color) · map name",
+    /// <summary>One player row, a PlayerChip (swatch + "Player N (Color) · map name",
     /// truncating) over a dim controller/race line, with a team dropdown on the right
     /// that moves the player. A Grid (star column for the chip, fixed-width combo) -
-    /// NOT a DockPanel - so a long name truncates instead of running under the combo
+    /// NOT a DockPanel, so a long name truncates instead of running under the combo
     /// when the panel sits in the narrow side dock.</summary>
     private Grid BuildPlayerRow(int id, PlayerInfo? player, int currentTeam,
                                 IReadOnlyList<string> teamNames)
@@ -218,7 +218,7 @@ public partial class PlayerForceView : UserControl, IMapPanel
                 Text = $"{player.Controller}, {player.Race}",
                 Foreground = DimBrush,
                 FontSize = 11,
-                // Aligns under the name: past the chip's 12px swatch + 6px gap.
+                // Aligns under the name, past the chip's 12px swatch + 6px gap.
                 Margin = new Thickness(18, 0, 0, 0),
                 TextTrimming = TextTrimming.CharacterEllipsis,
             });
@@ -268,8 +268,8 @@ public partial class PlayerForceView : UserControl, IMapPanel
         StatusText.Text = result.Message;
         if (result.Ok)
             MapEdited?.Invoke(this, EventArgs.Empty);
-        // Rebuild either way: the row moves to its new card (or reverts on failure).
-        // Deferred - never tear down the combo while its own event is on the stack.
+        // Rebuild either way, the row moves to its new card (or reverts on failure).
+        // Deferred, never tear down the combo while its own event is on the stack.
         Dispatcher.UIThread.Post(Refresh);
     }
 

@@ -38,8 +38,8 @@ public class ObjectEditorRefFieldsTests
         Assert.True(rows.Count > 0, "the corpus map should list units");
 
         // Walk the units until one carries a reference-list entry that resolved to a
-        // name: custom heroes reference map-defined abilities (A000-style), which the
-        // name cache resolves; "rawcode - name" is the resolved sub-row format, while
+        // name, custom heroes reference map-defined abilities (A000-style), which the
+        // name cache resolves. "rawcode, name" is the resolved sub-row format, while
         // unresolved entries stay a bare 4-char rawcode.
         bool found = false;
         for (int i = 0; i < rows.Count && !found; i++)

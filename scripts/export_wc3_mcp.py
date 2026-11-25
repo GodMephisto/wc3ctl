@@ -5,8 +5,8 @@ own product (exe wc3-mcp, registered in AI apps as "wc3"), so its source is copi
 than edited there. Run this after committing here, then build, test and commit in the wc3-mcp
 checkout.
 
-    python scripts/export-wc3-mcp.py <path to wc3-mcp checkout>            dry run, prints the plan
-    python scripts/export-wc3-mcp.py <path to wc3-mcp checkout> --apply    writes the files
+    python scripts/export_wc3_mcp.py <path to wc3-mcp checkout>            dry run, prints the plan
+    python scripts/export_wc3_mcp.py <path to wc3-mcp checkout> --apply    writes the files
 
 What it does
   * Takes the files from this repository's HEAD commit, never from the working tree, so what is
@@ -55,7 +55,7 @@ def origin_owner():
     try:
         url = git("remote", "get-url", "origin").decode().strip()
     except subprocess.CalledProcessError:
-        return None
+        url = ""    # no origin remote, so there is no owner slug to exempt
     match = re.search(r"[/:]([^/:]+)/[^/]+?(?:\.git)?$", url)
     return match.group(1) if match else None
 

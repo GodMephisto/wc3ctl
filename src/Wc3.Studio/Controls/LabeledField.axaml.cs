@@ -4,7 +4,7 @@ using Avalonia.Controls;
 namespace Wc3.Studio.Controls;
 
 /// <summary>
-/// One labeled editor row for a properties panel: the label in a fixed-width column,
+/// One labeled editor row for a properties panel, the label in a fixed-width column,
 /// the slotted editor control next to it, and an optional dim hint underneath. The editor
 /// goes in <see cref="FieldContent"/>, set with explicit
 /// <c>&lt;c:LabeledField.FieldContent&gt;</c> element syntax.

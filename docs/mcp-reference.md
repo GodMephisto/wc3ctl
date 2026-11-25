@@ -1780,7 +1780,7 @@ Parameters.
 
 Family. product
 
-Verify that a wc3-mcp checkout holds the same server source scripts/export-wc3-mcp.py would export from this repository, reporting every file that differs without writing. Read-only.
+Verify that a wc3-mcp checkout holds the same server source scripts/export_wc3_mcp.py would export from this repository, reporting every file that differs without writing. Read-only.
 
 Result. one JSON object with the fields inStep (boolean), sourceRoot (string), targetRoot (string), differences (array), checkedFiles (integer), message (string)
 

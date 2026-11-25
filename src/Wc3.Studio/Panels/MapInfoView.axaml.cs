@@ -198,7 +198,7 @@ public partial class MapInfoView : UserControl, IMapPanel
 
         Flag("HasTerrainFog", UseFogCheck, before.HasTerrainFog);
         Pick("FogStyle", FogStylePicker, before.FogStyle);
-        // Epsilons absorb the "0.###" display rounding: an untouched box parses back
+        // Epsilons absorb the "0.###" display rounding, an untouched box parses back
         // within them, so it never registers as a change.
         if (Differs(fogStart, before.FogStartZ))
             edits.Add(("FogStartZ", fogStart.ToString(inv)));
@@ -262,7 +262,7 @@ public partial class MapInfoView : UserControl, IMapPanel
             : $"{applied} updated, {errors.Count} failed. {string.Join(" ", errors)}";
     }
 
-    /// <summary>ArgumentException appends "(Parameter '...')" on its own line; only the
+    /// <summary>ArgumentException appends "(Parameter '...')" on its own line. Only the
     /// first line is a user-facing message.</summary>
     private static string FirstLine(string message)
     {

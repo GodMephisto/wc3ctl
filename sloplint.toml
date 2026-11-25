@@ -1,0 +1,11 @@
+# Places where a rule fires on a line that has to keep its shape. Each entry
+# names the rule and the file, and says why the finding is not a defect.
+
+[exempt]
+# tact.py probes the Blizzard CDN root it names, so the address is the subject
+# of the script. analyze.py builds an SVG document, and the only URL in it is
+# the xmlns namespace, which is an identifier and not an address.
+absolute-url = ["docs/reforged-3.0.0-evidence/tact.py", "tools/wc3watch/analyze.py"]
+# The editor draws these glyphs in the palette and terrain panels. They are the
+# interface, not decoration in a comment.
+emoji = ["src/Wc3.Studio/Panels/PaletteView.axaml.cs", "src/Wc3.Studio/Panels/TerrainView.axaml.cs"]

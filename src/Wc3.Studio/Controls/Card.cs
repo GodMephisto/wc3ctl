@@ -5,7 +5,7 @@ using Avalonia.Media;
 namespace Wc3.Studio.Controls;
 
 /// <summary>
-/// The Studio's standard card: a rounded 1px #33555555 border with 10x8 padding
+/// The Studio's standard card, a rounded 1px #33555555 border with 10x8 padding
 /// around its Child (Border's own content slot, so both XAML child syntax and
 /// code-built <c>new Card { Child = ... }</c> work). Replaces the per-panel Card()
 /// helpers. StyleKey stays Border so any Border-targeting styles apply unchanged.

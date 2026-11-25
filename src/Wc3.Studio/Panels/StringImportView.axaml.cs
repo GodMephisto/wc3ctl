@@ -6,13 +6,13 @@ namespace Wc3.Studio.Panels;
 
 /// <summary>
 /// Trigger strings (war3map.wts) + imports panel. Thin shell over StringsCommand /
-/// ImportsCommand: the list shows read-only rows and all editing happens in the single
+/// ImportsCommand, the list shows read-only rows and all editing happens in the single
 /// dedicated editor + Apply (an editable TextBox inside a ListBox loses its value to
 /// virtualization/focus recycling).
 /// </summary>
 public partial class StringImportView : UserControl, IMapPanel
 {
-    /// <summary>ListBox row for one string; ToString is the display text (id + first line).</summary>
+    /// <summary>ListBox row for one string. ToString is the display text (id + first line).</summary>
     private sealed record StringItem(WtsEntry Entry)
     {
         public override string ToString()
@@ -24,7 +24,7 @@ public partial class StringImportView : UserControl, IMapPanel
         }
     }
 
-    /// <summary>ListBox row for one import; read-only by design.</summary>
+    /// <summary>ListBox row for one import. Read-only by design.</summary>
     private sealed record ImportItem(ImportEntry Entry)
     {
         public override string ToString()
@@ -157,7 +157,7 @@ public partial class StringImportView : UserControl, IMapPanel
         if (doc is null || mapPath is null) { StatusText.Text = "No map path available."; return; }
         try
         {
-            // Same convention as the object editor: never clobber the original map.
+            // Same convention as the object editor, never clobber the original map.
             var editedPath = Path.Combine(
                 Path.GetDirectoryName(mapPath) ?? ".",
                 Path.GetFileNameWithoutExtension(mapPath) + ".edited" + Path.GetExtension(mapPath));

@@ -7,10 +7,10 @@ rights.
 
 Run it from an elevated PowerShell.
 
-```
+```text
 pwsh -File wc3watch.ps1                 wait for the game, record until it exits
 pwsh -File wc3watch.ps1 -Minutes 30     stop after 30 minutes
-```
+```text
 
 PresentMon 2.5.1 must be at `%LOCALAPPDATA%\wc3watch\PresentMon-2.5.1-x64.exe`, or pass `-PresentMon`.
 
@@ -41,12 +41,12 @@ With no `gc_probe` the slopes cover the whole session, which is right for a map 
 
 ## Reading a session
 
-```
+```text
 python analyze.py <session folder>            write report.md and print its first screen
 python analyze.py summary <session>           one screen, length, measures, drops and suspect windows
 python analyze.py chart <session>             write chart.svg beside the data
 python analyze.py diff <sessionA> <sessionB>  two sessions side by side, the delta is B minus A
-```
+```text
 
 `diff` is the A/B half of a leak investigation. Record one session with the suspect trigger disabled
 and one with it enabled, then diff them. Every measure is shown side by side with the change, so a
@@ -70,7 +70,7 @@ window, a mass spawn or a periodic trigger, rather than only printing a number.
 
 Run the tests with either of these from this folder.
 
-```
+```text
 python -m unittest test_analyze
 python -m pytest test_analyze.py
-```
+```text

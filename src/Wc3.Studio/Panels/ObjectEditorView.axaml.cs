@@ -18,11 +18,11 @@ using Wc3.Studio.Controls;
 namespace Wc3.Studio.Panels;
 
 /// <summary>
-/// World-Editor-style object editor: a type switcher over all 7 Object Editor
+/// World-Editor-style object editor, a type switcher over all 7 Object Editor
 /// kinds, the map's objects of that kind on the left (multi-select), and the
 /// first selected object's merged fields (base game data ⊕ map deltas) on the
-/// right. The field grid is read-only; editing happens in a dedicated box below
-/// it - select a row, change the value, Apply writes it to every selected object
+/// right. The field grid is read-only. Editing happens in a dedicated box below
+/// it, select a row, change the value, Apply writes it to every selected object
 /// via ObjectSetCommand for the selected kind (all 7 kinds are editable), and
 /// New… derives a fresh custom object from the selected one via ObjectNewCommand.
 /// This select-then-edit design avoids putting TextBoxes inside the recycled
@@ -41,7 +41,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         new(ObjectKind.Upgrade, "Upgrades"),
     };
 
-    /// <summary>Model-file field code per kind; other kinds fall back to a value scan.</summary>
+    /// <summary>Model-file field code per kind. Other kinds fall back to a value scan.</summary>
     private static readonly Dictionary<ObjectKind, string> ModelFieldCodes = new()
     {
         [ObjectKind.Unit] = "umdl",
@@ -68,7 +68,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     private int _unsavedEdits;
 
     /// <summary>The build the form's bounds are shown against, or null for the installed game
-    /// data. Set from the Target combo; a build with no object data is reported rather than
+    /// data. Set from the Target combo. A build with no object data is reported rather than
     /// silently showing the installed build's fields.</summary>
     private string? _targetBuild;
     /// <summary>Field-code to target-schema hints for the shown object, or null when the target
@@ -88,10 +88,10 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     /// without a visible original and an undo is guesswork.
     /// </remarks>
     private readonly Dictionary<(ObjectKind Kind, string Rawcode, string Field), string> _originalValues = new();
-    /// <summary>The current kind's full object list; SearchBox filters this in memory.</summary>
+    /// <summary>The current kind's full object list. SearchBox filters this in memory.</summary>
     private List<ObjectRow> _allRows = new();
     /// <summary>rawcode → display name across every kind's map objects, for reference
-    /// fields (lazy; dropped on map change and after edits - see <see cref="RefNames"/>).</summary>
+    /// fields (lazy. Dropped on map change and after edits, see <see cref="RefNames"/>).</summary>
     private Dictionary<string, string>? _refNames;
     /// <summary>Metadata type per (kind, bare field code), cached so classifying a
     /// field grid never re-derives the same field's option set twice.</summary>
@@ -112,7 +112,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     /// <summary>Stamp that invalidates in-flight renders when the preview target changes.</summary>
     private int _previewGeneration;
     private bool _renderInFlight;
-    /// <summary>A request arrived mid-render; run one trailing render when it lands.</summary>
+    /// <summary>A request arrived mid-render. Run one trailing render when it lands.</summary>
     private bool _renderQueued;
     private bool _dragging;
     private Point _dragLast;
@@ -123,12 +123,12 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     /// <summary>Anchor row for Shift+click range selection (the last plain-clicked row).</summary>
     private ObjectRow? _anchor;
 
-    // --- typed field editor: one control shown per field, chosen from its metadata ---
+    // --- typed field editor, one control shown per field, chosen from its metadata ---
     private enum EditorMode { Text, Numeric, Combo, Multi, RefList }
     private EditorMode _editorMode = EditorMode.Text;
     /// <summary>Multiselect tokens in display order, so Apply joins deterministically.</summary>
     private IReadOnlyList<string> _editorMultiTokens = Array.Empty<string>();
-    /// <summary>Reference-list builder entries (rawcodes in list order); Apply joins them.</summary>
+    /// <summary>Reference-list builder entries (rawcodes in list order). Apply joins them.</summary>
     private List<string> _refListTokens = new();
     /// <summary>Whether the numeric editor holds a whole-number type, so Apply writes
     /// "3" and never "3.0" into an int field.</summary>
@@ -165,18 +165,18 @@ public partial class ObjectEditorView : UserControl, IMapPanel
 
     /// <summary>
     /// Raised when the primary selected object (the first of the selection)
-    /// changes - including the automatic first-row selection after a list/kind
+    /// changes, including the automatic first-row selection after a list/kind
     /// refresh. The workspace feeds this to the Dependencies tab.
     /// </summary>
     public event EventHandler<(ObjectKind Kind, string Rawcode)>? ObjectSelected;
 
-    /// <summary>Raised by the object list's right-click "Show dependencies": an
+    /// <summary>Raised by the object list's right-click "Show dependencies", an
     /// explicit ask to open the Dependencies tab on this object.</summary>
     public event EventHandler<(ObjectKind Kind, string Rawcode)>? DependenciesRequested;
 
     private KindOption SelectedKind => KindCombo.SelectedItem?.Payload as KindOption ?? Kinds[0];
 
-    /// <summary>Canonical dropdown id for a kind - the enum name the CLI parses (case-insensitive).</summary>
+    /// <summary>Canonical dropdown id for a kind, the enum name the CLI parses (case-insensitive).</summary>
     private static string KindId(ObjectKind kind) => kind.ToString().ToLowerInvariant();
 
     /// <summary>The schemas directory to resolve target builds from, injected by a test session or
@@ -206,7 +206,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
             // With no schemas directory the installed data is the only target.
         }
 
-        // Keep the current choice while it still exists; otherwise prefer the resolved target
+        // Keep the current choice while it still exists. Otherwise prefer the resolved target
         // build when it has object data, else the installed data.
         string selectId = InstalledTargetId;
         if (_targetBuild is not null && items.Any(i => i.Id == _targetBuild))
@@ -280,7 +280,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     {
         _session = session;
         _unsavedEdits = 0;
-        _refNames = null;   // another map's objects; rebuild lazily
+        _refNames = null;   // another map's objects. Rebuild lazily
         _fieldTypes.Clear(); // GameDir may differ per session
         _targetHints = null;
         StatusText.Text = "";
@@ -295,7 +295,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
 
         PlaceholderText.IsVisible = false;
         ContentRoot.IsVisible = true;
-        // A freshly shown map starts on Units; Select never raises SelectionChanged,
+        // A freshly shown map starts on Units. Select never raises SelectionChanged,
         // so the single RefreshObjectList below is the only requery.
         KindCombo.Select(KindId(Kinds[0].Kind));
         RefreshObjectList();
@@ -315,13 +315,13 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         RefreshObjectList();
     }
 
-    /// <summary>Re-query the selected kind's objects; keeps the switcher usable when empty.</summary>
+    /// <summary>Re-query the selected kind's objects. Keeps the switcher usable when empty.</summary>
     private void RefreshObjectList()
     {
         ClearFieldPane();
-        _anchor = null; // rows are rebuilt with new instances; the old anchor is stale
+        _anchor = null; // rows are rebuilt with new instances. The old anchor is stale
         _suppress = true;
-        // Start each kind/map with an unfiltered list: a search typed for the previous
+        // Start each kind/map with an unfiltered list, a search typed for the previous
         // kind would otherwise carry over and filter the new kind to nothing, which reads
         // as "this kind is empty" (the "can't see abilities" bug).
         SearchBox.Text = "";
@@ -338,7 +338,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         var kind = SelectedKind;
         try
         {
-            // One icon loader per list load, like the palette: a kind or map switch
+            // One icon loader per list load, like the palette, a kind or map switch
             // rebuilds rows with a fresh loader, so a decode still in flight can only
             // ever land on a row the list no longer shows.
             var icons = IconFieldCodes.TryGetValue(kind.Kind, out var iconField)
@@ -369,9 +369,9 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     }
 
     /// <summary>
-    /// Show the cached object list filtered by the search text - DropdownFilter
+    /// Show the cached object list filtered by the search text, DropdownFilter
     /// matching (case-insensitive substring on display name OR rawcode) with the
-    /// best hits ranked first; empty search shows all in file order. The selection
+    /// best hits ranked first. Empty search shows all in file order. The selection
     /// survives filtering while the selected objects still match, so typing
     /// doesn't reload the field pane on every keystroke.
     /// </summary>
@@ -395,7 +395,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
             ? _allRows
             : _allRows
                 .Where(r => DropdownFilter.Matches(query, r.Display, r.Rawcode))
-                .OrderBy(r => DropdownFilter.Rank(query, r.Display, r.Rawcode)) // best hits first; stable
+                .OrderBy(r => DropdownFilter.Rank(query, r.Display, r.Rawcode)) // best hits first. Stable
                 .ToList();
         ListCountText.Text = query.Length == 0
             ? $"{_allRows.Count} {kind.Label}"
@@ -441,7 +441,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     }
 
     /// <summary>
-    /// Show the first selected object's merged fields; with a multi-selection that
+    /// Show the first selected object's merged fields. With a multi-selection that
     /// object is the editing template and Apply targets the whole selection.
     /// </summary>
     private void RefreshFieldPane(string? preserveFieldCode)
@@ -475,7 +475,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
 
         try
         {
-            // The form, not the raw field list: grouped, ordered, applicability-filtered and
+            // The form, not the raw field list, grouped, ordered, applicability-filtered and
             // bounds-annotated from the game's own metadata. Building that here would put map
             // logic in a panel, so it lives in Wc3.Commands and is shared with the CLI and MCP.
             var form = ObjectFormCommand.Execute(doc, SelectedKind.Kind, first.Rawcode, _session.GameDir);
@@ -493,7 +493,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
             _suppress = false;
 
             // Keep the edited field selected across object switches and post-Apply
-            // refreshes; the selection handler reloads EditorBox from the new row.
+            // refreshes. The selection handler reloads EditorBox from the new row.
             // Sub-rows are display-only children and never the preserved selection.
             var keep = string.IsNullOrEmpty(preserveFieldCode)
                 ? null
@@ -525,7 +525,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         HideModelArea();
     }
 
-    /// <summary>Surface the primary selection once per (kind, rawcode) change - the
+    /// <summary>Surface the primary selection once per (kind, rawcode) change, the
     /// field pane refreshes more often than the selection actually moves.</summary>
     private void NotifyObjectSelected(ObjectKind kind, string rawcode)
     {
@@ -535,16 +535,16 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         ObjectSelected?.Invoke(this, (kind, rawcode));
     }
 
-    // --- reference fields: show referenced objects' names next to their rawcodes ---
+    // --- reference fields, show referenced objects' names next to their rawcodes ---
 
     /// <summary>
     /// Grid rows for the merged fields. Object-reference fields get their referenced
-    /// objects' names: a single reference inline ("A000 (Naginata Combo)"), a reference
-    /// LIST as indented read-only sub-rows ("A000 - Naginata Combo") under the parent
+    /// objects' names, a single reference inline ("A000 (Naginata Combo)"), a reference
+    /// LIST as indented read-only sub-rows ("A000, Naginata Combo") under the parent
     /// row, one per entry. Every other field is one plain row, exactly as before.
     /// </summary>
     /// <summary>
-    /// Flattens the form into list rows: one heading per category, then that category's fields in
+    /// Flattens the form into list rows, one heading per category, then that category's fields in
     /// the metadata's own order, with reference lists still expanded beneath their field.
     /// </summary>
     private List<FieldRow> BuildFieldRows(ObjectForm form)
@@ -561,7 +561,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     /// <summary>Legal range and target layer, shown beside the value so an edit that the game
     /// would reject, or that would land in the layer the game ignores, is visible before it is
     /// made rather than after the map fails to load. When a target build is chosen its schema
-    /// supplies the bounds; otherwise the installed field metadata does.</summary>
+    /// supplies the bounds. Otherwise the installed field metadata does.</summary>
     private string HintFor(FormField f)
     {
         var layer = f.Layer == ObjectLayer.Skin ? "skin" : "";
@@ -609,7 +609,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         return rows;
     }
 
-    /// <summary>Cheap value gate before the metadata lookup: only values carrying a
+    /// <summary>Cheap value gate before the metadata lookup, only values carrying a
     /// 4-char alphanumeric token (alone or in a comma list) can hold rawcodes, so
     /// ints/reals/paths never cost an option-set scan.</summary>
     private static bool LooksLikeRawcodes(string value) =>
@@ -621,7 +621,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         token.Length == 4 && token.All(char.IsLetterOrDigit);
 
     /// <summary>True when the field's metadata type says its value is (a list of)
-    /// object rawcodes. Cached per (kind, bare code); leveled keys ("code:N") resolve
+    /// object rawcodes. Cached per (kind, bare code). Leveled keys ("code:N") resolve
     /// by the bare code. No game data ⇒ never a reference (renders as today).</summary>
     private bool IsReferenceField(ObjectKind kind, string fieldCode, out bool isList)
     {
@@ -644,9 +644,9 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         return IsObjectReferenceType(t.Type);
     }
 
-    /// <summary>Metadata type tokens whose values are object rawcodes: a known object
+    /// <summary>Metadata type tokens whose values are object rawcodes, a known object
     /// stem + "Code" (single) or "List" (comma-separated). Non-object lists like
-    /// "targetList"/"stringList" stay out - the stem whitelist keeps this conservative.</summary>
+    /// "targetList"/"stringList" stay out, the stem allowlist keeps this conservative.</summary>
     private static bool IsObjectReferenceType(string type)
     {
         var t = type.ToLowerInvariant();
@@ -656,7 +656,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
             or "item" or "tech" or "upgrade" or "buff" or "effect";
     }
 
-    /// <summary>"rawcode - name" when the rawcode resolves to a map object, else the bare rawcode.</summary>
+    /// <summary>"rawcode, name" when the rawcode resolves to a map object, else the bare rawcode.</summary>
     private string ReferenceLabel(string rawcode) =>
         RefNames().TryGetValue(rawcode, out var name) ? $"{rawcode} - {name}" : rawcode;
 
@@ -664,7 +664,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     /// rawcode → name over every kind's map objects, built once per map from
     /// <see cref="ObjectListCommand"/> (first hit across kinds wins) and dropped after
     /// edits, which can rename. One list pass per kind keeps resolving 500+ references
-    /// out of the per-rawcode command path; base-game-only rawcodes stay unresolved
+    /// out of the per-rawcode command path. Base-game-only rawcodes stay unresolved
     /// and render bare.
     /// </summary>
     private Dictionary<string, string> RefNames()
@@ -698,9 +698,9 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     /// object (World-Editor style) instead of piling up a multi-selection.
     /// Avalonia's <c>SelectionMode="Multiple"</c> otherwise accumulates on every
     /// plain click, and the detail pane + the Dependencies/Port seam only ever
-    /// follow the FIRST selected object - so after one click the panel appeared
+    /// follow the FIRST selected object, so after one click the panel appeared
     /// frozen and porting targeted the wrong unit. This tunnel handler runs before
-    /// the ListBox's own selection logic and marks the event handled, giving:
+    /// the ListBox's own selection logic and marks the event handled, giving,
     ///   • plain left-click  → select only that row (switch)
     ///   • Ctrl+left-click   → toggle that row in/out of the selection
     ///   • Shift+left-click  → range from the anchor to that row
@@ -716,7 +716,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
 
         if (props.IsRightButtonPressed)
         {
-            // Explorer-style: move the selection to the clicked row unless it is
+            // Explorer-style, move the selection to the clicked row unless it is
             // already part of the current selection (so "Show dependencies" acts
             // on what the user clicked). Left to the default menu open otherwise.
             if (row is not null && !SelectedObjects().Contains(row))
@@ -735,16 +735,16 @@ public partial class ObjectEditorView : UserControl, IMapPanel
             return; // clicks on empty space fall through to the default (no-op)
 
         // We own the click (marked handled below), so the list won't get focus from the
-        // ListBoxItem's own press handling - give it focus explicitly so arrow keys work.
+        // ListBoxItem's own press handling, give it focus explicitly so arrow keys work.
         ObjectList.Focus();
 
         bool ctrl = e.KeyModifiers.HasFlag(KeyModifiers.Control);
         bool shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
-        // Only a PLAIN double-click opens the preview; a fast Ctrl/Shift double is just
+        // Only a PLAIN double-click opens the preview. A fast Ctrl/Shift double is just
         // two toggles/ranges and must not collapse the multi-selection.
         bool preview = e.ClickCount >= 2 && !ctrl && !shift;
 
-        // Mutate selection silently, then refresh the field pane exactly once - each
+        // Mutate selection silently, then refresh the field pane exactly once, each
         // SelectedItems change would otherwise re-run ObjectGetCommand (N times for a range).
         _suppress = true;
         if (ctrl)
@@ -772,7 +772,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
             ShowSelectedObjectModel();
     }
 
-    /// <summary>Reflect the current selection in the detail panes: drop the per-object
+    /// <summary>Reflect the current selection in the detail panes, drop the per-object
     /// model preview and re-merge the (first) selected object's fields, keeping the
     /// edited field selected. Called once per selection gesture (mouse or keyboard).</summary>
     private void ApplySelectionToPanes()
@@ -786,7 +786,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     {
         var current = SelectedObjects();
         if (current.Count == 1 && ReferenceEquals(current[0], row))
-            return; // already the sole selection - don't churn the field pane
+            return; // already the sole selection, don't churn the field pane
         ObjectList.SelectedItems?.Clear();
         ObjectList.SelectedItem = row;
     }
@@ -854,8 +854,8 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     }
 
     /// <summary>
-    /// Double-click: resolve the (first) selected object's model file from its
-    /// merged fields. Map-imported models render as a rotatable preview; base-game
+    /// Double-click, resolve the (first) selected object's model file from its
+    /// merged fields. Map-imported models render as a rotatable preview. Base-game
     /// models (not in the map) render from CASC when a WC3 install is available,
     /// otherwise only their path shows.
     /// </summary>
@@ -872,7 +872,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         try
         {
             var fields = ObjectGetCommand.Execute(doc, SelectedKind.Kind, rawcode, _session.GameDir).Fields;
-            // Merged fields first (a map delta always wins); untouched base objects keep
+            // Merged fields first (a map delta always wins). Untouched base objects keep
             // their art in Reforged skin profiles, resolved through the command layer.
             modelPath = FindModelPath(SelectedKind.Kind, fields)
                 ?? RenderModelCommand.BaseModelPath(SelectedKind.Kind, rawcode, _session.GameDir);
@@ -903,7 +903,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         }
         else
         {
-            // Not imported - try the base game (CASC). Preparation failures append a
+            // Not imported, try the base game (CASC). Preparation failures append a
             // "Preview unavailable" note, leaving the path message as the fallback.
             ModelText.Text = $"{rawcode} - base game model: {modelPath}";
             StartPreview(doc, modelPath);
@@ -912,10 +912,10 @@ public partial class ObjectEditorView : UserControl, IMapPanel
 
     /// <summary>
     /// Parse the model, resolve its textures and render the first frame, all off
-    /// the UI thread; the prepared model is cached so drag re-renders only
+    /// the UI thread. The prepared model is cached so drag re-renders only
     /// rasterize. Resolution goes through the command layer's map-then-CASC
     /// fallback, so base-game models render when an install is available (the
-    /// first CASC open can take seconds - also off the UI thread). The generation
+    /// first CASC open can take seconds, also off the UI thread). The generation
     /// stamp drops results that land after the preview target changed (another
     /// double-click, selection change, map close).
     /// </summary>
@@ -956,7 +956,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     }
 
     /// <summary>
-    /// Re-render at the current angles with at most one render in flight:
+    /// Re-render at the current angles with at most one render in flight,
     /// requests arriving mid-render collapse into a single trailing render at
     /// whatever the angles are by then, so releasing a drag always settles on
     /// the final orientation without a backlog of stale frames.
@@ -1025,7 +1025,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         e.Pointer.Capture(PreviewBorder);
     }
 
-    /// <summary>Orbit so the model follows the drag: right spins it right, down tilts its top toward you.</summary>
+    /// <summary>Orbit so the model follows the drag, right spins it right, down tilts its top toward you.</summary>
     private void OnPreviewPointerMoved(object? sender, PointerEventArgs e)
     {
         if (!_dragging)
@@ -1044,7 +1044,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         e.Pointer.Capture(null);
     }
 
-    /// <summary>Scroll to zoom: wheel up magnifies, wheel down pulls back (clamped).</summary>
+    /// <summary>Scroll to zoom, wheel up magnifies, wheel down pulls back (clamped).</summary>
     private void OnPreviewWheel(object? sender, PointerWheelEventArgs e)
     {
         if (_previewModel is null)
@@ -1056,7 +1056,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     }
 
     /// <summary>
-    /// The kind's dedicated model field first (umdl/dfil/bfil/ifil); otherwise the
+    /// The kind's dedicated model field first (umdl/dfil/bfil/ifil). Otherwise the
     /// first field whose value looks like a model path.
     /// </summary>
     private static string? FindModelPath(ObjectKind kind, IReadOnlyList<MergedField> fields)
@@ -1074,7 +1074,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
 
     /// <summary>
     /// Resolves the model path against the map, reusing the shared command-layer
-    /// resolver so the preview finds exactly what the renderer does - including the
+    /// resolver so the preview finds exactly what the renderer does, including the
     /// .mdx/.mdl swap (maps reference a model as ".mdl" but store the binary as ".mdx").
     /// </summary>
     private static MapFileEntry? FindMapEntry(MapDocument doc, string modelPath) =>
@@ -1102,7 +1102,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         if (folders.Count != 1 || folders[0].TryGetLocalPath() is not { } dir)
             return;
 
-        // Keep the base filename; internal paths use '\' so take the last segment.
+        // Keep the base filename. Internal paths use '\' so take the last segment.
         var baseName = SanitizeFileName(_modelEntryName.Split('\\', '/').Last());
         if (baseName.Length == 0)
             baseName = "model.bin";
@@ -1129,7 +1129,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     {
         if (_suppress)
             return;
-        // Sub-rows (a reference list's expanded entries) are display-only; their
+        // Sub-rows (a reference list's expanded entries) are display-only. Their
         // containers are disabled, but guard anyway so they never reach the editor.
         // A category heading is not a field. Its containers are disabled so a click cannot
         // select one, but keyboard navigation can, and it would arrive here as "Art ()".
@@ -1202,7 +1202,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
             || opt.Options.Count > MaxEditorOptions
             || IsFreeTextType(opt.Type);
         // Metadata-gated (not value-gated) so an EMPTY reference list still gets the
-        // builder - that's exactly when the user wants to add the first entry.
+        // builder, that's exactly when the user wants to add the first entry.
         if (opt.IsList && IsObjectReferenceType(opt.Type))
             ShowRefListEditor(row, opt.Type);
         else if (!freeText && opt.IsList)
@@ -1216,14 +1216,14 @@ public partial class ObjectEditorView : UserControl, IMapPanel
 
         ConfigureAssetPicker(row, opt.Type);
         UpdateEditNote(opt);
-        // The grid shows resolved text for wts references; the editor holds the raw token,
+        // The grid shows resolved text for wts references. The editor holds the raw token,
         // so flag it rather than let the user think the box "lost" the readable value.
         if (row.Value.Contains("TRIGSTR_", StringComparison.Ordinal))
             EditNote.Text = "String-table reference (war3map.wts), the grid shows the resolved "
                 + "text; editing here replaces the reference with a literal value.";
     }
 
-    /// <summary>Metadata types edited as free text; anything else with a small option set
+    /// <summary>Metadata types edited as free text. Anything else with a small option set
     /// is treated as an enumeration.</summary>
     private static bool IsFreeTextType(string type) => type.ToLowerInvariant() switch
     {
@@ -1410,7 +1410,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
 
     /// <summary>
     /// Editable builder for object-reference LIST fields (e.g. a unit's abilities
-    /// 'uhab' = "A000,A001"): the current entries in order ("rawcode - name" via
+    /// 'uhab' = "A000,A001"), the current entries in order ("rawcode, name" via
     /// <see cref="ReferenceLabel"/>), an Add picker over the referenced kind's map
     /// objects, Remove and Up/Down reorder. <see cref="CurrentEditorValue"/> joins
     /// the rawcodes comma-separated in list order, so the normal Apply path (bulk
@@ -1425,16 +1425,16 @@ public partial class ObjectEditorView : UserControl, IMapPanel
             .ToList();
         RefreshRefListRows(selectIndex: -1);
         RefListAddCombo.Watermark = "Search object to add…";
-        // No auto-selection: adding is a deliberate pick, never a default first item.
+        // No auto-selection, adding is a deliberate pick, never a default first item.
         RefListAddCombo.SetItems(RefListCandidates(type), selectId: null,
             selectFirstWhenNoMatch: false);
         ShowEditor(RefListHost);
     }
 
     /// <summary>
-    /// Add-picker choices: the map's objects of the referenced kind, resolved from
+    /// Add-picker choices, the map's objects of the referenced kind, resolved from
     /// the field's metadata type stem (abilList → Abilities, …). Enumeration failure
-    /// just yields an empty picker - the existing entries are never affected.
+    /// just yields an empty picker, the existing entries are never affected.
     /// </summary>
     private List<SearchableComboBoxItem> RefListCandidates(string type)
     {
@@ -1470,7 +1470,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         };
     }
 
-    /// <summary>One builder row: index + "rawcode - name" label. The index keeps
+    /// <summary>One builder row, index + "rawcode, name" label. The index keeps
     /// duplicate rawcodes distinct, so selection and reorder stay unambiguous.</summary>
     private sealed record RefListEntry(int Index, string Display)
     {
@@ -1478,7 +1478,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     }
 
     /// <summary>Rebuild the builder's rows from the token list and re-select
-    /// <paramref name="selectIndex"/> (clamped; -1 = no selection).</summary>
+    /// <paramref name="selectIndex"/> (clamped. -1 = no selection).</summary>
     private void RefreshRefListRows(int selectIndex)
     {
         RefListBox.ItemsSource = _refListTokens
@@ -1488,7 +1488,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         UpdateRefListButtons();
     }
 
-    /// <summary>Append the picked candidate (duplicates allowed - list order matters).</summary>
+    /// <summary>Append the picked candidate (duplicates allowed, list order matters).</summary>
     private void OnRefListAddClick(object? sender, RoutedEventArgs e)
     {
         if (_editorMode != EditorMode.RefList)
@@ -1584,7 +1584,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         UpdateApplyState();
     }
 
-    /// <summary>Apply is available for every kind - the command layer routes the
+    /// <summary>Apply is available for every kind, the command layer routes the
     /// three modification shapes (Simple/Level/Variation) behind one call.</summary>
     private void UpdateApplyState()
     {
@@ -1593,7 +1593,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
             && SelectedObjects().Count > 0;
     }
 
-    /// <summary>Bulk edit: write the editor value to the selected field on every selected object.</summary>
+    /// <summary>Bulk edit, write the editor value to the selected field on every selected object.</summary>
     private void OnApplyClick(object? sender, RoutedEventArgs e)
     {
         if (_session?.Current is not { } doc)
@@ -1661,7 +1661,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
             _refNames = null; // an edit can rename an object other rows reference
 
         // Re-merge so the grid shows the new value with its gold map-source
-        // highlight; then report, so diagnostics don't clobber the summary.
+        // highlight. Then report, so diagnostics don't clobber the summary.
         RefreshFieldPane(row.Code);
 
         var summary = $"Applied {row.Code}={value} to {applied}/{targets.Count} object(s)"
@@ -1742,7 +1742,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
             return;
         }
 
-        // Never overwrite the original map: save next to it as <name>.edited<ext>.
+        // Never overwrite the original map, save next to it as <name>.edited<ext>.
         var editedPath = EditedPath(mapPath);
         try
         {
@@ -1766,11 +1766,11 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         return Path.Combine(dir, $"{stem}.edited{ext}");
     }
 
-    /// <summary>Type-switcher entry; carried as the combo item's payload.</summary>
+    /// <summary>Type-switcher entry. Carried as the combo item's payload.</summary>
     private sealed record KindOption(ObjectKind Kind, string Label);
 
     /// <summary>
-    /// Object list row: "Name (rawcode)" (or the bare rawcode when nameless) plus a
+    /// Object list row, "Name (rawcode)" (or the bare rawcode when nameless) plus a
     /// lazily decoded interface icon. Notifies for <see cref="Icon"/>, which lands
     /// after an off-thread resolve + decode, exactly like the palette's tiles.
     /// </summary>
@@ -1785,19 +1785,19 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         public string Rawcode { get; }
         public string Display { get; }
         /// <summary>Loader shared by every row of one list load. Null when the kind has
-        /// no icon art (destructables, doodads) - those rows never request anything.</summary>
+        /// no icon art (destructables, doodads), those rows never request anything.</summary>
         internal ObjectIconLoader? IconLoader { get; init; }
 
         private Bitmap? _icon;
         private bool _iconRequested;
 
         /// <summary>
-        /// The row's decoded icon, or null (pending or absent - the template's icon
-        /// box just stays empty, keeping the text aligned). Lazy like the palette:
+        /// The row's decoded icon, or null (pending or absent, the template's icon
+        /// box just stays empty, keeping the text aligned). Lazy like the palette,
         /// the first read, which happens when the list realizes the row and binds it,
         /// kicks off an off-thread resolve + decode and the binding refreshes via
         /// PropertyChanged when it lands. Never blocks the UI thread, never throws.
-        /// A kind or map switch can't show stale icons - it rebuilds rows and loader
+        /// A kind or map switch can't show stale icons, it rebuilds rows and loader
         /// wholesale, so a late decode only ever reaches an unbound row.
         /// </summary>
         public Bitmap? Icon
@@ -1814,7 +1814,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
                         else
                             IconLoader.Load(Rawcode, bmp =>
                             {
-                                if (bmp is null) return; // graceful fallback: empty box
+                                if (bmp is null) return; // graceful fallback, empty box
                                 _icon = bmp;
                                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Icon)));
                             });
@@ -1850,7 +1850,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         private readonly string? _gameDir;
         private readonly Dictionary<string, Bitmap?> _done = new(StringComparer.Ordinal);
         private readonly Dictionary<string, List<Action<Bitmap?>>> _pending = new(StringComparer.Ordinal);
-        /// <summary>Decoded art shared across rows - many objects reuse one icon file.</summary>
+        /// <summary>Decoded art shared across rows, many objects reuse one icon file.</summary>
         private readonly ConcurrentDictionary<string, Bitmap?> _byPath = new(StringComparer.OrdinalIgnoreCase);
         /// <summary>rawcode to icon art from the unit palette, built once on first use
         /// (off-thread, and Lazy coalesces concurrent builders). The first build per
@@ -1897,7 +1897,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         }
 
         /// <summary>The row's icon art path, or null. Non-unit kinds read the merged
-        /// icon field - bare code first, then level 1 for leveled kinds (upgrades
+        /// icon field, bare code first, then level 1 for leveled kinds (upgrades
         /// store 'gar1' per level). Art values can list several paths comma-separated,
         /// the first one is the icon (as the palette resolves it).</summary>
         private string? ResolveIconPath(string rawcode)
@@ -1947,7 +1947,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
     /// <summary>
     /// Read-only field grid row. Map-sourced fields render gold + semibold, like
     /// the World Editor's modified-field highlight. A reference-list field is
-    /// followed by display-only SUB-rows ("rawcode - name", one per entry) that
+    /// followed by display-only SUB-rows ("rawcode, name", one per entry) that
     /// share the parent's colour but are never selectable or editable.
     /// </summary>
     public sealed class FieldRow
@@ -2012,7 +2012,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         public string Name { get; }
         /// <summary>Raw stored value (TRIGSTR_ refs intact), what the editor edits and writes back.</summary>
         public string Value { get; }
-        /// <summary>TRIGSTR_-resolved value shown in the grid; equals Value when not a reference.</summary>
+        /// <summary>TRIGSTR_-resolved value shown in the grid. Equals Value when not a reference.</summary>
         public string DisplayValue { get; }
         public string Source { get; }
         /// <summary>Display-only child of a reference-list field (not a field itself).</summary>
@@ -2131,7 +2131,7 @@ public partial class ObjectEditorView : UserControl, IMapPanel
         }
 
         // Reverting is itself an unsaved change to the document, so the counter goes UP, not down.
-        // The field matches the opened map again; the file on disk does not yet.
+        // The field matches the opened map again. The file on disk does not yet.
         _originalValues.Remove(key);
         _unsavedEdits++;
         RefreshFieldPane(row.Code);

@@ -18,7 +18,7 @@ git clone https://github.com/GodMephisto/wc3ctl
 cd wc3ctl
 dotnet build
 dotnet test --filter "Category!=Corpus&Category!=GameData&Category!=Doctor"
-```
+```text
 
 Tests marked `GameData` need a Warcraft III install, and `Corpus` tests need
 real maps in your Documents\Warcraft III\Maps folder (or set `WC3_CORPUS_DIR`).
@@ -34,7 +34,7 @@ command reaches all three. Never re-implement map logic in a front-end.
 
 The MCP server and the libraries under it are also published on their own as
 [wc3-mcp](https://github.com/GodMephisto/wc3-mcp). That repository's `src/` and
-`tests/` are copied from here by `scripts/export-wc3-mcp.py`, so code changes for
+`tests/` are copied from here by `scripts/export_wc3_mcp.py`, so code changes for
 either belong here.
 
 ## Pull requests

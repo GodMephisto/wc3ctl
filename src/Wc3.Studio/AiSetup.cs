@@ -10,7 +10,7 @@ namespace Wc3.Studio;
 /// </summary>
 public static class AiSetup
 {
-    /// <summary>One client's state for the dialog: whether it is installed here and whether the
+    /// <summary>One client's state for the dialog, whether it is installed here and whether the
     /// server is already registered in it.</summary>
     public sealed record ClientStatus(string Id, string DisplayName, bool Detected, bool Registered, string State);
 

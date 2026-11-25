@@ -5,10 +5,10 @@ using Avalonia.Input;
 namespace Wc3.Studio.Controls;
 
 /// <summary>
-/// A visible group/section bar: solid-ish background that reads on both light and
+/// A visible group/section bar, solid-ish background that reads on both light and
 /// dark themes, 1px bottom border, bold BaseHigh text. When <see cref="Collapsible"/>
 /// it shows a ▾ (open) / ▸ (<see cref="Collapsed"/>) glyph, gets a hand cursor, and a
-/// click raises <see cref="Toggled"/> - the header does NOT flip its own state; the
+/// click raises <see cref="Toggled"/>, the header does NOT flip its own state. The
 /// owner decides and rebinds <see cref="Collapsed"/> (the palette rebuilds its list).
 /// The click is marked handled so it never bubbles into list-selection machinery.
 /// </summary>
@@ -29,7 +29,7 @@ public partial class SectionHeader : UserControl
         UpdateVisuals();
     }
 
-    /// <summary>Raised when a Collapsible header is clicked; the owner toggles the
+    /// <summary>Raised when a Collapsible header is clicked. The owner toggles the
     /// underlying state and re-renders.</summary>
     public event EventHandler? Toggled;
 
@@ -41,14 +41,14 @@ public partial class SectionHeader : UserControl
     }
 
     /// <summary>Whether the bar shows a disclosure glyph and raises <see cref="Toggled"/>
-    /// on click (default false: a plain section divider).</summary>
+    /// on click (default false, a plain section divider).</summary>
     public bool Collapsible
     {
         get => GetValue(CollapsibleProperty);
         set => SetValue(CollapsibleProperty, value);
     }
 
-    /// <summary>Which glyph a Collapsible bar shows: ▸ when true, ▾ when false.</summary>
+    /// <summary>Which glyph a Collapsible bar shows, ▸ when true, ▾ when false.</summary>
     public bool Collapsed
     {
         get => GetValue(CollapsedProperty);
@@ -73,7 +73,7 @@ public partial class SectionHeader : UserControl
         Bar.Cursor = Collapsible ? new Cursor(StandardCursorType.Hand) : Cursor.Default;
     }
 
-    /// <summary>Click on a Collapsible bar: consume the press (so e.g. a hosting
+    /// <summary>Click on a Collapsible bar, consume the press (so e.g. a hosting
     /// ListBox never treats it as a selection) and let the owner toggle.</summary>
     private void OnBarPressed(object? sender, PointerPressedEventArgs e)
     {

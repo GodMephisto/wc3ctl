@@ -10,7 +10,7 @@ using Xunit;
 namespace Wc3.Studio.Tests;
 
 /// <summary>
-/// The welcome landing surface: it lists what the workspace feeds it and reports clicks through
+/// The welcome landing surface, it lists what the workspace feeds it and reports clicks through
 /// events. These pin the two behaviours the workspace depends on, a clickable recent map and the
 /// Target-only blank-map action.
 /// </summary>

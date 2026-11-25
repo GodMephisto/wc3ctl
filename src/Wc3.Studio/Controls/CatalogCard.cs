@@ -8,8 +8,8 @@ using Avalonia.Media;
 namespace Wc3.Studio.Controls;
 
 /// <summary>
-/// Builds one standard catalog card (used by the regions, cameras and sounds panels): a bold
-/// title, a column of read-only "label: value" rows, an optional inline field editor (a field
+/// Builds one standard catalog card (used by the regions, cameras and sounds panels), a bold
+/// title, a column of read-only "label, value" rows, an optional inline field editor (a field
 /// dropdown + value box + Apply, over the type's editable fields), and an optional Remove
 /// button. Kept in one place so the three catalog panels never re-declare the same card body.
 /// All controls are built in code and live in a non-virtualized list, so the editable box is
@@ -65,7 +65,7 @@ public static class CatalogCard
             });
         }
 
-        // Inline field editor: pick a field, type a value, Apply.
+        // Inline field editor, pick a field, type a value, Apply.
         if (editableFields is { Count: > 0 } && onSetField is not null)
         {
             var editor = new Grid

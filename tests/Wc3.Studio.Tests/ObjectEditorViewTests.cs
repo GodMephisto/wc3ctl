@@ -45,7 +45,7 @@ public class ObjectEditorViewTests
             $"abilities should list but got {abilities} (units listed {units})");
     }
 
-    /// <summary>The real-world repro: type a search while on one kind,
+    /// <summary>The real-world repro, type a search while on one kind,
     /// then switch kinds. If the search text carries over, the new kind's
     /// list is filtered to nothing and looks empty. This is the likely
     /// cause of the "can't see abilities" report.</summary>

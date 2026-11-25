@@ -122,7 +122,7 @@ public static class Program
         }
 
         // Best-effort World-Editor catalog for the to-script renderer. A machine without the game
-        // installed has none, and that is not an error: the renderer keeps raw preset names and
+        // installed has none, and that is not an error, the renderer keeps raw preset names and
         // says in its output that it could not resolve them.
         static Wc3.GameData.TriggerDataCatalog? TryCatalog(string? gameDir) =>
             TriggerCatalogCommand.TryLoad(null, gameDir, out _);
@@ -205,7 +205,7 @@ public static class Program
                     p.GetValueForOption(gameDirOption));
             if (field is not null)
             {
-                // Leveled ability fields are keyed "code:N" - match the bare code too.
+                // Leveled ability fields are keyed "code:N", match the bare code too.
                 var match = r.Fields
                     .Where(f => string.Equals(f.Code, field, StringComparison.OrdinalIgnoreCase)
                         || f.Code.StartsWith(field + ":", StringComparison.OrdinalIgnoreCase)).ToList();
@@ -254,7 +254,7 @@ public static class Program
         var setOut = new Option<string?>(new[] { "-o", "--out" },
             "Output map path. Default: '<map>.edited.<ext>' next to the input - the original is never overwritten.");
 
-        // The one rule every mutating object command shares: the default output sits beside the
+        // The one rule every mutating object command shares, the default output sits beside the
         // input, and writing in place is refused so an original is never clobbered. Emits the
         // refusal and returns null when the caller must stop.
         string? ObjectEditedPath(ParseResult p, string map)
@@ -275,7 +275,7 @@ public static class Program
             return dest;
         }
 
-        // Split a "code=value" pair on the first '='; the value may itself contain '='.
+        // Split a "code=value" pair on the first '='. The value may itself contain '='.
         static bool TrySplitPair(string token, out string code, out string value)
         {
             int eq = token.IndexOf('=');
@@ -544,7 +544,7 @@ public static class Program
         }));
         obj.AddCommand(objClone);
 
-        // ---- migrate: rewrite object data to a target build's field set ----
+        // ---- migrate, rewrite object data to a target build's field set ----
         var migrateTo = new Option<string>("--to",
             "Target build name or path to a schema folder (read like compat).") { IsRequired = true };
         var migrateSchemas = new Option<string?>("--schemas",
@@ -574,7 +574,7 @@ public static class Program
         }));
         obj.AddCommand(objMigrate);
 
-        // ---- bulk-set: set one field on every object matching every where clause ----
+        // ---- bulk-set, set one field on every object matching every where clause ----
         var bulkKind = new Option<string>("--kind", () => "unit",
             "Object type: unit|item|ability|destructable|doodad|buff|upgrade.");
         var bulkSet = new Option<string>("--set",
@@ -621,7 +621,7 @@ public static class Program
         }));
         obj.AddCommand(objBulkSet);
 
-        // ---- export: write one kind's objects to CSV ----
+        // ---- export, write one kind's objects to CSV ----
         var exportKind = new Option<string>("--kind", () => "unit",
             "Object type: unit|item|ability|destructable|doodad|buff|upgrade.");
         var exportOut = new Option<string>(new[] { "-o", "--out" },
@@ -646,7 +646,7 @@ public static class Program
         }));
         obj.AddCommand(objExport);
 
-        // ---- import: read a kind's CSV back into the map ----
+        // ---- import, read a kind's CSV back into the map ----
         var importKind = new Option<string>("--kind", () => "unit",
             "Object type: unit|item|ability|destructable|doodad|buff|upgrade.");
         var importCsv = new Option<string>("--csv", "Path to the CSV file to import.") { IsRequired = true };
@@ -684,7 +684,7 @@ public static class Program
         }));
         obj.AddCommand(objImport);
 
-        // ---- rename: rename a rawcode and repoint its references ----
+        // ---- rename, rename a rawcode and repoint its references ----
         var renameKind = new Option<string>("--kind", () => "unit",
             "Object type: unit|item|ability|destructable|doodad|buff|upgrade.");
         var renameOld = new Argument<string>("old", "The rawcode to rename.");
@@ -717,7 +717,7 @@ public static class Program
         }));
         obj.AddCommand(objRename);
 
-        // ---- placement: add doodads/regions to a map and save the edited copy ----
+        // ---- placement, add doodads/regions to a map and save the edited copy ----
         var placeXArg = new Argument<float>("x", "World X coordinate.");
         var placeYArg = new Argument<float>("y", "World Y coordinate.");
         var placeZOpt = new Option<float>("--z", () => 0f, "World Z (height offset). Default: 0.");
@@ -1066,7 +1066,7 @@ public static class Program
         }));
         placed.AddCommand(placedFix);
 
-        // ---- palette: the doodad types placeable on a map (base catalog ⊕ map object-data) ----
+        // ---- palette, the doodad types placeable on a map (base catalog ⊕ map object-data) ----
         var palette = new Command("palette",
             "List the doodad types placeable on a map (base-game catalog + the map's own object-data).")
         { mapArg };
@@ -1220,7 +1220,7 @@ public static class Program
             var r3 = ScriptLoopsCommand.Run(doc3, onlyRisky: !p3.GetValueForOption(loopsAll));
             Emit(p3.GetValueForOption(jsonOption), r3, () => Render.ScriptLoops(r3));
         }));
-        // Roots for any reachability-based cleanup: functions invoked only by name at runtime,
+        // Roots for any reachability-based cleanup, functions invoked only by name at runtime,
         // which a caller-graph pass cannot see and would delete. Prerequisite for replacing the
         // porter's line-by-line trimming (which is what actually breaks ported maps) with a
         // carry-complete-then-strip pass.
@@ -1236,7 +1236,7 @@ public static class Program
             Emit(p4.GetValueForOption(jsonOption), r4, () => Render.ScriptRoots(r4));
         }));
         // Remove functions nothing can reach, as the alternative to the porter's trimming (which
-        // is what breaks ported maps: an unresolvable call commented out leaves a local declared
+        // is what breaks ported maps, an unresolvable call commented out leaves a local declared
         // and never assigned, or strips an iterator's advance so its loop can never exit).
         // Deleting a whole unreachable function cannot cause either, since nothing left refers to it.
         var stripOut = new Option<string?>(new[] { "-o", "--out" },
@@ -1843,7 +1843,7 @@ public static class Program
             var source = MapDocument.Load(sourcePath);
             var target = MapDocument.Load(targetPath);
 
-            // Never clobber the target - write a sibling <target>.ported.<ext> by default.
+            // Never clobber the target, write a sibling <target>.ported.<ext> by default.
             // A dry run writes nothing at all.
             string? outPath = dryRun ? null : p.GetValueForOption(outOption)
                 ?? Path.Combine(Path.GetDirectoryName(Path.GetFullPath(targetPath)) ?? ".",
@@ -2171,7 +2171,7 @@ public static class Program
         }));
         audit.AddCommand(auditReadiness);
 
-        // ---- debug: instrument a map so the running game reports what it is doing ----
+        // ---- debug, instrument a map so the running game reports what it is doing ----
         var debugWiringHeroArg = new Argument<string?>("hero", () => null,
             "Hero rawcode to add a per-hero branch checkpoint for. Omit to instrument only the "
             + "checkpoints shared by every cast, with no per-hero branch print.");
@@ -2302,7 +2302,7 @@ public static class Program
             if (!r.Ok) exitCode[0] = 2;
         }));
 
-        // Audit trend: the regression view over two maps. audit answers what is wrong now, trend
+        // Audit trend, the regression view over two maps. audit answers what is wrong now, trend
         // answers what an edit or a port changed, grouped by check.
         var auditTrendOther = new Argument<string>("other",
             "The second map, the one treated as the newer state.");
@@ -2322,7 +2322,7 @@ public static class Program
         }));
         audit.AddCommand(auditTrend);
 
-        // ---- deprotect: recover the file names a protected map stripped ----
+        // ---- deprotect, recover the file names a protected map stripped ----
         // A protected map ships no (listfile), so most entries have no name and GetFile can
         // never find them. On one real map that was 793 of 851 entries, and it made an audit
         // of imported models report 3 affected units when the real number was 178.
@@ -2356,7 +2356,7 @@ public static class Program
                 + "(those are recompressed, every other entry is byte-faithful)");
         }));
 
-        // ---- repair portraits: strip the camera from pre-900 models ----
+        // ---- repair portraits, strip the camera from pre-900 models ----
         var portraitApply = new Option<bool>("--apply",
             "Rewrite the affected models. Without it, nothing is changed.");
         var portraitStamp = new Option<int?>("--stamp-version",
@@ -2397,7 +2397,7 @@ public static class Program
                 + "renders it.");
         }));
 
-        // ---- repair data-pointers: levels that name the wrong Data column ----
+        // ---- repair data-pointers, levels that name the wrong Data column ----
         var ptrApply = new Option<bool>("--apply",
             "Correct the pointers. Without it, nothing is changed.");
         var repairPointers = new Command("data-pointers",
@@ -2422,7 +2422,7 @@ public static class Program
                 $"{r.LevelsFixed} level(s) across {r.FieldsFixed} field(s) corrected.");
         }));
 
-        // ---- repair model-paths: models the engine fails to load, and retries forever ----
+        // ---- repair model-paths, models the engine fails to load, and retries forever ----
         var mpApply = new Option<bool>("--apply",
             "Rewrite the paths that have exactly one intended file. Without it, nothing is changed.");
         var mpNoEmpty = new Option<bool>("--keep-placeholders",
@@ -2521,7 +2521,7 @@ public static class Program
                 + "loading screen. TEST THIS BUILD before distributing it.");
         }));
 
-        // ---- repair uabi-runtime: unit ability lists moved into the script ----
+        // ---- repair uabi-runtime, unit ability lists moved into the script ----
         var uabiApply = new Option<bool>("--apply",
             "Move the lists and write the adder into the script. Without it, only the counts are shown.");
         var repairUabi = new Command("uabi-runtime",
@@ -2561,7 +2561,7 @@ public static class Program
                 + "TEST THIS BUILD before distributing it.");
         }));
 
-        // ---- replay: score recorded games, for disconnect testing ----
+        // ---- replay, score recorded games, for disconnect testing ----
         var replayPath = new Argument<string?>("path",
             () => null, "A .w3g file or a folder searched recursively. Default: every Battle.net "
             + "account's replays under Documents\\Warcraft III\\BattleNet.");
@@ -2643,7 +2643,7 @@ public static class Program
         replay.AddCommand(replayStats);
         root.AddCommand(replay);
 
-        // ---- uabi-profile: compare unit ability lists across many maps at once ----
+        // ---- uabi-profile, compare unit ability lists across many maps at once ----
         var profilePaths = new Argument<string[]>("paths", "Maps, or folders searched recursively.")
         { Arity = ArgumentArity.OneOrMore };
         var uabiProfile = new Command("uabi-profile",
@@ -2659,7 +2659,7 @@ public static class Program
         }));
         root.AddCommand(uabiProfile);
 
-        // ---- doctor: Devo's Map Doctor, run as an external program ----
+        // ---- doctor, Devo's Map Doctor, run as an external program ----
         var doctor = new Command("doctor",
             "Run Devo's Map Doctor (MIT, github.com/devoltzz/devos-map-doctor) on a map. Found through "
             + "WC3_DOCTOR or %LOCALAPPDATA%\\wc3ctl\\doctor\\<version>\\, and only a pinned build runs.");
@@ -2761,7 +2761,7 @@ public static class Program
                 () => $"{message}\nsaved: {dest}");
         }
 
-        // Refuse an explicit -o that names the input map itself: a mutating command must
+        // Refuse an explicit -o that names the input map itself, a mutating command must
         // never overwrite the map it read. Returns true (and reports) when it refused.
         bool RefusedInPlace(bool json, string? outOpt, string map)
         {
@@ -2791,7 +2791,7 @@ public static class Program
         }
 
         // Generic save-and-report for any (Ok, Message) mutation result. On failure emits the
-        // message and sets exit 1; on success saves to --out (or a sibling .edited) and reports.
+        // message and sets exit 1. On success saves to --out (or a sibling .edited) and reports.
         static bool TryParseEcaKind(string text, out War3Net.Build.Script.TriggerFunctionType kind)
 {
     switch (text.Trim().ToLowerInvariant())
@@ -2972,7 +2972,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
             FinishTerrain(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message, r.TilesChanged);
         }));
 
-        // Fill: the rectangle counterpart to the brush commands above. Every bulk terrain
+        // Fill, the rectangle counterpart to the brush commands above. Every bulk terrain
         // operation lived in Wc3.Commands with no caller at all, so filling a region meant
         // clicking a brush repeatedly. They go behind ONE verb rather than a rectangle variant
         // of each, because selecting a region and acting on it is one concept.
@@ -3150,7 +3150,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         static string Trim(string t) =>
             t.Length <= 88 ? t.Replace("\n", " ") : t[..88].Replace("\n", " ") + "...";
 
-        // ---- unit-type abilities and field options: what a unit can do, and what a field accepts ----
+        // ---- unit-type abilities and field options, what a unit can do, and what a field accepts ----
         var abilRawcodeArg = new Argument<string>("rawcode", "Unit type's four-character rawcode.");
         var placedOpt = new Option<int?>("--placed",
             "Show abilities for a placed unit instance by creation number instead.");
@@ -3185,7 +3185,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         }));
         obj.AddCommand(objectOptions);
 
-        // ---- asset list: the paths an icon or model field can actually be set to ----
+        // ---- asset list, the paths an icon or model field can actually be set to ----
         var assetFamilyOpt = new Option<string>("--family", () => "icon",
             "Asset family: icon|model. Taken from the field's metadata type, so an icon field is "
             + "'icon' and a model field is 'model'.");
@@ -3791,7 +3791,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         mapCmd.AddCommand(mapOptimize);
         root.AddCommand(mapCmd);
 
-        // ---- strings / imports / trigger read: reachable from the GUI, previously not here ----
+        // ---- strings / imports / trigger read, reachable from the GUI, previously not here ----
         var stringsList = new Command("list",
             "List the map's string table (war3map.wts). Every TRIGSTR_ reference resolves here.")
         { mapArg, jsonOption };
@@ -3927,7 +3927,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
 
         // ---- repairing a map wc3ctl generated ----
         // This existed complete and tested and was reachable from nothing, which is the same
-        // defect the four trigger edits had. It is deliberately narrow: it looks for the
+        // defect the four trigger edits had. It is deliberately narrow, it looks for the
         // wc3ctl_WirePlacedHeroSpells helper, so it repairs maps this tool generated rather than
         // maps in general, and it says so rather than appearing to be a general repair.
         var repairHeroes = new Command("repair-generated",
@@ -3975,7 +3975,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
             "Function name from the World-Editor table, for example DisplayTextToForce. "
             + "Use 'trigger catalog list' to find one.");
         // An OPTION rather than a trailing variadic argument, because System.CommandLine binds a
-        // ZeroOrMore positional greedily: it swallowed the id, the kind and the name, and the
+        // ZeroOrMore positional greedily, it swallowed the id, the kind and the name, and the
         // command then reported "MapInitializationEvent takes 0 parameter(s), but 3 were given".
         // Repeating -p is unambiguous and reads better for values that contain spaces.
         var ecaParamsOpt = new Option<string[]>(new[] { "-p", "--param" },
@@ -4276,7 +4276,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
             FinishEdit(p.GetValueForOption(jsonOption), p.GetValueForOption(setOut), map, doc, r.Ok, r.Message);
         }));
 
-        // ---- unit / doodad: the units and doodads ALREADY PLACED on the map ----
+        // ---- unit / doodad, the units and doodads ALREADY PLACED on the map ----
         // 'place' adds one. These read, edit and remove what is there, which is most of what an
         // editor is for and was previously reachable only from the GUI.
         var cnArg = new Argument<int>("creation-number",
@@ -4421,7 +4421,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         doodadInst.AddCommand(doodadInstRemove);
         root.AddCommand(doodadInst);
 
-        // ---- sound: edit the map's sound catalog (war3map.w3s) ----
+        // ---- sound, edit the map's sound catalog (war3map.w3s) ----
         var soundList = new Command("list", "List the map's sound definitions.") { mapArg };
         soundList.SetHandler(ctx => RunSafely(() =>
         {
@@ -4591,7 +4591,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         }));
         sound.AddCommand(soundImport);
 
-        // ---- camera: edit the map's camera catalog (war3map.w3c) ----
+        // ---- camera, edit the map's camera catalog (war3map.w3c) ----
         var camList = new Command("list", "List the map's cameras.") { mapArg };
         camList.SetHandler(ctx => RunSafely(() =>
         {
@@ -4674,7 +4674,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         }));
         camera.AddCommand(camTour);
 
-        // ---- pathing: HiveWE-style brush over the pathing map (war3map.wpm) ----
+        // ---- pathing, HiveWE-style brush over the pathing map (war3map.wpm) ----
         var pathCX = new Argument<int>("cx", "Brush centre pathing-cell X.");
         var pathCY = new Argument<int>("cy", "Brush centre pathing-cell Y.");
         var pathRadius = new Argument<int>("radius", "Brush radius in pathing cells.");
@@ -4779,7 +4779,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         }));
         pathing.AddCommand(pathingValidate);
 
-        // ---- map-info: read/edit the editable scenario fields (war3map.w3i) ----
+        // ---- map-info, read/edit the editable scenario fields (war3map.w3i) ----
         var miGet = new Command("get", "Show the map's editable scenario fields.") { mapArg };
         miGet.SetHandler(ctx => RunSafely(() =>
         {
@@ -4817,7 +4817,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         mapInfo.AddCommand(miGet);
         mapInfo.AddCommand(miSet);
 
-        // ---- player / force: the Scenario Players and Forces dialogs (war3map.w3i) ----
+        // ---- player / force, the Scenario Players and Forces dialogs (war3map.w3i) ----
         var playerList = new Command("list", "List the map's player slots.") { mapArg };
         playerList.SetHandler(ctx => RunSafely(() =>
         {
@@ -4977,7 +4977,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         force.AddCommand(forceRename);
         force.AddCommand(forceSetPlayers);
 
-        // ---- file: raw/text editing of an internal archive entry ----
+        // ---- file, raw/text editing of an internal archive entry ----
         // Wc3.Commands.FileEditCommand already carried this and no front-end exposed it, so
         // editing an override file like war3mapSkin.txt meant leaving the toolkit. Writes go
         // through the raw byte path rather than a text path, because a map's override files
@@ -5040,7 +5040,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         file.AddCommand(fileGetText);
         file.AddCommand(fileSet);
 
-        // ---- repair: reusable fixups for generated/byproduct maps ----
+        // ---- repair, reusable fixups for generated/byproduct maps ----
         var repair = new Command("repair", "Repair generated/byproduct map issues and save the edited copy.");
         var repairGeneratedHeroes = new Command("generated-heroes",
             "Repair the generated preplaced-hero helper block so finalized heroes use distinct owner slots and owner-aware spell wiring.")
@@ -5200,7 +5200,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         repair.AddCommand(repairAudit);
         repair.AddCommand(repairPreload);
 
-        // ---- new: create a blank, World-Editor-openable map ----
+        // ---- new, create a blank, World-Editor-openable map ----
         var newOut = new Argument<string>("out", "Path to write the new .w3x/.w3m map.");
         var newNameOpt = new Option<string?>("--name", "Map name (default: Blank Map).");
         var newTilesOpt = new Option<int?>("--tiles", "Playable size in tiles per edge (default: 32).");
@@ -5421,7 +5421,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
             "World Editor base data (TileSets, SkyModels, LoadingScreens, brushes and more).");
         editor.AddCommand(editorCatalog);
 
-        // ---- region: list and remove regions (war3map.w3r). Add via 'place region' ----
+        // ---- region, list and remove regions (war3map.w3r). Add via 'place region' ----
         var regionList = new Command("list", "List the map's regions.") { mapArg };
         regionList.SetHandler(ctx => RunSafely(() =>
         {
@@ -5584,7 +5584,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
                 catch (FileNotFoundException) { /* bad build name, skip compat */ }
             }
         }));
-        // lint baseline: record the current findings so a later gate fails only on a new one.
+        // lint baseline, record the current findings so a later gate fails only on a new one.
         var lintBaselineOut = new Option<string>(new[] { "-o", "--out" },
             "File to write the baseline to.") { IsRequired = true };
         var lintBaselineAgainst = new Option<string?>("--against",
@@ -5635,9 +5635,9 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         }));
         root.AddCommand(testLoad);
 
-        // A map's HERO INTEGRATION CONTRACT: what a unit must be registered with before the map's
+        // A map's HERO INTEGRATION CONTRACT, what a unit must be registered with before the map's
         // own systems treat it as playable. The piece nothing else models, and where ported heroes
-        // actually die - correct objects, correct assets, compiling script, and still no hero,
+        // actually die, correct objects, correct assets, compiling script, and still no hero,
         // because the roster is built by the map's own script.
         var contractRef = new Option<string?>("--reference",
             "Rawcode of a hero the map ALREADY supports. Lists every function that mentions it, "
@@ -5667,7 +5667,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         }));
         root.AddCommand(contract);
 
-        // The format's 'import' verb: a hero as a reviewable artifact instead of something inferred
+        // The format's 'import' verb, a hero as a reviewable artifact instead of something inferred
         // out of a host map every time. Deliberately exports only the hero's REAL dependencies and
         // REPORTS the script-closure carry as review notes, because silently including it is what
         // produced thousands of foreign functions and the trimming damage that followed.
@@ -5774,7 +5774,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
             });
         }));
 
-        // Generation is the step before a definition exists: a brief becomes objects in a map, so
+        // Generation is the step before a definition exists, a brief becomes objects in a map, so
         // there is something for hero export, hero lint and hero install to work on afterwards.
         var heroSpecArg = new Argument<string>("spec", "Path to the hero brief JSON.");
         var heroGenerateOut = new Option<string>(new[] { "-o", "--out" },
@@ -5805,7 +5805,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         hero.AddCommand(heroRoster);
         root.AddCommand(hero);
 
-        // A content package is the placeholder half of the same job: art and a manifest a hero can
+        // A content package is the placeholder half of the same job, art and a manifest a hero can
         // bind by role, generated from a name alone so nobody starts from an empty folder.
         var contentOut = new Argument<string>("out", "Folder to write the package into.");
         var contentName = new Option<string>("--name",
@@ -5833,7 +5833,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         root.AddCommand(content);
 
         // Records HOW FAR initialisation gets, not just whether it finished. A hang on the loading
-        // screen otherwise gives nothing at all: no error, no log, no crash dump.
+        // screen otherwise gives nothing at all, no error, no log, no crash dump.
         var trTimeout = new Option<double>("--timeout", () => 180, "Seconds to wait.");
         var trDocs = new Option<string?>("--documents",
             @"Warcraft III documents folder. Default: Documents\Warcraft III.");
@@ -5875,7 +5875,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         root.AddCommand(mpqDiff);
 
         // Hash table viewer. MPQ resolves a name by probing forward from its home slot and stops
-        // only at a NEVER-USED slot; a DELETED slot does not stop it. An archive with zero
+        // only at a NEVER-USED slot. A DELETED slot does not stop it. An archive with zero
         // never-used slots therefore gives a failed lookup no terminator, and the probe runs
         // forever. That is invisible unless the two are counted separately, which is exactly what
         // this does.
@@ -6081,7 +6081,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
 
         // Observe the running game. Static comparison could not explain a map that sits forever on
         // the loading screen while being measurably equivalent to one that loads, so the behaviour
-        // has to be sampled instead of inferred. Read-only: reads OS counters, attaches nothing.
+        // has to be sampled instead of inferred. Read-only, reads OS counters, attaches nothing.
         var hangSeconds = new Option<double>("--seconds", () => 5.0,
             "How long to sample. Longer is steadier; 5s is enough to tell spinning from waiting.");
         var hangThreads = new Option<int>("--threads", () => 6, "How many busiest threads to list.");
@@ -6442,7 +6442,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         root.AddCommand(repairHeroes); root.AddCommand(repair);
         root.AddCommand(trigger);
         root.AddCommand(editor); root.AddCommand(gamedata);
-        // Standalone compat: check a map against a target build.
+        // Standalone compat, check a map against a target build.
         var compatMapArg = new Argument<string>("map", "Path to a .w3x/.w3m map.");
         var compatTarget = new Option<string?>("--target",
             () => null, "Target build name or schema folder path. Omit to use the configured default.");
@@ -6465,7 +6465,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
             string? schemas = p.GetValueForOption(compatSchemas);
             bool json = p.GetValueForOption(jsonOption);
 
-            // Resolve target: option > default from settings.
+            // Resolve target, option > default from settings.
             string actualTarget;
             TargetSource source;
             if (targetArg is not null)
@@ -6490,7 +6490,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
             if (result.Findings.Any(f => f.Severity == "error")) exitCode[0] = 2;
         }));
 
-        // compat matrix: a grid of maps against target builds, one pass or fail per cell.
+        // compat matrix, a grid of maps against target builds, one pass or fail per cell.
         var matrixMaps = new Argument<string[]>("maps",
             "One or more .w3x/.w3m maps.") { Arity = ArgumentArity.OneOrMore };
         var matrixTargets = new Option<string[]>("--targets",
@@ -6513,7 +6513,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         }));
         compat.AddCommand(compatMatrix);
 
-        // compat explain: one identifier against one target build.
+        // compat explain, one identifier against one target build.
         var explainName = new Argument<string>("name",
             "Identifier to explain, a native, global, type or function name.");
         var explainTarget = new Option<string?>("--target",
@@ -6760,7 +6760,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
 
         root.AddCommand(ci);
 
-        // ---- library: sweep a folder of maps the way a maintainer checks a whole set ----
+        // ---- library, sweep a folder of maps the way a maintainer checks a whole set ----
         var library = new Command("library",
             "Sweep a folder of maps instead of one map, the way a maintainer checks a whole library. "
             + "Every subcommand is read-only and opens one map at a time.");
@@ -6863,7 +6863,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
 
         root.AddCommand(library);        root.AddCommand(McpCommand.Build(jsonOption));
 
-        // ---- target: set and view the current target build ----
+        // ---- target, set and view the current target build ----
         var targetBuildArg = new Argument<string>("build",
             "Target build name or schema folder path.");
         var targetListFull = new Option<bool>("--full-only",
@@ -6938,7 +6938,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         target.AddCommand(targetClear);
         root.AddCommand(target);
 
-        // ---- version: what this build is, and the one command that bumps it ----
+        // ---- version, what this build is, and the one command that bumps it ----
         var versionSet = new Option<string?>("--set",
             "Write this x.y.z version into Directory.Build.props instead of reporting the current one.");
         var versionProps = new Option<string?>("--props",
@@ -6974,7 +6974,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         }));
         root.AddCommand(version);
 
-        // ---- changelog: release notes from git log, grouped by Conventional Commit type ----
+        // ---- changelog, release notes from git log, grouped by Conventional Commit type ----
         var changelogFrom = new Option<string?>("--from",
             "Git ref to start after. Default, the most recent tag reachable from the end ref.");
         var changelogTo = new Option<string?>("--to", "Git ref to end at. Default, HEAD.");
@@ -7008,7 +7008,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         }));
         root.AddCommand(changelog);
 
-        // ---- update: replace this build in place from the latest GitHub release ----
+        // ---- update, replace this build in place from the latest GitHub release ----
         var updateCheck = new Option<bool>("--check",
             "Only report whether a newer release exists, download nothing.");
         var updateRepo = new Option<string>("--repo", () => SelfUpdateCommand.DefaultRepo,
@@ -7039,7 +7039,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         }));
         root.AddCommand(update);
 
-        // ---- associate: the Windows Explorer right-click entry that opens a map in the Studio ----
+        // ---- associate, the Windows Explorer right-click entry that opens a map in the Studio ----
         var associateUnregister = new Option<bool>("--unregister",
             "Remove the Explorer right-click entry instead of adding it.");
         var associateStudio = new Option<string?>("--studio",
@@ -7083,7 +7083,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         }));
         root.AddCommand(associate);
 
-        // ---- quickstart: route a broad request to the right workflow ----
+        // ---- quickstart, route a broad request to the right workflow ----
         // A human or an agent that knows the outcome but not the tool reads this first. It names
         // the core workflows and the commands and MCP tools behind each one, and it touches no map.
         var quickstartGoal = new Option<string?>("--goal",
@@ -7105,7 +7105,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         }));
         root.AddCommand(quickstart);
 
-        // ---- export: keep the public wc3-mcp checkout in step with this repository ----
+        // ---- export, keep the public wc3-mcp checkout in step with this repository ----
         var exportTarget = new Argument<string>("path", "Path to the wc3-mcp checkout to check.");
         var exportSource = new Option<string?>("--source",
             "wc3ctl repository directory. Default, the located repository.");
@@ -7126,7 +7126,7 @@ void FinishEdit(bool json, string? outOpt, string map, MapDocument doc, bool ok,
         export.AddCommand(exportVerify);
         root.AddCommand(export);
 
-        // ---- rag: a local retrieval index over the bundled documents ----
+        // ---- rag, a local retrieval index over the bundled documents ----
         var rag = new Command("rag",
             "Local semantic retrieval over the bundled Warcraft III documents. 'install' fetches "
             + "the embedding model and builds the index once, and the MCP 'docs_search' then uses "

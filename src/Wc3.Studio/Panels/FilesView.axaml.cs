@@ -51,7 +51,7 @@ public partial class FilesView : UserControl, IMapPanel
     private byte[]? _audioBytes;
     private string _audioExt = "";
 
-    // Current preview state (wave 2: hex toggle, model preview, text edit).
+    // Current preview state (wave 2, hex toggle, model preview, text edit).
     private FileRow? _previewRow;
     private byte[]? _previewBytes;      // override-aware bytes of the previewed file
     private FilePreview? _preview;      // the auto preview (null for model files)
@@ -63,7 +63,7 @@ public partial class FilesView : UserControl, IMapPanel
         InitializeComponent();
         _audio.PlaybackStopped += (_, _) =>
             Avalonia.Threading.Dispatcher.UIThread.Post(() => SetPlayState(false));
-        // Best-effort cleanup: stop playback (releases the audio device + temp file) when
+        // Best-effort cleanup, stop playback (releases the audio device + temp file) when
         // this panel leaves the visual tree, e.g. on window close or tab teardown.
         DetachedFromVisualTree += (_, _) => _audio.Stop();
     }
@@ -207,7 +207,7 @@ public partial class FilesView : UserControl, IMapPanel
         AudioControls.IsVisible = false;
     }
 
-    // --- wave 2: model preview, hex view, text edit, import/replace ---
+    // --- wave 2, model preview, hex view, text edit, import/replace ---
 
     /// <summary>Render an .mdx/.mdl model as a lightweight orthographic wireframe PNG.</summary>
     private void ShowModelPreview(FileRow row, byte[] bytes)
@@ -246,7 +246,7 @@ public partial class FilesView : UserControl, IMapPanel
         _audio.Stop();
         SetPlayState(false);
         HidePreviewBodies();
-        const int cap = 256 * 1024; // the preview TextBox is not virtualized - cap the dump
+        const int cap = 256 * 1024; // the preview TextBox is not virtualized, cap the dump
         var bytes = _previewBytes!;
         int len = Math.Min(bytes.Length, cap);
         var text = string.Join("\n", HexDumpCommand.Format(bytes, 0, len));
@@ -263,7 +263,7 @@ public partial class FilesView : UserControl, IMapPanel
         var ext = Path.GetExtension(row.Name ?? "").ToLowerInvariant();
         if (ext is ".mdx" or ".mdl") ShowModelPreview(row, _previewBytes!);
         else if (_preview is not null) ShowPreview(_preview);
-        // Leaving hex returns to the read-only auto view; editing must be re-enabled.
+        // Leaving hex returns to the read-only auto view. Editing must be re-enabled.
         PreviewText.IsReadOnly = true;
         _editing = false;
         EditButton.Content = "Edit";
@@ -301,7 +301,7 @@ public partial class FilesView : UserControl, IMapPanel
         var path = await Controls.FilePicker.PickOpenAsync(this, "Import or replace a file in the map");
         if (path is null) return;
 
-        // Replace the selected file if one is highlighted; otherwise add under the disk name.
+        // Replace the selected file if one is highlighted. Otherwise add under the disk name.
         var selectedName = FileList.SelectedItems?.OfType<FileRow>().FirstOrDefault()?.Name;
         var targetName = selectedName ?? Path.GetFileName(path);
         try
@@ -616,7 +616,7 @@ public partial class FilesView : UserControl, IMapPanel
     }
 
     // File writing mirrors the CLI's ExtractWriter (src/wc3ctl), which Studio cannot
-    // reference; internal folder structure is preserved and writes never escape outDir.
+    // reference. Internal folder structure is preserved and writes never escape outDir.
 
     private static (int Count, long Bytes) WriteItems(IReadOnlyList<ExtractedItem> items, string outDir)
     {
@@ -637,7 +637,7 @@ public partial class FilesView : UserControl, IMapPanel
     }
 
     /// <summary>
-    /// Maps an internal name to a safe relative path: splits on '\'/'/', drops
+    /// Maps an internal name to a safe relative path, splits on '\'/'/', drops
     /// '.'/'..'/empty segments, replaces invalid characters. Unnamed entries
     /// (Name == null) go to _unnamed\block_&lt;n&gt;.&lt;ext&gt;, the extension taken
     /// from the entry's sniffed content type so a nameless BLP extracts as a .blp.

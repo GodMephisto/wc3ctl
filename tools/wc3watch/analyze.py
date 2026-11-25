@@ -88,7 +88,7 @@ def load_frames(path):
     tcol = "CPUStartDateTime" if "CPUStartDateTime" in rows[0] else "TimeInDateTime"
     by_chain = Counter(r.get("SwapChainAddress") for r in rows)
     chain = by_chain.most_common(1)[0][0]          # the game's main swap chain
-    frames = []
+    frames, unreadable = [], 0
     for r in rows:
         if r.get("SwapChainAddress") != chain:
             continue
@@ -98,12 +98,15 @@ def load_frames(path):
         try:
             t = ptime(r[tcol])
         except (KeyError, ValueError):
+            unreadable += 1
             continue
         frames.append({
             "t": t, "ft": ft,
             "cpu": num(r.get("MsCPUBusy"), 0.0), "gpu": num(r.get("MsGPUBusy"), 0.0),
             "mode": r.get("PresentMode", ""),
         })
+    if unreadable:
+        print("%d frame row(s) had no readable timestamp" % unreadable, file=sys.stderr)
     frames.sort(key=lambda f: f["t"])
     return frames, Counter(f["mode"] for f in frames).most_common(1)[0][0] if frames else None
 
@@ -657,12 +660,14 @@ def analyse(folder):
         facts.append("frames %s bound (CPU busy %d%%, GPU busy %d%% of frame time)"
                      % (bound, 100 * cpu_ratio, 100 * gpu_ratio))
 
-        thr = 0
+        thr, bad_throttle = 0, 0
         for r in now:
             try:
                 thr |= int(r.get("gpu_throttle") or "0", 16)
             except ValueError:
-                pass
+                bad_throttle += 1
+        if bad_throttle:
+            print("%d throttle field(s) were not hex" % bad_throttle, file=sys.stderr)
         t_now, t_base = m(now, "gpu_temp"), m(base, "gpu_temp")
         c_now, c_base = m(now, "gpu_clock"), m(base, "gpu_clock")
         u_now = m(now, "gpu_util")
