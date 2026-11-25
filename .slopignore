@@ -1,0 +1,16 @@
+# Trees this repository does not author, so the linter has nothing to say
+# about them. data/ and the dist trees are inputs and build output, and the
+# context folder carries Hive Workshop reference docs.
+data/
+dist/
+dist.old/
+dist-mcp/
+dist-mcp.old/
+dist-studio/
+src/Wc3.Mcp/context/
+
+# Captured output, not prose anyone wrote. Test run logs, a generated command
+# reference the CI guard regenerates, and saved tool dumps under docs/.
+uabi-disconnect/results/
+docs/wc3ctl-command-reference.md
+docs/bvo15-level-gap-repair.txt
