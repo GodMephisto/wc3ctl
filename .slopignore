@@ -32,7 +32,3 @@ docs/reforged-3.0.0-findings.txt
 # overwrites the prose.
 docs/mcp-reference.md
 
-# Release notes are parsed by the changelog tool and written by a release, so
-# their headings and dashes are part of the format, not prose to restyle.
-CHANGELOG.md
-changelog/
