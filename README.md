@@ -97,7 +97,7 @@ leaves your PATH alone.
    **Enter**) and run `.\wc3ctl.exe mcp install --all`. That adds the folder to
    your PATH and sets up your AI apps.
 
-## Open Studio
+## Open the Studio app
 
 Click **Start** and open **wc3ctl Studio**. If you installed by hand, double-click
 `Wc3.Studio.exe` in the folder you unzipped it to.

@@ -1,4 +1,4 @@
-# WC3 Reforged World Editor, Feature Inventory & Gap Analysis
+# The Reforged World Editor, feature inventory and gap analysis
 
 > **Purpose:** Inventory the full feature set of the official Warcraft III, Reforged
 > World Editor (WE), module by module, and map each capability to what **wc3ctl**

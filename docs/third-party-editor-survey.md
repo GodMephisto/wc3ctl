@@ -1,4 +1,4 @@
-# Third-Party WC3 Editor & Tooling Survey, What to Adopt
+# Third-party WC3 editor and tooling survey, what to adopt
 
 > **Purpose:** Survey community/open-source Warcraft III map editors and libraries,
 > and recommend which capabilities/approaches **wc3ctl** should adopt or learn from.
@@ -60,7 +60,7 @@
 
 ---
 
-## Wc3MapTranslator, `ChiefOfGxBxL/Wc3MapTranslator`
+## The Wc3MapTranslator parser, `ChiefOfGxBxL/Wc3MapTranslator`
 
 - **Link:** [github.com/ChiefOfGxBxL/Wc3MapTranslator](https://github.com/ChiefOfGxBxL/Wc3MapTranslator)
 - **Language / license:** TypeScript, open-source.

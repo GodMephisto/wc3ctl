@@ -65,8 +65,8 @@ It looks intermittent (retries "sometimes work") because occasionally a parse sq
    ```text
    Both tool prefixes because commands may run through either the Bash or PowerShell tool.
 
-**After changing pxpipe config, restart pxpipe (and Claude Code), then verify:** run a trivial
-`git status`, it should auto-approve with no stage-2 error.
+**After changing pxpipe config, restart pxpipe (and Claude Code), then verify.** Run a trivial
+`git status`. It should auto-approve with no stage-2 error.
 
 ## Subagents / parallel work
 
