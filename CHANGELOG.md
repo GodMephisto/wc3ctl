@@ -2,6 +2,34 @@
 
 All notable changes to wc3ctl, newest first. Each release has its own file under `changelog/`.
 
+## 0.5.46 - 2026-11-26
+
+`SixLabors.ImageSharp` is replaced by `SkiaSharp` 3.119.4 across the render path, so the build no
+longer needs a Six Labors licence, and `SafeImages` now recognises every format by its own magic
+number. See `changelog/0.5.46.md`.
+
+## 0.5.45 - 2026-11-26
+
+The memory guard follows the host rather than a fixed 1 GiB, every decode in the render path goes
+through `SafeImages`, the evidence scripts find the game data on any platform, and the lint findings
+are cleared at their cause. See `changelog/0.5.45.md`.
+
+## 0.5.44 - 2026-11-16
+
+`texture_audit` reports the texture headers the engine mishandles. See `changelog/0.5.44.md`.
+
+## 0.5.43 - 2026-11-16
+
+`game_file_shadows` finds map files that override the installed game's own files, and `repair_game_files` writes a copy without them. See `changelog/0.5.43.md`.
+
+## 0.5.42 - 2026-11-16
+
+`repair_reforged3` repairs a legacy SLK map for Warcraft III 3.0 in code, with no doctor, no game install and no name dictionary, and `reforged3_check` reports the same six counts read-only. See `changelog/0.5.42.md`.
+
+## 0.5.41 - 2026-11-16
+
+Devo's Map Doctor pinned to 2.3.2, which reads the obfuscated names a protected archive hides, and a `doctor schema` that returns the installed doctor's own JSON contract instead of a list baked into the wrapper. See `changelog/0.5.41.md`.
+
 ## 0.5.20 - 2026-11-10
 
 One version, every statement derived from `Directory.Build.props`. Titles, error codes, output

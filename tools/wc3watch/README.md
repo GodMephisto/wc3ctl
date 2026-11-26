@@ -7,7 +7,7 @@ rights.
 
 Run it from an elevated PowerShell.
 
-```
+```text
 pwsh -File wc3watch.ps1                 wait for the game, record until it exits
 pwsh -File wc3watch.ps1 -Minutes 30     stop after 30 minutes
 ```
@@ -41,7 +41,7 @@ With no `gc_probe` the slopes cover the whole session, which is right for a map 
 
 ## Reading a session
 
-```
+```text
 python analyze.py <session folder>            write report.md and print its first screen
 python analyze.py summary <session>           one screen, length, measures, drops and suspect windows
 python analyze.py chart <session>             write chart.svg beside the data
@@ -70,7 +70,7 @@ window, a mass spawn or a periodic trigger, rather than only printing a number.
 
 Run the tests with either of these from this folder.
 
-```
+```text
 python -m unittest test_analyze
 python -m pytest test_analyze.py
 ```

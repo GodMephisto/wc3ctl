@@ -25,7 +25,7 @@ public class PaletteViewTests
     private static readonly string MapPath =
         TestCorpus.Map(@"Anime_WOS2_0.32I.w3x");
 
-    /// <summary>The first load may open CASC (seconds); bounded so a hang still fails.</summary>
+    /// <summary>The first load may open CASC (seconds). Bounded so a hang still fails.</summary>
     private static readonly TimeSpan LoadTimeout = TimeSpan.FromSeconds(120);
 
     [CorpusAvaloniaFact("Anime_WOS2_0.32I.w3x")]
@@ -38,14 +38,14 @@ public class PaletteViewTests
 
         view.ShowMap(new MapSession { Current = MapDocument.Load(MapPath), MapPath = MapPath });
 
-        // ShowMap returns immediately (load is off-thread); pump until results land.
+        // ShowMap returns immediately (load is off-thread). Pump until results land.
         var groups = PumpUntilLoaded(view);
 
         Assert.True(groups.Any(), "palette should build groups");
         Assert.True(groups.All(g => !string.IsNullOrWhiteSpace(g.Title)), "each group has a visible title");
         var tiles = groups.SelectMany(g => g.Tiles).ToList();
         Assert.True(tiles.Any(), "palette should list placeable tiles");
-        // Units exist even map-only (the map's own w3u); doodads need an install.
+        // Units exist even map-only (the map's own w3u). Doodads need an install.
         Assert.True(tiles.Any(r => r.Kind == ObjectKind.Unit), "palette should list at least one unit");
     }
 

@@ -461,7 +461,7 @@ what the player gets and the tooltip is not contradicted by it. `tooltip-claim` 
 a claim as a note. Measured, it sets aside **16** claims on **5** abilities on v15 and **6** on
 **2** on the shipped build.
 
-`A0ES` "Water Style: Water Wall" is one of them, promising an area of effect of 350 against an
+`A0ES` "Water Style, Water Wall" is one of them, promising an area of effect of 350 against an
 `aare` of 100 at every level, which the shipped build's run prints as a note in those words. It
 is the idiom recorded above, the author neutralising the base so a trigger owns the radius.
 Writing the tooltip's number into that field would apply the area twice.

@@ -1,6 +1,5 @@
 // tests/Wc3.Tests/TerrainPerspectiveProbeTests.cs
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
+using SkiaSharp;
 using Wc3.Commands;
 using Wc3.Model;
 using Wc3.Render;
@@ -9,7 +8,7 @@ namespace Wc3.Tests;
 
 /// <summary>
 /// The 3D perspective terrain renderer (the "rendered in game" view) must produce a
-/// valid, non-degenerate PNG: correct dimensions, PNG signature, actual lit terrain
+/// valid, non-degenerate PNG, correct dimensions, PNG signature, actual lit terrain
 /// pixels (not pure sky), and a genuine perspective camera, tilting the pitch must
 /// change the projection (a flat 2D blit would be pitch-invariant).
 /// </summary>
@@ -27,26 +26,20 @@ public class TerrainPerspectiveProbeTests
         Assert.Equal(0x89, png[0]);          // PNG signature
         Assert.Equal((byte)'P', png[1]);
 
-        using var img = Image.Load<Rgba32>(png);
+        using var img = SafeImages.Load(png);
         Assert.Equal(320, img.Width);
         Assert.Equal(240, img.Height);
 
         // The mesh must actually fill pixels, count ones that aren't the sky clear colour.
         int nonSky = 0;
         var seen = new HashSet<int>();
-        img.ProcessPixelRows(rows =>
-        {
-            for (int y = 0; y < rows.Height; y++)
+        for (int y = 0; y < img.Height; y++)
+            for (int x = 0; x < img.Width; x++)
             {
-                var row = rows.GetRowSpan(y);
-                for (int x = 0; x < row.Length; x++)
-                {
-                    var p = row[x];
-                    if (!(p.R == 28 && p.G == 32 && p.B == 38)) nonSky++;
-                    seen.Add((p.R << 16) | (p.G << 8) | p.B);
-                }
+                var p = img.GetPixel(x, y);
+                if (!(p.Red == 28 && p.Green == 32 && p.Blue == 38)) nonSky++;
+                seen.Add((p.Red << 16) | (p.Green << 8) | p.Blue);
             }
-        });
 
         Assert.True(nonSky > 1000, $"expected lit terrain pixels, got {nonSky} non-sky");
         Assert.True(seen.Count >= 2, $"expected sky + terrain colours, got {seen.Count}");

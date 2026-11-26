@@ -11,14 +11,14 @@ using Wc3.Model;
 namespace Wc3.Tests;
 
 /// <summary>
-/// The dry-run guarantee: PreviewPort reports EXACTLY what PortUnit would do (same
-/// remap plan, objects, copy/skip decisions, string inlining and script summary , 
+/// The dry-run guarantee, PreviewPort reports EXACTLY what PortUnit would do (same
+/// remap plan, objects, copy/skip decisions, string inlining and script summary ,
 /// one code path, so they cannot drift) while writing nothing into the target.
 /// </summary>
 [Collection("Serial")]
 public class PortPreviewTests
 {
-    // Source: custom hero H000 (custom ability A000, imported icon, TRIGSTR name) plus a
+    // Source, custom hero H000 (custom ability A000, imported icon, TRIGSTR name) plus a
     // JASS spell handler + InitTrig referencing A000 via a global alias, the full Tier-1
     // + script surface, so the preview is compared against the real port on every axis.
     private const string SourceScript = @"globals
@@ -35,7 +35,7 @@ function InitTrig_RaidenQ takes nothing returns nothing
 endfunction
 ";
 
-    // Target: defines its own H000 and A000 (forces remaps), has a colliding function
+    // Target, defines its own H000 and A000 (forces remaps), has a colliding function
     // name and an InitCustomTriggers to hook, everything the script port can exercise.
     private const string TargetScript = @"globals
     integer udg_Foo= 1
@@ -109,7 +109,7 @@ endfunction
 
         Assert.Equal(AsJson(real), AsJson(preview));
 
-        // Sanity: the shared fixture actually exercised every axis of the report.
+        // Sanity, the shared fixture actually exercised every axis of the report.
         Assert.NotEmpty(preview.Remaps);                    // H000 + A000 collided
         Assert.True(preview.Objects.Count >= 2);            // hero + ability
         Assert.NotEmpty(preview.CopiedFiles);               // the icon would copy
@@ -131,7 +131,7 @@ endfunction
         Assert.NotEmpty(preview.Objects); // the preview really planned a port
 
         var reloaded = MapDocument.Load(target.SaveToBytes());
-        // No object injected: the target's own H000 is still the only unit...
+        // No object injected, the target's own H000 is still the only unit...
         var w3u = (UnitObjectData)reloaded.GetFile("war3map.w3u")!.Model!;
         Assert.Single(w3u.NewUnits);
         Assert.Equal("H000".FromRawcode(), w3u.NewUnits[0].NewId);

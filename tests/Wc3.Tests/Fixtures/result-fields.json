@@ -347,6 +347,14 @@
       "result",
       "stderr"
     ],
+    "doctor_schema": [
+      "command",
+      "doctor",
+      "exitCode",
+      "output",
+      "result",
+      "stderr"
+    ],
     "editor_catalog_get": [
       "catalog",
       "entries",
@@ -430,6 +438,16 @@
       "message",
       "outputSha256",
       "savedTo"
+    ],
+    "game_file_shadows": [
+      "conflicts",
+      "files",
+      "folders",
+      "gameDir",
+      "gameFiles",
+      "mapEntries",
+      "message",
+      "ok"
     ],
     "gamedata_bounds": [
       "code",
@@ -1255,6 +1273,19 @@
     ],
     "rag_install": [],
     "rag_status": [],
+    "reforged3_check": [
+      "abilityLevelColumnsAdded",
+      "applied",
+      "buttonPositionsCompleted",
+      "changedFiles",
+      "fileColumnsRemoved",
+      "issueCount",
+      "message",
+      "modelsMoved",
+      "numericCellsNormalized",
+      "ok",
+      "strayCommentTerminatorsRemoved"
+    ],
     "region_create": [
       "bytesWritten",
       "creationNumber",
@@ -1313,6 +1344,16 @@
       "outputSha256",
       "savedTo"
     ],
+    "repair_game_files": [
+      "dropped",
+      "inputEntries",
+      "message",
+      "ok",
+      "outputBytes",
+      "outputEntries",
+      "requested",
+      "savedTo"
+    ],
     "repair_generated": [
       "bytesWritten",
       "filesRewritten",
@@ -1322,6 +1363,14 @@
       "savedTo"
     ],
     "repair_portraits": [
+      "bytesWritten",
+      "filesRewritten",
+      "inputSha256",
+      "message",
+      "outputSha256",
+      "savedTo"
+    ],
+    "repair_reforged3": [
       "bytesWritten",
       "filesRewritten",
       "inputSha256",
@@ -1787,6 +1836,15 @@
       "tilesChanged"
     ],
     "texture_atlas": [],
+    "texture_audit": [
+      "bytes",
+      "findings",
+      "items",
+      "message",
+      "ok",
+      "problems",
+      "textures"
+    ],
     "texture_optimize": [],
     "trigger_add": [
       "bytesWritten",

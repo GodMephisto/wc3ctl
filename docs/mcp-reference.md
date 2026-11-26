@@ -2,7 +2,7 @@
 
 Generated from the live tool surface by `wc3ctl docs mcp`. Do not edit by hand. Regenerate with `wc3ctl docs mcp --force`, and the CI guard fails when this file is stale.
 
-The server exposes 277 tool(s) in 11 families.
+The server exposes 283 tool(s) in 11 families.
 
 Each entry carries the tool's family, its parameters with their type and default, the shape of its result and the error codes it can return, then the four annotation hints. A parameter line reads `name` and its type, then `required` or `optional`, then `default value` where the schema declares one. The Errors line lists the codes the tool's own description or a parameter description names, and the two codes every call passes through, `POLICY_DENIED` from the permission file's deny list and `COMMAND_REJECTED` when a shared command refuses and states its own reason. A tool whose method is typed `object` reports any JSON value, because no tool publishes an output schema and the shape is chosen by the arguments.
 
@@ -857,7 +857,21 @@ Parameters.
 
 Family. repair
 
-Read-only doctor reports on one map. diag is what protects the map and what the World Editor needs, including whether it runs in SLK mode and the fix steps that apply. files lists the archive's files with recovered names, card the name, author, players and loading screen, rawcodes the object ids with names, recipes the item recipes the script makes. Runs Devo's Map Doctor (MIT, github.com/devoltzz/devos-map-doctor), found through WC3_DOCTOR or %LOCALAPPDATA%\wc3ctl\doctor\<version>\, and only a pinned build. Returns the doctor's own JSON unchanged.
+Read-only doctor reports on one map. diag is what protects the map and what the World Editor needs, including whether it runs in SLK mode and the fix steps that apply. files lists the archive's files with recovered names, card the name, author, players and loading screen, rawcodes the object ids with names, recipes the item recipes the script makes, qol which quality of life edits the map supports, cheatpacks the cheat packs it takes, script the map's script. Runs Devo's Map Doctor (MIT, github.com/devoltzz/devos-map-doctor), found through WC3_DOCTOR or %LOCALAPPDATA%\wc3ctl\doctor\<version>\, and only a pinned build. Returns the doctor's own JSON unchanged.
+
+Result. one JSON object with the fields command (string), exitCode (integer), result (any), output (string), doctor (string), stderr (string)
+
+Errors. Every call can return POLICY_DENIED and COMMAND_REJECTED, and this tool's own text names no other code.
+
+Annotations. read-only yes, destructive no, idempotent yes, open-world no.
+
+## doctor_schema
+
+Parameters. none.
+
+Family. repair
+
+The installed doctor's own --json contract, read at run time: every command, its options, the fix steps and extras it accepts, and the keys each result carries, versioned by the schema number the doctor stamps on every answer. Use it to see what this build can do instead of relying on a list baked into the wrapper, which is how a pin bump leaves a stale option behind. Runs Devo's Map Doctor (MIT, github.com/devoltzz/devos-map-doctor), found through WC3_DOCTOR or %LOCALAPPDATA%\wc3ctl\doctor\<version>\, and only a pinned build. Returns the doctor's own JSON unchanged.
 
 Result. one JSON object with the fields command (string), exitCode (integer), result (any), output (string), doctor (string), stderr (string)
 
@@ -1070,6 +1084,23 @@ Result. one JSON object with the fields savedTo (string), message (string), inpu
 Errors. OUTPUT_EXISTS, STALE_INPUT. Every call can also return POLICY_DENIED and COMMAND_REJECTED.
 
 Annotations. read-only no, destructive no, idempotent no, open-world no.
+
+## game_file_shadows
+
+Parameters.
+
+- `map` string, required.
+- `game_dir` string|null, optional, default null.
+
+Family. assets
+
+Find map files that sit on a path the installed game already ships, so the engine reads the map's copy in place of its own. Two maps closed the game in LAN and HD graphics this way, one with UI minimap textures and one with 1,486 repacked game textures, and removing the files fixed both. Read-only. The editor's own object data (SLK and text tables) shares paths with the game by construction and is excluded, so what comes back is art only. Needs an installed game to read its file list, and the list is that build's, so a map aimed at a classic build can override a path this build has renamed.
+
+Result. one JSON object with the fields ok (boolean), message (string), gameDir (string), mapEntries (integer), gameFiles (integer), conflicts (integer), files (array), folders (array)
+
+Errors. Every call can return POLICY_DENIED and COMMAND_REJECTED, and this tool's own text names no other code.
+
+Annotations. read-only yes, destructive no, idempotent yes, open-world no.
 
 ## gamedata_bounds
 
@@ -1749,7 +1780,7 @@ Parameters.
 
 Family. product
 
-Verify that a wc3-mcp checkout holds the same server source scripts/export-wc3-mcp.py would export from this repository, reporting every file that differs without writing. Read-only.
+Verify that a wc3-mcp checkout holds the same server source scripts/export_wc3_mcp.py would export from this repository, reporting every file that differs without writing. Read-only.
 
 Result. one JSON object with the fields inStep (boolean), sourceRoot (string), targetRoot (string), differences (array), checkedFiles (integer), message (string)
 
@@ -3248,6 +3279,22 @@ Errors. Every call can return POLICY_DENIED and COMMAND_REJECTED, and this tool'
 
 Annotations. read-only yes, destructive no, idempotent yes, open-world no.
 
+## reforged3_check
+
+Parameters.
+
+- `map` string, required.
+
+Family. repair
+
+Report what Warcraft III 3.0 build 24268 refuses or misreads in a legacy SLK map, without writing anything. Counts the obsolete SLK file columns, the model paths still carrying a file value there, numeric cells that are not numbers, empty button positions, unmatched FDF comment terminators and abilities whose declared levels have no level 5 or 6 column. The repair is repair_reforged3, and it needs no external tool, no game install and no name dictionary.
+
+Result. one JSON object with the fields ok (boolean), message (string), applied (boolean), fileColumnsRemoved (integer), modelsMoved (integer), numericCellsNormalized (integer), buttonPositionsCompleted (integer), strayCommentTerminatorsRemoved (integer), abilityLevelColumnsAdded (integer), changedFiles (array), issueCount (integer)
+
+Errors. Every call can return POLICY_DENIED and COMMAND_REJECTED, and this tool's own text names no other code.
+
+Annotations. read-only yes, destructive no, idempotent yes, open-world no.
+
 ## region_create
 
 Parameters.
@@ -3384,6 +3431,25 @@ Errors. OUTPUT_EXISTS, STALE_INPUT. Every call can also return POLICY_DENIED and
 
 Annotations. read-only no, destructive no, idempotent yes, open-world no.
 
+## repair_game_files
+
+Parameters.
+
+- `map` string, required.
+- `out_path` string, required.
+- `names` array|null, optional, default null.
+- `game_dir` string|null, optional, default null.
+
+Family. repair
+
+Write a copy of the map with the game-overriding files removed, which is the repair for the shadows game_file_shadows reports. The archive is rebuilt from disk, so every other entry is carried over byte for byte, and the input map is NEVER modified in place. A shadow can be deliberate, a retexture for instance, so read the list first. With names left empty every detected shadow is dropped, otherwise only the ones named.
+
+Result. one JSON object with the fields ok (boolean), message (string), savedTo (string), requested (integer), dropped (integer), inputEntries (integer), outputEntries (integer), outputBytes (integer)
+
+Errors. Every call can return POLICY_DENIED and COMMAND_REJECTED, and this tool's own text names no other code.
+
+Annotations. read-only no, destructive no, idempotent yes, open-world no.
+
 ## repair_generated
 
 Parameters.
@@ -3415,6 +3481,25 @@ Parameters.
 Family. repair
 
 Remove the pre-900 camera chunk from every at-risk model so the portrait pane renders under 3.0.0 and later, and save the repaired map to out_path. Camera removal only. The version re-stamp is refused because it was measured to crash the map on load. The input map is NEVER modified in place.
+
+Result. one JSON object with the fields savedTo (string), message (string), inputSha256 (string), outputSha256 (string), filesRewritten (integer), bytesWritten (integer)
+
+Errors. OUTPUT_EXISTS, STALE_INPUT. Every call can also return POLICY_DENIED and COMMAND_REJECTED.
+
+Annotations. read-only no, destructive no, idempotent yes, open-world no.
+
+## repair_reforged3
+
+Parameters.
+
+- `map` string, required.
+- `out_path` string, required.
+- `overwrite` boolean, optional, default false.
+- `expect_input_sha256` string|null, optional, default null.
+
+Family. repair
+
+Repair a legacy SLK-mode map so Warcraft III 3.0 build 24268 renders it, and save the result to out_path. Model paths move out of the obsolete file column of unitUI.slk and ItemData.slk into merged UnitSkin.txt and ItemSkin.txt profiles, numeric cells and button positions are normalized, unmatched FDF comment terminators are removed, and abilities that declare more levels than they have columns gain level 5 and 6 columns inheriting the level 4 value. Every object keeps its rawcode and its text, and no model is renamed or dropped. This is the same repair doctor_fix performs through Devo's Map Doctor, done here in code, so it works with no doctor installed and no game install. The input map is NEVER modified in place.
 
 Result. one JSON object with the fields savedTo (string), message (string), inputSha256 (string), outputSha256 (string), filesRewritten (integer), bytesWritten (integer)
 
@@ -4615,6 +4700,22 @@ Result. any JSON value, the method is typed object so the shape is chosen by the
 Errors. OUTPUT_EXISTS, STALE_INPUT. Every call can also return POLICY_DENIED and COMMAND_REJECTED.
 
 Annotations. read-only no, destructive no, idempotent yes, open-world no.
+
+## texture_audit
+
+Parameters.
+
+- `map` string, required.
+
+Family. assets
+
+Read every texture header in a map and report the ones the engine mishandles, grouped by kind. Checks that a file carries a BLP signature, that a BLP1 or BLP2 header fits inside the file, that a declared JPEG header is not above the 624 bytes the engine allows, that every declared mip level ends inside the file, that a mip chain is not empty, and that dimensions are a power of two the engine will read. Read-only, needs no game install, and never decodes a pixel, so the cost is one kilobyte per texture. A header that points past the end makes the engine read outside its buffer, and a missing level draws transparent black.
+
+Result. one JSON object with the fields ok (boolean), message (string), textures (integer), findings (integer), bytes (integer), items (array), problems (array)
+
+Errors. Every call can return POLICY_DENIED and COMMAND_REJECTED, and this tool's own text names no other code.
+
+Annotations. read-only yes, destructive no, idempotent yes, open-world no.
 
 ## texture_optimize
 

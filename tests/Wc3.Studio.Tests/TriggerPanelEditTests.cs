@@ -63,7 +63,7 @@ public class TriggerPanelEditTests
     }
 
     /// <summary>Two custom-text triggers with real bodies, so removing the first one must be
-    /// refused: war3map.wct pairs bodies by position and cannot be rewritten.</summary>
+    /// refused, war3map.wct pairs bodies by position and cannot be rewritten.</summary>
     private static MapDocument MapWithCode()
     {
         var t = new MapTriggers(MapTriggersFormatVersion.v7, MapTriggersSubVersion.v4);
@@ -314,7 +314,7 @@ public class TriggerPanelEditTests
         Assert.Contains("without moving code", Status(view));
         Assert.Contains("Second", Status(view));
 
-        // Nothing moved: both bodies still belong to their own trigger.
+        // Nothing moved, both bodies still belong to their own trigger.
         var model = TriggerReadCommand.GetTriggers(session.Current!);
         Assert.Equal("// the body of First",
             model.Triggers.Single(t => t.Name == "First").CustomText);
@@ -350,7 +350,7 @@ public class TriggerPanelEditTests
 
         Assert.Contains("Added action", Status(view));
 
-        // Read back through the real reader, which is the check that matters: a function written
+        // Read back through the real reader, which is the check that matters, a function written
         // with the wrong arity makes the whole wtg unparseable and the panel would show nothing.
         var model = TriggerReadCommand.GetTriggers(session.Current!);
         var fn = model.Triggers.Single(t => t.Name == "Melee Init").Functions.Single();

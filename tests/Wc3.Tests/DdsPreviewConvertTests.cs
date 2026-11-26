@@ -1,8 +1,7 @@
 // tests/Wc3.Tests/DdsPreviewConvertTests.cs
 using System.Buffers.Binary;
 using System.Text;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
+using SkiaSharp;
 using Wc3.Commands;
 using Wc3.Model;
 using Wc3.Render;
@@ -28,7 +27,7 @@ public class DdsPreviewConvertTests
         BinaryPrimitives.WriteInt32LittleEndian(dds.AsSpan(76), 32);   // pixelformat size
         BinaryPrimitives.WriteUInt32LittleEndian(dds.AsSpan(80), 0x4); // DDPF_FOURCC
         Encoding.ASCII.GetBytes("DXT1").CopyTo(dds, 84);
-        // One BC1 block: c0 = red 565 (0xF800) > c1 = 0 selects 4-color mode,
+        // One BC1 block, c0 = red 565 (0xF800) > c1 = 0 selects 4-color mode,
         // all indices 0 so every texel is c0.
         dds[128] = 0x00;
         dds[129] = 0xF8;
@@ -44,11 +43,11 @@ public class DdsPreviewConvertTests
     private static void AssertSolidRedPng(byte[] png)
     {
         Assert.Equal(new byte[] { 0x89, 0x50, 0x4E, 0x47 }, png[..4]);
-        using var image = Image.Load<Rgba32>(png);
+        using var image = SafeImages.Load(png);
         Assert.Equal(4, image.Width);
         Assert.Equal(4, image.Height);
-        Assert.Equal(new Rgba32(255, 0, 0, 255), image[0, 0]);
-        Assert.Equal(new Rgba32(255, 0, 0, 255), image[3, 3]);
+        Assert.Equal(new SKColor(255, 0, 0, 255), image.GetPixel(0, 0));
+        Assert.Equal(new SKColor(255, 0, 0, 255), image.GetPixel(3, 3));
     }
 
     [Fact]

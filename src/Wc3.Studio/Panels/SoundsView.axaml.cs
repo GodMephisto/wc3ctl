@@ -8,8 +8,8 @@ using Wc3.Studio.Controls;
 namespace Wc3.Studio.Panels;
 
 /// <summary>
-/// Sound editor (war3map.w3s) over <see cref="SoundCommand"/>, in two halves: the sound
-/// DEFINITIONS at the top (named, playable sounds - add / edit-a-field / remove via
+/// Sound editor (war3map.w3s) over <see cref="SoundCommand"/>, in two halves, the sound
+/// DEFINITIONS at the top (named, playable sounds, add / edit-a-field / remove via
 /// <see cref="CatalogEditorView"/>), and the map's IMPORTED AUDIO files at the bottom (the
 /// archive's raw mp3/wav assets), each with an "Add as sound" button that creates a definition
 /// referencing it. Bridges the World Editor's Import Manager and Sound Editor so a map full of
@@ -24,7 +24,7 @@ public partial class SoundsView : UserControl, IMapPanel
     private FilePathBox? _addFile;
     private IReadOnlyList<string> _allAudio = Array.Empty<string>();
 
-    /// <summary>Raised after an edit mutated the in-memory map; the workspace enables Save.</summary>
+    /// <summary>Raised after an edit mutated the in-memory map. The workspace enables Save.</summary>
     public event EventHandler? MapEdited;
 
     public SoundsView()

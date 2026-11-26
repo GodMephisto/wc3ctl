@@ -10,7 +10,7 @@ using Wc3.Model;
 namespace Wc3.Tests;
 
 /// <summary>
-/// Hermetic coverage for the object data commands added on the object2 branch: migrate,
+/// Hermetic coverage for the object data commands added on the object2 branch, migrate,
 /// bulk-set, export, import and rename. Every map is built in memory through
 /// <see cref="SyntheticMap"/>, so nothing here needs a WC3 install.
 /// The rename and migrate cases drive the CLI and swap process-wide
@@ -62,7 +62,7 @@ public class ObjectBulkCommandsTests
         "C;X5;K\"type\"\n" +
         "E\n";
 
-    /// <summary>A unit-only context: hfoo with an HP (uhpm) field defined in the metadata.</summary>
+    /// <summary>A unit-only context, hfoo with an HP (uhpm) field defined in the metadata.</summary>
     private static GameDataContext BuildUnitContext()
     {
         using var src = new FakeGameSource(new Dictionary<string, byte[]>
@@ -94,7 +94,7 @@ public class ObjectBulkCommandsTests
         return ms.ToArray();
     }
 
-    /// <summary>A map with one custom unit: base hfoo, the given field deltas.</summary>
+    /// <summary>A map with one custom unit, base hfoo, the given field deltas.</summary>
     private static byte[] UnitMapBytes(string rawcode, string baseRawcode, params (string Code, string Value)[] fields)
     {
         var w3u = new UnitObjectData(ObjectDataFormatVersion.v2);
@@ -154,7 +154,7 @@ public class ObjectBulkCommandsTests
 
         var r = ObjectMigrateCommand.Execute(doc, schema);
         Assert.False(r.Ok);
-        // The map is untouched: the field the target cannot judge stays.
+        // The map is untouched, the field the target cannot judge stays.
         var model = (UnitObjectData)doc.GetFile("war3map.w3u")!.Model!;
         Assert.Single(model.NewUnits[0].Modifications);
     }
@@ -214,7 +214,7 @@ public class ObjectBulkCommandsTests
         var w3u = new UnitObjectData(ObjectDataFormatVersion.v2);
         w3u.NewUnits.Add(Simple("u000", "hfoo", "uhpm", "420"));
         w3u.NewUnits.Add(Simple("u001", "hfoo", "unam", "Grunt"));
-        var doc = MapDocument.Load(SyntheticMap.Build(new Dictionary<string, byte[]> 
+        var doc = MapDocument.Load(SyntheticMap.Build(new Dictionary<string, byte[]>
         { ["war3map.w3u"] = Ser(w => w.Write(w3u)) }));
 
         var r = ObjectExportCommand.Execute(doc, ObjectKind.Unit, ctx: null, Array.Empty<string>());

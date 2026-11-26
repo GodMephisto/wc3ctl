@@ -10,27 +10,27 @@ using Wc3.Model;
 namespace Wc3.Studio.Panels;
 
 /// <summary>
-/// A self-contained workspace for ONE map: a role header ("Source"/"Target") with
+/// A self-contained workspace for ONE map, a role header ("Source"/"Target") with
 /// its own open button and status line, its own <see cref="MapSession"/>, and its
 /// own panel-tab instances with lazy per-tab loading. Two instances live side by
-/// side in MainWindow and must never share mutable map state; a later wave wires
+/// side in MainWindow and must never share mutable map state. A later wave wires
 /// porting across them through the public <see cref="Session"/> surface.
 /// </summary>
 public partial class MapWorkspaceView : UserControl
 {
     private readonly HashSet<IMapPanel> _loadedPanels = new();
     private string _role = "Map";
-    /// <summary>The Objects tab's primary selection - what the Dependencies tab
+    /// <summary>The Objects tab's primary selection, what the Dependencies tab
     /// resolves when opened (live-pushed when that tab is already visible).</summary>
     private (ObjectKind Kind, string Rawcode)? _currentObject;
-    /// <summary>The port seam's CURRENT selection: the freshest pick across the
+    /// <summary>The port seam's CURRENT selection, the freshest pick across the
     /// Objects and Dependencies tabs, which the Port buttons act on. Display is
     /// the friendly "Name (rawcode)" label once the Dependencies tab resolves it,
     /// null (rawcode-only labels) until then.</summary>
     private (ObjectKind Kind, string Rawcode, string? Display)? _portSelection;
-    /// <summary>The 3D viewport's picked placed units (creation numbers) - what the
-    /// Unit tab shows when opened (live-routed on pick; 1 = the full editor, 2+ = the
-    /// bulk view). Cleared on map change: creation numbers do not survive a reload.</summary>
+    /// <summary>The 3D viewport's picked placed units (creation numbers), what the
+    /// Unit tab shows when opened (live-routed on pick. 1 = the full editor, 2+ = the
+    /// bulk view). Cleared on map change, creation numbers do not survive a reload.</summary>
     private IReadOnlyList<int> _currentUnits = Array.Empty<int>();
     /// <summary>The 3D viewport's picked placed doodad (war3map.doo creation number),
     /// what the Doodad tab shows when opened. Single-pick, exclusive with the unit
@@ -72,7 +72,7 @@ public partial class MapWorkspaceView : UserControl
         OptimizePanel.MapEdited += OnMapEdited;
     }
 
-    /// <summary>Dev/QA: select a top-level tab by its header text (drives the --tab startup
+    /// <summary>Dev/QA, select a top-level tab by its header text (drives the --tab startup
     /// flag so a panel can be screenshotted without clicking). Triggers the same lazy load a
     /// user click would. No-op if no tab matches.</summary>
     public void SelectTab(string header)
@@ -82,7 +82,7 @@ public partial class MapWorkspaceView : UserControl
             { PanelTabs.SelectedItem = t; return; }
     }
 
-    /// <summary>Dev/QA: select a Terrain-tab dock sub-tab (Palette/Unit/Doodad/Players) by header.</summary>
+    /// <summary>Dev/QA, select a Terrain-tab dock sub-tab (Palette/Unit/Doodad/Players) by header.</summary>
     public void SelectDock(string header)
     {
         foreach (var item in DockTabs.Items)
@@ -112,7 +112,7 @@ public partial class MapWorkspaceView : UserControl
 
     /// <summary>Viewport selection change (click/marquee/Shift-toggle/clear) → route the
     /// units to the side dock's Unit sub-tab. A non-empty pick flips the dock over to it
-    /// (1 = full editor, 2+ = bulk view); a cleared selection just resets the panel if it
+    /// (1 = full editor, 2+ = bulk view). A cleared selection just resets the panel if it
     /// has been shown, without yanking the dock over to it.</summary>
     private void OnTerrainUnitsSelected(IReadOnlyList<int> creationNumbers)
     {
@@ -126,7 +126,7 @@ public partial class MapWorkspaceView : UserControl
         _currentDoodad = null; // unit and doodad selection are exclusive in the viewport
         PanelTabs.SelectedItem = TerrainTab; // picks come from the viewport, so usually a no-op
         DockTabs.SelectedItem = UnitDockTab;
-        // Route directly - a dock sub-tab flip is not a PanelTabs selection change,
+        // Route directly, a dock sub-tab flip is not a PanelTabs selection change,
         // so LoadSelectedPanel won't fire. ShowUnits no-ops when already showing.
         _loadedPanels.Add(UnitPropsPanel);
         UnitPropsPanel.ShowUnits(Session, creationNumbers);
@@ -140,7 +140,7 @@ public partial class MapWorkspaceView : UserControl
         _currentDoodad = creationNumber;
         PanelTabs.SelectedItem = TerrainTab; // picks come from the viewport, so usually a no-op
         DockTabs.SelectedItem = DoodadDockTab;
-        // Route directly - a dock sub-tab flip is not a PanelTabs selection change,
+        // Route directly, a dock sub-tab flip is not a PanelTabs selection change,
         // so LoadSelectedPanel won't fire. ShowDoodad no-ops when already showing.
         _loadedPanels.Add(DoodadPropsPanel);
         DoodadPropsPanel.ShowDoodad(Session, creationNumber);
@@ -217,7 +217,7 @@ public partial class MapWorkspaceView : UserControl
         StatusText.Text = $"Removed doodad #{creationNumber} (unsaved) - click Save to write it to the map.";
     }
 
-    /// <summary>After a removal: refresh the viewport's placement scene and drop the
+    /// <summary>After a removal, refresh the viewport's placement scene and drop the
     /// selection from the viewport, the Unit tab, and this workspace's tracking.</summary>
     private void ClearUnitSelection()
     {
@@ -243,8 +243,8 @@ public partial class MapWorkspaceView : UserControl
 
     /// <summary>
     /// Header label, "Source" or "Target" (set from MainWindow.axaml). The role
-    /// also picks the role-specific header affordances: only the Source side
-    /// shows the (still disabled) port seam; only the Target side offers a
+    /// also picks the role-specific header affordances, only the Source side
+    /// shows the (still disabled) port seam. Only the Target side offers a
     /// blank map to port into.
     /// </summary>
     public string Role
@@ -270,24 +270,24 @@ public partial class MapWorkspaceView : UserControl
         set { _settings = value; RefreshWelcome(); }
     }
 
-    /// <summary>This workspace's map state, passed to its panels - never shared.</summary>
+    /// <summary>This workspace's map state, passed to its panels, never shared.</summary>
     public MapSession Session { get; } = new();
 
     /// <summary>Raised when the welcome screen's "Connect AI Apps" action is used, so the shell
     /// can open the setup dialog. The menu item routes to the same dialog separately.</summary>
     public event EventHandler? ConnectAiAppsRequested;
 
-    /// <summary>This workspace's 3D terrain tab - exposed so shell code can re-render
+    /// <summary>This workspace's 3D terrain tab, exposed so shell code can re-render
     /// placements and drive the selection highlight after unit edits.</summary>
     public TerrainView Terrain => TerrainPanel;
 
     public bool HasMap => Session.Current is not null;
 
     /// <summary>
-    /// Port seam: the selected unit whose closure the port copies into the Target
+    /// Port seam, the selected unit whose closure the port copies into the Target
     /// workspace. Tracks the FRESHEST selection across the Objects and Dependencies
-    /// tabs - no need to open Dependencies first. Null until a unit is chosen AND
-    /// null when the current selection is a non-unit - porting is unit-rooted.
+    /// tabs, no need to open Dependencies first. Null until a unit is chosen AND
+    /// null when the current selection is a non-unit, porting is unit-rooted.
     /// </summary>
     public string? SelectedUnitForPort =>
         _portSelection is { } sel && sel.Kind == ObjectKind.Unit ? sel.Rawcode : null;
@@ -308,7 +308,7 @@ public partial class MapWorkspaceView : UserControl
     public event EventHandler<PortRequest>? PortRequested;
 
     /// <summary>
-    /// Raised (Source only) when the user asks for a dry-run preview of the port: the
+    /// Raised (Source only) when the user asks for a dry-run preview of the port, the
     /// same report the real port would produce, with nothing written. Argument and
     /// handling mirror <see cref="PortRequested"/>.
     /// </summary>
@@ -354,7 +354,7 @@ public partial class MapWorkspaceView : UserControl
 
     /// <summary>
     /// The Dependencies tab's selection changed (manual pick, push-through of the
-    /// Objects tab, or cleared on map change): it becomes the current port selection,
+    /// Objects tab, or cleared on map change), it becomes the current port selection,
     /// upgrading the label to the panel's friendly "Name (rawcode)" display.
     /// </summary>
     private void OnPortSelectionChanged(object? sender, EventArgs e)
@@ -366,7 +366,7 @@ public partial class MapWorkspaceView : UserControl
     }
 
     /// <summary>
-    /// Renders the Port buttons from <see cref="_portSelection"/>: enabled with a
+    /// Renders the Port buttons from <see cref="_portSelection"/>, enabled with a
     /// live label when a UNIT is chosen (before the Dependencies tab ever resolves
     /// it). Porting is unit-rooted, so a non-unit selection still graphs but
     /// disables the buttons with an explaining tip.
@@ -410,9 +410,9 @@ public partial class MapWorkspaceView : UserControl
     }
 
     /// <summary>
-    /// Objects tab selection moved: remember it so the Dependencies tab resolves
-    /// it when opened; push it through immediately when that tab is visible. The
-    /// Port button follows right away - a unit selection arms it before the
+    /// Objects tab selection moved, remember it so the Dependencies tab resolves
+    /// it when opened. Push it through immediately when that tab is visible. The
+    /// Port button follows right away, a unit selection arms it before the
     /// Dependencies tab has ever resolved anything.
     /// </summary>
     private void OnObjectSelected(object? sender, (ObjectKind Kind, string Rawcode) obj)
@@ -423,7 +423,7 @@ public partial class MapWorkspaceView : UserControl
             DependenciesPanel.ShowObject(Session, obj.Kind, obj.Rawcode);
     }
 
-    /// <summary>Right-click "Show dependencies": jump to the Dependencies tab and resolve.</summary>
+    /// <summary>Right-click "Show dependencies", jump to the Dependencies tab and resolve.</summary>
     private void OnDependenciesRequested(object? sender, (ObjectKind Kind, string Rawcode) obj)
     {
         _currentObject = obj;
@@ -475,7 +475,7 @@ public partial class MapWorkspaceView : UserControl
             var doc = MapDocument.Load(path);
             Session.Current = doc;
             Session.MapPath = path;
-            // GameDir stays null - panels auto-detect the game install.
+            // GameDir stays null, panels auto-detect the game install.
             SaveButton.IsEnabled = true;
             TestButton.IsEnabled = true;
 
@@ -487,7 +487,7 @@ public partial class MapWorkspaceView : UserControl
                 : $"{path} - {name} - {list.Files.Count} file(s)";
             RefreshMinBuildStatus();
 
-            // Lazy loading: only the visible tab refreshes now; the other
+            // Lazy loading, only the visible tab refreshes now. The other
             // panels load on first selection (see OnPanelTabsSelectionChanged).
             _loadedPanels.Clear();
             _currentObject = null;                  // rawcodes from the previous map are stale
@@ -567,8 +567,8 @@ public partial class MapWorkspaceView : UserControl
     /// <summary>
     /// Saves the map, then launches Warcraft III on it via -loadfile. The executable
     /// is found under the located install (Reforged layout first, then classic
-    /// war3.exe); launching is best-effort and its outcome is reported on the status
-    /// line - a missing install or a failed launch never throws.
+    /// war3.exe). Launching is best-effort and its outcome is reported on the status
+    /// line, a missing install or a failed launch never throws.
     /// </summary>
     private void OnTestClick(object? sender, RoutedEventArgs e)
     {
@@ -639,7 +639,7 @@ public partial class MapWorkspaceView : UserControl
     }
 
     /// <summary>Re-shows the visible tab after the in-memory map was mutated externally
-    /// (e.g. a port into an unsaved blank target): rebuilds panels from the changed doc,
+    /// (e.g. a port into an unsaved blank target), rebuilds panels from the changed doc,
     /// enables Save/Test, and updates the global status. Save then prompts for a location.</summary>
     public void RefreshAfterExternalEdit()
     {
@@ -648,7 +648,7 @@ public partial class MapWorkspaceView : UserControl
         SaveButton.IsEnabled = true;
         TestButton.IsEnabled = true;
         _loadedPanels.Clear();   // force the visible tab to rebuild from the mutated doc
-        _currentObject = null;   // ported rawcodes are new; drop the stale selection
+        _currentObject = null;   // ported rawcodes are new. Drop the stale selection
         _currentUnits = Array.Empty<int>(); // creation numbers may have shifted with the edit
         _currentDoodad = null;
         UpdateWelcomeVisibility();
@@ -678,7 +678,7 @@ public partial class MapWorkspaceView : UserControl
     private void LoadSelectedPanel()
     {
         // The Terrain tab hosts a Grid (viewport + side dock), not a bare
-        // IMapPanel - load the viewport and all three dock panels together.
+        // IMapPanel, load the viewport and all three dock panels together.
         if (ReferenceEquals(PanelTabs.SelectedItem, TerrainTab))
         {
             LoadTerrainDock();
@@ -693,21 +693,21 @@ public partial class MapWorkspaceView : UserControl
         bool firstShow = _loadedPanels.Add(panel);
         if (ReferenceEquals(panel, DependenciesPanel) && _currentObject is { } obj)
         {
-            // Smart path: the Dependencies tab follows the Objects tab's selection.
+            // Smart path, the Dependencies tab follows the Objects tab's selection.
             // ShowObject fully initializes the panel (a superset of ShowMap) and
             // no-ops when the object is already shown, so tab flips never re-resolve.
             DependenciesPanel.ShowObject(Session, obj.Kind, obj.Rawcode);
         }
         else if (firstShow)
         {
-            // No object picked yet: the Dependencies tab keeps its manual picker
-            // prompt (no forced resolve); every other panel loads as before.
+            // No object picked yet, the Dependencies tab keeps its manual picker
+            // prompt (no forced resolve). Every other panel loads as before.
             panel.ShowMap(Session);
         }
     }
 
     /// <summary>Shows the Terrain tab's viewport plus its docked panels
-    /// (Palette / Unit / Doodad / Players) on first open - the Palette loads its
+    /// (Palette / Unit / Doodad / Players) on first open, the Palette loads its
     /// heavy art off-thread, so eager-loading the dock stays cheap. The Unit and
     /// Doodad panels follow the viewport's current selection when there is one
     /// (ShowUnits/ShowDoodad are supersets of ShowMap and no-op when already
@@ -744,7 +744,7 @@ public partial class MapWorkspaceView : UserControl
     private async void OnWelcomeOpenMap(object? sender, EventArgs e) =>
         await PickAndOpenMapAsync();
 
-    /// <summary>Pushes the persisted lists into the welcome screen: the recent map paths and the
+    /// <summary>Pushes the persisted lists into the welcome screen, the recent map paths and the
     /// maps discovered under the chosen folder plus the default Warcraft III Maps folder.</summary>
     private void RefreshWelcome()
     {
@@ -763,7 +763,7 @@ public partial class MapWorkspaceView : UserControl
         PanelTabs.IsVisible = hasMap;
     }
 
-    /// <summary>Drag over the workspace: accept the drop (Copy) only when the payload carries a
+    /// <summary>Drag over the workspace, accept the drop (Copy) only when the payload carries a
     /// .w3x or .w3m file, so dragging arbitrary content shows the no-drop cursor.</summary>
     private void OnDragOver(object? sender, DragEventArgs e)
     {
@@ -771,7 +771,7 @@ public partial class MapWorkspaceView : UserControl
         e.Handled = true;
     }
 
-    /// <summary>Drop onto the workspace: open the first dropped .w3x or .w3m file.</summary>
+    /// <summary>Drop onto the workspace, open the first dropped .w3x or .w3m file.</summary>
     private void OnDrop(object? sender, DragEventArgs e)
     {
         if (DroppedMapPath(e) is { } path)

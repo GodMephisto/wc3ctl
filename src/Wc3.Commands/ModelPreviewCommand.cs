@@ -1,19 +1,19 @@
 // src/Wc3.Commands/ModelPreviewCommand.cs
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
+using SkiaSharp;
+using Wc3.Render;
 using Wc3.Modeling;
 
 namespace Wc3.Commands;
 
 /// <summary>
-/// Lightweight static model preview: MDX/MDL bytes → orthographic wireframe PNG.
+/// Lightweight static model preview, MDX/MDL bytes → orthographic wireframe PNG.
 /// This is explicitly a first cut, NOT a full render, no textures, no skeleton or
 /// animation (bind pose only), no lighting, no perspective, no hidden-line removal.
 /// The bind-pose triangle edges are projected with a fixed 3/4 orthographic view
 /// (45° yaw around +Z, WC3 models are Z-up, then a 30° downward pitch), uniformly
 /// scaled to fit the canvas with padding, and drawn as a wireframe on a solid
 /// background. Empty, degenerate, or unparseable input degrades to a small
-/// placeholder PNG (background + diagonal cross); <see cref="RenderPreview(byte[], int, int)"/>
+/// placeholder PNG (background + diagonal cross). <see cref="RenderPreview(byte[], int, int)"/>
 /// never throws. Output is deterministic for identical input (no timestamps, no
 /// randomness).
 /// </summary>
@@ -22,18 +22,18 @@ public static class ModelPreviewCommand
     /// <summary>Fraction of the smaller canvas side left as padding on each edge.</summary>
     private const float PaddingFraction = 0.05f;
 
-    /// <summary>Fixed 3/4 view: yaw around +Z (WC3's up axis), then downward pitch.</summary>
+    /// <summary>Fixed 3/4 view, yaw around +Z (WC3's up axis), then downward pitch.</summary>
     private const float YawDegrees = 45f;
     private const float PitchDegrees = 30f;
 
-    private static readonly Rgba32 Background = new(24, 26, 32, 255);
-    private static readonly Rgba32 Wire = new(140, 200, 255, 255);
-    private static readonly Rgba32 PlaceholderMark = new(90, 96, 110, 255);
+    private static readonly SKColor Background = new(24, 26, 32, 255);
+    private static readonly SKColor Wire = new(140, 200, 255, 255);
+    private static readonly SKColor PlaceholderMark = new(90, 96, 110, 255);
 
     /// <summary>
     /// Renders a static wireframe preview of a WC3 model. <paramref name="modelBytes"/>
-    /// is dispatched by content: "MDLX" magic → binary MDX, otherwise text MDL.
-    /// Never throws: null/empty/unparseable bytes or a model with no drawable
+    /// is dispatched by content, "MDLX" magic → binary MDX, otherwise text MDL.
+    /// Never throws, null/empty/unparseable bytes or a model with no drawable
     /// triangles return a placeholder PNG of the requested size instead.
     /// </summary>
     public static byte[] RenderPreview(byte[] modelBytes, int width = 512, int height = 512)
@@ -44,7 +44,7 @@ public static class ModelPreviewCommand
         try
         {
             if (modelBytes is { Length: > 0 })
-                // The parser checks MDLX magic first; the .mdl name routes the
+                // The parser checks MDLX magic first. The .mdl name routes the
                 // remaining (text) case to the MDL reader.
                 model = ModelParser.Parse(modelBytes, "preview.mdl");
         }
@@ -70,7 +70,7 @@ public static class ModelPreviewCommand
             if (!ScaleToFit(xy, width, height, PaddingFraction))
                 return PlaceholderPng(width, height);
 
-            using var image = new Image<Rgba32>(width, height, Background);
+            using var image = Canvas(width, height);
             for (int i = 0; i + 2 < indices.Length; i += 3)
             {
                 int a = indices[i] * 2, b = indices[i + 1] * 2, c = indices[i + 2] * 2;
@@ -89,7 +89,7 @@ public static class ModelPreviewCommand
     /// <summary>
     /// Concatenates every geoset's triangle list into one packed x,y,z vertex array
     /// with offset-adjusted indices. Triangles with out-of-range indices or with any
-    /// non-finite vertex coordinate are dropped. (First-cut simplification: vertices
+    /// non-finite vertex coordinate are dropped. (First-cut simplification, vertices
     /// of dropped triangles still participate in the bounding box.)
     /// </summary>
     internal static (float[] Vertices, int[] Indices) FlattenGeosets(Model3D model)
@@ -127,8 +127,8 @@ public static class ModelPreviewCommand
 
     /// <summary>
     /// Projects packed x,y,z model-space vertices to packed 2D plane coordinates with
-    /// the fixed 3/4 orthographic view: yaw <see cref="YawDegrees"/> around +Z, then
-    /// pitch <see cref="PitchDegrees"/> tilting the camera down; depth is discarded.
+    /// the fixed 3/4 orthographic view, yaw <see cref="YawDegrees"/> around +Z, then
+    /// pitch <see cref="PitchDegrees"/> tilting the camera down. Depth is discarded.
     /// Orthographic, so Project(k·v) = k·Project(v). +Y is "up" in the returned plane
     /// (<see cref="ScaleToFit"/> flips it to raster rows).
     /// </summary>
@@ -147,7 +147,7 @@ public static class ModelPreviewCommand
             float x1 = x * cy - y * sy;          // yaw around +Z
             float y1 = x * sy + y * cy;          // depth axis after yaw
             xy[v * 2] = x1;                      // screen horizontal
-            xy[v * 2 + 1] = z * cp - y1 * sp;    // screen up after pitch; depth dropped
+            xy[v * 2 + 1] = z * cp - y1 * sp;    // screen up after pitch. Depth dropped
         }
         return xy;
     }
@@ -157,7 +157,7 @@ public static class ModelPreviewCommand
     /// coordinates (Y-down raster) inside <paramref name="width"/>×<paramref name="height"/>,
     /// keeping <paramref name="paddingFraction"/> of the smaller side clear on each
     /// edge. Aspect ratio is preserved. A zero-extent cloud (single point, or all
-    /// points coincident) collapses to the canvas center; non-finite points are
+    /// points coincident) collapses to the canvas center. Non-finite points are
     /// excluded from the fit and pinned to the center. Returns false when no finite
     /// point exists (nothing drawable).
     /// </summary>
@@ -198,7 +198,7 @@ public static class ModelPreviewCommand
                 continue;
             }
             xy[i] = ox + (x - cx) * scale;
-            xy[i + 1] = oy - (y - cyv) * scale; // flip: plane Y-up → raster Y-down
+            xy[i + 1] = oy - (y - cyv) * scale; // flip, plane Y-up → raster Y-down
         }
         return true;
     }
@@ -206,14 +206,14 @@ public static class ModelPreviewCommand
     /// <summary>Solid background plus a diagonal cross, the "no geometry" marker.</summary>
     private static byte[] PlaceholderPng(int width, int height)
     {
-        using var image = new Image<Rgba32>(width, height, Background);
+        using var image = Canvas(width, height);
         DrawLine(image, 0, 0, width - 1, height - 1, PlaceholderMark);
         DrawLine(image, 0, height - 1, width - 1, 0, PlaceholderMark);
         return EncodePng(image);
     }
 
-    /// <summary>Integer Bresenham; pixels outside the canvas are clipped per-pixel.</summary>
-    private static void DrawLine(Image<Rgba32> img, float x0f, float y0f, float x1f, float y1f, Rgba32 color)
+    /// <summary>Integer Bresenham. Pixels outside the canvas are clipped per-pixel.</summary>
+    private static void DrawLine(SKBitmap img, float x0f, float y0f, float x1f, float y1f, SKColor color)
     {
         int x0 = (int)MathF.Round(x0f), y0 = (int)MathF.Round(y0f);
         int x1 = (int)MathF.Round(x1f), y1 = (int)MathF.Round(y1f);
@@ -223,7 +223,7 @@ public static class ModelPreviewCommand
         while (true)
         {
             if ((uint)x0 < (uint)img.Width && (uint)y0 < (uint)img.Height)
-                img[x0, y0] = color;
+                img.SetPixel(x0, y0, color);
             if (x0 == x1 && y0 == y1) break;
             int e2 = 2 * err;
             if (e2 >= dy) { err += dy; x0 += sx; }
@@ -231,12 +231,15 @@ public static class ModelPreviewCommand
         }
     }
 
-    private static byte[] EncodePng(Image<Rgba32> image)
+    /// <summary>A canvas pre-filled with the preview background colour.</summary>
+    private static SKBitmap Canvas(int width, int height)
     {
-        using var ms = new MemoryStream();
-        image.SaveAsPng(ms);
-        return ms.ToArray();
+        var image = SafeImages.NewBitmap(width, height);
+        image.Erase(Background);
+        return image;
     }
+
+    private static byte[] EncodePng(SKBitmap image) => SafeImages.EncodePng(image);
 
     private static (int Width, int Height) ClampSize(int width, int height) =>
         (Math.Clamp(width, 1, 4096), Math.Clamp(height, 1, 4096));

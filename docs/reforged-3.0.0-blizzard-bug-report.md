@@ -189,7 +189,7 @@ breaking, listed so the cause is not mistaken for something else.
 
 `Scripts/common.j`.
 
-```
+```text
 2.0.4                          3.0.0
   6  ITEM_TYPE_MISCELLANEOUS     6  ITEM_TYPE_MISCELLANEOUS
   7  ITEM_TYPE_UNKNOWN           7  ITEM_TYPE_EQUIPMENT   <- inserted
@@ -212,7 +212,7 @@ baseline build.
 The two routes agree, and the Lua dump makes the whole surface visible at once. Between
 those builds `common.j` loses exactly **three** lines and nothing else.
 
-```
+```text
 -TypeDefine('framehandle', 'handle')
 -ITEM_TYPE_UNKNOWN = ConvertItemType(7)
 -ITEM_TYPE_ANY = ConvertItemType(8)
@@ -246,7 +246,7 @@ Sampled across 120 models present in both builds.
 
 On a portrait model of 52,811 bytes the entire file differs in exactly three places.
 
-```
+```text
 VERS  b0040000 -> 08070000      1200 -> 1800
 CAMS  78000000 -> 78000003      the record header gains 0x03 in its top byte
 ```
@@ -257,7 +257,7 @@ node is what the unit portrait renders from, which is where this surfaces.
 
 What `0x03` means is **not established**. It sits where the record size was a plain uint32.
 
-#### The observable consequence, CONFIRMED on a live map
+#### # The observable consequence, CONFIRMED on a live map
 
 **A custom model that carries a camera renders a BLACK portrait pane in 3.0.0.** The unit
 renders correctly in the world and its health and mana read correctly, so only the portrait
@@ -275,7 +275,7 @@ The damage is confined to custom models that actually ship a camera, which is wh
 presents as a handful of heroes broken while the rest are fine, and why it looks random
 rather than systematic. Most ripped models omit the camera entirely and are unaffected.
 
-#### Three attempted remedies, all of which FAILED, which is why no workaround is offered
+#### # Three attempted remedies, all of which FAILED, which is why no workaround is offered
 
 An earlier draft of this report claimed that re-stamping the three header bytes restores
 the portraits. **That claim was wrong and is withdrawn.** It was written from the shape of
@@ -309,14 +309,14 @@ publish what the `0x03` flag means and ship a converter. There are tens of thous
 custom models in circulation, and their authors cannot edit a byte inside an encrypted,
 protected archive without building a tool first.
 
-### D4. `AbilityData.slk` doubled its column count, PROVEN
+### # D4. `AbilityData.slk` doubled its column count, PROVEN
 
 99 columns to 201, with 102 columns inserted rather than appended in a single block at the
 end. Any consumer reading this table by column index rather than by header name now reads the
 wrong field. Documenting the new layout would help the tool authors the map community depends
 on.
 
-### D5. `fileVerFlags` value 2 was retired with no stated meaning, PROVEN
+### # D5. `fileVerFlags` value 2 was retired with no stated meaning, PROVEN
 
 In `Units/UnitSkin.txt`, every object using this field moved off value 2 onto value 6. Not one
 was left behind.
@@ -329,7 +329,7 @@ was left behind.
 A custom skin still setting `fileVerFlags = 2` is now using a value the base game abandoned
 entirely. What the engine does with it is not documented anywhere.
 
-### D6. Critical strike became a global mechanic, and every map inherits its constants, PROVEN
+### # D6. Critical strike became a global mechanic, and every map inherits its constants, PROVEN
 
 This is the largest silent gameplay change in the patch for custom content, and it is not in
 the patch notes.
@@ -337,7 +337,7 @@ the patch notes.
 `Units/MiscGame.txt` gained exactly **three** keys, all in `[Misc]`, and two of them are a new
 mechanic rather than tuning.
 
-```
+```text
 + AICallForHelp      = 900
 + BaseMeleeCritDamage = 150
 + BaseSpellCritDamage = 150
@@ -345,7 +345,7 @@ mechanic rather than tuning.
 
 `UI/MiscData.txt` `[Misc]` gained the two floating text colours that go with them.
 
-```
+```text
 + CriticalStrikeHealTextColor  = 255,0,255,0
 + CriticalStrikeSpellTextColor = 255,0,0,255
 ```

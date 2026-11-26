@@ -3,17 +3,16 @@
 # Every run was rebuilding the same three structures from scratch. The archive map re-reads
 # 40 MB of indices, and each build re-decodes a multi-megabyte BLTE encoding table and then
 # walks a thousand-odd 4 KB pages to rebuild a map that never changes for a fixed build.
-# None of that depends on which file is being asked for, so it is pickled and reloaded.
+# None of that depends on which file is being asked for, so it is cached on disk and reloaded.
 #
 # Fetches are also issued in parallel, because each file is one small ranged HTTP request
 # and the run was spending its time waiting on round trips rather than on CPU.
-# On pickle. This file is written and read only by this script, in the session scratchpad,
-# from data this script derived itself. It never loads a pickle from anywhere else, so the
-# arbitrary-execution risk of untrusted pickles does not apply. It is used rather than JSON
-# because the payload is a few million binary keys and tuples, which JSON round trips far
-# more slowly and much larger. Delete fastcache.pickle to force a rebuild.
+# On the store. This file is written and read only by this script, in the session scratchpad,
+# from data this script derived itself. It is JSON, because a pickle loads as code and this
+# cache carries no signature, and because the payload is text keys and small lists that JSON
+# holds without a code path. Delete fastcache.json to force a rebuild.
+import json
 import pathlib
-import pickle
 import sys
 import time
 import urllib.request
@@ -21,17 +20,17 @@ from concurrent.futures import ThreadPoolExecutor
 
 HERE = pathlib.Path(__file__).parent
 sys.path.insert(0, str(HERE))
-from tact import CDN, blte_decode, fetch, parse_build_config, parse_encoding
+from tact import CDN, blte_decode, fetch, game_data_dir, parse_build_config, parse_encoding
 from archidx import build_map
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-CFG = pathlib.Path(r"C:\Warcraft III\Data\config")
+CFG = game_data_dir() / "config"
 BUILDS = {
     "2.0.4": CFG / "9a/94/9a94ff7d25781db6c09190cd69d52458",
     "3.0.0": CFG / "3a/9d/3a9d8f26806936764d2d9ad526a65e04",
 }
-STORE = HERE / "fastcache.pickle"
+STORE = HERE / "fastcache.json"
 
 _state = None
 
@@ -66,18 +65,28 @@ def _build_state(report=True):
     return dict(arch=arch, builds=builds)
 
 
+def _load_store():
+    """The state this script wrote here, decoded from the local cache file."""
+    return json.loads(STORE.read_text(encoding="utf-8"))
+
+
+def _save_store(cached):
+    """Write the state back, so the next run pays the parse cost once."""
+    STORE.write_text(json.dumps(cached), encoding="utf-8")
+
+
 def state():
     global _state
     if _state is not None:
         return _state
     if STORE.exists():
         t0 = time.perf_counter()
-        _state = pickle.loads(STORE.read_bytes())
+        _state = _load_store()
         print(f"  cache load       {time.perf_counter() - t0:6.2f}s", file=sys.stderr)
         return _state
     _state = _build_state()
     t0 = time.perf_counter()
-    STORE.write_bytes(pickle.dumps(_state, protocol=5))
+    _save_store(_state)
     print(f"  cache write      {time.perf_counter() - t0:6.2f}s  "
           f"({STORE.stat().st_size / 1024**2:.1f} MB)", file=sys.stderr)
     return _state
@@ -99,8 +108,9 @@ def raw(label, path):
     try:
         with urllib.request.urlopen(req, timeout=60) as r:
             return blte_decode(r.read()), None
-    except Exception as e:
-        return None, f"{type(e).__name__} {e}"
+    except (OSError, ValueError) as e:
+        reason = f"{type(e).__name__} {e}"
+        return None, reason
 
 
 def many(pairs, workers=16):

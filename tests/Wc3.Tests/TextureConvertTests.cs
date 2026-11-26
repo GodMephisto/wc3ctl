@@ -1,13 +1,12 @@
 // tests/Wc3.Tests/TextureConvertTests.cs
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
+using SkiaSharp;
 using Wc3.Modeling;
 using Wc3.Render;
 
 namespace Wc3.Tests;
 
 /// <summary>
-/// Image conversion coverage, including the BLP channel-order proof: BLP1 JPEG
+/// Image conversion coverage, including the BLP channel-order proof, BLP1 JPEG
 /// content stores BGRA, our encoder swaps RGBA→BGRA on write and BlpDecoder
 /// swaps back on read, so colors survive a full round-trip (JPEG-lossy, hence
 /// tolerance). A channel swap bug would show as a ~255 error on the red/blue
@@ -15,9 +14,9 @@ namespace Wc3.Tests;
 /// </summary>
 public class TextureConvertTests
 {
-    private const int Tolerance = 20; // JPEG quality 90; quadrant centers stay well inside this
+    private const int Tolerance = 20; // JPEG quality 90. Quadrant centers stay well inside this
 
-    /// <summary>RGBA quadrants: TL=red, TR=green, BL=blue, BR=white.</summary>
+    /// <summary>RGBA quadrants, TL=red, TR=green, BL=blue, BR=white.</summary>
     private static byte[] QuadrantRgba(int w, int h)
     {
         var rgba = new byte[w * h * 4];
@@ -84,7 +83,7 @@ public class TextureConvertTests
         var blp = TextureConvert.Convert(QuadrantPng(16, 16), ".png", ".blp");
         var png = TextureConvert.Convert(blp, ".blp", ".png");
         Assert.Equal(new byte[] { 0x89, 0x50, 0x4E, 0x47 }, png[..4]);
-        using var image = Image.Load<Rgba32>(png);
+        using var image = SafeImages.Load(png);
         Assert.Equal(16, image.Width);
         Assert.Equal(16, image.Height);
     }
@@ -100,13 +99,13 @@ public class TextureConvertTests
         var tga = TextureConvert.Convert(bmp, ".bmp", ".tga");
         var back = TextureConvert.Convert(tga, ".tga", ".png");
 
-        using var a = Image.Load<Rgba32>(png);
-        using var b = Image.Load<Rgba32>(back);
+        using var a = SafeImages.Load(png);
+        using var b = SafeImages.Load(back);
         Assert.Equal(a.Width, b.Width);
         Assert.Equal(a.Height, b.Height);
         for (int y = 0; y < h; y++)
             for (int x = 0; x < w; x++)
-                Assert.Equal(a[x, y], b[x, y]);
+                Assert.Equal(a.GetPixel(x, y), b.GetPixel(x, y));
     }
 
     [Fact]
@@ -140,12 +139,16 @@ public class TextureConvertTests
     [Fact]
     public void A_tiff_source_is_refused_so_the_pinned_tiff_decoder_never_runs()
     {
-        // ImageSharp 3.1.12's TIFF decoder has an open advisory (GHSA-wmxv-xphr-5c9g). The
-        // default configuration would decode this, so a pass here proves TIFF is not registered.
-        using var img = new Image<Rgba32>(4, 4);
-        using var ms = new MemoryStream();
-        img.SaveAsTiff(ms);
-        Assert.Throws<NotSupportedException>(() => TextureConvert.Convert(ms.ToArray(), ".tif", ".png"));
+        // No decoder in this library accepts TIFF: the format is not on SafeImages' allow-list, so
+        // the bytes are refused before a parser is constructed. A minimal TIFF header is enough to
+        // prove that, since the refusal happens on the magic number.
+        var bytes = new byte[32];
+        bytes[0] = (byte)'I';
+        bytes[1] = (byte)'I';
+        bytes[2] = 42;
+        BitConverter.GetBytes(8).CopyTo(bytes, 4);
+        BitConverter.GetBytes((ushort)0).CopyTo(bytes, 8); // empty IFD
+        Assert.Throws<NotSupportedException>(() => TextureConvert.Convert(bytes, ".tif", ".png"));
     }
 
     [Fact]
@@ -159,14 +162,14 @@ public class TextureConvertTests
     [Trait("Category", "GameData")]
     public void Real_jpeg_blp_decodes_with_true_rgba_channel_order()
     {
-        // Ground truth for the channel order: a real map asset with skin tones.
+        // Ground truth for the channel order, a real map asset with skin tones.
         // Without the JPEG-content BGRA swap in BlpDecoder this face decodes blue.
         string path =
             System.IO.Path.Combine(System.IO.Path.GetTempPath(), @"wc3x_modelsamples\blp\war3mapImported\Emoji_KEKW.blp");
         if (!File.Exists(path)) return; // samples-optional
 
         var tex = BlpDecoder.Decode(File.ReadAllBytes(path));
-        // Average the central region; flesh tones are strongly red-dominant.
+        // Average the central region. Flesh tones are strongly red-dominant.
         long r = 0, b = 0;
         int cx = tex.Width / 2, cy = tex.Height / 2, n = 0;
         for (int y = cy - 20; y < cy + 20; y++)

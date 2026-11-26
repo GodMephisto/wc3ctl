@@ -1,4 +1,4 @@
-﻿// src/Wc3.Mcp/Wc3Tools.cs
+// src/Wc3.Mcp/Wc3Tools.cs
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
@@ -13,7 +13,7 @@ using Wc3.Model;
 namespace Wc3.Mcp;
 
 /// <summary>
-/// The MCP tool surface: one thin wrapper per Wc3.Commands handler. Each tool
+/// The MCP tool surface, one thin wrapper per Wc3.Commands handler. Each tool
 /// loads the map(s), calls the shared command layer and returns its result POCO
 /// (the SDK serializes it to JSON), no map parsing or logic lives here.
 /// <para>
@@ -126,7 +126,7 @@ public static class Wc3Tools
         });
 
     [McpServerTool(Name = "mcp_export_verify", Title = "Verify MCP export", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
-    [Description("Verify that a wc3-mcp checkout holds the same server source scripts/export-wc3-mcp.py would export from this repository, reporting every file that differs without writing. Read-only.")]
+    [Description("Verify that a wc3-mcp checkout holds the same server source scripts/export_wc3_mcp.py would export from this repository, reporting every file that differs without writing. Read-only.")]
     public static McpExportVerifyResult McpExportVerify(
         [Description("Path to the wc3-mcp checkout to check.")] string target_dir,
         [Description("Source repository directory. Omit to locate the wc3ctl repository.")] string? source_dir = null)
@@ -1880,7 +1880,7 @@ public static class Wc3Tools
                 // assigning the raw PNG to it put binary where base64 text belongs, and the
                 // reply did not survive the round trip. An MCP client failed to deserialize
                 // it with "The JSON value could not be converted to ContentBlock.
-                // Path: $.content[1]", so every agent calling render_model got that instead
+                // Path, $.content[1]", so every agent calling render_model got that instead
                 // of an image. FromBytes is the SDK's factory for decoded bytes and does the
                 // encoding itself.
                 content.Add(ImageContentBlock.FromBytes(png, "image/png"));
@@ -1900,7 +1900,7 @@ public static class Wc3Tools
         => Run(() =>
         {
             var source = LoadMap(source_map);
-            var target = LoadMap(target_map); // fresh load - ported output never feeds back into inputs
+            var target = LoadMap(target_map); // fresh load, ported output never feeds back into inputs
             var bundle = BundleCommand.ResolveUnit(source, rawcode, ResolveGameDir(game_dir));
             var report = PortCommand.PortUnit(source, bundle, target, includeScript: include_script);
 
@@ -2957,7 +2957,7 @@ public static class Wc3Tools
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
         => Run(() => PathingCommand.Validate(LoadMap(map)));
 
-    // ---- scenario: map-info, players, forces (war3map.w3i) ---------------
+    // ---- scenario, map-info, players, forces (war3map.w3i) ---------------
 
     // Compile-time mirror of MapInfoCommand.EditableFields (attribute args must be const).
     private const string MapInfoFieldValues =
@@ -3359,6 +3359,64 @@ public static class Wc3Tools
                 $"{r.ModelsRepaired} of {r.ModelsAtRisk} at-risk model(s) repaired.");
         }));
 
+    [McpServerTool(Name = "reforged3_check", Title = "Detect 3.0 SLK rejections", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Report what Warcraft III 3.0 build 24268 refuses or misreads in a legacy SLK map, without writing anything. Counts the obsolete SLK file columns, the model paths still carrying a file value there, numeric cells that are not numbers, empty button positions, unmatched FDF comment terminators and abilities whose declared levels have no level 5 or 6 column. The repair is repair_reforged3, and it needs no external tool, no game install and no name dictionary.")]
+    public static Reforged3RepairResult Reforged3Check(
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only.")] string map)
+        => Run(() => Reforged3RepairCommand.Execute(LoadMap(map), apply: false));
+
+    [McpServerTool(Name = "repair_reforged3", Title = "Repair a 3.0 SLK map", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Repair a legacy SLK-mode map so Warcraft III 3.0 build 24268 renders it, and save the result to out_path. Model paths move out of the obsolete file column of unitUI.slk and ItemData.slk into merged UnitSkin.txt and ItemSkin.txt profiles, numeric cells and button positions are normalized, unmatched FDF comment terminators are removed, and abilities that declare more levels than they have columns gain level 5 and 6 columns inheriting the level 4 value. Every object keeps its rawcode and its text, and no model is renamed or dropped. This is the same repair doctor_fix performs through Devo's Map Doctor, done here in code, so it works with no doctor installed and no game install. The input map is NEVER modified in place.")]
+    public static EditToolResult RepairReforged3(
+        [Description("Path to the source .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only, the repaired copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
+        [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null)
+        => Run(() => SaveEdit(map, out_path, overwrite, expect_input_sha256, doc =>
+        {
+            var r = Reforged3RepairCommand.Execute(doc, apply: true);
+            return (r.Ok, r.Message);
+        }));
+
+    [McpServerTool(Name = "texture_audit", Title = "Audit texture headers", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Read every texture header in a map and report the ones the engine mishandles, grouped by kind. Checks that a file carries a BLP signature, that a BLP1 or BLP2 header fits inside the file, that a declared JPEG header is not above the 624 bytes the engine allows, that every declared mip level ends inside the file, that a mip chain is not empty, and that dimensions are a power of two the engine will read. Read-only, needs no game install, and never decodes a pixel, so the cost is one kilobyte per texture. A header that points past the end makes the engine read outside its buffer, and a missing level draws transparent black.")]
+    public static TextureAuditResult TextureAudit(
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map)
+        => Run(() => TextureAuditCommand.Execute(LoadMap(map)));
+
+    [McpServerTool(Name = "game_file_shadows", Title = "Find files that override the game", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Find map files that sit on a path the installed game already ships, so the engine reads the map's copy in place of its own. Two maps closed the game in LAN and HD graphics this way, one with UI minimap textures and one with 1,486 repacked game textures, and removing the files fixed both. Read-only. The editor's own object data (SLK and text tables) shares paths with the game by construction and is excluded, so what comes back is art only. Needs an installed game to read its file list, and the list is that build's, so a map aimed at a classic build can override a path this build has renamed.")]
+    public static GameFileShadowResult GameFileShadows(
+        [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries. Read-only.")] string map,
+        [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var).")] string? game_dir = null)
+        => Run(() => GameFileShadowCommand.Detect(LoadMap(map),
+            ResolveGameDir(game_dir) ?? game_dir ?? Wc3.GameData.GameInstall.Locate()));
+
+    [McpServerTool(Name = "repair_game_files", Title = "Drop files that override the game", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Write a copy of the map with the game-overriding files removed, which is the repair for the shadows game_file_shadows reports. The archive is rebuilt from disk, so every other entry is carried over byte for byte, and the input map is NEVER modified in place. A shadow can be deliberate, a retexture for instance, so read the list first. With names left empty every detected shadow is dropped, otherwise only the ones named.")]
+    public static GameFileShadowApplyResult RepairGameFiles(
+        [Description("Path to the source .w3x/.w3m map file. Read-only, the repaired copy is written to out_path.")] string map,
+        [Description("Output map file path (must differ from the input map).")] string out_path,
+        [Description("Only drop these names, as game_file_shadows reported them. Leave empty to drop every detected shadow.")] string[]? names = null,
+        [Description("Warcraft III install directory (overrides auto-detection and the WC3_GAME_DIR env var).")] string? game_dir = null)
+        => Run(() =>
+        {
+            string target = Path.GetFullPath(out_path);
+            if (string.Equals(target, Path.GetFullPath(map), StringComparison.OrdinalIgnoreCase))
+                throw new ArgumentException("out_path must differ from map, this tool never writes in place");
+
+            IReadOnlyList<string> drop;
+            if (names is { Length: > 0 }) drop = names;
+            else
+            {
+                var report = GameFileShadowCommand.Detect(LoadMap(map),
+                    ResolveGameDir(game_dir) ?? game_dir ?? Wc3.GameData.GameInstall.Locate());
+                if (!report.Ok) return new GameFileShadowApplyResult(false, report.Message, target, 0, 0, 0, 0, 0);
+                drop = report.Files.Select(f => f.Name).ToList();
+            }
+            return GameFileShadowCommand.Apply(map, drop, target);
+        });
+
     [McpServerTool(Name = "repair_audit_errors", Title = "Repair audited defects", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Repair the object-data defects audit reports. Fills ability level gaps (a field with no value at a declared level, copied from the nearest valid level), clears dangling references and impossible requirements, and saves to out_path. The input map is NEVER modified in place.")]
     public static EditToolResult RepairAuditErrors(
@@ -3675,11 +3733,22 @@ public static class Wc3Tools
     [Description("Read-only doctor reports on one map. diag is what protects the map and what the World "
         + "Editor needs, including whether it runs in SLK mode and the fix steps that apply. files lists "
         + "the archive's files with recovered names, card the name, author, players and loading screen, "
-        + "rawcodes the object ids with names, recipes the item recipes the script makes." + DoctorNote)]
+        + "rawcodes the object ids with names, recipes the item recipes the script makes, qol which "
+        + "quality of life edits the map supports, cheatpacks the cheat packs it takes, script the map's "
+        + "script." + DoctorNote)]
     public static MapDoctorResult DoctorInspect(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
-        [Description("One of diag, files, card, rawcodes, recipes.")] string report = "diag")
+        [Description("One of diag, files, card, rawcodes, recipes, qol, cheatpacks, script.")] string report = "diag")
         => Run(() => MapDoctorCommand.ReadOnly(report, map));
+
+    [McpServerTool(Name = "doctor_schema", Title = "Show the doctor's JSON contract", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("The installed doctor's own --json contract, read at run time: every command, its "
+        + "options, the fix steps and extras it accepts, and the keys each result carries, versioned by "
+        + "the schema number the doctor stamps on every answer. Use it to see what this build can do "
+        + "instead of relying on a list baked into the wrapper, which is how a pin bump leaves a stale "
+        + "option behind." + DoctorNote)]
+    public static MapDoctorResult DoctorSchema()
+        => Run(() => MapDoctorCommand.Schema());
 
     [McpServerTool(Name = "doctor_compare", Title = "Compare two map versions", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("What differs between two versions of a map, file by file (added, removed, changed) "
@@ -3698,11 +3767,16 @@ public static class Wc3Tools
     public static MapDoctorResult DoctorFix(
         [Description("Path to a .w3x/.w3m map file, or to an unpacked map folder holding the same entries.")] string map,
         [Description("Where to write the repaired copy. Default <map>_doctor.<ext> beside the input.")] string? out_path = null,
-        [Description("Steps and extras, without dashes, such as listfile, data, portraits, uabi. Prefix no- to "
-            + "drop a default step. Empty applies the steps the doctor picks for this map. Allowed: unprotect, "
+        [Description("Steps and extras, without dashes, such as listfile, data, uabi. Prefix no- to "
+            + "drop a default step. Empty applies the steps the doctor picks for this map. Steps: unprotect, "
             + "fake-files, listfile, ids, data, script-back, editor-files, counts, doodads, gui-triggers, "
-            + "script-objects, safe-units, models, model-names, portraits, data-pointers, kk-textures, "
-            + "green-icons, uabi, preload, single-player, shrink, strip-indent. At most 1000, and a longer list is refused with a tool error naming the limit.")] string[]? options = null,
+            + "script-objects, safe-units. Extras: models, model-names, data-pointers, kk-textures, "
+            + "green-icons, console-sides, uabi, preload, single-player, shrink, shrink-lossy, strip-indent, "
+            + "fix-attributes, remove-game-files, remove-game-copies, fix-requirements, fix-model-paths, "
+            + "fix-fdf, null-handles, minify, strip-comment-blocks, slk-objects, fix-graphics-modes, "
+            + "shrink-models, shrink-models-lossy, translation-keep, and portraits with a value, "
+            + "portraits=stamp or portraits=upgrade. At most 1000, and a longer list is refused with a tool "
+            + "error naming the limit. doctor_schema lists what the installed build accepts.")] string[]? options = null,
         [Description("Replace an existing output file. Default false, and a rerun that would overwrite is refused with OUTPUT_EXISTS (SAF-05).")] bool overwrite = false,
         [Description("The SHA-256 of the input map as you last read it. A mismatch is refused with STALE_INPUT, so an edit cannot land on a file that changed underneath it (SAF-07).")] string? expect_input_sha256 = null,
         [Description("Cancels the call at the next check point. The repair itself is not interruptible once it starts.")] CancellationToken cancellationToken = default)
@@ -3977,7 +4051,7 @@ public static class Wc3Tools
         if (string.IsNullOrWhiteSpace(map))
             throw Missing("map path");
         // A folder map is a real Studio workflow, so `map` accepts one archive file or a folder.
-        // The extension check only applies to a file. PAR-01 reopens as a wording problem: every
+        // The extension check only applies to a file. PAR-01 reopens as a wording problem, every
         // parameter says which of the two it takes, rather than the loader refusing one of them.
         bool folder = Directory.Exists(map);
         if (!File.Exists(map) && !folder)
@@ -4085,7 +4159,7 @@ public static class Wc3Tools
     }
 
     /// <summary>Load the map, apply a placement mutation, and save the edited copy to out_path.
-    /// The input map is never modified in place (out_path must differ) - mirroring the no-clobber
+    /// The input map is never modified in place (out_path must differ), mirroring the no-clobber
     /// stance of render_model and port_unit. A rejected placement surfaces as a clean MCP error.</summary>
     private static PlacementToolResult SavePlacement(
         string map, string outPath, bool overwrite, string? expectInputSha256,
@@ -4153,7 +4227,7 @@ public static class Wc3Tools
             w.FilesRewritten, w.BytesWritten);
     }
 
-    /// <summary>Parse a string into an enum (case-insensitive); clean MCP error on failure.</summary>
+    /// <summary>Parse a string into an enum (case-insensitive). Clean MCP error on failure.</summary>
     private static TEnum ParseEnum<TEnum>(string value, string paramName) where TEnum : struct, Enum
     {
         if (Enum.TryParse<TEnum>(value, ignoreCase: true, out var parsed) && Enum.IsDefined(parsed))
@@ -4208,7 +4282,7 @@ public static class Wc3Tools
         return true;
     }
 
-    /// <summary>Read a PNG the caller named; a missing file is a clean MCP error.</summary>
+    /// <summary>Read a PNG the caller named. A missing file is a clean MCP error.</summary>
     private static byte[] ReadPngFile(string png)
     {
         if (string.IsNullOrWhiteSpace(png))
@@ -4560,7 +4634,7 @@ public static class Wc3Tools
         : Environment.GetEnvironmentVariable(GameDirVariable) is var env && IsSet(env) ? env
         : null;
 
-    /// <summary>Resolve the target build: use the explicit value or fall through to settings.</summary>
+    /// <summary>Resolve the target build, use the explicit value or fall through to settings.</summary>
     internal static string ResolveTarget(string? target, string? schemas_dir)
     {
         if (target is not null)
@@ -4574,7 +4648,7 @@ public static class Wc3Tools
 
     // ---- target_* result POCOs ------------------------------------------
 
-    /// <summary>Target get outcome: the build, its source, and the installed game build.</summary>
+    /// <summary>Target get outcome, the build, its source, and the installed game build.</summary>
     public sealed record TargetGetResult(string Build, string Source, string? InstallBuild, IReadOnlyList<string> Sections);
 
     /// <summary>target_set outcome, whether the build validated and the settings file was written,
@@ -4584,16 +4658,16 @@ public static class Wc3Tools
         string? InputSha256 = null, string OutputSha256 = "", int FilesRewritten = 0, long BytesWritten = 0);
 }
 
-/// <summary>render_model outcome: where the PNG landed and whether it was also inlined.</summary>
+/// <summary>render_model outcome, where the PNG landed and whether it was also inlined.</summary>
 public sealed record RenderModelToolResult(string SavedTo, int SizeBytes, bool ImageInline,
     string? InputSha256 = null, string OutputSha256 = "", int FilesRewritten = 0, long BytesWritten = 0);
 
-/// <summary>asset_thumbnails outcome: where the PNGs landed, how many, their names and any skips.</summary>
+/// <summary>asset_thumbnails outcome, where the PNGs landed, how many, their names and any skips.</summary>
 public sealed record AssetThumbnailsToolResult(
     string OutDir, int Rendered, IReadOnlyList<string> Files, IReadOnlyList<string> Diagnostics,
     string? InputSha256 = null, string OutputSha256 = "", int FilesRewritten = 0, long BytesWritten = 0);
 
-/// <summary>mpq_extract_all outcome: where the entries landed, the counts, and the relative file names.</summary>
+/// <summary>mpq_extract_all outcome, where the entries landed, the counts, and the relative file names.</summary>
 public sealed record MpqExtractAllToolResult(
     string OutDir, int TotalEntries, int NamedEntries, int UnnamedEntries, long TotalBytes,
     IReadOnlyList<string> Files,
@@ -4602,7 +4676,7 @@ public sealed record MpqExtractAllToolResult(
 /// <summary>ERR-05. One item a batch skipped, named, with the reason it was skipped.</summary>
 public sealed record SkippedItem(string Item, string Reason);
 
-/// <summary>asset_convert_batch outcome: where the copies landed, how many, the target extension,
+/// <summary>asset_convert_batch outcome, where the copies landed, how many, the target extension,
 /// their relative paths, any skips, and each skipped file with its reason. Partial is true when
 /// anything was skipped, so a run that converted some of a folder is not reported as success.</summary>
 public sealed record AssetConvertBatchToolResult(
@@ -4610,37 +4684,37 @@ public sealed record AssetConvertBatchToolResult(
     string? InputSha256 = null, string OutputSha256 = "", int FilesRewritten = 0, long BytesWritten = 0,
     IReadOnlyList<SkippedItem>? Failed = null, bool Partial = false);
 
-/// <summary>asset_import_wire outcome: where the edited copy landed, the imported paths, the
+/// <summary>asset_import_wire outcome, where the edited copy landed, the imported paths, the
 /// fields set and any skips.</summary>
 public sealed record AssetImportWireToolResult(
     string SavedTo, IReadOnlyList<string> Imported, IReadOnlyList<string> FieldsSet,
     IReadOnlyList<string> Diagnostics,
     string? InputSha256 = null, string OutputSha256 = "", int FilesRewritten = 0, long BytesWritten = 0);
 
-/// <summary>model_export_obj outcome: where the .obj landed, its .mtl path and the texture names.</summary>
+/// <summary>model_export_obj outcome, where the .obj landed, its .mtl path and the texture names.</summary>
 public sealed record ModelExportObjToolResult(
     string SavedTo, string Mtl, IReadOnlyList<string> Textures, IReadOnlyList<string> Diagnostics);
 
-/// <summary>model_import outcome: where the .mdx landed, the counts it holds, the sequence count and
+/// <summary>model_import outcome, where the .mdx landed, the counts it holds, the sequence count and
 /// names, and the texture files written.</summary>
 public sealed record ModelImportToolResult(
     string SavedTo, int Geosets, int Vertices, int Faces, int Textures, int Materials,
     int Sequences, IReadOnlyList<string> SequenceNames, IReadOnlyList<string> TextureFiles);
 
-/// <summary>port_unit outcome: where the new .ported map was written plus the full port report.</summary>
+/// <summary>port_unit outcome, where the new .ported map was written plus the full port report.</summary>
 public sealed record PortUnitToolResult(string SavedTo, PortResult Report,
     string? InputSha256 = null, string OutputSha256 = "", int FilesRewritten = 0, long BytesWritten = 0,
     IReadOnlyList<OutputFile>? Files = null);
 
-/// <summary>port_into_version outcome: where the downgraded map was written plus the report.</summary>
+/// <summary>port_into_version outcome, where the downgraded map was written plus the report.</summary>
 public sealed record PortIntoVersionToolResult(string SavedTo, PortIntoVersionResult Report,
     string? InputSha256 = null, string OutputSha256 = "", int FilesRewritten = 0, long BytesWritten = 0,
     IReadOnlyList<OutputFile>? Files = null);
 
-/// <summary>bundle_merge outcome: where the merged bundle was written plus the merge result.</summary>
+/// <summary>bundle_merge outcome, where the merged bundle was written plus the merge result.</summary>
 public sealed record BundleMergeToolResult(string SavedTo, BundleMergeResult Merge);
 
-/// <summary>place_doodad / place_region outcome: where the edited map was written, a
+/// <summary>place_doodad / place_region outcome, where the edited map was written, a
 /// human-readable message, and the creation number assigned to the new instance.</summary>
 public sealed record PlacementToolResult(string SavedTo, string Message, int CreationNumber,
     string? InputSha256 = null, string OutputSha256 = "", int FilesRewritten = 0, long BytesWritten = 0);
@@ -4681,22 +4755,22 @@ public sealed record BulkPlacementToolResult(
     string SavedTo, string Message, int Placed, IReadOnlyList<int> CreationNumbers,
     string? InputSha256 = null, string OutputSha256 = "", int FilesRewritten = 0, long BytesWritten = 0);
 
-/// <summary>terrain_* edit outcome: where the edited map was written, a message, and tiles changed.</summary>
+/// <summary>terrain_* edit outcome, where the edited map was written, a message, and tiles changed.</summary>
 public sealed record TerrainToolResult(
     string SavedTo, string Message, int TilesChanged,
     string? InputSha256 = null, string OutputSha256 = "", int FilesRewritten = 0, long BytesWritten = 0);
 
-/// <summary>terrain_export_heightmap outcome: where the PNG landed, its grid, and its byte size.</summary>
+/// <summary>terrain_export_heightmap outcome, where the PNG landed, its grid, and its byte size.</summary>
 public sealed record ImageExportToolResult(string SavedTo, string Message, int Width, int Height, int SizeBytes,
     string? InputSha256 = null, string OutputSha256 = "", int FilesRewritten = 0, long BytesWritten = 0);
 
-/// <summary>pathing_export_png outcome: where the PNG landed, its grid and size, and the flag legend.</summary>
+/// <summary>pathing_export_png outcome, where the PNG landed, its grid and size, and the flag legend.</summary>
 public sealed record PathingExportToolResult(
     string SavedTo, string Message, int Width, int Height, int SizeBytes,
     IReadOnlyList<PathingExportPngCommand.LegendEntry> Legend,
     string? InputSha256 = null, string OutputSha256 = "", int FilesRewritten = 0, long BytesWritten = 0);
 
-/// <summary>object_set outcome: where the edited map was written, its digests, what was rewritten, a message, and any non-fatal warning.</summary>
+/// <summary>object_set outcome, where the edited map was written, its digests, what was rewritten, a message, and any non-fatal warning.</summary>
 public sealed record ObjectSetToolResult(
     string SavedTo, string? InputSha256, string OutputSha256, int FilesRewritten, long BytesWritten,
     string Message, string? Warning);
@@ -4704,27 +4778,27 @@ public sealed record ObjectSetToolResult(
 /// <summary>One edit in an object_batch_set request. Kind defaults to unit.</summary>
 public sealed record BatchEditInput(string Rawcode, string Field, string? Value, string Kind = "unit");
 
-/// <summary>object_batch_set outcome: where the map was written, its digests, how many edits
+/// <summary>object_batch_set outcome, where the map was written, its digests, how many edits
 /// applied, the message and any non-fatal warnings.</summary>
 public sealed record ObjectBatchSetToolResult(
     string SavedTo, string? InputSha256, string OutputSha256, int FilesRewritten, long BytesWritten,
     int Applied, string Message, string[] Warnings);
 
-/// <summary>object_new outcome: where the edited map was written, a message, and the newly allocated rawcode.</summary>
+/// <summary>object_new outcome, where the edited map was written, a message, and the newly allocated rawcode.</summary>
 public sealed record ObjectNewToolResult(string SavedTo, string Message, string? NewRawcode,
     string? InputSha256 = null, string OutputSha256 = "", int FilesRewritten = 0, long BytesWritten = 0);
 
-/// <summary>object_clone outcome: where the edited map was written, a message, the new
+/// <summary>object_clone outcome, where the edited map was written, a message, the new
 /// rawcode, and how many field values the clone received.</summary>
 public sealed record ObjectCloneToolResult(string SavedTo, string Message, string? NewRawcode, int FieldsCopied,
     string? InputSha256 = null, string OutputSha256 = "", int FilesRewritten = 0, long BytesWritten = 0);
 
-/// <summary>object_migrate outcome: the saved map, the target build, and the field counts.</summary>
+/// <summary>object_migrate outcome, the saved map, the target build, and the field counts.</summary>
 public sealed record ObjectMigrateToolResult(
     string SavedTo, string Message, string TargetBuild, int FieldsKept, int FieldsDropped, int Drops,
     string? InputSha256 = null, string OutputSha256 = "", int FilesRewritten = 0, long BytesWritten = 0);
 
-/// <summary>object_bulk_set outcome: the saved map, how many objects matched and changed, and each
+/// <summary>object_bulk_set outcome, the saved map, how many objects matched and changed, and each
 /// object the write skipped with its reason. Partial is true when anything was skipped, so a run
 /// that changed some of the matches is not reported as success.</summary>
 public sealed record ObjectBulkSetToolResult(
@@ -4732,23 +4806,23 @@ public sealed record ObjectBulkSetToolResult(
     string Message, string Kind, int Matched, int Changed, int Skipped,
     IReadOnlyList<SkippedItem> Failed, bool Partial);
 
-/// <summary>object_export outcome: the CSV path, the kind, and the row and column counts.</summary>
+/// <summary>object_export outcome, the CSV path, the kind, and the row and column counts.</summary>
 public sealed record ObjectExportToolResult(
     string CsvPath, string Message, string Kind, int ObjectCount, int Columns);
 
-/// <summary>object_import outcome: the saved map and the added, updated and field counts.</summary>
+/// <summary>object_import outcome, the saved map and the added, updated and field counts.</summary>
 public sealed record ObjectImportToolResult(
     string SavedTo, string Message, string Kind, int Added, int Updated, int FieldsSet,
     string? InputSha256 = null, string OutputSha256 = "", int FilesRewritten = 0, long BytesWritten = 0);
 
-/// <summary>object_rename outcome: the saved map, the old and new rawcodes, and the reference counts.</summary>
+/// <summary>object_rename outcome, the saved map, the old and new rawcodes, and the reference counts.</summary>
 public sealed record ObjectRenameToolResult(
     string SavedTo, string Message, string Kind, string OldRawcode, string NewRawcode,
     int FieldsRewritten, int ScriptLiteralsRewritten,
     string? InputSha256 = null, string OutputSha256 = "", int FilesRewritten = 0, long BytesWritten = 0);
 
-/// <summary>sound_* write outcome: where the edited map was written plus a human-readable message.</summary>
-/// <summary>sound_import_events outcome: where the map landed, its digests, how many events and
+/// <summary>sound_* write outcome, where the edited map was written plus a human-readable message.</summary>
+/// <summary>sound_import_events outcome, where the map landed, its digests, how many events and
 /// catalog entries were written, and the generated dispatcher text.</summary>
 public sealed record SoundImportToolResult(
     string SavedTo, string? InputSha256, string OutputSha256, string Message,
@@ -4779,7 +4853,7 @@ public sealed record FileExtractResult(string SavedTo, string Name, int SizeByte
 public sealed record FileSetResult(string SavedTo, string Name, bool Replaced, int SizeBytes,
     string? InputSha256 = null, string OutputSha256 = "", int FilesRewritten = 0, long BytesWritten = 0);
 
-/// <summary>Generic write outcome for camera/pathing/map-info/player/force/new tools:
+/// <summary>Generic write outcome for camera/pathing/map-info/player/force/new tools,
 /// where the edited (or created) map was written, the digests and counts where a write gate ran,
 /// and a human-readable message.</summary>
 public sealed record EditToolResult(
@@ -4794,7 +4868,7 @@ public sealed record EditToolResult(
 /// <para>
 /// The last three fields are the names those twelve tools served before this version, kept for one
 /// minor release so a caller that already reads them keeps working. <c>truncated</c> is the same
-/// fact as <c>hasMore</c> and <c>total</c> the same fact as <c>totalCount</c>; <c>cap</c> is how
+/// fact as <c>hasMore</c> and <c>total</c> the same fact as <c>totalCount</c>. <c>cap</c> is how
 /// many items the result may carry. A tool with no offset argument reports
 /// <c>nextOffset</c> as the index the next page would start at, so a caller learns where the cut
 /// fell even though this version offers no argument to ask for it.

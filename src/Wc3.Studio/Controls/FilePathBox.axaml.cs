@@ -6,10 +6,10 @@ using Avalonia.Interactivity;
 namespace Wc3.Studio.Controls;
 
 /// <summary>
-/// A path input with a Browse button: a TextBox plus a "Browse…" button that opens the OS file
+/// A path input with a Browse button, a TextBox plus a "Browse…" button that opens the OS file
 /// dialog (via <see cref="FilePicker"/>, so it reopens at the last-used folder) and drops the
 /// chosen path into the box. Used everywhere a file path is entered, so no panel ships a bare
-/// type-the-path box. <see cref="Text"/> is the two-way path value; <see cref="FilterName"/> /
+/// type-the-path box. <see cref="Text"/> is the two-way path value. <see cref="FilterName"/> /
 /// <see cref="FilterPatterns"/> scope the dialog (comma-separated globs, e.g. "*.mp3,*.wav").
 /// </summary>
 public partial class FilePathBox : UserControl
@@ -37,7 +37,7 @@ public partial class FilePathBox : UserControl
 
     public FilePathBox() => InitializeComponent();
 
-    /// <summary>The path shown/entered. Two-way; set by typing or by Browse.</summary>
+    /// <summary>The path shown/entered. Two-way. Set by typing or by Browse.</summary>
     public string? Text
     {
         get => GetValue(TextProperty);

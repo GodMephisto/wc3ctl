@@ -11,7 +11,7 @@ binary lives in a versioned folder, upgrading never hits a Windows file lock on 
 
 ## Run it
 
-```
+```text
 npx -y wc3-mcp@latest
 ```
 
@@ -20,10 +20,10 @@ launch. For example, a client config that takes a command and args looks like th
 
 ```json
 {
-  "mcpServers": {
-    "wc3": {
-      "command": "npx",
-      "args": ["-y", "wc3-mcp@latest"]
+  "mcpServers", {
+    "wc3", {
+      "command", "npx",
+      "args", ["-y", "wc3-mcp@latest"]
     }
   }
 }
@@ -32,7 +32,7 @@ launch. For example, a client config that takes a command and args looks like th
 Then start the setup wizard once, which writes the `npx` entry into every supported client on
 this PC.
 
-```
+```text
 npx -y wc3-mcp@latest install --all
 ```
 

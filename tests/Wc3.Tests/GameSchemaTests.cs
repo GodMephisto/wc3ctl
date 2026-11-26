@@ -40,7 +40,7 @@ public class GameSchemaTests
 
         var api = JassApiIndex.Parse(jass);
 
-        // 1 type: footman
+        // 1 type, footman
         Assert.Single(api.Types);
         Assert.Equal("footman", api.Types[0].Name);
         Assert.Equal("unit", api.Types[0].Parent);
@@ -126,12 +126,12 @@ public class GameSchemaTests
         var tmp = Directory.CreateTempSubdirectory("wc3test_layered");
         try
         {
-            // Flat: scripts/common.j
+            // Flat, scripts/common.j
             var flatPath = Path.Combine(tmp.FullName, "scripts", "common.j");
             Directory.CreateDirectory(Path.GetDirectoryName(flatPath)!);
             File.WriteAllText(flatPath, "// flat content\n", Encoding.UTF8);
 
-            // Layered: war3.w3mod/scripts/common.j (layer prefix + path after colon)
+            // Layered, war3.w3mod/scripts/common.j (layer prefix + path after colon)
             var layeredPath = Path.Combine(tmp.FullName, "war3.w3mod", "scripts", "common.j");
             Directory.CreateDirectory(Path.GetDirectoryName(layeredPath)!);
             File.WriteAllText(layeredPath, "// layered content\n", Encoding.UTF8);
@@ -246,7 +246,7 @@ eu|1|1.30.1.10211|def456";
         var tmpB = Directory.CreateTempSubdirectory("wc3test_diffB");
         try
         {
-            // Schema A: one native
+            // Schema A, one native
             var pathA = Path.Combine(tmpA.FullName, "scripts", "common.j");
             Directory.CreateDirectory(Path.GetDirectoryName(pathA)!);
             File.WriteAllText(pathA,
@@ -265,7 +265,7 @@ eu|1|1.30.1.10211|def456";
                 null, null, scriptDictA.Count > 0 ? scriptDictA : null);
             GameSchemaCommand.Save(schemaA, tmpA.FullName);
 
-            // Schema B: adds one native, changes GetUnitX to return integer
+            // Schema B, adds one native, changes GetUnitX to return integer
             var pathB = Path.Combine(tmpB.FullName, "scripts", "common.j");
             Directory.CreateDirectory(Path.GetDirectoryName(pathB)!);
             File.WriteAllText(pathB,
@@ -285,7 +285,7 @@ eu|1|1.30.1.10211|def456";
 
             var diff = GameSchemaCommand.Diff(tmpA.FullName, tmpB.FullName);
 
-            // Check changes: one "added" (GetUnitY) and one "changed" (GetUnitX return type)
+            // Check changes, one "added" (GetUnitY) and one "changed" (GetUnitX return type)
             var allChanges = diff.Changes.ToList();
             var added = allChanges.Where(c => c.Change == "added").ToList();
             var changed = allChanges.Where(c => c.Change == "changed").ToList();
@@ -362,7 +362,7 @@ eu|1|1.30.1.10211|def456";
         var r = new SchemaDiffResult("1.30", "1.31", changes, Array.Empty<string>());
 
         // With --section objects --limit 1, only 3 object changes remain after filtering.
-        // Hidden should be 2 (3 - 1), NOT 3 (4 total - 1).
+        // Hidden should be 2 (3, 1), NOT 3 (4 total, 1).
         var output = Wc3Ctl.Render.GameSchemaDiff(r, section: "objects", limit: 1);
         Assert.Contains("2 more change(s) hidden by --limit", output);
         Assert.DoesNotContain("3 more change", output);
@@ -394,7 +394,7 @@ eu|1|1.30.1.10211|def456";
         Assert.Equal("integer", api.Functions[0].Returns);
     }
 
-    // Task 6: tab aligned native with space after keyword
+    // Task 6, tab aligned native with space after keyword
 
     [Fact]
     public void Parse_handles_tab_aligned_natives()
@@ -417,7 +417,7 @@ eu|1|1.30.1.10211|def456";
         Assert.Equal("real", api.Natives[1].Returns);
     }
 
-    // --- Bug 1: FolderGameDataSource en-us strings fallback ---
+    // --- Bug 1, FolderGameDataSource en-us strings fallback ---
 
     [Fact]
     public void FolderGameDataSource_reads_enus_strings_fallback()
@@ -436,7 +436,7 @@ eu|1|1.30.1.10211|def456";
         finally { Directory.Delete(tmp.FullName, true); }
     }
 
-    // --- Task 10: BuildIndex / WriteIndex ---
+    // --- Task 10, BuildIndex / WriteIndex ---
 
     [Fact]
     public void BuildIndex_builds_per_file_natives_not_summed()
@@ -486,7 +486,7 @@ eu|1|1.30.1.10211|def456";
         finally { Directory.Delete(tmp.FullName, true); }
     }
 
-    // Deleted: BuildIndex_sabotage_summing_fails
+    // Deleted, BuildIndex_sabotage_summing_fails
     // This was a copy of BuildIndex_builds_per_file_natives_not_summed with sabotage comments
     // in place of actual sabotage code, so it could never fail. The real test above covers it.
 

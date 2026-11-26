@@ -1,0 +1,23 @@
+# Places where a rule fires on a line that has to keep its shape. Each entry
+# names the rule and the file, and says why the finding is not a defect.
+
+[exempt]
+# tact.py probes the Blizzard CDN root it names, so the address is the subject
+# of the script. analyze.py builds an SVG document, and the only URL in it is
+# the xmlns namespace, which is an identifier and not an address.
+# game_data_dir() reads WC3_DATA first and only then the two default install
+# folders. A forensic script has to find the game where the installer put it.
+machine-path-literal = ["docs/reforged-3.0.0-evidence/tact.py"]
+absolute-url = ["docs/reforged-3.0.0-evidence/tact.py", "tools/wc3watch/analyze.py"]
+# The editor draws these glyphs in the palette and terrain panels. They are the
+# interface, not decoration in a comment.
+emoji = ["src/Wc3.Studio/Panels/PaletteView.axaml.cs", "src/Wc3.Studio/Panels/TerrainView.axaml.cs"]
+# The plan and spec records under docs/superpowers/ are dated documents written
+# against the code of their day, kept as history. Restyling their headings would
+# rewrite a record to match a rule that came later, so they keep the shape they
+# were written in.
+title-case-heading = ["docs/superpowers/*"]
+# The editor survey and the gap analysis are field lists, a bold label and its
+# value on one line, which is what a comparison of eleven projects reads as. The
+# colon is the format there, not prose that needs splitting.
+inline-header-colon = ["docs/superpowers/*", "docs/third-party-editor-survey.md", "docs/reforged-world-editor-gap-analysis.md"]

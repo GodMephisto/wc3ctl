@@ -52,7 +52,7 @@ public partial class MainWindow : Window
         Opened += OnOpenedAutoLoad;
     }
 
-    /// <summary>Pushes the saved folders into the running app: the Warcraft III install goes to
+    /// <summary>Pushes the saved folders into the running app, the Warcraft III install goes to
     /// both map sessions (null keeps auto-detect), and the map folder seeds the shared picker so
     /// Open Map starts there. Called at startup and after the Settings dialog saves.</summary>
     private void ApplySettings()
@@ -81,7 +81,7 @@ public partial class MainWindow : Window
         StatusText.Text = "Settings saved. The Warcraft III install and map folder are remembered for next time.";
     }
 
-    /// <summary>Dev/QA convenience: <c>Wc3.Studio.exe --open &lt;map&gt; [--open-target &lt;map&gt;]</c>
+    /// <summary>Dev/QA convenience, <c>Wc3.Studio.exe --open &lt;map&gt. [--open-target &lt;map&gt;]</c>
     /// auto-loads maps on startup so the UI can be driven and screenshotted without the file
     /// dialog. No-op in normal use (no flags). Runs once, after the window is up.</summary>
     private void OnOpenedAutoLoad(object? sender, EventArgs e)
@@ -130,7 +130,7 @@ public partial class MainWindow : Window
 
     /// <summary>Git short-hash + UTC build time baked in at compile (see the
     /// StampBuildInfo target). Shown in the title bar so a stale build is obvious at a
-    /// glance - no more guessing whether the running binary carries the latest change.</summary>
+    /// glance, no more guessing whether the running binary carries the latest change.</summary>
     private static string BuildStamp()
     {
         var attrs = Assembly.GetExecutingAssembly().GetCustomAttributes<AssemblyMetadataAttribute>();
@@ -159,7 +159,7 @@ public partial class MainWindow : Window
         await TargetWorkspace.PickAndOpenMapAsync();
     }
 
-    /// <summary>Saves the active map: the workspace that holds keyboard focus, or the visible
+    /// <summary>Saves the active map, the workspace that holds keyboard focus, or the visible
     /// Target pane when both are open, falling back to whichever workspace has a map.</summary>
     private async Task SaveActiveAsync()
     {
@@ -196,7 +196,7 @@ public partial class MainWindow : Window
         await dialog.ShowDialog(this);
     }
 
-    /// <summary>Reveals the Target pane (and the splitter) the first time it is needed - opening
+    /// <summary>Reveals the Target pane (and the splitter) the first time it is needed, opening
     /// a target map or porting. The window starts as a single Source pane so one map fills it;
     /// pressing Port or Open Target brings the second pane in as a half-width split.</summary>
     private void RevealTargetPane()
@@ -232,11 +232,11 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// The one-button port: resolve the selected unit's closure in the Source map and
-    /// inject it into the Target map, auto-remapping rawcode collisions - no config. Runs
-    /// off the UI thread (a real map is large); reports the outcome in a dialog. The port
+    /// The one-button port, resolve the selected unit's closure in the Source map and
+    /// inject it into the Target map, auto-remapping rawcode collisions, no config. Runs
+    /// off the UI thread (a real map is large). Reports the outcome in a dialog. The port
     /// works on a fresh reload of each map on disk, so the open sessions stay untouched
-    /// and the result is written to a sibling &lt;target&gt;.ported.&lt;ext&gt; (never clobbers).
+    /// and the result is written to a sibling &lt;target&gt;.ported.&lt;ext&gt. (never clobbers).
     /// </summary>
     private async void OnPortRequested(object? sender, MapWorkspaceView.PortRequest request)
     {
@@ -245,7 +245,7 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Dry-run preview: computes the identical report through PortCommand.PreviewPort
+    /// Dry-run preview, computes the identical report through PortCommand.PreviewPort
     /// (same code path as the real port) and shows it, nothing is written anywhere.
     /// </summary>
     private async void OnPortPreviewRequested(object? sender, MapWorkspaceView.PortRequest request)
@@ -278,7 +278,7 @@ public partial class MainWindow : Window
             var (result, outPath) = await Task.Run(() =>
             {
                 var source = MapDocument.Load(sourcePath);
-                // Saved target → a fresh disk copy; blank/unsaved → the live in-memory doc.
+                // Saved target → a fresh disk copy. Blank/unsaved → the live in-memory doc.
                 var target = targetPath is not null ? MapDocument.Load(targetPath) : liveTarget;
                 var bundle = BundleCommand.ResolveUnit(source, rawcode, gameDir);
                 // Left-click exclusions from the Dependencies graph narrow the bundle before
@@ -289,7 +289,7 @@ public partial class MainWindow : Window
                     return (PortCommand.PreviewPort(source, bundle, target), (string?)null);
                 var r = PortCommand.PortUnit(source, bundle, target);
                 if (targetPath is null)
-                    return (r, (string?)null); // ported into the live in-memory target; user Saves
+                    return (r, (string?)null); // ported into the live in-memory target. User Saves
                 var dir = Path.GetDirectoryName(Path.GetFullPath(targetPath)) ?? ".";
                 var stem = Path.GetFileNameWithoutExtension(targetPath);
                 // Strip a trailing ".ported" so re-porting accumulates into one file, not a chain.
@@ -323,7 +323,7 @@ public partial class MainWindow : Window
         }
     }
 
-    /// <summary>Port report dialog: dry-run preview, a saved .ported file, or an in-memory
+    /// <summary>Port report dialog, dry-run preview, a saved .ported file, or an in-memory
     /// port into an unsaved target (<paramref name="outPath"/> null but not a dry run).</summary>
     private async Task ShowPortReport(PortResult r, string? outPath, bool dryRun)
     {
@@ -358,7 +358,7 @@ public partial class MainWindow : Window
         await dialog.ShowDialog(this);
     }
 
-    /// <summary>Global status: which map sits in each pane (details live per pane).</summary>
+    /// <summary>Global status, which map sits in each pane (details live per pane).</summary>
     private void OnWorkspaceMapChanged(object? sender, EventArgs e) =>
         StatusText.Text = $"Source: {Describe(SourceWorkspace)}   |   Target: {Describe(TargetWorkspace)}";
 

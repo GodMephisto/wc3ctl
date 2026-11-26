@@ -10,7 +10,7 @@ namespace Wc3.Studio.Panels;
 /// World-Editor-style properties editor for ONE placed doodad/destructable
 /// (war3map.doo), opened by clicking a doodad in the 3D viewport (the workspace
 /// routes the pick here). Thin shell over <see cref="DoodadInstanceCommand"/>,
-/// the doodad twin of <see cref="UnitPropertiesView"/>: read-only identity rows
+/// the doodad twin of <see cref="UnitPropertiesView"/>, read-only identity rows
 /// plus editable fields (LabeledField rows) and one Apply that writes only the
 /// fields that actually changed, plus a Remove that deletes the placement.
 /// </summary>
@@ -41,7 +41,7 @@ public partial class DoodadPropertiesView : UserControl, IMapPanel
         InitializeComponent();
     }
 
-    /// <summary>IMapPanel entry: a (re)opened map invalidates creation numbers, so
+    /// <summary>IMapPanel entry, a (re)opened map invalidates creation numbers, so
     /// reset to the "pick a doodad" hint until the viewport routes a selection here.</summary>
     public void ShowMap(MapSession session)
     {
@@ -178,7 +178,7 @@ public partial class DoodadPropertiesView : UserControl, IMapPanel
             messages.Add(result.Message);
         }
 
-        // Epsilons absorb the display rounding ("0.###" / "0.##"): an untouched field
+        // Epsilons absorb the display rounding ("0.###" / "0.##"), an untouched field
         // parses back within them, so it never registers as a change.
         float rotationRad = (float)(rotationDeg * Math.PI / 180.0);
         if (Differs(rotationRad, before.Rotation, 0.0002f))

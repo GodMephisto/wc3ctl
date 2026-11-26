@@ -303,7 +303,7 @@ public sealed class McpSmokeInspectTests : McpSmokeBase
     [Fact, Trait("Category", "GameData"), Covers("target_get", "target_set", "target_list")]
     public async Task Target_tools_view_and_set_the_current_target()
     {
-        // Determine schemas directory: env override > test output > the repo checkout.
+        // Determine schemas directory, env override > test output > the repo checkout.
         string? schemasDir = Environment.GetEnvironmentVariable("WC3_SCHEMAS_DIR");
         if (string.IsNullOrWhiteSpace(schemasDir))
         {

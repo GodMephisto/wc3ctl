@@ -11,7 +11,7 @@ using Wc3.Model;
 namespace Wc3.Tests;
 
 /// <summary>
-/// Hermetic coverage for the object toolkit commands added on the object branch:
+/// Hermetic coverage for the object toolkit commands added on the object branch,
 /// search, noop-fields, deprecated, rawcode-suggest and clone. Every map is built in
 /// memory through <see cref="SyntheticMap"/>, so nothing here needs a WC3 install.
 /// The clone case drives the CLI and swaps process-wide <see cref="System.Console.Out"/>,
@@ -54,7 +54,7 @@ public class ObjectToolkitCommandTests
         "C;X5;K\"type\"\n" +
         "E\n";
 
-    // Two base units: hfoo with HP 420, and u000 (deliberately colliding with the
+    // Two base units, hfoo with HP 420, and u000 (deliberately colliding with the
     // custom in the map, to prove a suggestion avoids the base catalog too).
     private const string UnitBalanceSlk =
         "ID;PWXL;N;E\n" +
@@ -66,7 +66,7 @@ public class ObjectToolkitCommandTests
         "C;X2;K\"500\"\n" +
         "E\n";
 
-    /// <summary>A unit-only GameDataContext: hfoo and u000 with an HP field.</summary>
+    /// <summary>A unit-only GameDataContext, hfoo and u000 with an HP field.</summary>
     private static GameDataContext BuildUnitContext()
     {
         using var src = new FakeGameSource(new Dictionary<string, byte[]>

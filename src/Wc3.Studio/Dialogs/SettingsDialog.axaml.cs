@@ -6,7 +6,7 @@ using Wc3.Commands;
 namespace Wc3.Studio.Dialogs;
 
 /// <summary>
-/// The app Settings dialog: two folder inputs (Warcraft III install and default map folder),
+/// The app Settings dialog, two folder inputs (Warcraft III install and default map folder),
 /// each with an OS folder picker via <see cref="Controls.FilePathBox"/>, and a checkbox that
 /// adds or removes the Windows Explorer right-click entry through
 /// <see cref="FileAssociationCommand"/>. Opened modally with the current values, it returns the

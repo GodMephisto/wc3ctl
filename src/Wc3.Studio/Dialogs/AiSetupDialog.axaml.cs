@@ -8,7 +8,7 @@ using Wc3.Studio.Controls;
 namespace Wc3.Studio.Dialogs;
 
 /// <summary>
-/// The one-click Connect AI Apps dialog: lists every supported client with its detection and
+/// The one-click Connect AI Apps dialog, lists every supported client with its detection and
 /// registration state, registers the server in all detected clients, and copies a starter prompt.
 /// The logic lives in <see cref="AiSetup"/>, so this class only renders and relays clicks. The
 /// environment is a settable property so a test can drive it against a temp profile.
@@ -73,7 +73,7 @@ public partial class AiSetupDialog : Window
 
     private void OnCloseClick(object? sender, RoutedEventArgs e) => Close();
 
-    /// <summary>One client row: name and id on the left, the state on the right, in the standard card.</summary>
+    /// <summary>One client row, name and id on the left, the state on the right, in the standard card.</summary>
     private static Control BuildRow(AiSetup.ClientStatus status)
     {
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };

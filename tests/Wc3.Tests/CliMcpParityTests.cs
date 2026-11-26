@@ -1,5 +1,5 @@
 // tests/Wc3.Tests/CliMcpParityTests.cs
-// Guards that wc3ctl's two surfaces stay in lockstep: everything an agent can do
+// Guards that wc3ctl's two surfaces stay in lockstep, everything an agent can do
 // through the MCP server, a human can do through the CLI, and no CLI verb appears
 // without a conscious parity decision. Both surfaces are thin wrappers over
 // Wc3.Commands, so this catches "wired one side, forgot the other" drift, the exact
@@ -80,6 +80,11 @@ public class CliMcpParityTests
         ["repair_generated"] = "repair-generated",
         ["repair_audit_errors"] = "repair audit-errors",
         ["repair_portraits"] = "repair portraits",
+        ["repair_reforged3"] = "repair reforged-3",
+        ["game_file_shadows"] = "repair game-files",
+        ["texture_audit"] = "texture audit",
+        ["repair_game_files"] = "repair game-files",
+        ["reforged3_check"] = "repair reforged-3",
         ["hero_lint"] = "hero lint",
         ["hero_generate"] = "hero generate",
         ["hero_install"] = "hero install",
@@ -159,6 +164,7 @@ public class CliMcpParityTests
         ["uabi_profile"] = "uabi-profile",
         ["doctor_check"] = "doctor check",
         ["doctor_inspect"] = "doctor inspect",
+        ["doctor_schema"] = "doctor schema",
         ["doctor_compare"] = "doctor compare",
         ["doctor_fix"] = "doctor fix",
         ["script_leaks"] = "script leaks",
@@ -364,14 +370,14 @@ public class CliMcpParityTests
         // Disk to disk asset conversion. Neither side is a map, so there is no map for an
         // agent to act on.
         "convert",
-        // Repair utility: regenerates the preplaced-widget creation script. Placement
+        // Repair utility, regenerates the preplaced-widget creation script. Placement
         // already runs it automatically (CommitUnits), so MCP needs no separate tool.
         "place sync",
-        // Repair utility: restores declarations a port left commented out, so the script
+        // Repair utility, restores declarations a port left commented out, so the script
         // compiles again. Porting now gates on this automatically, so it is only ever needed
         // for a map produced before the gate existed.
         "script repair",
-        // Debug tool: instruments an already-ported map with BJDebugMsg calls so the running game,
+        // Debug tool, instruments an already-ported map with BJDebugMsg calls so the running game,
         // not an agent, reports where its cast chain stops. A one-off local investigation aid over
         // a disposable copy of a map, not something an agent drives through MCP.
         "debug wiring",
@@ -389,19 +395,19 @@ public class CliMcpParityTests
         "debug trace-load",
         // Read-only analysis of a target map's hero integration requirements.
         "contract",
-        // Writes a definition folder to disk; local file output like 'extract'. That reason is
+        // Writes a definition folder to disk. Local file output like 'extract'. That reason is
         // true of export and was wrong about the other two, which are now wired. 'hero install'
         // produces an edited MAP, which is exactly what the other write tools produce, and
         // 'hero lint' returns findings rather than writing anything. If the hero definition
         // format is the centre of this tool, an agent has to be able to check one and install it.
         "hero export",
-        // Launches the real game on this machine; inherently local.
+        // Launches the real game on this machine. Inherently local.
         "test-load",
         // Heuristic script analysis for non-terminating loops. Reports candidates to read.
         "script loops",
-        // Roots for a reachability pass; analysis output for whoever builds that pass.
+        // Roots for a reachability pass. Analysis output for whoever builds that pass.
         "script roots",
-        // Reachability-based function removal; a repair utility like 'script repair'.
+        // Reachability-based function removal. A repair utility like 'script repair'.
         "script strip",
         // Generates the two reference documents into local files, so it is about the tool surface
         // rather than about a map, the same reason 'mcp tools' is here. The guard test regenerates

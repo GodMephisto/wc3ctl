@@ -1,6 +1,5 @@
 // tests/Wc3.Tests/TerrainImportResolutionTests.cs
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
+using SkiaSharp;
 using War3Net.Build.Environment;
 using Wc3.Model;
 using Wc3.Modeling;
@@ -31,17 +30,17 @@ public class TerrainImportResolutionTests
     [Trait("Category", "GameData")]
     public void Map_imported_blp_resolved_over_base_game()
     {
-        // Skip when game data (CASC) is not available
+        // The check needs the shipped game data, so there is nothing to compare without it.
         if (!Wc3.GameData.GameData.TryOpen(null, out var ctx, out _)) return;
 
-        // Step 1: create a valid 128x128 .blp file (the cell size)
+        // A cell sized .blp, the same size the terrain catalog reads a tile at.
         const int size = TerrainArtCatalog.Cell;
         var blp = CreateQuadBlp(size);
 
-        // Step 2: build a blank map that has terrain types
+        // A blank map that has terrain types, so the catalog has a tile to resolve.
         var doc = BlankMap.Create();
 
-        // Step 3: find what path Terrain.slk assigns to the first terrain type
+        // The path Terrain.slk assigns to that terrain type.
         var cat = TerrainArtCatalog.Open(ctx!, doc);
         Assert.True(cat.HasCatalog, "Terrain.slk missing");
 
@@ -53,13 +52,13 @@ public class TerrainImportResolutionTests
         string tileId = cat.TileIdOf(firstType);
         Assert.NotNull(tileId);
 
-        // Get the relative path Terrain.slk assigns to this tile
+        // The relative path Terrain.slk assigns to this tile.
         string rel = cat.TilePath(tileId)!;
 
-        // Step 4: add the .blp to the map at that path
+        // The map imports its own copy at that path, which is what a map author ships.
         doc.AddOrReplaceRawFile(rel + ".blp", blp);
 
-        // Step 5: resolve via a catalog that was opened with the map
+        // A catalog opened with the map sees the import, so it answers ahead of the game data.
         var mapCat = TerrainArtCatalog.Open(ctx!, doc);
         var img = mapCat.Resolve(tileId);
 
@@ -172,7 +171,7 @@ public class TerrainImportResolutionTests
         for (int i = 0; i < rgba.Length; i += 4)
             (rgba[i], rgba[i + 2]) = (rgba[i + 2], rgba[i]);
 
-        var image = Image.LoadPixelData<Rgba32>(rgba, size, size);
+        var image = SafeImages.FromRgba(rgba, size, size);
         using var ms = new System.IO.MemoryStream();
         new War3Net.Drawing.Blp.BlpEncoder(
             new War3Net.Drawing.Blp.Blp1EncodingOptions

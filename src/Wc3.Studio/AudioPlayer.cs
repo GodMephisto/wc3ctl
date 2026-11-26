@@ -6,11 +6,11 @@ namespace Wc3.Studio;
 
 /// <summary>
 /// Plays a single map sound at a time. NAudio's MediaFoundationReader needs a file, so
-/// the bytes are staged to a temp file (Windows codecs handle mp3/wav/wma; flac/ogg only
-/// if a system codec is installed). One clip plays at a time; Stop/Dispose tears down the
+/// the bytes are staged to a temp file (Windows codecs handle mp3/wav/wma. Flac/ogg only
+/// if a system codec is installed). One clip plays at a time. Stop/Dispose tears down the
 /// device and deletes the temp. Never throws to the caller beyond the initial Play.
 ///
-/// Thread-safety: Play/Stop (UI thread) and the natural-finish callback (which NAudio may
+/// Thread-safety, Play/Stop (UI thread) and the natural-finish callback (which NAudio may
 /// raise on a background thread when no SynchronizationContext is captured) are serialized
 /// under <see cref="_gate"/>. A finish callback that arrives after the clip it belongs to
 /// has already been replaced/stopped is ignored (guarded on sender identity), so it can
@@ -44,7 +44,7 @@ public sealed class AudioPlayer : IDisposable
             try
             {
                 _reader = new MediaFoundationReader(_tempFile);
-                _output = OpenOutput(_reader);   // WaveOut mapper, then WASAPI; clear throw if truly no device
+                _output = OpenOutput(_reader);   // WaveOut mapper, then WASAPI. Clear throw if truly no device
                 _output.PlaybackStopped += OnStopped;
                 _output.Play();
             }
@@ -58,9 +58,9 @@ public sealed class AudioPlayer : IDisposable
 
     /// <summary>
     /// Opens an initialized output device for <paramref name="reader"/>. Tries the legacy
-    /// WaveOut mapper first (WAVE_MAPPER = the current default device; lowest overhead and
+    /// WaveOut mapper first (WAVE_MAPPER = the current default device. Lowest overhead and
     /// works on most boxes). If winmm rejects it, which happens on machines whose default
-    /// endpoint the mapper can't resolve, surfacing as "BadDeviceId calling waveOutOpen" , 
+    /// endpoint the mapper can't resolve, surfacing as "BadDeviceId calling waveOutOpen" ,
     /// it consults the modern Core Audio stack and plays via WASAPI on the default render
     /// endpoint instead. Only when Core Audio reports no active render endpoint at all
     /// (headless/remote session, or audio disabled) does it throw a clear, diagnosable
@@ -81,7 +81,7 @@ public sealed class AudioPlayer : IDisposable
         }
 
         // winmm's mapper failed. Ask Core Audio whether a default render endpoint actually
-        // exists; if so, WASAPI can drive it even when the legacy mapper won't.
+        // exists. If so, WASAPI can drive it even when the legacy mapper won't.
         using var enumerator = new MMDeviceEnumerator();
         var activeEndpoints = enumerator
             .EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active).Count;
@@ -90,7 +90,7 @@ public sealed class AudioPlayer : IDisposable
                 $"no audio output device is available (active render endpoints: {activeEndpoints})");
 
         var device = enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
-        // Shared mode + push model; NAudio resamples the clip to the endpoint mix format.
+        // Shared mode + push model. NAudio resamples the clip to the endpoint mix format.
         var wasapi = new WasapiOut(device, AudioClientShareMode.Shared, false, 200);
         wasapi.Init(reader);
         return wasapi;

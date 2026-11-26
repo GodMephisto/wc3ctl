@@ -46,3 +46,9 @@ TestResults/
 # Scratch and stale publish folders
 %TEMP%/
 *.old/
+
+# Local game files and audit output
+/FileImporter_ACA_30_gojo_musthave.7z
+/audio_final.txt
+/raigo-audit.json
+/raigo-audit.err

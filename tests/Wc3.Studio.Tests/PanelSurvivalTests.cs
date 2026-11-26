@@ -118,7 +118,7 @@ public class PanelSurvivalTests
                     // none, so a full run left around ninety of them alive in the application.
                     // Correct hygiene either way, and NOT a cure for the intermittent "Unable to
                     // locate 'Avalonia.Platform.IFontManagerImpl'" thrown from inside a text
-                    // measure: measured over four runs after this change, the failure still
+                    // measure, measured over four runs after this change, the failure still
                     // appeared once.
                     //
                     // That flake now has three falsified explanations, the theory data source,

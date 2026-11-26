@@ -7,7 +7,7 @@ using Wc3.Studio.Controls;
 namespace Wc3.Studio.Panels;
 
 /// <summary>
-/// Camera-catalog editor (war3map.w3c) over <see cref="CameraCommand"/>: an add form (name +
+/// Camera-catalog editor (war3map.w3c) over <see cref="CameraCommand"/>, an add form (name +
 /// target x/y) plus one <see cref="CatalogCard"/> per camera with its key fields, an inline
 /// field editor and a Remove button. Rebuilds from the command layer after every edit.
 /// Composes <see cref="CatalogEditorView"/> for its chrome, exactly like the sounds panel.
@@ -70,7 +70,7 @@ public partial class CamerasView : UserControl, IMapPanel
         if (cameras.Count == 0)
         {
             // The reason is asked rather than asserted. This used to state that war3map.w3c
-            // held a count of zero, which the panel could not know: the command layer returns an
+            // held a count of zero, which the panel could not know, the command layer returns an
             // empty list for an absent file and for an unparseable one too, so a user with a
             // damaged map was told their map was fine.
             Catalog.SetEmpty("This map defines no cameras.",

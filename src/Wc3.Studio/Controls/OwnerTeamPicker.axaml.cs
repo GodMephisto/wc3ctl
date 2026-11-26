@@ -5,7 +5,7 @@ using Wc3.Model;
 
 namespace Wc3.Studio.Controls;
 
-/// <summary>Owner-dropdown row: a disabled team header, or a selectable player
+/// <summary>Owner-dropdown row, a disabled team header, or a selectable player
 /// (color swatch + "Player N (Color) · map name"). Public for reflection bindings
 /// in the item template (same idiom as ObjectEditorView's rows).</summary>
 public sealed record OwnerChoice(bool IsHeader, int PlayerId, string Label, IBrush? Swatch)
@@ -14,18 +14,18 @@ public sealed record OwnerChoice(bool IsHeader, int PlayerId, string Label, IBru
 }
 
 /// <summary>
-/// The grouped unit-owner dropdown: the map's players under their force (team)
-/// headers, then players in no force, then the four neutral slots - each player row
+/// The grouped unit-owner dropdown, the map's players under their force (team)
+/// headers, then players in no force, then the four neutral slots, each player row
 /// with the slot's color swatch. Extracted from UnitPropertiesView, which used to
 /// carry the same builder + item template twice (single and multi editors).
 /// <see cref="Load"/> (re)builds the choices from the command layer;
 /// <see cref="SelectedOwnerId"/> is the picked player id, or null while nothing is
-/// selected. Headers are display-only: the ComboBoxItem style disables them so they
+/// selected. Headers are display-only, the ComboBoxItem style disables them so they
 /// can never become the selection. Stretches to fill its container horizontally.
 /// </summary>
 public partial class OwnerTeamPicker : UserControl
 {
-    /// <summary>True while Load repopulates the combo - the selection handler no-ops
+    /// <summary>True while Load repopulates the combo, the selection handler no-ops
     /// so programmatic initialization never raises <see cref="SelectionChanged"/>.</summary>
     private bool _loading;
 
@@ -52,7 +52,7 @@ public partial class OwnerTeamPicker : UserControl
 
     /// <summary>(Re)builds the grouped choices from the map's players and forces.
     /// <paramref name="currentOwner"/> is preselected when known (it gets an "Other"
-    /// row if it matches no slot); pass null to leave the picker blank - e.g. a mixed
+    /// row if it matches no slot). Pass null to leave the picker blank, e.g. A mixed
     /// multi-selection, so it is never misreported as sharing one owner.</summary>
     public void Load(MapDocument doc, int? currentOwner)
     {
@@ -78,11 +78,11 @@ public partial class OwnerTeamPicker : UserControl
         SelectionChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    /// <summary>Builds the grouped owner-dropdown rows: the map's players grouped
+    /// <summary>Builds the grouped owner-dropdown rows, the map's players grouped
     /// under their force (team) headers, then players in no force, then the four
     /// neutral slots. <paramref name="ownerId"/> is the current owner when known (it
     /// gets an "Other" row if it matches no slot, so a weird owner id still displays
-    /// instead of blanking the picker); null for a mixed multi-selection.</summary>
+    /// instead of blanking the picker). Null for a mixed multi-selection.</summary>
     private static List<OwnerChoice> BuildOwnerItems(MapDocument doc, int? ownerId)
     {
         var players = PlayerForceCommand.GetPlayers(doc);
@@ -134,7 +134,7 @@ public partial class OwnerTeamPicker : UserControl
         return items;
     }
 
-    /// <summary>"Team N: name" (or a bare "Team N" for a nameless force). Shared by
+    /// <summary>"Team N, name" (or a bare "Team N" for a nameless force). Shared by
     /// the picker's group headers and the Players tab so both label forces identically.</summary>
     internal static string ForceLabel(ForceInfo force) =>
         string.IsNullOrWhiteSpace(force.Name)
